@@ -2,6 +2,7 @@ import { getDatabase } from './init.js';
 import { logger } from '../logger.js';
 import type { Persona, CreatePersonaRequest } from '../types.js';
 import { getRow, listRows, deleteRow } from 'drone-swarm-common';
+import { deleteSkillsByPersona } from './skills.js';
 
 export function createPersona(
   req: CreatePersonaRequest,
@@ -74,6 +75,23 @@ export function deletePersona(id: string): boolean {
   const result = deleteRow(getDatabase, 'personas', id);
   logger.info(`Deleted persona: ${id}`);
   return result;
+}
+
+/**
+ * Delete a persona and cascade-delete the skills it owns, atomically.
+ * Returns true when the persona row was removed.
+ */
+export function deletePersonaWithSkills(id: string): boolean {
+  const database = getDatabase();
+  const run = database.transaction(() => {
+    deleteSkillsByPersona(id);
+    const stmt = database.prepare('DELETE FROM personas WHERE id = ?');
+    const result = stmt.run(id) as { changes?: number } | undefined;
+    return (result?.changes ?? 0) > 0;
+  });
+  const deleted = run();
+  if (deleted) logger.info(`Deleted persona (with owned skills): ${id}`);
+  return deleted;
 }
 
 export function upsertPersonaFromCoordinator(p: Persona): void {

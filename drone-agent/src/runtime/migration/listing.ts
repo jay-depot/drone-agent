@@ -8,6 +8,7 @@ import path from 'node:path';
 import {
   getPersonaDir,
   getSkillsDir,
+  getPersonaSkillsDir,
   getInsightsDir,
   getPrinciplesDir,
 } from './paths.js';
@@ -63,7 +64,7 @@ export async function listLocalSkills(scope: LocalScope): Promise<AssetInfo[]> {
   try {
     entries = await readdir(dir);
   } catch {
-    return [];
+    entries = [];
   }
 
   const assets: AssetInfo[] = [];
@@ -83,6 +84,53 @@ export async function listLocalSkills(scope: LocalScope): Promise<AssetInfo[]> {
       description,
       filePath,
     });
+  }
+
+  assets.push(...(await listPersonaOwnedSkills(scope)));
+  return assets;
+}
+
+/**
+ * List persona-owned skills: every `<personas-dir>/<id>/skills/*.md`.
+ */
+async function listPersonaOwnedSkills(
+  scope: LocalScope
+): Promise<AssetInfo[]> {
+  const personaDir = getPersonaDir(scope);
+  let personaIds: string[];
+  try {
+    personaIds = await readdir(personaDir);
+  } catch {
+    return [];
+  }
+
+  const assets: AssetInfo[] = [];
+  for (const personaId of personaIds) {
+    const skillsDir = getPersonaSkillsDir(scope, personaId);
+    let entries: string[];
+    try {
+      entries = await readdir(skillsDir);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.endsWith('.md')) continue;
+      const id = entry.slice(0, -3);
+      const filePath = path.join(skillsDir, entry);
+      const content = await readFile(filePath, 'utf-8');
+      const name = extractFrontmatterField(content, 'name') ?? id;
+      const description =
+        extractFrontmatterField(content, 'description') ?? `Skill: ${id}`;
+      assets.push({
+        type: 'skill',
+        id,
+        scope,
+        name,
+        description,
+        personaId,
+        filePath,
+      });
+    }
   }
   return assets;
 }

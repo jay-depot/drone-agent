@@ -85,7 +85,14 @@ export async function promoteAsset(
       const description =
         extractFrontmatterField(content, 'description') ?? `Skill: ${id}`;
       const trigger = extractFrontmatterField(content, 'recall') ?? '';
-      payload = { id, name, description, trigger, body: content };
+      payload = {
+        id,
+        name,
+        description,
+        trigger,
+        body: content,
+        ...(options.personaId ? { personaId: options.personaId } : {}),
+      };
     } else if (type === 'insight') {
       // Insights are JSON arrays — read and post each entry
       const insights = JSON.parse(content);

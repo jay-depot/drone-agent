@@ -206,6 +206,22 @@ export async function triggerCoordinatorSync(): Promise<{
       db.upsertSkillFromCoordinator(s);
     }
 
+    // Owned-skill reconcile: persona/skill sync is upsert-only, so a persona
+    // deleted on the coordinator would otherwise leave its owned skills on the
+    // beacon forever. Drop owned rows whose owner is no longer advertised.
+    db.deleteOwnedSkillsNotIn(new Set(personas.map(p => p.id)));
+
+    // Same for coordinator-scoped global skills, but only when the pull
+    // succeeded and returned a non-empty set — never wipe on an empty or
+    // failed fetch (mirrors the knowledge-cache guard below).
+    if (skills.length > 0) {
+      db.deleteCoordinatorGlobalSkillsNotIn(
+        new Set(
+          skills.filter(s => s.personaId === null).map(s => s.id)
+        )
+      );
+    }
+
     // Sync knowledge from coordinator
     let knowledgeCount = 0;
     try {

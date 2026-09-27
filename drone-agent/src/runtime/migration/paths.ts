@@ -33,6 +33,23 @@ export function getSkillFilePath(
   return path.join(getSkillsDir(scope), `${id}.md`);
 }
 
+/** Directory holding a persona's owned skills: `personas/<id>/skills/`. */
+export function getPersonaSkillsDir(
+  scope: 'project' | 'user',
+  personaId: string
+): string {
+  return path.join(getPersonaDir(scope), personaId, SKILLS_DIR);
+}
+
+/** File path for a persona-owned skill: `personas/<id>/skills/<skill>.md`. */
+export function getPersonaSkillFilePath(
+  scope: 'project' | 'user',
+  personaId: string,
+  id: string
+): string {
+  return path.join(getPersonaSkillsDir(scope, personaId), `${id}.md`);
+}
+
 export function getInsightsDir(scope: 'project' | 'user'): string {
   return path.join(getLocalBaseDir(scope), CONFIG_DIR, INSIGHTS_DIR);
 }

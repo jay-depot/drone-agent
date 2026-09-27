@@ -155,6 +155,7 @@ export type {
   CreatePersonaRequest,
   CreateSkillRequest,
 } from './domain-types.js';
+export { skillStorageKey } from './skill-key.js';
 
 // ── LSP types ───────────────────────────────────────────────────────
 

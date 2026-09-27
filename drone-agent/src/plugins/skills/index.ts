@@ -3,6 +3,7 @@ import {
   insertSortedByPrecedence,
   removeById,
   insertWriterSorted,
+  skillStorageKey,
   toToolResultContent,
 } from 'drone-core';
 import { SkillsRecallBlock } from '../../tui/components/SkillsRecallBlock.js';
@@ -63,12 +64,70 @@ export const skillsPlugin: DronePlugin = {
       return undefined;
     }
 
+    type PersonaSkillGate = {
+      isSkillVisible: (skill: DroneSkillDefinition) => boolean;
+      getActivePersona: () => { id: string } | null;
+    };
+
+    function getPersonaGate(): PersonaSkillGate | undefined {
+      return registration.request<PersonaSkillGate>('persona');
+    }
+
+    /**
+     * Global skills plus the active persona's own skills. This is the
+     * LLM-facing view — persona-owned skills are isolated to their owner.
+     */
+    function getVisibleSkills(): DroneSkillDefinition[] {
+      const gate = getPersonaGate();
+      return getAllSkills().filter(s =>
+        gate ? gate.isSkillVisible(s) : !s.personaId
+      );
+    }
+
+    /**
+     * Resolve a skill by public id from the visible set. When several skills
+     * share an id (a global and one or more owned copies) the active persona's
+     * own skill wins; otherwise the global; otherwise the first match.
+     */
+    function resolveVisibleSkill(
+      id: string
+    ): DroneSkillDefinition | undefined {
+      const lower = id.trim().toLowerCase();
+      const gate = getPersonaGate();
+      const visible = getAllSkills().filter(s =>
+        gate ? gate.isSkillVisible(s) : !s.personaId
+      );
+      const candidates = visible.filter(s => s.id.toLowerCase() === lower);
+      if (candidates.length === 0) return undefined;
+      const activeId = gate?.getActivePersona()?.id;
+      return (
+        candidates.find(s => s.personaId && s.personaId === activeId) ??
+        candidates.find(s => !s.personaId) ??
+        candidates[0]
+      );
+    }
+
     function findSkill(id: string): DroneSkillDefinition | undefined {
+      return resolveVisibleSkill(id);
+    }
+
+    /** Unfiltered lookup — the operator escape hatch (ignores isolation). */
+    function findAnySkill(id: string): DroneSkillDefinition | undefined {
       const lower = id.trim().toLowerCase();
       return (
         getSkillById(lower) ??
         getAllSkills().find(s => s.id.toLowerCase() === lower)
       );
+    }
+
+    async function applyEnhancers(
+      skill: DroneSkillDefinition
+    ): Promise<string> {
+      let body = skill.body;
+      for (const enhancer of recallEnhancers) {
+        body = await enhancer(skill.id, body);
+      }
+      return body;
     }
 
     /**
@@ -78,11 +137,7 @@ export const skillsPlugin: DronePlugin = {
     async function renderSkillBody(id: string): Promise<string | undefined> {
       const skill = findSkill(id);
       if (!skill) return undefined;
-      let body = skill.body;
-      for (const enhancer of recallEnhancers) {
-        body = await enhancer(skill.id, body);
-      }
-      return body;
+      return applyEnhancers(skill);
     }
 
     const skillsFragment: DronePromptFragment = {
@@ -97,7 +152,9 @@ export const skillsPlugin: DronePlugin = {
             skills: DroneSkillDefinition[]
           ) => DroneSkillDefinition[];
         }>('persona');
-        const visible = personaCap ? personaCap.getFilteredSkills(all) : all;
+        const visible = personaCap
+          ? personaCap.getFilteredSkills(all)
+          : all.filter(s => !s.personaId);
 
         if (visible.length === 0) return false;
 
@@ -200,6 +257,11 @@ export const skillsPlugin: DronePlugin = {
         type: 'object',
         properties: {
           id: { type: 'string', description: 'Skill id.' },
+          all: {
+            type: 'boolean',
+            description:
+              'Administrative view — include skills owned by other personas.',
+          },
         },
         required: ['id'],
         additionalProperties: false,
@@ -211,7 +273,8 @@ export const skillsPlugin: DronePlugin = {
           throw new Error('skills.recall requires a non-empty id string.');
         }
 
-        const skill = findSkill(id);
+        const skill =
+          input.all === true ? findAnySkill(id) : resolveVisibleSkill(id);
         if (!skill) {
           const all = getAllSkills();
           throw new Error(
@@ -219,7 +282,9 @@ export const skillsPlugin: DronePlugin = {
           );
         }
 
-        const body = (await renderSkillBody(id)) ?? skill.body;
+        const body = input.all === true
+          ? await applyEnhancers(skill)
+          : ((await renderSkillBody(id)) ?? skill.body);
 
         return JSON.stringify(
           {
@@ -253,6 +318,11 @@ export const skillsPlugin: DronePlugin = {
             type: 'boolean',
             description: 'Include author remarks in the result.',
           },
+          all: {
+            type: 'boolean',
+            description:
+              'Administrative view — include skills owned by other personas.',
+          },
         },
         additionalProperties: false,
       },
@@ -260,17 +330,18 @@ export const skillsPlugin: DronePlugin = {
         if (input.reload === true) {
           await capability.reloadSkills();
         }
-        const all = getAllSkills();
+        const skills = input.all === true ? getAllSkills() : getVisibleSkills();
         return JSON.stringify(
           {
-            count: all.length,
-            skills: all.map(s => ({
+            count: skills.length,
+            skills: skills.map(s => ({
               id: s.id,
               name: s.name,
               description: s.description,
               recall: s.recall,
               source: s.source,
               hasBody: s.body.length > 0,
+              ...(s.personaId ? { personaId: s.personaId } : {}),
               ...(input.includeRemark === true && s.remark
                 ? { remark: s.remark }
                 : {}),
@@ -329,6 +400,7 @@ export const skillsPlugin: DronePlugin = {
           ctx.logger.info(
             toToolResultContent(
               await ctx.engine.executeTool('skills__list', {
+                all: true,
                 includeRemark: true,
               })
             )
@@ -344,7 +416,10 @@ export const skillsPlugin: DronePlugin = {
           }
 
           // Execute the tool to get skill data
-          const result = await ctx.engine.executeTool('skills__recall', { id });
+          const result = await ctx.engine.executeTool('skills__recall', {
+            id,
+            all: true,
+          });
           const raw = toToolResultContent(result);
           const skill = JSON.parse(raw);
 
@@ -363,6 +438,7 @@ export const skillsPlugin: DronePlugin = {
           ctx.logger.info(
             toToolResultContent(
               await ctx.engine.executeTool('skills__list', {
+                all: true,
                 reload: true,
                 includeRemark: true,
               })
