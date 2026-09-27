@@ -347,3 +347,54 @@ Depends: Step 11.
 12. **Migration:** an existing DB upgrades in place with all global skills intact and addressable by their original ids.
 13. **Migrate tool:** `drone-migrate --list` shows persona-owned skills; promote/demote preserves the owner.
 14. `pnpm -r run lint` was run last (prettier reformats) and the working tree still builds/tests green afterwards.
+
+---
+
+## EXECUTION SUMMARY (completed 2026-09-26, branch `feat/swarm-persona-owned-skills`)
+
+All 13 steps executed; all 14 validation criteria satisfied.
+
+**Commits:** `908a0869` (plan+seed docs) → `d7bc53d0` (core storage/routes/sync/agent-isolation/migrate) →
+`3a2ec190` (coordinator UI) → `1972b4a7` (tests) → `29e8b80b` (pollution cleanup + prettier) →
+`0549a1f6` (beacon route tests).
+
+**What landed**
+- **Step 1** `drone-core/src/skill-key.ts` (`skillStorageKey`); `Skill` gains `key`+`personaId`,
+  `CreateSkillRequest` gains `personaId?`.
+- **Step 2** both `skills` tables rebuilt with `key TEXT PRIMARY KEY` + `personaId TEXT`; idempotent
+  legacy migration backfills `key=id`, `personaId=NULL`.
+- **Step 3/4** key-addressed accessors; global routes address `key===id`; new `/personas/:id/skills[/:skillId]`
+  CRUD; transactional `deletePersonaWithSkills` cascade; owned-skill push suppression; global skill push/delete
+  preserved.
+- **Step 5** `personaId` passthrough on fetch/push/upsert; `deleteOwnedSkillsNotIn` + guarded
+  `deleteCoordinatorGlobalSkillsNotIn` reconcile sweeps in `triggerCoordinatorSync`.
+- **Step 6** swarm provider sets `personaId`, keys maps compositely; shared `persona/owned-skills.ts` helper
+  replaces the duplicated discovery in both persona providers; `skills/keying.ts` `findSkillByPublicId`.
+- **Step 7** `isSkillVisible` on the persona capability; `getFilteredSkills` filters first then globs globals;
+  broker gains `getVisibleSkills`/`resolveVisibleSkill` (owner-wins), composite `getAllSkills` dedupe, and the
+  `all: true` operator flag on `skills__list`/`skills__recall` (+ `/skills` slash command).
+- **Step 8** self-improvement persona-dir routing gated to `user`/`project` sources only.
+- **Step 9** migrate tool: nested listing, `personaId` payloads, `--persona-id` flag, both directions.
+- **Step 10** coordinator UI Owned Skills card (CRUD) + `persona-skill-editor.tsx` + routes + owner badge.
+- **Step 11** new suites: beacon ownership (13), coordinator ownership (7), agent isolation (9),
+  migration (5), self-improvement paths (5), beacon owned-skill routes (7) — all green.
+- **Step 12** ADR `226-persona-owned-skills-swarm-scope` (in the project wiki) + index updates. No
+  `AGENTS.md`/`docs/agents` text described the changed ownership behavior, so none needed edits.
+
+**Verification**: `pnpm -r build`, `pnpm typecheck` (incl. `tsconfig.test.json`), `pnpm lint`, and root
+`pnpm test` (242 files / 3295 passed, 14 skipped) all green. LSP clean.
+
+**En-route findings (NOT regressions — pre-existing, confirmed at base commit `91387000`):**
+1. **`DEFAULT_KB_DIR = './knowledge-base'` + package-dir test runs**: running a package's own
+   `vitest run` (as `pnpm -r run test` does) does NOT load the root `vitest.config.ts`, so the
+   `drone-swarm-common` alias is absent and the module resolves to a SECOND instance. `setKnowledgeBaseDir`
+   then sets a different instance than the routes read, so wiki writes land in a repo-root
+   `knowledge-base/` and graph/origin tests fail. This created the tracked pollution swept into `1972b4a7`;
+   removed in `29e8b80b`. Also causes pre-existing `wiki-indexer`/`wiki-routes` failures under package-dir
+   runs only — the ROOT `pnpm test` (correct aliases) passes them. **Follow-up candidate: add a `.gitignore`
+   entry for `knowledge-base/`, and/or fix the test harness module-identity split.**
+2. Also pre-existing at base: `Markdown.test.tsx` (6) + `multiline-text-input` failures under package-dir
+   runs; green under the root runner. Unrelated to this work.
+3. `file__apply_diff` silently no-op'd several edits against multi-line anchors in
+   `self-improvement/paths.ts` and `migration/promote.ts`; the compiler was the reliable ground truth.
+   Verify each edit with `grep`/`tsc` rather than trusting the tool's success report.
