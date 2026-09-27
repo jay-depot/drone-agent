@@ -7,6 +7,7 @@ import path from 'node:path';
 import {
   getPersonaFilePath,
   getSkillFilePath,
+  getPersonaSkillFilePath,
   getInsightsDir,
   getPrinciplesDir,
 } from './paths.js';
@@ -39,7 +40,9 @@ export async function promoteAsset(
     if (type === 'persona') {
       filePath = getPersonaFilePath(fromScope, id);
     } else if (type === 'skill') {
-      filePath = getSkillFilePath(fromScope, id);
+      filePath = options.personaId
+        ? getPersonaSkillFilePath(fromScope, options.personaId, id)
+        : getSkillFilePath(fromScope, id);
     } else if (type === 'insight') {
       filePath = path.join(getInsightsDir(fromScope), id);
     } else if (type === 'principle') {

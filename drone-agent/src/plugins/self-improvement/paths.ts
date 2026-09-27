@@ -29,7 +29,7 @@ export function resolveInsightPaths(
 
   if (targetType === 'skill') {
     const skill = skillsCap?.getSkill(targetId);
-    if (skill?.personaId) {
+    if (skill?.personaId && isLocalSkill(skill)) {
       const personaDir = path.join(
         baseDir,
         CONFIG_DIR,
@@ -74,7 +74,7 @@ export function resolvePrinciplePaths(
 
   if (targetType === 'skill') {
     const skill = skillsCap?.getSkill(targetId);
-    if (skill?.personaId) {
+    if (skill?.personaId && isLocalSkill(skill)) {
       const personaDir = path.join(
         baseDir,
         CONFIG_DIR,

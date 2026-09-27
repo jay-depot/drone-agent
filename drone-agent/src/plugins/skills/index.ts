@@ -47,10 +47,12 @@ export const skillsPlugin: DronePlugin = {
       const result: DroneSkillDefinition[] = [];
       for (const provider of providers) {
         for (const skill of provider.getSkills()) {
-          if (!seen.has(skill.id)) {
-            seen.add(skill.id);
-            result.push(skill);
-          }
+          // Dedupe on the composite identity so a global skill and one or
+          // more persona-owned copies of the same id all survive.
+          const identity = skillStorageKey(skill.personaId, skill.id);
+          if (seen.has(identity)) continue;
+          seen.add(identity);
+          result.push(skill);
         }
       }
       return result;
