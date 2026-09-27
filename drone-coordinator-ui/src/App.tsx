@@ -17,6 +17,7 @@ import SessionDetailPage from '@/pages/session-detail';
 import PersonasPage from '@/pages/personas';
 import PersonaDetailPage from '@/pages/persona-detail';
 import PersonaEditorPage from '@/pages/persona-editor';
+import PersonaSkillEditorPage from '@/pages/persona-skill-editor';
 import SkillsPage from '@/pages/skills';
 import SkillDetailPage from '@/pages/skill-detail';
 import SkillEditorPage from '@/pages/skill-editor';
@@ -129,6 +130,14 @@ function AppLayout() {
           <Route path="/personas/new" element={<PersonaEditorPage />} />
           <Route path="/personas/:id" element={<PersonaDetailPage />} />
           <Route path="/personas/:id/edit" element={<PersonaEditorPage />} />
+          <Route
+            path="/personas/:id/skills/new"
+            element={<PersonaSkillEditorPage />}
+          />
+          <Route
+            path="/personas/:id/skills/:skillId/edit"
+            element={<PersonaSkillEditorPage />}
+          />
           <Route path="/skills" element={<SkillsPage />} />
           <Route path="/skills/new" element={<SkillEditorPage />} />
           <Route path="/skills/:id" element={<SkillDetailPage />} />
