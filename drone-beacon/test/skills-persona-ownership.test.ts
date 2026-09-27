@@ -9,7 +9,6 @@ import {
   closeDatabase,
   createPersona,
   createSkill,
-  getSkill,
   getSkillByKey,
   getGlobalSkill,
   listSkills,

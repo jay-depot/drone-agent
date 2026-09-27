@@ -216,9 +216,7 @@ export async function triggerCoordinatorSync(): Promise<{
     // failed fetch (mirrors the knowledge-cache guard below).
     if (skills.length > 0) {
       db.deleteCoordinatorGlobalSkillsNotIn(
-        new Set(
-          skills.filter(s => s.personaId === null).map(s => s.id)
-        )
+        new Set(skills.filter(s => s.personaId === null).map(s => s.id))
       );
     }
 

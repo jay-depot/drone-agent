@@ -23,10 +23,7 @@ function rowToFragment(row: Record<string, unknown>): CoordinatorFragmentRow {
  * stamped. Rows are always coordinator-scoped.
  */
 export function upsertFragment(
-  fragment: Omit<
-    DroneSwarmFragment,
-    'createdAt' | 'updatedAt' | 'scope'
-  > & {
+  fragment: Omit<DroneSwarmFragment, 'createdAt' | 'updatedAt' | 'scope'> & {
     createdAt?: number;
     scope?: DroneSwarmFragment['scope'];
   }

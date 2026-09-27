@@ -91,9 +91,7 @@ export const skillsPlugin: DronePlugin = {
      * share an id (a global and one or more owned copies) the active persona's
      * own skill wins; otherwise the global; otherwise the first match.
      */
-    function resolveVisibleSkill(
-      id: string
-    ): DroneSkillDefinition | undefined {
+    function resolveVisibleSkill(id: string): DroneSkillDefinition | undefined {
       const lower = id.trim().toLowerCase();
       const gate = getPersonaGate();
       const visible = getAllSkills().filter(s =>
@@ -284,9 +282,10 @@ export const skillsPlugin: DronePlugin = {
           );
         }
 
-        const body = input.all === true
-          ? await applyEnhancers(skill)
-          : ((await renderSkillBody(id)) ?? skill.body);
+        const body =
+          input.all === true
+            ? await applyEnhancers(skill)
+            : ((await renderSkillBody(id)) ?? skill.body);
 
         return JSON.stringify(
           {

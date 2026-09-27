@@ -77,7 +77,9 @@ async function setupEngine(projectDir: string) {
   await mkdir(path.join(base, 'personas', 'alice', 'skills'), {
     recursive: true,
   });
-  await mkdir(path.join(base, 'personas', 'bob', 'skills'), { recursive: true });
+  await mkdir(path.join(base, 'personas', 'bob', 'skills'), {
+    recursive: true,
+  });
 
   await writeFile(
     path.join(base, 'personas', 'alice', 'persona.md'),
@@ -205,7 +207,9 @@ describe('owner-wins id resolution', () => {
       expect(parsed.body).toContain('ALICE deploy body.');
 
       personaCap.selectPersona('bob');
-      const bobRes = await engine.executeTool('skills__recall', { id: 'deploy' });
+      const bobRes = await engine.executeTool('skills__recall', {
+        id: 'deploy',
+      });
       const bobParsed = JSON.parse(toToolResultContent(bobRes));
       expect(bobParsed.body).toContain('BOB deploy body.');
     });

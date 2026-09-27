@@ -93,9 +93,7 @@ export async function listLocalSkills(scope: LocalScope): Promise<AssetInfo[]> {
 /**
  * List persona-owned skills: every `<personas-dir>/<id>/skills/*.md`.
  */
-async function listPersonaOwnedSkills(
-  scope: LocalScope
-): Promise<AssetInfo[]> {
+async function listPersonaOwnedSkills(scope: LocalScope): Promise<AssetInfo[]> {
   const personaDir = getPersonaDir(scope);
   let personaIds: string[];
   try {

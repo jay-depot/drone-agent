@@ -10,7 +10,9 @@ import {
   resolvePrinciplePaths,
 } from '../../src/plugins/self-improvement/paths.js';
 
-function makeSkillsCap(skill: Partial<DroneSkillDefinition>): DroneSkillsCapability {
+function makeSkillsCap(
+  skill: Partial<DroneSkillDefinition>
+): DroneSkillsCapability {
   const full = { id: 'owned', ...skill } as DroneSkillDefinition;
   return {
     getSkills: () => [full],
@@ -33,7 +35,14 @@ describe('self-improvement paths — persona-owned skill routing', () => {
     const cap = makeSkillsCap({ personaId: 'alice', source: 'project' });
     const { filePath } = resolveInsightPaths('skill', 'owned', BASE, cap);
     expect(filePath).toBe(
-      path.join(BASE, '.drone-agent', 'personas', 'alice', 'insights', 'owned.json')
+      path.join(
+        BASE,
+        '.drone-agent',
+        'personas',
+        'alice',
+        'insights',
+        'owned.json'
+      )
     );
   });
 

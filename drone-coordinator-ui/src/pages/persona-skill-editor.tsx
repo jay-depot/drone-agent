@@ -108,7 +108,8 @@ export default function PersonaSkillEditorPage() {
       } else {
         const data = await res.json().catch(() => ({}));
         setError(
-          data.error || (isEdit ? 'Failed to update skill' : 'Failed to create skill')
+          data.error ||
+            (isEdit ? 'Failed to update skill' : 'Failed to create skill')
         );
       }
     } catch (err) {
@@ -156,9 +157,7 @@ export default function PersonaSkillEditorPage() {
             {isEdit ? 'Edit Owned Skill' : 'New Owned Skill'}
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {isEdit
-              ? `Editing "${name}"`
-              : `A skill owned by persona "${id}"`}
+            {isEdit ? `Editing "${name}"` : `A skill owned by persona "${id}"`}
           </p>
         </div>
       </div>

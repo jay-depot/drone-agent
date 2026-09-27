@@ -164,8 +164,7 @@ export function deleteOwnedSkillsNotIn(personaIds: Set<string>): number {
           `DELETE FROM skills WHERE personaId IS NOT NULL AND personaId NOT IN (${ids.map(() => '?').join(', ')})`
         );
   const result = (ids.length === 0 ? stmt.run() : stmt.run(...ids)) as
-    | { changes?: number }
-    | undefined;
+    { changes?: number } | undefined;
   const removed = result?.changes ?? 0;
   if (removed > 0) {
     logger.info(`Reconcile: removed ${removed} orphaned owned skill(s)`);
@@ -190,8 +189,7 @@ export function deleteCoordinatorGlobalSkillsNotIn(ids: Set<string>): number {
           `DELETE FROM skills WHERE scope = 'coordinator' AND personaId IS NULL AND id NOT IN (${list.map(() => '?').join(', ')})`
         );
   const result = (list.length === 0 ? stmt.run() : stmt.run(...list)) as
-    | { changes?: number }
-    | undefined;
+    { changes?: number } | undefined;
   const removed = result?.changes ?? 0;
   if (removed > 0) {
     logger.info(

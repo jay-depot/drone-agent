@@ -3,10 +3,7 @@ import { mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
-import {
-  listAllAssets,
-  migrateAsset,
-} from '../src/runtime/migration/index.js';
+import { listAllAssets, migrateAsset } from '../src/runtime/migration/index.js';
 
 let projectDir: string;
 let userDir: string;
@@ -27,7 +24,13 @@ async function createOwnedSkillFile(
   personaId: string,
   id: string
 ): Promise<string> {
-  const dir = path.join(baseDir, '.drone-agent', 'personas', personaId, 'skills');
+  const dir = path.join(
+    baseDir,
+    '.drone-agent',
+    'personas',
+    personaId,
+    'skills'
+  );
   await mkdir(dir, { recursive: true });
   const content = `---
 name: ${id}
@@ -183,12 +186,7 @@ describe('Migration — persona-owned skills', () => {
     });
 
     expect(result.success).toBe(true);
-    const flat = path.join(
-      projectDir,
-      '.drone-agent',
-      'skills',
-      'plain.md'
-    );
+    const flat = path.join(projectDir, '.drone-agent', 'skills', 'plain.md');
     expect(await readFile(flat, 'utf-8')).toContain('Global body');
   });
 });

@@ -23,7 +23,9 @@ export default function PersonaDetailPage() {
   const [skillsError, setSkillsError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [skillDeleteTarget, setSkillDeleteTarget] = useState<Skill | null>(null);
+  const [skillDeleteTarget, setSkillDeleteTarget] = useState<Skill | null>(
+    null
+  );
   const [skillDeleteLoading, setSkillDeleteLoading] = useState(false);
 
   useEffect(() => {
