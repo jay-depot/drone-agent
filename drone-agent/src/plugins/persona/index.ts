@@ -143,37 +143,32 @@ export const personaPlugin: DronePlugin = {
     function getFilteredSkills(
       allSkills: DroneSkillDefinition[]
     ): DroneSkillDefinition[] {
-      if (!activePersona) {
-        return allSkills;
+      // Isolation first: a persona-owned skill is visible only to its owner.
+      const visible = allSkills.filter(isSkillVisible);
+
+      const active = activePersona;
+      if (!active?.allowedSkills) {
+        return visible;
       }
 
-      // Separate persona-owned skills (always visible) from global skills
-      const ownedSkills: DroneSkillDefinition[] = [];
-      const globalSkills: DroneSkillDefinition[] = [];
-
-      for (const skill of allSkills) {
-        if (skill.personaId === activePersona.id) {
-          ownedSkills.push(skill);
-        } else {
-          globalSkills.push(skill);
-        }
-      }
-
-      // If no allowedSkills filter, return all global + owned
-      if (!activePersona.allowedSkills) {
-        return [...globalSkills, ...ownedSkills];
-      }
-
-      // Filter global skills by allowedSkills patterns
-      const globalIds = globalSkills.map(s => s.id);
+      // `allowedSkills` globs filter only the global skills; an owner's own
+      // skills are always visible to it.
+      const ownedSkills = visible.filter(s => s.personaId === active.id);
+      const globalSkills = visible.filter(s => !s.personaId);
       const filteredIds = filterByGlobPatterns(
-        globalIds,
-        activePersona.allowedSkills
+        globalSkills.map(s => s.id),
+        active.allowedSkills
       );
       const filteredSet = new Set(filteredIds);
-      const filteredGlobal = globalSkills.filter(s => filteredSet.has(s.id));
+      return [
+        ...globalSkills.filter(s => filteredSet.has(s.id)),
+        ...ownedSkills,
+      ];
+    }
 
-      return [...filteredGlobal, ...ownedSkills];
+    function isSkillVisible(skill: DroneSkillDefinition): boolean {
+      if (!skill.personaId) return true;
+      return activePersona?.id === skill.personaId;
     }
 
     // Dynamic prompt fragment that renders the active persona's override/fragments
@@ -317,6 +312,7 @@ export const personaPlugin: DronePlugin = {
         getFilteredTools(allTools),
       getFilteredSkills: (allSkills: DroneSkillDefinition[]) =>
         getFilteredSkills(allSkills),
+      isSkillVisible: (skill: DroneSkillDefinition) => isSkillVisible(skill),
     };
 
     registration.offer(capability);

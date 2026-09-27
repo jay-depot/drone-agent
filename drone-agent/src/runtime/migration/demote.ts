@@ -7,6 +7,7 @@ import path from 'node:path';
 import {
   getPersonaFilePath,
   getSkillFilePath,
+  getPersonaSkillFilePath,
   getInsightsDir,
   getPrinciplesDir,
 } from './paths.js';
@@ -60,7 +61,10 @@ export async function demoteAsset(
       const systemPrompt = String(data.systemPrompt ?? '');
       content = `---\nname: ${name}\ndescription: ${description}\n---\n\n${systemPrompt}`;
     } else if (type === 'skill') {
-      filePath = getSkillFilePath(toScope, id);
+      const personaId = data.personaId ? String(data.personaId) : undefined;
+      filePath = personaId
+        ? getPersonaSkillFilePath(toScope, personaId, id)
+        : getSkillFilePath(toScope, id);
       const name = String(data.name ?? id);
       const description = String(data.description ?? `Skill: ${id}`);
       const body = String(data.body ?? '');

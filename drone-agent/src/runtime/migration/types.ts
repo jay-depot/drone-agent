@@ -25,6 +25,8 @@ export interface MigrateOptions {
   pull?: boolean;
   /** Source scope for pull operations. */
   scope?: MigrateScope;
+  /** Owning persona id (for persona-owned skills). */
+  personaId?: string;
   /** Beacon host override. */
   beaconHost?: string;
   /** Beacon port override. */
@@ -37,6 +39,8 @@ export interface AssetInfo {
   scope: MigrateScope;
   name: string;
   description: string;
+  /** Owning persona id, when this is a persona-owned skill. */
+  personaId?: string;
   /** Path to the local file (for local assets). */
   filePath?: string;
 }
