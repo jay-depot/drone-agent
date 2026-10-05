@@ -69,6 +69,7 @@ export class CoordinatorClient implements SwarmApi {
     personaId?: string;
     task?: string;
     spawnId?: string;
+    config?: { workingDir?: string };
   }): Promise<unknown> {
     return this.mutate('POST', '/api/spawn', input, 'Spawn failed', true);
   }

@@ -17,6 +17,7 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
 
   private coordinatorClient: CoordinatorClient;
   private sessions: Map<string, SpawnSession> = new Map();
+  private pending: Map<string, Promise<SpawnSession>> = new Map();
 
   constructor(coordinatorUrl: string, coordinatorToken: string | undefined) {
     this.coordinatorClient = new CoordinatorClient(
@@ -35,12 +36,35 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
       return existing;
     }
 
+    // Concurrent callers for one conversation share a single in-flight spawn
+    // so no two agents are created for the same session.
+    const inFlight = this.pending.get(conversationId);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const promise = this.startSession(conversationId, personaId, opts);
+    this.pending.set(conversationId, promise);
+    try {
+      return await promise;
+    } finally {
+      this.pending.delete(conversationId);
+    }
+  }
+
+  private async startSession(
+    conversationId: string,
+    personaId: string,
+    opts: SpawnSessionOptions | undefined
+  ): Promise<SpawnSession> {
     const targetBeaconId = opts?.targetBeaconId;
     if (!targetBeaconId) {
       throw new Error(
         'CoordinatorSpawnBackend.spawnSession requires a targetBeaconId.'
       );
     }
+
+    const workingDir = opts?.workingDir;
 
     logger.info(
       `Spawning agent on beacon "${targetBeaconId}" for conversation ${conversationId} (persona: ${personaId})`
@@ -51,6 +75,9 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
       targetBeaconId,
       personaId,
       spawnId,
+      // When no working dir is set, omit `config` entirely so the beacon
+      // applies its own `defaultSpawnRoot`.
+      ...(workingDir ? { config: { workingDir } } : {}),
     });
 
     const spawnResult = result as {
@@ -66,6 +93,7 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
       startedAt: Date.now(),
       targetBeaconId,
       spawnId: spawnResult.spawnId,
+      workingDir,
     };
 
     this.sessions.set(conversationId, session);

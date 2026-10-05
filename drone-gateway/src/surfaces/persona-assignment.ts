@@ -1,6 +1,7 @@
 import { logger } from '../logger.js';
-import type { AdapterMessage, SpawnSession } from '../types.js';
+import type { AdapterMessage } from '../types.js';
 import type { SurfaceFactory } from './types.js';
+import { SessionLifecycle } from './lifecycle.js';
 
 export const createPersonaAssignmentSurface: SurfaceFactory = (
   spec,
@@ -11,7 +12,12 @@ export const createPersonaAssignmentSurface: SurfaceFactory = (
     throw new Error('persona-assignment control surface requires personaId');
   }
   const personaId = spec.personaId;
-  let session: SpawnSession | null = null;
+  const lifecycle = new SessionLifecycle({
+    surfaceType: 'persona-assignment',
+    conversationId,
+    personaId,
+    ctx,
+  });
 
   return {
     id: `persona-assignment-${conversationId}`,
@@ -20,17 +26,7 @@ export const createPersonaAssignmentSurface: SurfaceFactory = (
       // The engine guarantees this surface is only invoked for its own
       // conversation — no conversationId re-check needed.
       try {
-        if (!session) {
-          session = await ctx.spawnBackend.spawnSession(
-            conversationId,
-            personaId,
-            { targetBeaconId: ctx.targetBeaconId }
-          );
-        }
-
-        const response = await ctx.spawnBackend.sendMessage(session, msg.text);
-
-        return { response, handled: true };
+        return { response: await lifecycle.send(msg.text), handled: true };
       } catch (err) {
         logger.error(
           { err, conversationId, personaId },
@@ -42,5 +38,6 @@ export const createPersonaAssignmentSurface: SurfaceFactory = (
         };
       }
     },
+    dispose: () => lifecycle.dispose(),
   };
 };

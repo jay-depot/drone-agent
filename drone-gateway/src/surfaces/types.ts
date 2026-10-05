@@ -16,6 +16,18 @@ export interface SurfaceContext {
    * gateway-wide default. Absent in local spawn-backend mode.
    */
   targetBeaconId?: string;
+  /**
+   * Engine-resolved per-surface working directory (validated at load).
+   * Absent means "use the default": local mode inherits the gateway cwd;
+   * coordinator mode lets the beacon apply its `defaultSpawnRoot`.
+   */
+  workingDir?: string;
+  /**
+   * Engine-resolved idle timeout in ms (`config.lifecycle.idleTimeoutMs` ??
+   * gateway-wide `idleTimeoutMs`). `0` disables. Defaults are applied by
+   * SessionLifecycle when this is absent.
+   */
+  idleTimeoutMs?: number;
 }
 
 export type SurfaceFactory = (

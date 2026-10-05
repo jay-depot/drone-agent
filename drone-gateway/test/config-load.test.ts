@@ -285,4 +285,142 @@ describe('loadGatewayConfig conversation parsing', () => {
         ?.allowedSenders
     ).toBeUndefined();
   });
+
+  it('keeps a valid absolute workingDir and expands ~ to the home directory', async () => {
+    writeConversation('matrix', 'home.json', {
+      conversationId: '!home:server',
+      controlSurfaces: [
+        {
+          type: 'persona-assignment',
+          personaId: 'me',
+          config: { workingDir: '~/bots/x' },
+        },
+      ],
+    });
+    const config = await load();
+    const surfaces =
+      config.serviceAdapters[0].conversations.get('!home:server')?.surfaces;
+    expect((surfaces?.[0].config as { workingDir?: string })?.workingDir).toBe(
+      path.join(os.homedir(), 'bots/x')
+    );
+  });
+
+  it('drops a relative workingDir', async () => {
+    writeConversation('matrix', 'rel.json', {
+      conversationId: '!rel:server',
+      controlSurfaces: [
+        {
+          type: 'persona-assignment',
+          personaId: 'me',
+          config: { workingDir: 'bots/x' },
+        },
+      ],
+    });
+    const config = await load();
+    const surfaces =
+      config.serviceAdapters[0].conversations.get('!rel:server')?.surfaces;
+    expect(surfaces?.[0].config).not.toHaveProperty('workingDir');
+  });
+
+  it('drops an over-length workingDir', async () => {
+    writeConversation('matrix', 'long.json', {
+      conversationId: '!long:server',
+      controlSurfaces: [
+        {
+          type: 'persona-assignment',
+          personaId: 'me',
+          config: { workingDir: '/' + 'x'.repeat(4200) },
+        },
+      ],
+    });
+    const config = await load();
+    const surfaces =
+      config.serviceAdapters[0].conversations.get('!long:server')?.surfaces;
+    expect(surfaces?.[0].config).not.toHaveProperty('workingDir');
+  });
+
+  it('drops a non-string workingDir', async () => {
+    writeConversation('matrix', 'num.json', {
+      conversationId: '!num:server',
+      controlSurfaces: [
+        {
+          type: 'persona-assignment',
+          personaId: 'me',
+          config: { workingDir: 42 },
+        },
+      ],
+    });
+    const config = await load();
+    const surfaces =
+      config.serviceAdapters[0].conversations.get('!num:server')?.surfaces;
+    expect(surfaces?.[0].config).not.toHaveProperty('workingDir');
+  });
+
+  it('keeps a valid lifecycle.idleTimeoutMs and drops a negative one', async () => {
+    writeConversation('matrix', 'life.json', {
+      conversationId: '!life:server',
+      controlSurfaces: [
+        {
+          type: 'persona-assignment',
+          personaId: 'me',
+          config: { lifecycle: { idleTimeoutMs: 1000 } },
+        },
+      ],
+    });
+    writeConversation('matrix', 'life-neg.json', {
+      conversationId: '!life-neg:server',
+      controlSurfaces: [
+        {
+          type: 'persona-assignment',
+          personaId: 'me',
+          config: { lifecycle: { idleTimeoutMs: -1 } },
+        },
+      ],
+    });
+    const config = await load();
+    const good = config.serviceAdapters[0].conversations.get('!life:server')
+      ?.surfaces?.[0].config as { lifecycle?: { idleTimeoutMs?: number } };
+    expect(good.lifecycle?.idleTimeoutMs).toBe(1000);
+    const bad = config.serviceAdapters[0].conversations.get('!life-neg:server')
+      ?.surfaces?.[0].config as { lifecycle?: { idleTimeoutMs?: number } };
+    expect(bad.lifecycle).not.toHaveProperty('idleTimeoutMs');
+  });
+});
+
+describe('loadGatewayConfig idleTimeoutMs validation', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(path.join(os.tmpdir(), 'gateway-idle-test-'));
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  async function writeConfig(config: Record<string, unknown>): Promise<string> {
+    const configPath = path.join(tmpDir, 'config.json');
+    writeFileSync(configPath, JSON.stringify(config));
+    return configPath;
+  }
+
+  it('keeps a valid top-level idleTimeoutMs (including 0)', async () => {
+    const configPath = await writeConfig({
+      spawnBackend: 'local',
+      idleTimeoutMs: 0,
+    });
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    const config = await loadGatewayConfig(configPath);
+    expect(config.idleTimeoutMs).toBe(0);
+  });
+
+  it('omits an invalid top-level idleTimeoutMs', async () => {
+    const configPath = await writeConfig({
+      spawnBackend: 'local',
+      idleTimeoutMs: 'soon',
+    });
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    const config = await loadGatewayConfig(configPath);
+    expect(config.idleTimeoutMs).toBeUndefined();
+  });
 });

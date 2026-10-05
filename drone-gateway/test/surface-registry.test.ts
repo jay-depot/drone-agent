@@ -107,6 +107,7 @@ describe('registerBuiltInSurfaces', () => {
     expect(result).toEqual({ response: 'hello back', handled: true });
     expect(spawnBackend.spawnSession).toHaveBeenCalledWith('conv-1', 'coder', {
       targetBeaconId: undefined,
+      workingDir: undefined,
     });
   });
 
@@ -136,6 +137,7 @@ describe('registerBuiltInSurfaces', () => {
     });
     expect(spawnBackend.spawnSession).toHaveBeenCalledWith('conv-1', 'coder', {
       targetBeaconId: 'beacon-9',
+      workingDir: undefined,
     });
   });
 

@@ -19,6 +19,7 @@ import type { SurfaceContext } from './surfaces/types.js';
 type InstantiatedConversation = {
   allowedSenders?: string[];
   surfaces: DroneControlSurface[];
+  tail: Promise<unknown>;
 };
 
 /**
@@ -36,6 +37,23 @@ function senderAllowed(
 ): boolean {
   if (!allowed) return true;
   return senderId !== undefined && allowed.includes(senderId);
+}
+
+/**
+ * Append `fn` to a conversation's serial dispatch chain, returning a promise
+ * that settles with `fn`. Guarantees that message N+1 starts only after
+ * message N settles, so a conversation never runs two agent turns at once.
+ */
+function runOnTail<T>(
+  conv: InstantiatedConversation,
+  fn: () => Promise<T>
+): Promise<T> {
+  const result = conv.tail.then(fn, fn);
+  conv.tail = result.then(
+    () => undefined,
+    () => undefined
+  );
+  return result;
 }
 
 export class GatewayEngine {
@@ -79,6 +97,7 @@ export class GatewayEngine {
         byConv.set(convId, {
           allowedSenders: conv.allowedSenders,
           surfaces,
+          tail: Promise.resolve(),
         });
       }
       this.controlSurfaces.set(adapterConfig.id, byConv);
@@ -103,32 +122,42 @@ export class GatewayEngine {
     // dispatch falls through to the wildcard.
     const exact = byConv.get(msg.conversationId);
     const wildcard = byConv.get('*');
+
+    const exactApplies =
+      exact !== undefined && senderAllowed(exact.allowedSenders, msg.senderId);
+    const wildcardApplies =
+      wildcard !== undefined &&
+      senderAllowed(wildcard.allowedSenders, msg.senderId);
+
     const candidates: DroneControlSurface[] = [
-      ...(exact && senderAllowed(exact.allowedSenders, msg.senderId)
-        ? exact.surfaces
-        : []),
-      ...(wildcard && senderAllowed(wildcard.allowedSenders, msg.senderId)
-        ? wildcard.surfaces
-        : []),
+      ...(exactApplies && exact ? exact.surfaces : []),
+      ...(wildcardApplies && wildcard ? wildcard.surfaces : []),
     ];
 
-    for (const surface of candidates) {
-      const result = await surface.handleMessage(msg);
-      if (result.handled) {
-        if (result.response) {
-          const adapter = this.adapters.get(msg.adapterId);
-          if (adapter) {
-            await adapter.sendMessage(msg.conversationId, result.response);
-          }
-        }
-        return;
-      }
-    }
+    // Serialize dispatch per conversation so two messages for one conversation
+    // never run concurrently (which would double-spawn and corrupt the stream).
+    const queue = exactApplies ? exact : wildcard;
+    if (!queue) return;
 
-    logger.debug(
-      { adapterId: msg.adapterId, conversationId: msg.conversationId },
-      'Message unhandled by any control surface'
-    );
+    await runOnTail(queue, async () => {
+      for (const surface of candidates) {
+        const result = await surface.handleMessage(msg);
+        if (result.handled) {
+          if (result.response) {
+            const adapter = this.adapters.get(msg.adapterId);
+            if (adapter) {
+              await adapter.sendMessage(msg.conversationId, result.response);
+            }
+          }
+          return;
+        }
+      }
+
+      logger.debug(
+        { adapterId: msg.adapterId, conversationId: msg.conversationId },
+        'Message unhandled by any control surface'
+      );
+    });
   }
 
   async stop(): Promise<void> {
@@ -138,6 +167,22 @@ export class GatewayEngine {
       await adapter.stop();
     }
     this.adapters.clear();
+
+    // Dispose every instantiated surface so spawning surfaces terminate their
+    // live agents instead of leaking them past shutdown.
+    for (const byConv of this.controlSurfaces.values()) {
+      for (const conv of byConv.values()) {
+        for (const surface of conv.surfaces) {
+          if (surface.dispose) {
+            try {
+              await surface.dispose();
+            } catch (err) {
+              logger.warn({ err }, 'Surface dispose failed');
+            }
+          }
+        }
+      }
+    }
     this.controlSurfaces.clear();
   }
 
@@ -170,11 +215,7 @@ export class GatewayEngine {
           `Supported types: ${this.surfaceRegistry.types().join(', ')}`
       );
     }
-    return factory(
-      spec,
-      conversationId,
-      this.surfaceContext(this.resolveTargetBeaconId(spec))
-    );
+    return factory(spec, conversationId, this.surfaceContext(spec));
   }
 
   /**
@@ -189,11 +230,15 @@ export class GatewayEngine {
     return this.config.targetBeaconId;
   }
 
-  private surfaceContext(targetBeaconId: string | undefined): SurfaceContext {
+  private surfaceContext(spec: ControlSurfaceSpec): SurfaceContext {
+    const cfg = spec.config ?? {};
+    const lifecycle = cfg.lifecycle as { idleTimeoutMs?: number } | undefined;
     return {
       spawnBackend: this.spawnBackend,
       swarm: this.swarm,
-      targetBeaconId,
+      targetBeaconId: this.resolveTargetBeaconId(spec),
+      workingDir: cfg.workingDir as string | undefined,
+      idleTimeoutMs: lifecycle?.idleTimeoutMs ?? this.config.idleTimeoutMs,
     };
   }
 }

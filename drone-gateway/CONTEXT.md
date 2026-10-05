@@ -16,6 +16,8 @@ _Avoid_: Connector, driver, integration, channel
 A configuration that maps a chat conversation (room, DM, channel) to a behavior. Each conversation gets a **dedicated instance** of its control surface(s), created at engine start time. A control surface is never invoked for a conversation other than its own. Multiple control surfaces can be attached to the same conversation as an ordered array (first-match-wins).
 _Avoid_: Handler, rule, mapping, route
 
+A control surface may expose an optional `dispose(): Promise<void>` (see **Surface Disposal**). The engine calls it once at shutdown for every instantiated surface.
+
 **Conversation**:
 A single chat conversation identified by a `conversationId`. For Matrix, rooms use the room ID (e.g. `!abc:matrix.org`) and DMs use `dm:@peer:server`. The conversationId is opaque to the engine and control surfaces — only the adapter knows the scheme.
 _Avoid_: Channel, thread, room
@@ -29,7 +31,7 @@ A built-in control surface type (`type: "discard"`) that silently consumes messa
 _Avoid_: Null surface, dev-null, black hole
 
 **Persona Assignment**:
-A control surface that routes all messages in a conversation to a specific persona. The gateway spawns an agent with that persona on the conversation's resolved target beacon (see **Spawn Target Beacon**), sends the message as a task, and returns the response.
+A lifecycle-managed control surface that routes all messages in a conversation to a specific persona. The gateway spawns an agent with that persona on the conversation's resolved **Spawn Target Beacon** and with the conversation's resolved **Working Directory**, sends the message as a task, and returns the response. The agent is kept alive between turns, terminated after the **Idle Timeout** (and re-spawned lazily on the next message), re-spawned once if `sendMessage` fails because the agent died, and disposed at gateway shutdown. There is no session resume: a re-spawn starts with fresh in-memory context, and continuity comes from the on-disk **Working Directory**.
 _Avoid_: Persona router, persona mapper, persona binding
 
 **Swarm Console**:
@@ -37,12 +39,24 @@ A control surface that exposes coordinator commands as chat-accessible dot-notat
 _Avoid_: Admin console, swarm shell, command surface
 
 **Surface Registry**:
-The engine's lookup table from a control surface `type` to the factory that builds per-conversation surface instances. Factories receive `(spec, conversationId, ctx)` where `ctx` is a `SurfaceContext` (`spawnBackend` + optional `swarm` API). Replaced the earlier hardcoded `switch` in the engine.
+The engine's lookup table from a control surface `type` to the factory that builds per-conversation surface instances. Factories receive `(spec, conversationId, ctx)` where `ctx` is a `SurfaceContext` (`spawnBackend` + optional `swarm` API + engine-resolved `targetBeaconId`, `workingDir`, `idleTimeoutMs`). Replaced the earlier hardcoded `switch` in the engine.
 _Avoid_: Surface table, factory map
 
 **Spawn Target Beacon**:
 The beacon a conversation's agents spawn on. The engine resolves it per conversation as `controlSurfaces[].config.targetBeaconId ?? config.targetBeaconId` (the per-conversation override wins over the gateway-wide default) and injects the resolved value into that conversation's `SurfaceContext`. It is `undefined` in local spawn-backend mode, where there is no beacon. The gateway-wide default is required when `spawnBackend` is `"coordinator"` and merely warned about when it is `"local"`. `CoordinatorSpawnBackend` holds no ambient beacon: it records the beacon on the session it returns, and termination targets that recorded beacon.
 _Avoid_: Spawn host, target host, agent location
+
+**Working Directory**:
+The directory a conversation's spawned agent runs in, set per surface as `controlSurfaces[].config.workingDir`. There is **no** gateway-wide default. The engine resolves it (validating that it is a non-empty absolute string after `~`/`~/` expansion, ≤ 4096 chars) and injects it as `ctx.workingDir`; the surface passes it to `spawnSession`. Absent means the mode default: local mode inherits the gateway process cwd, coordinator mode omits the field so the beacon applies its `defaultSpawnRoot`. Local mode has no whitelist; coordinator mode is whitelisted by the beacon's `spawnRoots`. The directory gives each bot a pseudo-project for memories and scratch files, and is how continuity survives an idle/death re-spawn.
+_Avoid_: cwd, project path, working folder
+
+**Idle Timeout**:
+How long a spawning surface keeps its agent alive with no completed turn. Resolved as `controlSurfaces[].config.lifecycle.idleTimeoutMs ?? config.idleTimeoutMs` (gateway-wide) ?? a built-in default (300000 ms). `0` disables the timer. The timer resets on each turn **completion** (never mid-turn) and is `unref()`'d so it cannot hold the process open. On expiry the surface terminates the agent and drops the session; the next message lazily re-spawns.
+_Avoid_: keepalive, TTL, expiry
+
+**Surface Disposal**:
+The optional `dispose(): Promise<void>` a control surface may implement. The engine calls it once for every instantiated surface at `GatewayEngine.stop()`, after adapters stop, so spawning surfaces terminate their live agents instead of leaking them. Implementations are idempotent and do not throw; the engine logs and swallows any failure.
+_Avoid_: teardown, cleanup, destroy
 
 **Allowed Senders**:
 An optional per-conversation allowlist (`allowedSenders: string[]`) enforced by the engine at dispatch time. When set, only listed `senderId`s match the conversation; other senders fall through to the wildcard. Unset means every sender is allowed. Authorization lives at the conversation level, never inside a surface.
@@ -71,6 +85,9 @@ _Avoid_: Coordinator API, coordinator proxy, coordinator connector
     targetBeaconId?: string           # Gateway-wide default spawn beacon;
                                       # required when spawnBackend is "coordinator";
                                       # inert (and warned) in local mode
+    idleTimeoutMs?: number            # Gateway-wide default idle timeout (ms)
+                                      # for spawning surfaces; 0 disables.
+                                      # Overridden per-surface (see below).
     agentPath?: string                # For local spawn backend
   adapters/
     <adapter-id>/
@@ -98,7 +115,14 @@ _Avoid_: Coordinator API, coordinator proxy, coordinator connector
                                      # wildcard. Unset = every sender allowed.
           controlSurfaces: [
             { type: "persona-assignment", personaId: "...",
-              config: { targetBeaconId: "other-beacon" } },  # optional override
+              config: {
+                targetBeaconId: "other-beacon",  # optional beacon override
+                workingDir: "/srv/bots/me",       # optional; local: any path,
+                                                  # coordinator: must be a
+                                                  # beacon spawnRoot. Absent =
+                                                  # mode default.
+                lifecycle: { idleTimeoutMs: 1000 } # optional; 0 disables
+              } },
             { type: "swarm-console" },
             { type: "discard" }
           ]

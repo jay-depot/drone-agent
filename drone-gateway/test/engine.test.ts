@@ -358,6 +358,7 @@ describe('GatewayEngine', () => {
       });
       expect(spawnedBeacon(backend)).toEqual({
         targetBeaconId: 'beacon-default',
+        workingDir: undefined,
       });
     });
 
@@ -387,6 +388,7 @@ describe('GatewayEngine', () => {
       });
       expect(spawnedBeacon(backend)).toEqual({
         targetBeaconId: 'beacon-override',
+        workingDir: undefined,
       });
     });
 
@@ -396,7 +398,133 @@ describe('GatewayEngine', () => {
         conversationId: 'dm:@me:server',
         text: 'hello',
       });
-      expect(spawnedBeacon(backend)).toEqual({ targetBeaconId: undefined });
+      expect(spawnedBeacon(backend)).toEqual({
+        targetBeaconId: undefined,
+        workingDir: undefined,
+      });
+    });
+
+    it('forwards the surface workingDir to spawnSession', async () => {
+      const backend = makeRespondingSpawnBackend('local');
+      const config = beaconConfig('local', {
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              [
+                'dm:@me:server',
+                conv([
+                  makeConvSpec('persona-assignment', {
+                    personaId: 'me',
+                    config: { workingDir: '/srv/bots/me' },
+                  }),
+                ]),
+              ],
+            ]),
+          }),
+        ],
+      });
+      await startAndDrive(config, backend, {
+        conversationId: 'dm:@me:server',
+        text: 'hello',
+      });
+      expect(spawnedBeacon(backend)).toEqual({
+        targetBeaconId: undefined,
+        workingDir: '/srv/bots/me',
+      });
+    });
+  });
+
+  describe('per-conversation serialization', () => {
+    it('runs two messages for one conversation serially', async () => {
+      const order: string[] = [];
+      const backend = makeRespondingSpawnBackend('local');
+      backend.sendMessage = vi.fn(async (_session, text: string) => {
+        order.push(`start:${text}`);
+        await new Promise(resolve => setTimeout(resolve, 10));
+        order.push(`end:${text}`);
+        return 'ok';
+      }) as unknown as SpawnBackend['sendMessage'];
+
+      const config = makeMinimalConfig({
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              [
+                'dm:@me:server',
+                conv([makeConvSpec('persona-assignment', { personaId: 'me' })]),
+              ],
+            ]),
+          }),
+        ],
+      });
+      const engine = new GatewayEngine(config, backend);
+      await engine.start();
+      const matrix = (await import('../src/adapters/matrix.js'))
+        .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
+      const adapter = matrix.mock.results.at(-1)?.value as {
+        onMessage: ReturnType<typeof vi.fn>;
+      };
+      const handler = adapter.onMessage.mock.calls[0][0] as (m: {
+        adapterId: string;
+        conversationId: string;
+        text: string;
+      }) => void;
+
+      handler({
+        adapterId: 'matrix-1',
+        conversationId: 'dm:@me:server',
+        text: 'a',
+      });
+      handler({
+        adapterId: 'matrix-1',
+        conversationId: 'dm:@me:server',
+        text: 'b',
+      });
+      await vi.waitFor(() => expect(order).toHaveLength(4));
+
+      expect(order).toEqual(['start:a', 'end:a', 'start:b', 'end:b']);
+    });
+  });
+
+  describe('shutdown disposal', () => {
+    it('disposes instantiated surfaces on stop (terminating live agents)', async () => {
+      const backend = makeRespondingSpawnBackend('local');
+      const config = makeMinimalConfig({
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              [
+                'dm:@me:server',
+                conv([makeConvSpec('persona-assignment', { personaId: 'me' })]),
+              ],
+            ]),
+          }),
+        ],
+      });
+      const engine = new GatewayEngine(config, backend);
+      await engine.start();
+      const matrix = (await import('../src/adapters/matrix.js'))
+        .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
+      const adapter = matrix.mock.results.at(-1)?.value as {
+        onMessage: ReturnType<typeof vi.fn>;
+      };
+      const handler = adapter.onMessage.mock.calls[0][0] as (m: {
+        adapterId: string;
+        conversationId: string;
+        text: string;
+      }) => void;
+      handler({
+        adapterId: 'matrix-1',
+        conversationId: 'dm:@me:server',
+        text: 'hi',
+      });
+      await vi.waitFor(() => expect(backend.sendMessage).toHaveBeenCalled());
+
+      await engine.stop();
+      expect(backend.terminateSession).toHaveBeenCalledTimes(1);
     });
   });
 });

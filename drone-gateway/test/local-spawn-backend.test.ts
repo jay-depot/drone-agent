@@ -112,6 +112,53 @@ describe('LocalSpawnBackend', () => {
       );
     });
 
+    it('passes cwd and --working-dir when a working dir is supplied', async () => {
+      const mockProc = makeMockProcess(12345, []);
+      mockSpawn.mockReturnValue(mockProc);
+
+      const session = await backend.spawnSession('conv-1', 'coder', {
+        workingDir: '/srv/bots/coder',
+      });
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        '/usr/local/bin/drone-agent',
+        [
+          '--output-json',
+          '--persona',
+          'coder',
+          '--working-dir',
+          '/srv/bots/coder',
+        ],
+        expect.objectContaining({ cwd: '/srv/bots/coder' })
+      );
+      expect(session.workingDir).toBe('/srv/bots/coder');
+    });
+
+    it('omits cwd and --working-dir when no working dir is supplied', async () => {
+      const mockProc = makeMockProcess(12345, []);
+      mockSpawn.mockReturnValue(mockProc);
+
+      await backend.spawnSession('conv-1', 'coder');
+
+      const args = mockSpawn.mock.calls[0][1] as string[];
+      expect(args).not.toContain('--working-dir');
+      const options = mockSpawn.mock.calls[0][2] as Record<string, unknown>;
+      expect(options).not.toHaveProperty('cwd');
+    });
+
+    it('dedupes concurrent spawns for the same conversation', async () => {
+      const mockProc = makeMockProcess(12345, []);
+      mockSpawn.mockReturnValue(mockProc);
+
+      const [a, b] = await Promise.all([
+        backend.spawnSession('conv-1', 'coder'),
+        backend.spawnSession('conv-1', 'coder'),
+      ]);
+
+      expect(a).toBe(b);
+      expect(mockSpawn).toHaveBeenCalledTimes(1);
+    });
+
     it('cleans up session on process error', async () => {
       const mockProc = makeMockProcess(12345, []);
       mockSpawn.mockReturnValue(mockProc);

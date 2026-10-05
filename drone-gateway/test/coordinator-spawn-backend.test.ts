@@ -89,6 +89,61 @@ describe('CoordinatorSpawnBackend', () => {
 
       expect(session.processId).toBe('spawn-abc');
     });
+
+    it('forwards workingDir as config.workingDir', async () => {
+      mockSpawnAgent.mockResolvedValue({
+        spawnId: 'spawn-abc',
+        agentId: 'agent-xyz',
+        status: 'running',
+      });
+
+      const session = await backend.spawnSession('conv-1', 'coder', {
+        targetBeaconId: 'beacon-1',
+        workingDir: '/srv/bots/coder',
+      });
+
+      expect(mockSpawnAgent).toHaveBeenCalledWith({
+        targetBeaconId: 'beacon-1',
+        personaId: 'coder',
+        spawnId: expect.any(String),
+        config: { workingDir: '/srv/bots/coder' },
+      });
+      expect(session.workingDir).toBe('/srv/bots/coder');
+    });
+
+    it('omits config when no workingDir is supplied', async () => {
+      mockSpawnAgent.mockResolvedValue({
+        spawnId: 'spawn-abc',
+        agentId: 'agent-xyz',
+        status: 'running',
+      });
+
+      await backend.spawnSession('conv-1', 'coder', {
+        targetBeaconId: 'beacon-1',
+      });
+
+      expect(mockSpawnAgent).toHaveBeenCalledWith({
+        targetBeaconId: 'beacon-1',
+        personaId: 'coder',
+        spawnId: expect.any(String),
+      });
+    });
+
+    it('dedupes concurrent spawns for the same conversation', async () => {
+      mockSpawnAgent.mockResolvedValue({
+        spawnId: 'spawn-abc',
+        agentId: 'agent-xyz',
+        status: 'running',
+      });
+
+      const [a, b] = await Promise.all([
+        backend.spawnSession('conv-1', 'coder', { targetBeaconId: 'beacon-1' }),
+        backend.spawnSession('conv-1', 'coder', { targetBeaconId: 'beacon-1' }),
+      ]);
+
+      expect(a).toBe(b);
+      expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('sendMessage', () => {
