@@ -144,6 +144,32 @@ describe('spawner workingDir guard', () => {
     ]);
   });
 
+  it('persists agent_id at spawn time for terminate lookup', async () => {
+    const { initSpawner, spawnAgent } = await import('../src/spawner.js');
+    initSpawner(
+      {
+        agentPath: 'drone-agent',
+        timeoutMs: 60_000,
+        maxConcurrentSpawns: 2,
+        beaconHost: '127.0.0.1',
+        beaconPort: 4000,
+      },
+      db
+    );
+    spawnMock.mockReturnValue(createMockChildProcess());
+
+    await spawnAgent('spawn-1', 'agent-xyz', null, null, {});
+
+    expect(db.createSpawn).toHaveBeenCalledWith(
+      'spawn-1',
+      null,
+      null,
+      {},
+      'agent-xyz'
+    );
+  });
+
+
   it('unregisters the agent session when the spawned process exits', async () => {
     const { initSpawner, spawnAgent } = await import('../src/spawner.js');
     initSpawner(

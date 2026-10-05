@@ -26,13 +26,15 @@ const beaconSpawnDb: SpawnDb = {
     spawnId: string,
     personaId: string | null,
     task: string | null,
-    config: Record<string, unknown> | null
+    config: Record<string, unknown> | null,
+    agentId?: string | null
   ): SpawnRecord {
     return db.createSpawn(
       spawnId,
       personaId,
       task,
-      config as SpawnConfig | null
+      config as SpawnConfig | null,
+      agentId
     );
   },
 

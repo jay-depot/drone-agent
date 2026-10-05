@@ -606,6 +606,13 @@ describe('Beacon Spawn CRUD', () => {
     expect(spawn.status).toBe('spawning');
   });
 
+  it('should store agent_id when provided at creation', () => {
+    const spawn = createSpawn('spawn-1', null, null, null, 'agent-1');
+    expect(spawn.agentId).toBe('agent-1');
+    expect(getSpawn('spawn-1')!.agentId).toBe('agent-1');
+  });
+
+
   it('should get a spawn by id', () => {
     createSpawn('spawn-1', null, null, null);
     expect(getSpawn('spawn-1')).toBeDefined();

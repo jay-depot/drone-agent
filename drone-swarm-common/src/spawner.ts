@@ -26,7 +26,8 @@ export interface SpawnDb {
     spawnId: string,
     personaId: string | null,
     task: string | null,
-    config: Record<string, unknown> | null
+    config: Record<string, unknown> | null,
+    agentId?: string | null
   ): unknown;
   updateSpawnStatus(
     id: string,
@@ -150,7 +151,8 @@ export async function spawnAgent(
     spawnId,
     personaId,
     task,
-    configOverride ?? null
+    configOverride ?? null,
+    agentId
   );
 
   // Spawn the process
