@@ -620,6 +620,80 @@ describe('lsp-installer — ensureServerInstalled', () => {
       ).rejects.toThrow(/Go must be installed/);
     });
   });
+
+  it('retries a transient download failure and succeeds', async () => {
+    const tarball = await buildSyntheticTarball({
+      [TEST_ENTRY_POINT]: 'export const main = () => {};',
+      'package.json': '{"name":"typescript-language-server","version":"5.3.0"}',
+    });
+    const integrity = `sha512-${sha512Base64(tarball)}`;
+
+    await withTempCache(async cacheDir => {
+      let calls = 0;
+      const fetchMock = vi.fn(async () => {
+        calls += 1;
+        if (calls < 3) {
+          return new Response('boom', {
+            status: 500,
+            statusText: 'Internal Server Error',
+          });
+        }
+        return new Response(new Blob([new Uint8Array(tarball)]), {
+          status: 200,
+        });
+      });
+
+      const resolution = await ensureServerInstalled(baseSpec(integrity), {
+        cacheDir,
+        nodePath: '/path/to/node',
+        fetchImpl: fetchMock as unknown as typeof fetch,
+      });
+
+      expect(calls).toBe(3);
+      expect(resolution.source).toBe('cache');
+    });
+  });
+
+  it('gives up after the bounded retry budget on a persistent transient error', async () => {
+    await withTempCache(async cacheDir => {
+      const fetchMock = vi.fn(
+        async () =>
+          new Response('boom', {
+            status: 503,
+            statusText: 'Service Unavailable',
+          })
+      );
+
+      await expect(
+        ensureServerInstalled(baseSpec('sha512-anything'), {
+          cacheDir,
+          nodePath: '/path/to/node',
+          fetchImpl: fetchMock as unknown as typeof fetch,
+        })
+      ).rejects.toThrow(/LSP server download failed: 503/);
+
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  it('does not retry a permanent 4xx download failure', async () => {
+    await withTempCache(async cacheDir => {
+      const fetchMock = vi.fn(
+        async () =>
+          new Response('nope', { status: 404, statusText: 'Not Found' })
+      );
+
+      await expect(
+        ensureServerInstalled(baseSpec('sha512-anything'), {
+          cacheDir,
+          nodePath: '/path/to/node',
+          fetchImpl: fetchMock as unknown as typeof fetch,
+        })
+      ).rejects.toThrow(/LSP server download failed: 404/);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
 });
 
 /**
