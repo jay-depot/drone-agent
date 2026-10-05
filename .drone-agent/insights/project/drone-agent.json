@@ -614,5 +614,9 @@
   {
     "timestamp": "2026-09-27T01:00:45.628Z",
     "insight": "When extending a shared identity-asset table (skills) with a new optional owner column, remember the LSP `typescript-language-server` can serve a STALE diagnostics snapshot for the drone-* packages even after edits land. In this session it repeatedly reported nonexistent errors (e.g. \"Property 'getGlobalSkill' does not exist on ... db/index\") while `grep` proved the exports existed and `pnpm -r run typecheck` / `tsc -b` passed. Ground truth for this repo is the compiler, not the connected LSP — during multi-file refactors, verify with `pnpm -r run typecheck` (plus the root `pnpm typecheck`, which additionally covers test files via `tsconfig.test.json`) rather than trusting `lsp__get_diagnostics`."
+  },
+  {
+    "timestamp": "2026-10-05T01:09:43.921Z",
+    "insight": "Skill authoring/reload in drone-agent: the skills broker's reloadSkills() only reloads skill PROVIDERS, and the persona-owned-skill provider's reloadSkills is a deliberate no-op (it re-derives from a persona reload). So any write to a persona-owned skill must call personaCap.reloadPersonas() (not just skillsCap.reloadSkills()) to become visible. Also, at coordinator scope the beacon learns of a new coordinator skill only on its periodic coordinator sync, so an agent-side write is invisible to an immediate reload unless the write path upserts the created row locally (upsertSkillFromCoordinator) — which is why the new beacon proxy POST /coordinator/personas/:id/skills does that upsert. Note also: neither server exposes a single-GET for an owned skill (global GET /skills/:id resolves global rows only), so owned existence checks must list-and-match."
   }
 ]
