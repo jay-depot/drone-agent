@@ -6,5 +6,9 @@
   {
     "timestamp": "2026-10-05T19:16:44.813Z",
     "insight": "matrix-js-sdk@38 on Node aborts (WASM `RuntimeError: unreachable`, exit 1) when `client.initRustCrypto()` is called with the SDK default `useIndexedDB:true`, because Node has no `indexedDB` global. This is a hard WASM abort, NOT a catchable JS exception: `try`/`catch`, `--unhandled-rejections`, and `NODE_OPTIONS` all fail to stop it. The fix is prevention, not handling: call `initRustCrypto({ useIndexedDB: false })` (in-memory store; works on Node but keys are NOT durable) and only when E2EE is explicitly opted in (`adapter.json encryption: true`, default false). Also: `createClient({ cryptoStore })` is legacy-crypto/migration-only in v38 — it does NOT persist Rust-crypto E2EE keys, so `SqliteCryptoStore` + `dataPath` does not make E2EE keys survive restart. Verified against the installed SDK (client.d.ts:91-96, 1104; client.js:1087)."
+  },
+  {
+    "timestamp": "2026-10-05T19:39:38.009Z",
+    "insight": "DRONE-GW-BUG-002: a persistent Matrix sync store must ACCUMULATE /sync responses, not store the last one. A /sync response is a delta (the first carries room state, later ones carry only next_batch), so `INSERT OR REPLACE` of the last response leaves a valid token with no `rooms` — the client then resumes an incremental sync, getRooms() is empty, and replies fail with \"unknown conversation\" (persistence becomes WORSE than no store, which would full-sync). Fix mirrors matrix-js-sdk's IndexedDB backend: hold a `SyncAccumulator`, persist `getJSON(true)` (accumulated), return `getJSON()`/`getNextBatchToken()` from it, and rehydrate by replaying persisted state through `accumulate(..., fromDatabase=true)`. Note the gateway's `SqliteSyncStore` reads the DB directly (it never awaited `store.startup()`), so hydration must be lazy; also `createClient({cryptoStore})` being legacy-only (BUG-001) means the sync store and crypto store are independent."
   }
 ]
