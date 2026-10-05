@@ -169,7 +169,6 @@ describe('spawner workingDir guard', () => {
     );
   });
 
-
   it('unregisters the agent session when the spawned process exits', async () => {
     const { initSpawner, spawnAgent } = await import('../src/spawner.js');
     initSpawner(

@@ -14,8 +14,11 @@ import {
 
 function resolveWith(stdout: string): void {
   execFileMock.mockImplementation(
-    (_file: string, _args: string[], cb: (err: unknown, out?: unknown) => void) =>
-      cb(null, { stdout })
+    (
+      _file: string,
+      _args: string[],
+      cb: (err: unknown, out?: unknown) => void
+    ) => cb(null, { stdout })
   );
 }
 
@@ -58,7 +61,9 @@ describe('matchPidBySpawnId', () => {
   });
 
   it('ignores a trailing --spawn-id with no value', () => {
-    const procs: ProcessInfo[] = [{ pid: 1, argv: ['drone-agent', '--spawn-id'] }];
+    const procs: ProcessInfo[] = [
+      { pid: 1, argv: ['drone-agent', '--spawn-id'] },
+    ];
     expect(matchPidBySpawnId(procs, 'spawn-1')).toBeNull();
   });
 });
@@ -91,9 +96,10 @@ describe('findPidBySpawnId', () => {
 
   it('reports found with the pid from live ps output', async () => {
     resolveWith(
-      ['  10 drone-agent --spawn-id other', '  20 drone-agent --spawn-id target'].join(
-        '\n'
-      )
+      [
+        '  10 drone-agent --spawn-id other',
+        '  20 drone-agent --spawn-id target',
+      ].join('\n')
     );
     await expect(findPidBySpawnId('target')).resolves.toEqual({
       status: 'found',

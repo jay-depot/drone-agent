@@ -7,8 +7,7 @@ const { listProcessesMock } = vi.hoisted(() => ({
 
 // Keep the pure helpers real; only the OS enumeration is stubbed.
 vi.mock('drone-swarm-common', async importOriginal => {
-  const actual =
-    await importOriginal<typeof import('drone-swarm-common')>();
+  const actual = await importOriginal<typeof import('drone-swarm-common')>();
   return { ...actual, listProcesses: listProcessesMock };
 });
 
@@ -29,8 +28,12 @@ vi.mock('../src/logger.js', () => ({
 
 const db = await import('../src/db/index.js');
 const wsServer = await import('../src/ws-server.js');
-const { isSpawnReachable, reconcileSpawnRows, getSpawnLiveness, HEARTBEAT_GRACE_MS } =
-  await import('../src/spawn-reconcile.js');
+const {
+  isSpawnReachable,
+  reconcileSpawnRows,
+  getSpawnLiveness,
+  HEARTBEAT_GRACE_MS,
+} = await import('../src/spawn-reconcile.js');
 
 function spawn(overrides: Partial<SpawnRecord> = {}): SpawnRecord {
   return {
@@ -57,15 +60,13 @@ describe('isSpawnReachable', () => {
   const now = 1_000_000;
 
   it('is reachable when the agent socket is connected', () => {
-    expect(
-      isSpawnReachable('agent-1', null, new Set(['agent-1']), now)
-    ).toBe(true);
+    expect(isSpawnReachable('agent-1', null, new Set(['agent-1']), now)).toBe(
+      true
+    );
   });
 
   it('is reachable on a fresh heartbeat', () => {
-    expect(
-      isSpawnReachable('agent-1', now - 1000, new Set(), now)
-    ).toBe(true);
+    expect(isSpawnReachable('agent-1', now - 1000, new Set(), now)).toBe(true);
   });
 
   it('is not reachable when the heartbeat is stale and the socket is down', () => {
@@ -150,9 +151,7 @@ describe('reconcileSpawnRows', () => {
   });
 
   it('ignores rows that are not running/spawning', async () => {
-    vi.mocked(db.listSpawns).mockReturnValue([
-      spawn({ status: 'terminated' }),
-    ]);
+    vi.mocked(db.listSpawns).mockReturnValue([spawn({ status: 'terminated' })]);
 
     const n = await reconcileSpawnRows();
 

@@ -33,9 +33,8 @@ vi.mock('../src/logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-const { handleSpawnAgent, handleTerminateSpawn } = await import(
-  '../src/routes/spawn-handlers.js'
-);
+const { handleSpawnAgent, handleTerminateSpawn } =
+  await import('../src/routes/spawn-handlers.js');
 const spawner = await import('../src/spawner.js');
 const spawnRoots = await import('../src/spawn-roots.js');
 const wsServer = await import('../src/ws-server.js');
@@ -147,7 +146,9 @@ describe('handleTerminateSpawn ladder', () => {
   });
 
   it('stage 1: asks a connected agent to shut down and reports graceful exit', async () => {
-    vi.mocked(dbModule.getSpawn).mockReturnValue(spawnRecord('agent-1', 'running'));
+    vi.mocked(dbModule.getSpawn).mockReturnValue(
+      spawnRecord('agent-1', 'running')
+    );
     vi.mocked(wsServer.isAgentConnected)
       .mockReturnValueOnce(true)
       .mockReturnValue(false);

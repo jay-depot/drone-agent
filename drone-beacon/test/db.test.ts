@@ -612,7 +612,6 @@ describe('Beacon Spawn CRUD', () => {
     expect(getSpawn('spawn-1')!.agentId).toBe('agent-1');
   });
 
-
   it('should get a spawn by id', () => {
     createSpawn('spawn-1', null, null, null);
     expect(getSpawn('spawn-1')).toBeDefined();

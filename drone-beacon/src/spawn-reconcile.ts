@@ -120,7 +120,9 @@ let reconcileTimer: NodeJS.Timeout | null = null;
  * Schedule the one-shot boot reconcile after a grace window. Boot-only for
  * v1: the grace window is what makes it safe against a slow reconnect.
  */
-export function startSpawnReconcile(graceMs: number = RECONCILE_GRACE_MS): void {
+export function startSpawnReconcile(
+  graceMs: number = RECONCILE_GRACE_MS
+): void {
   if (reconcileTimer) return;
   reconcileTimer = setTimeout(() => {
     reconcileTimer = null;

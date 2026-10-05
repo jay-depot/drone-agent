@@ -37,7 +37,7 @@ Terminate a spawned agent reliably, even after a beacon restart. Use a 3-stage l
 
 ## Settled design decisions
 
-- **Eternal WS retry (assumption change).** The beacon stays up; if it goes down it comes back. So a live agent is always *eventually* reachable. Drop `maxReconnectAttempts`; keep `shuttingDown` so an intentional close does not retry. Backoff becomes `min(1000·2ⁿ, 900_000)` (cap 15 min). The ~60 s cliff above no longer exists.
+- **Eternal WS retry (assumption change).** The beacon stays up; if it goes down it comes back. So a live agent is always _eventually_ reachable. Drop `maxReconnectAttempts`; keep `shuttingDown` so an intentional close does not retry. Backoff becomes `min(1000·2ⁿ, 900_000)` (cap 15 min). The ~60 s cliff above no longer exists.
 - **Existence and reachability are separate predicates.** Reconcile asks "does the process exist"; the derived read asks "is it reachable". They come apart for a wedged agent (process alive, event loop stuck): `exists=true`, `reachable=false`.
 - **The pid only ever ADDS liveness; it never shortens the reconcile wait.** Short-circuiting is a latency optimization, and the sweep runs on the deploy cadence — a grace delay after an update restart is free. Do not pay an enumeration-reliability dependency for it.
 - **Grace window: 45 s.** Covers one 30 s heartbeat tick plus jitter. The heartbeat is a flat tick, so a live agent re-announces quickly and the window is heartbeat-bound, not reconnect-bound.
@@ -64,7 +64,7 @@ live(spawn)      = exists || reachable
 
 - `isAgentConnected` already exists (`ws-server.ts:55`).
 - `lastActivity` already exists and is already bumped by the heartbeat (`db/agents.ts:39`) — this finally gives it a reader.
-- Expose `live` as an additive field on `GET /spawn` / `GET /spawn/:id`. Nothing is written. "Orphaned" is a *view*, not a *state*.
+- Expose `live` as an additive field on `GET /spawn` / `GET /spawn/:id`. Nothing is written. "Orphaned" is a _view_, not a _state_.
 
 ## Boot reconcile
 
@@ -80,6 +80,7 @@ New leaf module `drone-beacon/src/spawn-reconcile.ts` (same shape as `fragments-
 ## Termination handler
 
 Make `handleTerminateSpawn` (`drone-beacon/src/routes/spawn-handlers.ts`) async. Steps:
+
 1. If the record is already `terminated`, return 400 (unchanged).
 2. Run stage 1 using `agent_id` from the row. Wait up to D2 seconds.
 3. If the agent is still alive, find the pid by spawn-id. Send SIGTERM. Wait 5 s.
