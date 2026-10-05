@@ -42,6 +42,13 @@ describe('parsePsOutput', () => {
     const out = ['', '   ', 'not-a-pid foo', '  789 ps'].join('\n');
     expect(parsePsOutput(out)).toEqual([{ pid: 789, argv: ['ps'] }]);
   });
+
+  it('skips a pid-only line with no command', () => {
+    // The command group is anchored with `\S` to avoid the CodeQL
+    // polynomial-redos overlap, so a line carrying only a pid is skipped
+    // rather than yielding an empty argv.
+    expect(parsePsOutput('  42   ')).toEqual([]);
+  });
 });
 
 describe('matchPidBySpawnId', () => {
@@ -83,12 +90,8 @@ describe('listProcesses', () => {
 
   it('returns null when ps is unavailable', async () => {
     execFileMock.mockImplementation(
-      (
-        _f: string,
-        _a: string[],
-        _o: unknown,
-        cb: (err: unknown) => void
-      ) => cb(new Error('spawn ps ENOENT'))
+      (_f: string, _a: string[], _o: unknown, cb: (err: unknown) => void) =>
+        cb(new Error('spawn ps ENOENT'))
     );
     await expect(listProcesses()).resolves.toBeNull();
   });
@@ -129,12 +132,8 @@ describe('findPidBySpawnId', () => {
 
   it('reports unavailable when enumeration could not run', async () => {
     execFileMock.mockImplementation(
-      (
-        _f: string,
-        _a: string[],
-        _o: unknown,
-        cb: (err: unknown) => void
-      ) => cb(new Error('ps unsupported'))
+      (_f: string, _a: string[], _o: unknown, cb: (err: unknown) => void) =>
+        cb(new Error('ps unsupported'))
     );
     await expect(findPidBySpawnId('target')).resolves.toEqual({
       status: 'unavailable',

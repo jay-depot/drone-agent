@@ -46,7 +46,17 @@ let psUnavailableLogged = false;
 export function parsePsOutput(output: string): ProcessInfo[] {
   const processes: ProcessInfo[] = [];
   for (const line of output.split('\n')) {
-    const match = /^\s*(\d+)\s+(.+)$/.exec(line);
+    // The command group is anchored with `\S` (not `.+`): `\s` is a
+    // subset of `.`, so an unanchored tail lets a run of spaces split
+    // ambiguously between the separator and the command, which CodeQL
+    // flags as js/polynomial-redos. Anchoring the first command char to
+    // non-whitespace removes the overlap at no cost: `ps` pads the column
+    // with whitespace and the argv[0] that follows is never itself
+    // whitespace-led (any such lead space is consumed by the separator
+    // either way). The one delta: a pid-only line (no command) is now
+    // skipped instead of yielding an empty argv, which is both more
+    // correct and irrelevant to the --spawn-id lookup.
+    const match = /^\s*(\d+)\s+(\S.*)$/.exec(line);
     if (!match) continue;
     processes.push({
       pid: Number(match[1]),
