@@ -18,5 +18,9 @@
   {
     "timestamp": "2026-10-05T23:06:50.931Z",
     "insight": "Gateway control surfaces are instantiated per conversation but the engine dispatches messages fire-and-forget (`adapter.onMessage(msg => { void this.handleMessage(msg) })`), so two messages in one conversation run concurrently. Any surface that holds session state (persona-assignment) therefore has a check-then-await-then-set double-spawn race, and LocalSpawnBackend.sendMessage opens a fresh readline over the persistent child stdout on every call, so concurrent readers corrupt each other's output stream. Fix pattern: serialize dispatch per conversation in the engine (promise-chain tail on the instantiated-conversation record), plus in-flight promise caching in both spawn backends — the same queue-if-in-flight mutex used for `_runtime.submitUserMessage` (ADR 198)."
+  },
+  {
+    "timestamp": "2026-10-05T23:17:39.541Z",
+    "insight": "When a `apply_diff` hunk's change zone contains template-literal lines (e.g. `` order.push(`start:${text}`) ``), the whitespace-fuzz matcher can collapse the surrounding newlines and silently mangle the file tail (it swallowed an entire `describe` block and the outer close brace in test/engine.test.ts, producing an \"Unexpected end of file\" from esbuild). The build/test gate caught it, but the reliable fix is: truncate the file at the last known-good line with `head -n N` and re-append the new tail via a quoted heredoc, rather than fighting apply_diff. This is the same failure family as the pre-existing swarm wiki page `drone-agent-plan-execution-verification-lessons` (lesson 3), which specifically warns against apply_diff on interpolated template lines — it holds for the *surrounding block*, not just the interpolated line itself."
   }
 ]

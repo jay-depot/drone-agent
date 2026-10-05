@@ -10,5 +10,9 @@
   {
     "timestamp": "2026-10-05T21:38:38.545Z",
     "insight": "`pnpm run lint` runs `prettier --write .` repo-wide (lint = lint:eslint && lint:prettier), and pnpm-lock.yaml is NOT in .prettierignore (only `dist/` is). So a single lint run dirties the tree with an ~8000-line pnpm-lock.yaml reformat plus unrelated .drone-agent/insights/*.json newline fixes — all noise unrelated to your change, and NOT carried by HEAD (the HEAD lockfile is not prettier-clean either). After linting, before committing, `git checkout HEAD -- pnpm-lock.yaml .drone-agent/insights/` (and any other unrelated files prettier touched), then keep only the reformats of files you actually changed this session. Note AGENTS.md's warning is real: prettier will reformat your files, so re-read before further edits — and `git diff -w` will NOT show reflows (line splits/joins) as empty, since -w ignores intra-line whitespace only, not line re-wrapping."
+  },
+  {
+    "timestamp": "2026-10-05T23:17:39.541Z",
+    "insight": "`pnpm run lint` = `eslint --fix` then `prettier --write .` repo-wide, and the only `.prettierignore` entry is `dist/`. So every lint run reformats `pnpm-lock.yaml` (~5800-line reflow) and adds trailing newlines to `.drone-agent/insights/*.json` — none of which belong to your change and none of which HEAD is clean over. After linting and before committing, run `git checkout HEAD -- pnpm-lock.yaml .drone-agent/insights/` (plus any pre-existing memory files prettier touched) and keep only reformats of files you actually changed. Note this is already recorded as an insight in `.drone-agent/insights/project/tooling.json` — it happened again this session, so it is a recurring trap, not a one-off."
   }
 ]

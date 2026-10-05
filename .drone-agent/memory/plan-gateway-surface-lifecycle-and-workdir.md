@@ -526,3 +526,37 @@ All must pass. Do not consider the job done until every item is green.
 
 - Conversation continuity / session resume across re-spawn (later; likely swarm-leveraged).
 - Per-sender sessions; streaming/partial replies; persona hot-switching; gateway hot-reload.
+---
+
+## ✅ COMPLETED (2026-10-05) — commit `c4fd39f4`
+
+**Status:** All steps A1–I1 executed; all validation criteria green.
+
+### What was built
+- **`drone-agent`:** new `src/working-dir.ts` `applyWorkingDir()` runs `process.chdir()` as the first statement of `main()` after arg parsing (before config load, external-plugin discovery, engine init, and every cwd-reading plugin). Throws a clear error on a missing path or a non-directory. New `test/working-dir.test.ts` (4 tests).
+- **`drone-gateway` types:** `DroneControlSurface.dispose?()`; `SpawnSessionOptions.workingDir?`; `SpawnSession.workingDir?`; `GatewayConfig.idleTimeoutMs?`.
+- **`SurfaceContext`:** gained engine-resolved `workingDir?` and `idleTimeoutMs?`.
+- **Config loader:** added `sanitizeWorkingDir` (`~`/`~/` expansion via `os.homedir()`, must be absolute, ≤ 4096, no existence check) and `sanitizeIdleTimeoutMs` (finite non-negative; `0` valid); `sanitizeSurfaceConfig` now prunes all three surface keys with warnings; top-level `idleTimeoutMs` read into the config.
+- **`LocalSpawnBackend`:** `spawnSession(conv, persona, opts?)`; passes `cwd: opts.workingDir` **and** appends `--working-dir <dir>`; records `workingDir` on the session; per-conversation in-flight spawn-promise cache.
+- **`CoordinatorSpawnBackend`:** forwards `config: { workingDir }` to `CoordinatorClient.spawnAgent` (omitting `config` when absent so the beacon applies `defaultSpawnRoot`); records `workingDir`; in-flight spawn cache.
+- **`CoordinatorClient.spawnAgent`:** input gains `config?: { workingDir?: string }`.
+- **New `surfaces/lifecycle.ts` `SessionLifecycle`:** `DEFAULT_IDLE_TIMEOUT_MS = 300_000`; spawn-on-demand; idle-timeout terminate + lazy re-spawn (timer reset on turn **completion**, `unref()`'d, cleared in `dispose()`, `0` disables); one-shot death detection (a throwing `sendMessage` → best-effort terminate + clear → re-spawn → retry once, second failure propagates); `dispose()` (idempotent); internal serial tail so a wildcard-shared instance never overlaps turns.
+- **`persona-assignment`:** rewritten on `SessionLifecycle`; gains `dispose: () => lifecycle.dispose()`; keeps the `{ response: 'Error: …', handled: true }` contract.
+- **Engine:** `surfaceContext(spec)` now resolves `targetBeaconId` + `workingDir` + `idleTimeoutMs`; `InstantiatedConversation` gains a `tail` and dispatch is serialized per conversation via `runOnTail` (keyed on the conversation that actually runs); `stop()` disposes every instantiated surface after adapters stop.
+
+### Tests
+- New: `test/working-dir.test.ts` (4), `test/session-lifecycle.test.ts` (10), `test/persona-assignment-surface.test.ts` (9).
+- Updated: `config-load.test.ts` (+8), `engine.test.ts` (+3 and exact-arg updates), `surface-registry.test.ts` (exact-arg updates), `local-spawn-backend.test.ts` (+3), `coordinator-spawn-backend.test.ts` (+3).
+
+### Validation (all green)
+- LSP clean; `pnpm -r run build` 0 errors; `pnpm typecheck` 0 errors; `pnpm run lint` 0 errors; `pnpm run test` 3555 passed / 14 skipped.
+- Behavioral: `--working-dir /nonexistent` fails loudly with `--working-dir does not exist: …`; a per-surface `workingDir` reaches `spawnSession` as `{ targetBeaconId, workingDir }`; two concurrent messages for one conversation run serially; `stop()` terminates a live session.
+- Dead-code sweep: no leftover `'default'` beacon fallback; `applyWorkingDir` wired; `MAX_WORKING_DIR_LENGTH` used.
+
+### Deviations / notes
+- `apply_diff`'s whitespace-fuzz matcher **mangled the tail of `test/engine.test.ts`** when a hunk's change zone contained template-literal lines (`` order.push(`start:${text}`) ``): it collapsed newlines and the trailing `describe` body. Repaired by truncating at the last good line and re-appending the tail via a quoted heredoc. (Same failure family as the pre-existing `drone-agent-plan-execution-verification-lessons` wiki page — lesson 3.)
+- `pnpm run lint` runs `prettier --write .` repo-wide and `pnpm-lock.yaml` is not in `.prettierignore`; lint dirtied the tree with a ~5877-line lockfile reformat plus unrelated `.drone-agent/insights/*.json` newline fixes. Reverted with `git checkout HEAD -- pnpm-lock.yaml .drone-agent/insights/ .drone-agent/memory/planning-seed-async-agent-terminate.md` before committing, keeping only files actually changed this session.
+
+### Deferred (unchanged)
+- Conversation continuity / session resume across re-spawn (later; likely swarm-leveraged).
+- Per-sender sessions; streaming/partial replies; persona hot-switching; gateway hot-reload.
