@@ -110,6 +110,12 @@ export interface SpawnSession {
   startedAt: number;
   /** The beacon the spawn was placed on. Coordinator mode only. */
   targetBeaconId?: string;
+  /**
+   * The beacon's spawn-record id (the `spawns.id` row key). Coordinator mode
+   * only. The terminate endpoint is keyed on THIS, not on `processId` (which
+   * is the agentId and is used for message relay).
+   */
+  spawnId?: string;
 }
 
 export interface SpawnSessionOptions {

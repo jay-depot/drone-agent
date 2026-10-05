@@ -47,6 +47,7 @@ describe('CoordinatorSpawnBackend', () => {
       expect(session.conversationId).toBe('conv-1');
       expect(session.personaId).toBe('coder');
       expect(session.processId).toBe('agent-xyz');
+      expect(session.spawnId).toBe('spawn-abc');
       expect(session.startedAt).toBeGreaterThan(0);
       expect(session.targetBeaconId).toBe('beacon-1');
     });
@@ -123,7 +124,9 @@ describe('CoordinatorSpawnBackend', () => {
       });
       await backend.terminateSession(session);
 
-      expect(mockTerminateSpawn).toHaveBeenCalledWith('beacon-2', 'agent-xyz');
+      // The terminate endpoint is keyed on the beacon's spawnId, not the
+      // agentId (which is what processId holds for message relay).
+      expect(mockTerminateSpawn).toHaveBeenCalledWith('beacon-2', 'spawn-abc');
     });
 
     it('warns and skips the network call when the session has no beacon', async () => {
@@ -132,6 +135,19 @@ describe('CoordinatorSpawnBackend', () => {
         personaId: 'coder',
         processId: 'agent-xyz',
         startedAt: 0,
+      };
+
+      await expect(backend.terminateSession(session)).resolves.toBeUndefined();
+      expect(mockTerminateSpawn).not.toHaveBeenCalled();
+    });
+
+    it('warns and skips the network call when the session has no spawn id', async () => {
+      const session = {
+        conversationId: 'conv-1',
+        personaId: 'coder',
+        processId: 'agent-xyz',
+        startedAt: 0,
+        targetBeaconId: 'beacon-1',
       };
 
       await expect(backend.terminateSession(session)).resolves.toBeUndefined();

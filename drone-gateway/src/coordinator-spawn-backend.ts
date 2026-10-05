@@ -65,6 +65,7 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
       processId: spawnResult.agentId || spawnResult.spawnId,
       startedAt: Date.now(),
       targetBeaconId,
+      spawnId: spawnResult.spawnId,
     };
 
     this.sessions.set(conversationId, session);
@@ -94,11 +95,20 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
       this.sessions.delete(session.conversationId);
       return;
     }
+    if (!session.spawnId) {
+      logger.warn(
+        `Cannot terminate agent ${session.processId}: no spawn id recorded on the session`
+      );
+      this.sessions.delete(session.conversationId);
+      return;
+    }
 
     try {
+      // The terminate endpoint is keyed on the beacon's spawnId, NOT the
+      // agentId (processId). Passing the agentId here 404s at the beacon.
       await this.coordinatorClient.terminateSpawn(
         session.targetBeaconId,
-        session.processId
+        session.spawnId
       );
     } catch (err) {
       logger.warn(`Failed to terminate agent ${session.processId}: ${err}`);
