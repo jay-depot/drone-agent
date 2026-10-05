@@ -111,6 +111,8 @@ export async function spawnAgent(
   // Build command arguments
   const args: string[] = [
     '--swarm',
+    '--spawn-id',
+    spawnId,
     '--session-id',
     agentId,
     '--beacon-host',

@@ -117,6 +117,33 @@ describe('spawner workingDir guard', () => {
     expect(args).not.toContain('--working-dir');
     expect(options.cwd).toBe(process.cwd());
   });
+
+  it('emits --spawn-id early in the argv for pid lookup', async () => {
+    const { initSpawner, spawnAgent } = await import('../src/spawner.js');
+    initSpawner(
+      {
+        agentPath: 'drone-agent',
+        timeoutMs: 60_000,
+        maxConcurrentSpawns: 2,
+        beaconHost: '127.0.0.1',
+        beaconPort: 4000,
+      },
+      db
+    );
+    spawnMock.mockReturnValue(createMockChildProcess());
+
+    await spawnAgent('spawn-xyz', 'agent-1', null, null, {});
+
+    const [, args] = spawnMock.mock.calls[0] as [string, string[]];
+    // Front-loaded so `ps -o command=` truncation cannot defeat the match.
+    expect(args.slice(0, 4)).toEqual([
+      '--swarm',
+      '--spawn-id',
+      'spawn-xyz',
+      '--session-id',
+    ]);
+  });
+
   it('unregisters the agent session when the spawned process exits', async () => {
     const { initSpawner, spawnAgent } = await import('../src/spawner.js');
     initSpawner(

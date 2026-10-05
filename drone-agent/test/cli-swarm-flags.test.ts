@@ -66,6 +66,8 @@ describe('parseCliInvocation — swarm spawn flags', () => {
     expect(() =>
       parseCliInvocation([
         '--swarm',
+        '--spawn-id',
+        'spawn-1',
         '--session-id',
         'agent-1',
         '--beacon-host',
