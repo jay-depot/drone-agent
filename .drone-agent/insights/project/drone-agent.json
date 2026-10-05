@@ -618,5 +618,9 @@
   {
     "timestamp": "2026-10-05T01:09:43.921Z",
     "insight": "Skill authoring/reload in drone-agent: the skills broker's reloadSkills() only reloads skill PROVIDERS, and the persona-owned-skill provider's reloadSkills is a deliberate no-op (it re-derives from a persona reload). So any write to a persona-owned skill must call personaCap.reloadPersonas() (not just skillsCap.reloadSkills()) to become visible. Also, at coordinator scope the beacon learns of a new coordinator skill only on its periodic coordinator sync, so an agent-side write is invisible to an immediate reload unless the write path upserts the created row locally (upsertSkillFromCoordinator) — which is why the new beacon proxy POST /coordinator/personas/:id/skills does that upsert. Note also: neither server exposes a single-GET for an owned skill (global GET /skills/:id resolves global rows only), so owned existence checks must list-and-match."
+  },
+  {
+    "timestamp": "2026-10-05T02:00:01.060Z",
+    "insight": "drone-agent verification: the repo-root `pnpm typecheck` script is `pnpm -r typecheck && tsc -p tsconfig.test.json --pretty false`. The trailing `tsc -p tsconfig.test.json` type-checks test files that the per-package `tsc -b` builds skip, so a change can pass `pnpm -r run build`/`typecheck` yet still fail root `pnpm typecheck`. Always run the ROOT `pnpm typecheck` (not just `-r`) before declaring work done. Concrete case: a test helper whose `ask` closure did `if (x) return { a: 'v' }` inferred a union with `undefined` optional fields that was not assignable to `DroneElicitationAnswers` (`Record<string,string>`); the fix is to type the helper's return object explicitly (`const out: DroneElicitationAnswers = {}`)."
   }
 ]

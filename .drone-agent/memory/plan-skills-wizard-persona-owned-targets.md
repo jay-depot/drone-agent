@@ -651,3 +651,52 @@ All of the following must hold before the work is "done":
    - A coordinator-owned write is visible on the beacon immediately after the write (proxy upsert).
    - The kickMessage names `/persona select <owner>` when the owner is not active, and does not when it is.
 8. **The final step (14) re-checks every criterion above against the finished work.**
+
+---
+
+## Completion summary (2026-10-05)
+
+**Status: DONE — all 14 steps executed.** Commit `43e1daf8` on branch
+`feat/swarm-persona-owned-skills` (+1127/−38 across 18 files, including a new test file).
+
+### What shipped
+
+- **`drone-core`** — `DroneOwnedSkillWriter` type (`provider-types.ts`), exported from `index.ts`; the three
+  registry methods (`registerOwnedWriter` / `unregisterOwnedWriter` / `getOwnedWriters`) on
+  `DroneSkillsCapability` (`capabilities.ts`). `getWriters()` untouched.
+- **Skills broker** (`drone-agent/src/plugins/skills/index.ts`) — parallel `ownedWriters` registry, sorted by
+  scope via `insertWriterSorted`.
+- **`persona-provider-{project,user}`** — owned writers writing `personas/<id>/skills/<id>.md` with a file
+  `access` existence check.
+- **Swarm plugin** (`swarm/providers.ts`) — `beacon`- and `coordinator`-owned writers.
+- **Beacon** — new symmetric proxy pair `GET`/`POST /coordinator/personas/:id/skills`
+  (`routes/coordinator.ts`) + `CoordinatorClient.getOwnedSkills`/`createOwnedSkill`
+  (`coordinator-client.ts`); the POST upserts the created row locally via `upsertSkillFromCoordinator`.
+- **Wizard** (`skills/wizard.ts`) — owner-first picker (`No owner (global skill)` default/first row),
+  `personaId` input (owner > scope > ask precedence, unresolvable throws), `bindOwnedWriter` helper,
+  `reloadPersonas()` then `reloadSkills()` after an owned write, `personaId` in `toolResult`, conditional
+  kickMessage naming `/persona select <owner>` when the owner is not active.
+- **Tests** — wizard (24), broker + provider (`test/owned-skill-writers.test.ts`, 3), beacon proxy (24) and
+  client (41); repaired the one full-literal `DroneSkillsCapability` mock.
+
+### Verification
+
+All validation criteria met: LSP clean; `pnpm -r run build` / `typecheck` clean; `pnpm lint` clean;
+`pnpm test` **3317 passed, 14 skipped** (0 failures); interface sweep complete (grep + LSP find-references —
+only the `unknown`-cast `tui-completion.test.ts` mock remains, no change needed).
+
+### Notes for the next implementer
+
+- **`pnpm typecheck` at the repo root also runs `tsc -p tsconfig.test.json`**, which type-checks test files that
+  the per-package `tsc -b` misses. New test helpers returning object literals for `DroneElicitationAnswers`
+  (`Record<string,string>`) must be explicitly typed — inline `if (...) return { ... }` closures infer a union
+  with `undefined` optionals that fails the index signature. Fixed with a typed `dispatchElicit` helper.
+- **`apply_diff` calls that target the same file in parallel race and can corrupt it.** Combine same-file
+  hunks into a single patch.
+- Out of scope (left as-is, per plan): the pre-existing `coordinatorSkillWriter.exists` in `swarm/providers.ts`
+  hits the beacon URL even for the coordinator scope (a `DroneSkillWriter`, not an owned writer).
+
+### Follow-ups
+
+- `planning-seed-skills-management-tools` captures the deferred *management* surface
+  (update/delete/move/rename) and the eventual unified authoring-target registry.
