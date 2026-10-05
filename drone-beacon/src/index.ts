@@ -20,6 +20,7 @@ import {
   cleanupExpiredMemories,
   backfillVecChunks,
   backfillBqVecChunks,
+  backfillPersonaMetadata,
 } from './db/index.js';
 import {
   registerRoutes,
@@ -261,6 +262,10 @@ async function main() {
 
   // Initialize database
   initDatabase(config.dbPath);
+  const repairedPersonas = backfillPersonaMetadata();
+  if (repairedPersonas > 0) {
+    logger.info(`Persona metadata: backfilled ${repairedPersonas} row(s)`);
+  }
   const backfilled = backfillVecChunks();
   if (backfilled > 0) {
     logger.info(`Search index: backfilled ${backfilled} chunk(s) into vec0`);

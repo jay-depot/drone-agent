@@ -40,8 +40,8 @@ export type Skill = {
 /** Request to create a new Persona. */
 export type CreatePersonaRequest = {
   id: string;
-  name: string;
-  description: string;
+  name?: string;
+  description?: string;
   systemPrompt: string;
   scope?: 'local' | 'coordinator';
 };

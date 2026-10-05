@@ -82,10 +82,13 @@ describe('Persona Routes', () => {
     const res = await app.inject({
       method: 'PUT',
       url: '/api/personas/test-persona',
-      payload: { name: 'Updated' },
+      payload: {
+        systemPrompt:
+          '---\nname: test-persona\ndescription: Updated\n---\nBody',
+      },
     });
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body).name).toBe('Updated');
+    expect(JSON.parse(res.body).description).toBe('Updated');
   });
 
   it('PUT /personas/:id returns 404 for missing persona', async () => {

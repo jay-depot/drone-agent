@@ -137,8 +137,13 @@ describe.skipIf(
         id: `e2e-persona-${Date.now()}`,
         name: 'E2E Test Persona',
         description: 'Testing persona propagation',
-        systemPrompt:
+        systemPrompt: [
+          '---',
+          'name: E2E Test Persona',
+          'description: Testing persona propagation',
+          '---',
           'You are an E2E test assistant that validates swarm behavior.',
+        ].join('\n'),
       };
 
       await createBeaconPersona(BEACON_URL, testPersona);
@@ -149,6 +154,7 @@ describe.skipIf(
 
       expect(created).toBeDefined();
       expect(created?.name).toBe(testPersona.name);
+      expect(created?.description).toBe(testPersona.description);
       expect(created?.systemPrompt).toBe(testPersona.systemPrompt);
 
       // Verify agents can access the persona

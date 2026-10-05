@@ -654,5 +654,37 @@
   {
     "timestamp": "2026-10-05T02:00:01.060Z",
     "insight": "drone-agent verification: the repo-root `pnpm typecheck` script is `pnpm -r typecheck && tsc -p tsconfig.test.json --pretty false`. The trailing `tsc -p tsconfig.test.json` type-checks test files that the per-package `tsc -b` builds skip, so a change can pass `pnpm -r run build`/`typecheck` yet still fail root `pnpm typecheck`. Always run the ROOT `pnpm typecheck` (not just `-r`) before declaring work done. Concrete case: a test helper whose `ask` closure did `if (x) return { a: 'v' }` inferred a union with `undefined` optional fields that was not assignable to `DroneElicitationAnswers` (`Record<string,string>`); the fix is to type the helper's return object explicitly (`const out: DroneElicitationAnswers = {}`)."
+  },
+  {
+    "timestamp": "2026-10-05T15:59:32.975Z",
+    "insight": "Swarm-memory wiki page `drone-agent-swarm-persona-provider-data-flow-analysis` (snapshot 2026-07-01) is STALE: its discrepancy claims #1 (\"systemPrompt never mapped to systemPromptOverride\"), #4 (\"no .md parsing on read-back\"), and #5 were all fixed by commit 6c6d350 but the page was never corrected. The sibling origin page (`...contents-system-prompt-injection-fix-origin`) documents the fix but the analysis page still asserts the broken behavior, so a reader who lands on the analysis page first is misled. Wiki pages that describe pre-fix behavior should be marked superseded or updated when the fix lands; this one was not."
+  },
+  {
+    "timestamp": "2026-10-05T15:59:32.977Z",
+    "insight": "Persona `name` has two conflicting conventions in the codebase: the loader's doc comment frames `name:` as a human title (id = subdirectory name), but the wizard prompt forces `name` == id (slug) and both seeded personas follow that. The wizard's validation only requires `name` to slugify to the id, so hand-authored human titles are silently accepted while wizard-authored personas are slugs. Deciding \"which source is authoritative for name\" required reading loader + wizard + seeds together; any future human-readable-name change will need to reconcile all three."
+  },
+  {
+    "timestamp": "2026-10-05T15:59:32.978Z",
+    "insight": "`CreatePersonaRequest` (and the `Persona` shape) are duplicated in `drone-core/src/domain-types.ts` and `drone-coordinator-ui/src/lib/types.ts`. Changing the optionality of `name`/`description` means editing both, or the UI silently drifts from the API contract. Worth considering a shared type source for the coordinator UI, or at least a lint/grep check when the domain type changes."
+  },
+  {
+    "timestamp": "2026-10-05T16:12:41.780Z",
+    "insight": "`file__apply_diff` can silently no-op even when it reports success: a hunk that matches nothing can come back as `patched: true` with `additions: 0, deletions: 0` (I saw this on several single-line import additions in `drone-beacon/src/index.ts` and `drone-coordinator/src/index.ts`). It can also corrupt a file's tail with a stray duplicated fragment when a hunk's context is ambiguous near EOF (it appended 3 junk lines to `drone-coordinator/test/db.test.ts`). ALWAYS verify after an apply_diff that reports zero changes, and re-read the tail after any edit near EOF. Cheap checks: `grep -n <new-symbol> <file>` for additions, and a diff review for the whole file."
+  },
+  {
+    "timestamp": "2026-10-05T16:12:41.783Z",
+    "insight": "Root `pnpm lint` is `pnpm lint:eslint && pnpm lint:prettier`, and `lint:prettier` is `prettier --write .` across the whole repo — it reformats `pnpm-lock.yaml` (thousands of lines) and any markdown as a side effect even when you changed no dependencies. After running lint, `git checkout -- pnpm-lock.yaml` (and check `.drone-agent/` markdown) to drop the incidental churn before committing."
+  },
+  {
+    "timestamp": "2026-10-05T16:12:41.786Z",
+    "insight": "LSP diagnostics go stale after a full-file `file__write` rewrite: the language server kept reporting the OLD file's errors (line numbers/content from before the rewrite) for several tool calls, which nearly caused me to \"fix\" already-correct code. The authoritative verification is `pnpm -r run build` / `pnpm -r run typecheck`. When an LSP diagnostic contradicts the on-disk content you just wrote, trust the build and re-fetch diagnostics later rather than acting on the stale report."
+  },
+  {
+    "timestamp": "2026-10-05T16:12:41.788Z",
+    "insight": "drone-coordinator-ui tests must run with `NODE_ENV=test` (the package's own `test` script sets it). A bare `vitest run` resolves React 19's production react-dom build and fails with `TypeError: React.act is not a function` on the first render — a false failure that looks like a broken test but is environmental. Always invoke via `pnpm --filter drone-coordinator-ui test` (or prefix `NODE_ENV=test`)."
+  },
+  {
+    "timestamp": "2026-10-05T16:12:41.790Z",
+    "insight": "When a DB column is derived from a blob (e.g. persona name/description derived from the systemPrompt .md frontmatter), the clean chokepoint is the DB layer's create/update/upsert functions — NOT the HTTP routes and NOT the clients. Routes and clients proliferate (wizard, swarm writers, seed, coordinator-sync, migration tool); the DB layer is the single seam every write path crosses, so the invariant \"columns always match the blob\" holds unconditionally. Prefer deriving in the persistence layer plus an idempotent startup backfill for legacy rows."
   }
 ]
