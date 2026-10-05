@@ -622,5 +622,17 @@
   {
     "timestamp": "2026-10-05T02:00:01.060Z",
     "insight": "drone-agent verification: the repo-root `pnpm typecheck` script is `pnpm -r typecheck && tsc -p tsconfig.test.json --pretty false`. The trailing `tsc -p tsconfig.test.json` type-checks test files that the per-package `tsc -b` builds skip, so a change can pass `pnpm -r run build`/`typecheck` yet still fail root `pnpm typecheck`. Always run the ROOT `pnpm typecheck` (not just `-r`) before declaring work done. Concrete case: a test helper whose `ask` closure did `if (x) return { a: 'v' }` inferred a union with `undefined` optional fields that was not assignable to `DroneElicitationAnswers` (`Record<string,string>`); the fix is to type the helper's return object explicitly (`const out: DroneElicitationAnswers = {}`)."
+  },
+  {
+    "timestamp": "2026-10-05T15:59:32.975Z",
+    "insight": "Swarm-memory wiki page `drone-agent-swarm-persona-provider-data-flow-analysis` (snapshot 2026-07-01) is STALE: its discrepancy claims #1 (\"systemPrompt never mapped to systemPromptOverride\"), #4 (\"no .md parsing on read-back\"), and #5 were all fixed by commit 6c6d350 but the page was never corrected. The sibling origin page (`...contents-system-prompt-injection-fix-origin`) documents the fix but the analysis page still asserts the broken behavior, so a reader who lands on the analysis page first is misled. Wiki pages that describe pre-fix behavior should be marked superseded or updated when the fix lands; this one was not."
+  },
+  {
+    "timestamp": "2026-10-05T15:59:32.977Z",
+    "insight": "Persona `name` has two conflicting conventions in the codebase: the loader's doc comment frames `name:` as a human title (id = subdirectory name), but the wizard prompt forces `name` == id (slug) and both seeded personas follow that. The wizard's validation only requires `name` to slugify to the id, so hand-authored human titles are silently accepted while wizard-authored personas are slugs. Deciding \"which source is authoritative for name\" required reading loader + wizard + seeds together; any future human-readable-name change will need to reconcile all three."
+  },
+  {
+    "timestamp": "2026-10-05T15:59:32.978Z",
+    "insight": "`CreatePersonaRequest` (and the `Persona` shape) are duplicated in `drone-core/src/domain-types.ts` and `drone-coordinator-ui/src/lib/types.ts`. Changing the optionality of `name`/`description` means editing both, or the UI silently drifts from the API contract. Worth considering a shared type source for the coordinator UI, or at least a lint/grep check when the domain type changes."
   }
 ]
