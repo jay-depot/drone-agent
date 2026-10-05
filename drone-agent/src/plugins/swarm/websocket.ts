@@ -127,14 +127,16 @@ export function connectWebSocket(ctx: SwarmContext): void {
         );
         return;
       }
-      if (ctx.wsReconnectAttempts < ctx.maxReconnectAttempts) {
-        ctx.wsReconnectAttempts++;
-        const delay = Math.min(
-          1000 * Math.pow(2, ctx.wsReconnectAttempts),
-          30000
-        );
-        setTimeout(() => connectWebSocket(ctx), delay);
-      }
+      // Retry forever. The beacon is expected to come back after a restart,
+      // and a live agent must always be reachable again; a capped budget would
+      // strand an agent whose socket the beacon lost. Backoff caps at 15
+      // minutes so a long outage stays cheap.
+      ctx.wsReconnectAttempts++;
+      const delay = Math.min(
+        1000 * Math.pow(2, ctx.wsReconnectAttempts),
+        15 * 60 * 1000
+      );
+      setTimeout(() => connectWebSocket(ctx), delay);
     };
 
     ctx.ws.onerror = error => {

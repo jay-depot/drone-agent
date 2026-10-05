@@ -62,7 +62,6 @@ export interface SwarmContext {
   ws: WebSocket | null;
   shuttingDown: boolean;
   wsReconnectAttempts: number;
-  maxReconnectAttempts: number;
   messageQueue: QueuedMessage[];
   pendingMessages: PendingMessage[];
   wsUrl: string;
@@ -103,7 +102,6 @@ export function createSwarmContext(
     ws: null,
     shuttingDown: false,
     wsReconnectAttempts: 0,
-    maxReconnectAttempts: 5,
     messageQueue: [],
     pendingMessages: [],
     wsUrl,

@@ -156,4 +156,57 @@ describe('connectWebSocket swarm-info caching', () => {
 
     expect(() => ws.emitMessage({ type: 'shutdown' })).not.toThrow();
   });
+
+  it('reconnects forever after close (no attempt cap)', () => {
+    vi.useFakeTimers();
+    try {
+      const ctx = createSwarmContext(
+        'http://beacon.test',
+        'agent-1',
+        makeRegistration(),
+        'ws://beacon.test/ws',
+        'localhost:3457'
+      );
+      connectWebSocket(ctx);
+
+      // Drive six consecutive closes without a successful open. The old
+      // capped budget (5) would stop after the fifth; eternal retry must not.
+      for (let i = 0; i < 6; i++) {
+        const ws = FakeWebSocket.instances.at(-1);
+        if (!ws) throw new Error('no WebSocket constructed');
+        ws.onclose?.({ code: 1006, reason: 'lost' });
+        vi.advanceTimersByTime(15 * 60 * 1000 + 1);
+      }
+
+      expect(FakeWebSocket.instances.length).toBeGreaterThanOrEqual(7);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not reconnect after an intentional shutdown close', () => {
+    vi.useFakeTimers();
+    try {
+      const ctx = createSwarmContext(
+        'http://beacon.test',
+        'agent-1',
+        makeRegistration(),
+        'ws://beacon.test/ws',
+        'localhost:3457'
+      );
+      connectWebSocket(ctx);
+      const count = FakeWebSocket.instances.length;
+
+      ctx.shuttingDown = true;
+      FakeWebSocket.instances.at(-1)?.onclose?.({
+        code: 1000,
+        reason: 'shutdown',
+      });
+      vi.advanceTimersByTime(15 * 60 * 1000 + 1);
+
+      expect(FakeWebSocket.instances.length).toBe(count);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
