@@ -31,6 +31,7 @@ import {
   updatePersona,
   listPersonas,
   listSkills,
+  backfillPersonaMetadata,
 } from './db/index.js';
 import { initStorage } from './storage.js';
 import { registerRoutes } from './routes/index.js';
@@ -582,6 +583,10 @@ export async function main() {
   // Seed default personas and skills (only if they don't exist)
   initDatabase(config.dbPath);
   seedDefaults();
+  const repairedPersonas = backfillPersonaMetadata();
+  if (repairedPersonas > 0) {
+    logger.info(`Persona metadata: backfilled ${repairedPersonas} row(s)`);
+  }
   await initStorage(config.configDir);
 
   // Initialize wiki storage under config dir

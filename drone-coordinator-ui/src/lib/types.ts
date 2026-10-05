@@ -78,8 +78,8 @@ export interface Persona {
 
 export interface CreatePersonaRequest {
   id: string;
-  name: string;
-  description: string;
+  name?: string;
+  description?: string;
   systemPrompt: string;
   scope?: string;
 }

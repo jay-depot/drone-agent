@@ -18,6 +18,7 @@ export {
   deletePersona,
   deletePersonaWithSkills,
   upsertPersonaFromCoordinator,
+  backfillPersonaMetadata,
 } from './personas.js';
 export {
   createSkill,

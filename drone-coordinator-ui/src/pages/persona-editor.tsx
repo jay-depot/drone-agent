@@ -17,9 +17,7 @@ export default function PersonaEditorPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [name, setName] = useState('');
   const [personaId, setPersonaId] = useState('');
-  const [description, setDescription] = useState('');
   const [scope, setScope] = useState('coordinator');
   const [systemPrompt, setSystemPrompt] = useState('');
 
@@ -32,9 +30,7 @@ export default function PersonaEditorPage() {
         const res = await authFetch(`/api/personas/${id}`);
         if (res.ok) {
           const p: Persona = await res.json();
-          setName(p.name);
           setPersonaId(p.id);
-          setDescription(p.description);
           setScope(p.scope);
           setSystemPrompt(p.systemPrompt);
         } else {
@@ -49,33 +45,12 @@ export default function PersonaEditorPage() {
     fetchPersona();
   }, [id, authFetch]);
 
-  // Auto-generate ID from name on create
-  const handleNameChange = (value: string) => {
-    setName(value);
-    if (!isEdit) {
-      setPersonaId(
-        value
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-|-$/g, '')
-      );
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!name.trim()) {
-      setError('Name is required');
-      return;
-    }
     if (!personaId.trim()) {
       setError('ID is required');
-      return;
-    }
-    if (!description.trim()) {
-      setError('Description is required');
       return;
     }
     if (!systemPrompt.trim()) {
@@ -87,8 +62,6 @@ export default function PersonaEditorPage() {
     try {
       const body: CreatePersonaRequest = {
         id: personaId.trim(),
-        name: name.trim(),
-        description: description.trim(),
         systemPrompt: systemPrompt.trim(),
         scope,
       };
@@ -137,8 +110,6 @@ export default function PersonaEditorPage() {
         </div>
         <div className="space-y-4">
           <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-20 w-full" />
           <Skeleton className="h-64 w-full" />
         </div>
       </div>
@@ -156,7 +127,9 @@ export default function PersonaEditorPage() {
             {isEdit ? 'Edit Persona' : 'New Persona'}
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {isEdit ? `Editing "${name}"` : 'Create a new swarm-wide persona'}
+            {isEdit
+              ? `Editing "${personaId}"`
+              : 'Create a new swarm-wide persona'}
           </p>
         </div>
       </div>
@@ -164,18 +137,6 @@ export default function PersonaEditorPage() {
       <ErrorBanner message={error} />
 
       <form onSubmit={handleSubmit} className="max-w-2xl space-y-4">
-        <div>
-          <label htmlFor="name" className="block text-sm font-medium mb-1">
-            Name *
-          </label>
-          <Input
-            id="name"
-            value={name}
-            onChange={e => handleNameChange(e.target.value)}
-            placeholder="My Persona"
-          />
-        </div>
-
         <div>
           <label
             htmlFor="persona-id"
@@ -192,24 +153,9 @@ export default function PersonaEditorPage() {
             className={isEdit ? 'opacity-50' : ''}
           />
           <p className="text-xs text-muted-foreground mt-1">
-            URL-safe identifier. Auto-generated from name on create.
+            URL-safe identifier. The persona's name and description are derived
+            from the system prompt's YAML frontmatter.
           </p>
-        </div>
-
-        <div>
-          <label
-            htmlFor="description"
-            className="block text-sm font-medium mb-1"
-          >
-            Description *
-          </label>
-          <textarea
-            id="description"
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            placeholder="Describe what this persona does..."
-            className="w-full px-3 py-2 border rounded-md text-sm bg-background min-h-[60px]"
-          />
         </div>
 
         <div>

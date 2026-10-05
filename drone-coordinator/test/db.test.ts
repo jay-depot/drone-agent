@@ -2,6 +2,8 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { setupDb, teardownDb } from './setup.js';
 import {
   createPersona,
+  getDatabase,
+  backfillPersonaMetadata,
   getPersona,
   listPersonas,
   updatePersona,
@@ -74,13 +76,14 @@ describe('Persona CRUD', () => {
   it('should create a persona', () => {
     const req: CreatePersonaRequest = {
       id: 'test-persona',
-      name: 'Test Persona',
-      description: 'A test persona',
+      name: 'ignored',
+      description: 'ignored',
       systemPrompt: 'You are a test persona.',
     };
     const persona = createPersona(req);
     expect(persona.id).toBe('test-persona');
-    expect(persona.name).toBe('Test Persona');
+    expect(persona.name).toBe('test-persona');
+    expect(persona.description).toBe('Persona: test-persona');
     expect(persona.scope).toBe('coordinator');
     expect(persona.createdAt).toBeGreaterThan(0);
     expect(persona.updatedAt).toBeGreaterThan(0);
@@ -119,17 +122,17 @@ describe('Persona CRUD', () => {
     expect(list).toHaveLength(2);
   });
 
-  it('should update a persona', () => {
+  it('should derive name/description from systemPrompt on update', () => {
     createPersona({
       id: 'p1',
-      name: 'P1',
-      description: 'd1',
-      systemPrompt: 'sp1',
+      systemPrompt: '---\nname: p1\ndescription: first\n---\nbody',
     });
-    const updated = updatePersona('p1', { name: 'Updated' });
+    const updated = updatePersona('p1', {
+      systemPrompt: '---\nname: p1\ndescription: second\n---\nbody',
+    });
     expect(updated).toBeDefined();
-    expect(updated!.name).toBe('Updated');
-    expect(updated!.description).toBe('d1');
+    expect(updated!.name).toBe('p1');
+    expect(updated!.description).toBe('second');
   });
 
   it('should return undefined when updating non-existent persona', () => {
@@ -149,6 +152,49 @@ describe('Persona CRUD', () => {
 
   it('should return false when deleting non-existent persona', () => {
     expect(deletePersona('nonexistent')).toBe(false);
+  });
+
+  it('derives name/description from frontmatter on create', () => {
+    const persona = createPersona({
+      id: 'my-persona',
+      systemPrompt:
+        '---\nname: my-persona\ndescription: Reviews code carefully\n---\nBody',
+    });
+    expect(persona.name).toBe('my-persona');
+    expect(persona.description).toBe('Reviews code carefully');
+  });
+
+  it('falls back to id and Persona: id without frontmatter', () => {
+    const persona = createPersona({
+      id: 'plain',
+      systemPrompt: 'You are a helper.',
+    });
+    expect(persona.name).toBe('plain');
+    expect(persona.description).toBe('Persona: plain');
+  });
+
+  it('backfills legacy rows without bumping updatedAt', () => {
+    const legacy = createPersona({
+      id: 'legacy',
+      systemPrompt: '---\nname: legacy\ndescription: real text\n---\nBody',
+    });
+    getDatabase()
+      .prepare("UPDATE personas SET description = '' WHERE id = 'legacy'")
+      .run();
+    const before = getPersona('legacy')!;
+    expect(before.description).toBe('');
+
+    const repaired = backfillPersonaMetadata();
+    expect(repaired).toBe(1);
+    const after = getPersona('legacy')!;
+    expect(after.description).toBe('real text');
+    expect(after.updatedAt).toBe(before.updatedAt);
+    expect(after.createdAt).toBe(legacy.createdAt);
+  });
+
+  it('backfill is idempotent', () => {
+    createPersona({ id: 'p1', systemPrompt: 'plain body' });
+    expect(backfillPersonaMetadata()).toBe(0);
   });
 });
 

@@ -30,6 +30,9 @@ const execFileAsync = promisify(execFile);
 const CACHE_DIR_ENV = 'DRONE_AGENT_LSP_CACHE';
 const CACHE_SUBDIR = 'lsp';
 
+const DOWNLOAD_MAX_ATTEMPTS = 3;
+const DOWNLOAD_RETRY_DELAY_MS = 500;
+
 /**
  * A description of how a server should be invoked after the installer runs.
  * Mirrors the shape the LSP plugin uses for spawn-style server configs but
@@ -288,18 +291,49 @@ async function withCacheLock<T>(
   throw new Error(`Could not acquire LSP installer lock: ${lockPath}`);
 }
 
+const delay = (ms: number): Promise<void> =>
+  new Promise(resolve => setTimeout(resolve, ms));
+
+/** Statuses a release-asset CDN returns during transient outages. */
+const isTransientDownloadStatus = (status: number): boolean =>
+  status === 408 || status === 429 || status >= 500;
+
+/**
+ * Download a URL, retrying transient failures (network errors and
+ * 408/429/5xx responses) with a short bounded backoff. Permanent failures
+ * (e.g. 404) surface immediately so a bad URL fails fast.
+ */
 async function downloadTarball(
   url: string,
   fetchImpl: typeof fetch
 ): Promise<Buffer> {
-  const response = await fetchImpl(url);
-  if (!response.ok) {
-    throw new Error(
+  let lastError: Error = new Error(`LSP server download failed (${url})`);
+  for (let attempt = 1; attempt <= DOWNLOAD_MAX_ATTEMPTS; attempt += 1) {
+    const isLastAttempt = attempt === DOWNLOAD_MAX_ATTEMPTS;
+
+    let response: Response;
+    try {
+      response = await fetchImpl(url);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (isLastAttempt) throw lastError;
+      await delay(DOWNLOAD_RETRY_DELAY_MS);
+      continue;
+    }
+
+    if (response.ok) {
+      return Buffer.from(await response.arrayBuffer());
+    }
+
+    lastError = new Error(
       `LSP server download failed: ${response.status} ${response.statusText} (${url})`
     );
+    if (isLastAttempt || !isTransientDownloadStatus(response.status)) {
+      throw lastError;
+    }
+    await delay(DOWNLOAD_RETRY_DELAY_MS);
   }
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+  throw lastError;
 }
 
 async function extractTarball(
