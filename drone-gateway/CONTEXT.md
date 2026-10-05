@@ -82,8 +82,14 @@ _Avoid_: Coordinator API, coordinator proxy, coordinator connector
         userId: string
         deviceId?: string
         rooms?: string[]             # Allowlist; DMs always included
-        dataPath?: string            # Path to SQLite database for persistent
-                                     # sync/crypto store (E2EE keys survive restart)
+        dataPath?: string            # Path to SQLite database for the persistent
+                                     # sync store (survives restart); the same
+                                     # database backs the legacy-crypto
+                                     # migration store. Does NOT persist
+                                     # Rust-crypto E2EE keys.
+        encryption?: boolean         # Opt-in E2EE (default false). On Node the
+                                     # Rust-crypto keys live in memory only, so
+                                     # they are lost on restart.
       conversations/
         <conv-id>.json              # One file per conversation
           conversationId: string     # Canonical ID (not derived from filename)

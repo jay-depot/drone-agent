@@ -28,18 +28,35 @@ export interface MatrixAdapterConfig {
   /** Optional allowlist of room IDs to listen in. DMs are always included. */
   rooms?: string[];
   /**
-   * Optional path for persistent sync/crypto store.
+   * Optional path for the persistent sync store.
    *
    * When set, a SQLite database is created at this path (parent directories
-   * are created as needed). Both the sync store (room timelines, sync
-   * token) and the crypto store (E2EE keys, Olm sessions) are persisted
-   * here, so the bot survives restarts without re-syncing or losing the
-   * ability to decrypt messages in encrypted rooms.
+   * are created as needed) and used as the sync store (room timelines, sync
+   * token), so the bot survives restarts without re-syncing. The same
+   * database also backs the legacy-crypto store, which matrix-js-sdk only
+   * consults to migrate a device that previously used legacy crypto.
    *
-   * When unset, the SDK uses in-memory stores (everything is lost on
+   * When unset, the SDK uses an in-memory sync store (everything is lost on
    * restart).
+   *
+   * NOTE: this path does NOT persist Rust-crypto E2EE keys. See
+   * {@link MatrixAdapterConfig.encryption}.
    */
   dataPath?: string;
+  /**
+   * Whether to initialize end-to-end encryption (Rust crypto).
+   *
+   * Defaults to `false`. On a headless Node host the SDK's Rust-crypto store
+   * selection would otherwise reach for the browser-only `indexedDB` global
+   * and abort the process inside the WASM module — an abort that JavaScript
+   * `try`/`catch` cannot intercept. Encryption is therefore opt-in.
+   *
+   * When `true`, crypto is initialized on the in-memory Rust-crypto store
+   * (`useIndexedDB: false`). E2EE then works, but the keys are NOT durable:
+   * they are lost on restart. A SQLite-backed, Node-viable Rust-crypto store
+   * is future work.
+   */
+  encryption?: boolean;
 }
 
 /**
@@ -90,8 +107,14 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
 
     const { createClient } = await import('matrix-js-sdk');
 
-    const { homeserverUrl, accessToken, userId, deviceId, dataPath } =
-      this.config;
+    const {
+      homeserverUrl,
+      accessToken,
+      userId,
+      deviceId,
+      dataPath,
+      encryption,
+    } = this.config;
 
     if (!homeserverUrl || !accessToken || !userId) {
       throw new Error(
@@ -116,7 +139,7 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
     if (dataPath) {
       logger.info(
         { adapterId: this.id, dataPath },
-        'Opening SQLite database for persistent sync/crypto store'
+        'Opening SQLite database for persistent sync store'
       );
       this.db = openGatewayDb(dataPath);
       clientOpts.store = new SqliteSyncStore(this.db);
@@ -124,19 +147,22 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
     }
 
     // Create the Matrix client
-    this.client = createClient(clientOpts);
+    const client = createClient(clientOpts);
+    this.client = client;
 
-    // Best-effort crypto initialization for E2EE rooms
-    try {
-      await this.client.initRustCrypto();
+    // Initialize crypto only when E2EE is explicitly requested. The SDK's
+    // default store selection reaches for the browser-only `indexedDB` global
+    // and aborts the process inside the WASM module otherwise — an abort that
+    // `try`/`catch` cannot intercept.
+    if (encryption) {
+      await this.initCryptoForNode(client);
       logger.info(
-        'Matrix crypto initialized (E2EE rooms supported; keys persisted via SQLite)'
+        'Matrix E2EE enabled — crypto initialized on the in-memory store; ' +
+          'keys are NOT persisted and are lost on restart'
       );
-    } catch (cryptoErr) {
-      logger.warn(
-        { err: cryptoErr },
-        'Matrix crypto initialization failed — E2EE rooms will not be decryptable. ' +
-          'Install matrix-js-sdk with crypto support or use unencrypted rooms.'
+    } else {
+      logger.info(
+        'Matrix E2EE disabled (encryption is not true) — skipping crypto initialization'
       );
     }
 
@@ -157,6 +183,31 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
     this.started = true;
 
     logger.info({ adapterId: this.id }, 'Matrix adapter started and syncing');
+  }
+
+  /**
+   * Initialize Rust crypto on a store that works on a headless Node host.
+   *
+   * `useIndexedDB: false` selects the SDK's in-memory store. The SDK default
+   * (an IndexedDB store) is browser-only: on Node the WASM module reads a null
+   * `indexedDB` global and aborts the process — an abort no `try`/`catch` can
+   * intercept. A failure here is surfaced as a descriptive error, never a
+   * silent downgrade and never a panic.
+   */
+  private async initCryptoForNode(client: MatrixClient): Promise<void> {
+    try {
+      await client.initRustCrypto({ useIndexedDB: false });
+    } catch (cryptoErr) {
+      const detail =
+        cryptoErr instanceof Error ? cryptoErr.message : String(cryptoErr);
+      throw new Error(
+        'Matrix crypto initialization failed. E2EE is requested ' +
+          '(encryption=true) but the Rust-crypto stack could not start. ' +
+          'The in-memory store is used, so keys are never persisted. ' +
+          `Underlying error: ${detail}`,
+        { cause: cryptoErr }
+      );
+    }
   }
 
   private onTimelineEvent(

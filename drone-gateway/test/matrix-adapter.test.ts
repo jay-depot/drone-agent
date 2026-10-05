@@ -138,7 +138,7 @@ describe('MatrixServiceAdapter', () => {
       );
     });
 
-    it('initializes crypto (best-effort)', async () => {
+    it('does not initialize crypto when encryption is not set', async () => {
       adapter = new MatrixServiceAdapter('matrix-1', {
         homeserverUrl: 'https://matrix.org',
         accessToken: 'syt_token',
@@ -147,7 +147,50 @@ describe('MatrixServiceAdapter', () => {
 
       await adapter.start();
 
-      expect(mockInitRustCrypto).toHaveBeenCalled();
+      expect(mockInitRustCrypto).not.toHaveBeenCalled();
+      expect(mockStartClient).toHaveBeenCalled();
+    });
+
+    it('does not initialize crypto when encryption is false', async () => {
+      adapter = new MatrixServiceAdapter('matrix-1', {
+        homeserverUrl: 'https://matrix.org',
+        accessToken: 'syt_token',
+        userId: '@bot:matrix.org',
+        encryption: false,
+      });
+
+      await adapter.start();
+
+      expect(mockInitRustCrypto).not.toHaveBeenCalled();
+    });
+
+    it('initializes crypto on the in-memory store when encryption is true', async () => {
+      adapter = new MatrixServiceAdapter('matrix-1', {
+        homeserverUrl: 'https://matrix.org',
+        accessToken: 'syt_token',
+        userId: '@bot:matrix.org',
+        encryption: true,
+      });
+
+      await adapter.start();
+
+      expect(mockInitRustCrypto).toHaveBeenCalledWith({
+        useIndexedDB: false,
+      });
+    });
+
+    it('surfaces a descriptive error when crypto init fails with encryption=true', async () => {
+      mockInitRustCrypto.mockRejectedValueOnce(new Error('boom'));
+      adapter = new MatrixServiceAdapter('matrix-1', {
+        homeserverUrl: 'https://matrix.org',
+        accessToken: 'syt_token',
+        userId: '@bot:matrix.org',
+        encryption: true,
+      });
+
+      await expect(adapter.start()).rejects.toThrow(
+        /Matrix crypto initialization failed/
+      );
     });
 
     it('starts the client sync', async () => {
