@@ -25,6 +25,15 @@ export type ProcessLookupResult =
 
 const SPAWN_ID_FLAG = '--spawn-id';
 
+/**
+ * Hard cap on a single `ps` invocation. Process enumeration runs inside the
+ * beacon's terminate ladder (and the liveness read), so an unbounded `ps` on a
+ * loaded host would make those operations unbounded too. On timeout execFile
+ * kills the child and throws, which degrades to `unavailable` — never to
+ * `absent`.
+ */
+const PS_TIMEOUT_MS = 2000;
+
 let psUnavailableLogged = false;
 
 /**
@@ -57,12 +66,11 @@ export function parsePsOutput(output: string): ProcessInfo[] {
  */
 export async function listProcesses(): Promise<ProcessInfo[] | null> {
   try {
-    const { stdout } = await execFileAsync('ps', [
-      '-A',
-      '-ww',
-      '-o',
-      'pid=,command=',
-    ]);
+    const { stdout } = await execFileAsync(
+      'ps',
+      ['-A', '-ww', '-o', 'pid=,command='],
+      { timeout: PS_TIMEOUT_MS }
+    );
     return parsePsOutput(stdout);
   } catch (err) {
     if (!psUnavailableLogged) {

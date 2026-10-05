@@ -17,6 +17,7 @@ function resolveWith(stdout: string): void {
     (
       _file: string,
       _args: string[],
+      _options: unknown,
       cb: (err: unknown, out?: unknown) => void
     ) => cb(null, { stdout })
   );
@@ -82,10 +83,22 @@ describe('listProcesses', () => {
 
   it('returns null when ps is unavailable', async () => {
     execFileMock.mockImplementation(
-      (_f: string, _a: string[], cb: (err: unknown) => void) =>
-        cb(new Error('spawn ps ENOENT'))
+      (
+        _f: string,
+        _a: string[],
+        _o: unknown,
+        cb: (err: unknown) => void
+      ) => cb(new Error('spawn ps ENOENT'))
     );
     await expect(listProcesses()).resolves.toBeNull();
+  });
+
+  it('passes a timeout so enumeration cannot hang', async () => {
+    resolveWith('  42 drone-agent --spawn-id spawn-1');
+    await listProcesses();
+    const options = execFileMock.mock.calls[0][2] as { timeout?: number };
+    expect(typeof options.timeout).toBe('number');
+    expect(options.timeout).toBeGreaterThan(0);
   });
 });
 
@@ -116,8 +129,12 @@ describe('findPidBySpawnId', () => {
 
   it('reports unavailable when enumeration could not run', async () => {
     execFileMock.mockImplementation(
-      (_f: string, _a: string[], cb: (err: unknown) => void) =>
-        cb(new Error('ps unsupported'))
+      (
+        _f: string,
+        _a: string[],
+        _o: unknown,
+        cb: (err: unknown) => void
+      ) => cb(new Error('ps unsupported'))
     );
     await expect(findPidBySpawnId('target')).resolves.toEqual({
       status: 'unavailable',
