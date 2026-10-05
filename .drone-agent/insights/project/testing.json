@@ -82,5 +82,9 @@
   {
     "timestamp": "2026-10-05T19:39:38.009Z",
     "insight": "Contract-mismatch bugs against a third-party SDK are invisible to both isolated unit tests and fully-mocked tests. `sqlite-sync-store.test.ts` tested the store by itself and could not see that the SDK needs accumulated sync state; `matrix-adapter.test.ts` mocked the SDK entirely. What caught DRONE-GW-BUG-002 was a test that drives the REAL client (no `vi.mock`) through the actual lifecycle: start -> sync -> restart over the same SQLite file -> sync, asserting the observable outcome (`getSavedSync().roomsData` lists the room; `client.getRooms()` is non-empty). Rule: for code that implements a documented interface of an external library, add at least one integration-style test that exercises the real library, not a mock. The bug reproduced cleanly in ~60ms with a 1-room + incremental fixture."
+  },
+  {
+    "timestamp": "2026-10-05T19:56:06.996Z",
+    "insight": "Real-library tests caught another contract bug that mocks hid: the \"wrong/duplicate reply\" symptom was caused by matrix-js-sdk re-emitting cached-sync timeline events on restart, which the fully-mocked adapter suite could never see (it invoked the handler manually with only 3 args). The decisive test seeded a SqliteSyncStore with a sync containing a `swarm.beacon.list` message, then started the REAL MatrixClient over that store and asserted no AdapterMessage was emitted (test/matrix-adapter-replay.test.ts). Keep adding at least one real-client test whenever adapter behavior depends on SDK-internal event semantics — payload shape (`data.liveEvent`), not just event name, is part of the contract."
   }
 ]
