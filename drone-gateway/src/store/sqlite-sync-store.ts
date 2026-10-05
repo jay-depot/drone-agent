@@ -3,7 +3,12 @@ import { MatrixEvent } from 'matrix-js-sdk/lib/models/event.js';
 import type { GatewayDatabase } from './db.js';
 import type { IStore, ISavedSync } from 'matrix-js-sdk/lib/store/index.js';
 import type { IEvent } from 'matrix-js-sdk/lib/models/event.js';
-import type { ISyncResponse } from 'matrix-js-sdk/lib/sync-accumulator.js';
+import {
+  SyncAccumulator,
+  type ISyncData,
+  type ISyncResponse,
+} from 'matrix-js-sdk/lib/sync-accumulator.js';
+import { deepCopy } from 'matrix-js-sdk/lib/utils.js';
 import type { IStartClientOpts } from 'matrix-js-sdk/lib/client.js';
 import type { IStateEventWithRoomId } from 'matrix-js-sdk/lib/@types/search.js';
 import type {
@@ -17,18 +22,27 @@ const WRITE_DELAY_MS = 1000 * 30; // 30 seconds, matching IndexedDBStore
  * SQLite-backed Matrix sync store.
  *
  * Extends MemoryStore (same as matrix-js-sdk's IndexedDBStore) and persists
- * the data that the SDK needs to survive a restart: the saved-sync blob,
- * presence events, out-of-band membership, pending events, to-device
+ * the data that the SDK needs to survive a restart: the accumulated sync
+ * state, presence events, out-of-band membership, pending events, to-device
  * batches, and client options.
  *
- * On startup the client replays the saved sync to rebuild live Room/User
- * objects in memory — we never serialize Room/User objects directly (the
- * SDK has no Room.fromJSON).
+ * Sync responses are deltas: the first carries the room state, later ones
+ * carry only a new token and whatever changed. Persisting the last response
+ * would therefore discard all room data. Like the SDK's IndexedDB backend,
+ * this store folds every response into a {@link SyncAccumulator} and persists
+ * the *accumulated* state, so a restarted client still knows its rooms.
+ *
+ * On startup the client replays the accumulated state to rebuild live
+ * Room/User objects in memory — we never serialize Room/User objects directly
+ * (the SDK has no Room.fromJSON).
  */
 export class SqliteSyncStore extends MemoryStore implements IStore {
   private db: GatewayDatabase;
   private syncTs: number;
   private userModifiedMap: Record<string, number> = {};
+  private syncAccumulator = new SyncAccumulator();
+  private accumulatorHydrated = false;
+  private accumulatorHydration: Promise<void> | null = null;
 
   constructor(db: GatewayDatabase) {
     super({});
@@ -39,7 +53,10 @@ export class SqliteSyncStore extends MemoryStore implements IStore {
   // ── Startup / lifecycle ─────────────────────────────────────
 
   async startup(): Promise<void> {
-    // Load presence events from SQLite and replay them into MemoryStore
+    // Rehydrate the accumulated sync state, then load presence events from
+    // SQLite and replay them into MemoryStore.
+    await this.ensureAccumulator();
+
     const rows = this.db
       .prepare(`SELECT user_id, event FROM presence_events`)
       .all() as { user_id: string; event: string }[];
@@ -64,9 +81,43 @@ export class SqliteSyncStore extends MemoryStore implements IStore {
 
   // ── Saved sync ─────────────────────────────────────────────
 
+  /**
+   * Rehydrate the accumulator from persisted state exactly once. Concurrent
+   * callers share one in-flight hydration.
+   */
+  private ensureAccumulator(): Promise<void> {
+    if (this.accumulatorHydrated) return Promise.resolve();
+    this.accumulatorHydration ??= this.hydrateAccumulator().then(() => {
+      this.accumulatorHydrated = true;
+    });
+    return this.accumulatorHydration;
+  }
+
+  private async hydrateAccumulator(): Promise<void> {
+    const row = this.db
+      .prepare(`SELECT data FROM saved_sync WHERE id = 1`)
+      .get() as { data: string } | undefined;
+    if (!row) return;
+
+    const persisted = parsePersistedSync(row.data);
+    if (!persisted) return;
+
+    // Replay the accumulated state through the accumulator in database mode,
+    // mirroring the SDK's IndexedDB backend init().
+    this.syncAccumulator.accumulate(
+      {
+        next_batch: persisted.nextBatch,
+        rooms: persisted.roomsData,
+        account_data: { events: persisted.accountData },
+      },
+      true
+    );
+  }
+
   async setSyncData(syncData: ISyncResponse): Promise<void> {
-    // The sync token is in syncData.next_batch
-    const nextBatch = syncData.next_batch ?? '';
+    await this.ensureAccumulator();
+    this.syncAccumulator.accumulate(syncData);
+    const accumulated = this.syncAccumulator.getJSON(true);
     this.db
       .prepare(
         `
@@ -74,28 +125,19 @@ export class SqliteSyncStore extends MemoryStore implements IStore {
       VALUES (1, ?, ?)
     `
       )
-      .run(nextBatch, JSON.stringify(syncData));
+      .run(accumulated.nextBatch ?? '', JSON.stringify(accumulated));
   }
 
   async getSavedSync(): Promise<ISavedSync | null> {
-    const row = this.db
-      .prepare(`SELECT sync_token, data FROM saved_sync WHERE id = 1`)
-      .get() as { sync_token: string; data: string } | undefined;
-    if (!row) return null;
-    const raw = JSON.parse(row.data) as ISyncResponse;
-    // Transform snake_case next_batch to camelCase nextBatch for ISavedSync
-    return {
-      nextBatch: raw.next_batch ?? row.sync_token,
-      roomsData: raw.rooms ?? { join: {}, invite: {}, leave: {} },
-      accountData: raw.account_data?.events ?? [],
-    };
+    await this.ensureAccumulator();
+    const data = this.syncAccumulator.getJSON();
+    if (!data.nextBatch) return null;
+    return deepCopy(data);
   }
 
   async getSavedSyncToken(): Promise<string | null> {
-    const row = this.db
-      .prepare(`SELECT sync_token FROM saved_sync WHERE id = 1`)
-      .get() as { sync_token: string } | undefined;
-    return row?.sync_token ?? null;
+    await this.ensureAccumulator();
+    return this.syncAccumulator.getNextBatchToken() ?? null;
   }
 
   // ── Presence events ────────────────────────────────────────
@@ -248,6 +290,9 @@ export class SqliteSyncStore extends MemoryStore implements IStore {
 
   async deleteAllData(): Promise<void> {
     super.deleteAllData();
+    this.syncAccumulator = new SyncAccumulator();
+    this.accumulatorHydrated = true;
+    this.accumulatorHydration = null;
     this.db.exec(`
       DELETE FROM saved_sync;
       DELETE FROM presence_events;
@@ -266,4 +311,46 @@ export class SqliteSyncStore extends MemoryStore implements IStore {
       .get() as { cnt: number };
     return Promise.resolve(row.cnt === 0);
   }
+}
+
+/**
+ * Parse the persisted `saved_sync.data` blob into accumulated sync state.
+ *
+ * New rows hold a serialized {@link ISyncData} (`nextBatch`/`roomsData`/
+ * `accountData`). Rows written by the old clobbering store hold a raw
+ * `/sync` response instead; those are read best-effort so a single full
+ * sync heals legacy databases. Returns null when the blob is unusable.
+ */
+function parsePersistedSync(data: string): ISyncData | null {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(data);
+  } catch {
+    return null;
+  }
+  if (!raw || typeof raw !== 'object') return null;
+  const record = raw as Record<string, unknown>;
+
+  if (typeof record.nextBatch === 'string') {
+    return {
+      nextBatch: record.nextBatch,
+      roomsData: (record.roomsData ?? emptyRooms()) as ISyncData['roomsData'],
+      accountData: (record.accountData ?? []) as ISyncData['accountData'],
+    };
+  }
+
+  if (typeof record.next_batch === 'string') {
+    return {
+      nextBatch: record.next_batch,
+      roomsData: (record.rooms ?? emptyRooms()) as ISyncData['roomsData'],
+      accountData: ((record.account_data as { events?: unknown[] } | undefined)
+        ?.events ?? []) as ISyncData['accountData'],
+    };
+  }
+
+  return null;
+}
+
+function emptyRooms(): ISyncData['roomsData'] {
+  return { join: {}, invite: {}, leave: {}, knock: {} };
 }

@@ -7,6 +7,7 @@ import type { IStateEventWithRoomId } from 'matrix-js-sdk/lib/@types/search.js';
 import type { IStartClientOpts } from 'matrix-js-sdk/lib/client.js';
 import type { ToDeviceBatchWithTxnId } from 'matrix-js-sdk/lib/models/ToDeviceMessage.js';
 import type { IEvent } from 'matrix-js-sdk/lib/models/event.js';
+import { roomSync, incrementalSync } from './fixtures/sync.js';
 
 describe('SqliteSyncStore', () => {
   let db: Database.Database;
@@ -66,11 +67,56 @@ describe('SqliteSyncStore', () => {
       expect(token).toBe('s1234');
     });
 
-    it('overwrites existing saved sync', async () => {
+    it('advances the token on every sync', async () => {
       await store.setSyncData({ next_batch: 's1' } as ISyncResponse);
       await store.setSyncData({ next_batch: 's2' } as ISyncResponse);
       const token = await store.getSavedSyncToken();
       expect(token).toBe('s2');
+    });
+
+    it('accumulates room data across incremental syncs', async () => {
+      await store.setSyncData(roomSync('s1'));
+      // An incremental /sync carries only a new token and no rooms.
+      await store.setSyncData(incrementalSync('s2'));
+
+      const saved = await store.getSavedSync();
+      expect(saved!.nextBatch).toBe('s2');
+      expect(Object.keys(saved!.roomsData.join)).toContain('!room:test');
+    });
+
+    it('rehydrates accumulated state into a fresh store over the same db', async () => {
+      await store.setSyncData(roomSync('s1'));
+      await store.setSyncData(incrementalSync('s2'));
+
+      const reopened = new SqliteSyncStore(db);
+      const saved = await reopened.getSavedSync();
+      expect(saved!.nextBatch).toBe('s2');
+      expect(Object.keys(saved!.roomsData.join)).toContain('!room:test');
+      expect(await reopened.getSavedSyncToken()).toBe('s2');
+    });
+
+    it('reads a legacy raw-sync row best-effort', async () => {
+      // The old store wrote the raw last /sync response.
+      db.prepare(
+        `INSERT OR REPLACE INTO saved_sync (id, sync_token, data) VALUES (1, ?, ?)`
+      ).run(
+        's9',
+        JSON.stringify({
+          next_batch: 's9',
+          rooms: {
+            join: { '!legacy:test': { timeline: { events: [] } } },
+            invite: {},
+            leave: {},
+            knock: {},
+          },
+          account_data: { events: [] },
+        })
+      );
+
+      const reopened = new SqliteSyncStore(db);
+      const saved = await reopened.getSavedSync();
+      expect(saved!.nextBatch).toBe('s9');
+      expect(Object.keys(saved!.roomsData.join)).toContain('!legacy:test');
     });
   });
 
