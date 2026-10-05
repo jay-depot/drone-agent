@@ -4,6 +4,7 @@ import { getBeaconUrl } from './context.js';
 import * as db from '../db/index.js';
 import * as spawner from '../spawner.js';
 import { isAgentConnected, sendToAgent } from '../ws-server.js';
+import { getSpawnLiveness } from '../spawn-reconcile.js';
 import {
   getDefaultSpawnRoot,
   getSpawnRoots,
@@ -96,21 +97,27 @@ export function handleListSpawns(status?: string) {
   return db.listSpawns(status);
 }
 
-/** Get a single spawn's status. Returns 404 if not found. */
-export function handleGetSpawn(spawnId: string): {
+/**
+ * Get a single spawn's status. Returns 404 if not found. The derived `live`
+ * field reports whether the agent is confirmably alive (process visible or
+ * reachable); it is a view, not a stored state.
+ */
+export async function handleGetSpawn(spawnId: string): Promise<{
   status: number;
   body: unknown;
-} {
+}> {
   const spawn = db.getSpawn(spawnId);
   if (!spawn) {
     return { status: 404, body: { error: 'Spawn not found' } };
   }
+  const liveness = (await getSpawnLiveness([spawn])).get(spawn.id);
   return {
     status: 200,
     body: {
       spawnId: spawn.id,
       agentId: spawn.agentId,
       status: spawn.status,
+      live: liveness?.live ?? false,
       createdAt: spawn.createdAt,
       startedAt: spawn.startedAt,
       terminatedAt: spawn.terminatedAt,
