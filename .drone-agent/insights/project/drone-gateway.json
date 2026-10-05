@@ -14,5 +14,9 @@
   {
     "timestamp": "2026-10-05T19:56:06.995Z",
     "insight": "drone-gateway Matrix adapter follow-on (after the sync-store accumulation fix): with a persistent sync store, matrix-js-sdk replays the cached /sync on restart and re-emits every cached timeline event as `RoomEvent.Timeline`. `EventTimelineSet.addLiveEvent` ALWAYS passes `toStartOfTimeline === false`, so `toStartOfTimeline` does NOT distinguish replayed history. The only discriminator is `data.liveEvent` (false when the event came `fromCache`). The adapter filtered on `toStartOfTimeline` alone, so on each restart it re-dispatched historical commands as fresh input — an earlier command's reply then \"answered\" a later unrelated command, and command replies duplicated once per restart. Fix: take the full 5-arg `RoomEvent.Timeline` signature `(event, room, toStartOfTimeline, removed, data)` and return early on `removed || !data?.liveEvent` (this is the SDK's own documented check, per event-timeline-set docs). Rule: with a persistent store, treat `RoomEvent.Timeline` as \"timeline changed\", not \"new message\"."
+  },
+  {
+    "timestamp": "2026-10-05T23:06:50.931Z",
+    "insight": "Gateway control surfaces are instantiated per conversation but the engine dispatches messages fire-and-forget (`adapter.onMessage(msg => { void this.handleMessage(msg) })`), so two messages in one conversation run concurrently. Any surface that holds session state (persona-assignment) therefore has a check-then-await-then-set double-spawn race, and LocalSpawnBackend.sendMessage opens a fresh readline over the persistent child stdout on every call, so concurrent readers corrupt each other's output stream. Fix pattern: serialize dispatch per conversation in the engine (promise-chain tail on the instantiated-conversation record), plus in-flight promise caching in both spawn backends — the same queue-if-in-flight mutex used for `_runtime.submitUserMessage` (ADR 198)."
   }
 ]
