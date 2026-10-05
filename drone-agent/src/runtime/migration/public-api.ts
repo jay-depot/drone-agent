@@ -269,7 +269,7 @@ export async function batchMigrate(
         asset.id,
         fromScope,
         toScope,
-        options
+        asset.personaId ? { ...options, personaId: asset.personaId } : options
       );
       results.push(result);
     }

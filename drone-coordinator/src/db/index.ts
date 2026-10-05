@@ -12,14 +12,22 @@ export {
   listPersonas,
   updatePersona,
   deletePersona,
+  deletePersonaWithSkills,
 } from './personas.js';
 export {
   createSkill,
   getSkill,
+  getSkillByKey,
+  getGlobalSkill,
   listSkills,
+  listSkillsByPersona,
   updateSkill,
+  updateSkillByKey,
   deleteSkill,
+  deleteSkillByKey,
+  deleteSkillsByPersona,
 } from './skills.js';
+export type { CreateSkillOptions } from './skills.js';
 export {
   registerBeacon,
   getBeacon,

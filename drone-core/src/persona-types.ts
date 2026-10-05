@@ -113,4 +113,11 @@ export type DronePersonaCapability = {
   getFilteredSkills: (
     allSkills: DroneSkillDefinition[]
   ) => DroneSkillDefinition[];
+  /**
+   * Whether a skill is visible to the currently active persona. Global
+   * skills (no `personaId`) are always visible; persona-owned skills are
+   * visible only to their owning persona. With no active persona, owned
+   * skills are hidden.
+   */
+  isSkillVisible: (skill: DroneSkillDefinition) => boolean;
 };

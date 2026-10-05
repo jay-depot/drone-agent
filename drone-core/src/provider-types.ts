@@ -35,6 +35,28 @@ export type DroneSkillWriter = {
   /** Write a skill .md file to the target location. Returns the file path. */
   writeSkill: (id: string, content: string) => Promise<{ filePath: string }>;
 };
+/**
+ * A writer for persona-owned skills. Unlike `DroneSkillWriter`, a single
+ * instance serves every owner at its scope: the owner is an argument, and the
+ * target location is derived from the owner (the skill inherits the owner's
+ * scope). Registered once per scope; safe across persona reloads.
+ */
+export type DroneOwnedSkillWriter = {
+  /** Unique id for this writer (e.g. 'persona-owned-skills-project'). */
+  id: string;
+  /** The scope whose personas this writer can serve. */
+  scope: 'project' | 'user' | 'beacon' | 'coordinator';
+  /** Human-readable label for the owner picker for a given persona. */
+  labelFor: (personaId: string) => string;
+  /** Check whether `personaId` already owns a skill with this id. */
+  exists: (personaId: string, id: string) => Promise<boolean>;
+  /** Write a skill .md file owned by `personaId`. Returns the location. */
+  writeSkill: (
+    personaId: string,
+    id: string,
+    content: string
+  ) => Promise<{ filePath: string }>;
+};
 
 import type { DroneSkillDefinition } from './skill-types.js';
 import type { DronePersonaDefinition } from './persona-types.js';

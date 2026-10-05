@@ -203,15 +203,17 @@ describe('Beacon Skill CRUD', () => {
       trigger: 't1',
       body: '# Body',
     };
-    const skill = createSkill(req, 'local');
+    const skill = createSkill(req, { scope: 'local' });
     expect(skill.id).toBe('test-skill');
     expect(skill.scope).toBe('local');
+    expect(skill.key).toBe('test-skill');
+    expect(skill.personaId).toBeNull();
   });
 
   it('should get a skill by id', () => {
     createSkill(
       { id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' },
-      'local'
+      { scope: 'local' }
     );
     expect(getSkill('s1')).toBeDefined();
   });
@@ -219,11 +221,11 @@ describe('Beacon Skill CRUD', () => {
   it('should list all skills', () => {
     createSkill(
       { id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' },
-      'local'
+      { scope: 'local' }
     );
     createSkill(
       { id: 's2', name: 'S2', description: 'd2', trigger: 't2', body: 'b2' },
-      'local'
+      { scope: 'local' }
     );
     expect(listSkills()).toHaveLength(2);
   });
@@ -231,15 +233,17 @@ describe('Beacon Skill CRUD', () => {
   it('should list only local skills', () => {
     createSkill(
       { id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' },
-      'local'
+      { scope: 'local' }
     );
     upsertSkillFromCoordinator({
+      key: 's2',
       id: 's2',
       name: 'S2',
       description: 'd2',
       trigger: 't2',
       body: 'b2',
       scope: 'coordinator',
+      personaId: null,
       createdAt: 1,
       updatedAt: 1,
     });
@@ -249,7 +253,7 @@ describe('Beacon Skill CRUD', () => {
   it('should update a skill', () => {
     createSkill(
       { id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' },
-      'local'
+      { scope: 'local' }
     );
     const updated = updateSkill('s1', { name: 'Updated' });
     expect(updated).toBeDefined();
@@ -259,19 +263,21 @@ describe('Beacon Skill CRUD', () => {
   it('should delete a skill', () => {
     createSkill(
       { id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' },
-      'local'
+      { scope: 'local' }
     );
     expect(deleteSkill('s1')).toBe(true);
   });
 
   it('should upsert a skill from coordinator', () => {
     upsertSkillFromCoordinator({
+      key: 's1',
       id: 's1',
       name: 'S1',
       description: 'd1',
       trigger: 't1',
       body: 'b1',
       scope: 'coordinator',
+      personaId: null,
       createdAt: 100,
       updatedAt: 100,
     });

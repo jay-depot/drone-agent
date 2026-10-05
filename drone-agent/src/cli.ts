@@ -83,6 +83,8 @@ export type MigrateCliOptions = {
   scope?: string;
   /** Beacon host override. */
   beaconHost?: string;
+  /** Owning persona id (for persona-owned skills). */
+  personaId?: string;
   /** Beacon port override. */
   beaconPort?: number;
 };
@@ -293,6 +295,8 @@ function parseMigrateSubcommand(args: string[]): CliInvocation {
       migrateOptions.pull = true;
     } else if (arg === '--scope' && i + 1 < args.length) {
       migrateOptions.scope = args[++i];
+    } else if (arg === '--persona-id' && i + 1 < args.length) {
+      migrateOptions.personaId = args[++i];
     } else if (arg === '--beacon-host' && i + 1 < args.length) {
       migrateOptions.beaconHost = args[++i];
     } else if (arg === '--beacon-port' && i + 1 < args.length) {

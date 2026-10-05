@@ -13,16 +13,23 @@ import type {
   DroneSkillProvider,
   DroneSkillsCapability,
   DroneSkillWriter,
+  DroneOwnedSkillWriter,
 } from 'drone-core';
-import { PRECEDENCE_COORDINATOR, PRECEDENCE_SWARM } from 'drone-core';
+import {
+  PRECEDENCE_COORDINATOR,
+  PRECEDENCE_SWARM,
+  skillStorageKey,
+} from 'drone-core';
 import { parsePersonaMd } from '../persona/loader.js';
+import { findSkillByPublicId } from '../skills/keying.js';
 import type { SwarmContext } from './context.js';
 
 // The beacon /skills endpoint returns the persisted Skill shape (which
 // carries a `scope` field) rather than a DroneSkillDefinition. Keep the
 // wire type honest so `scope` is typed instead of cast through `any`.
-interface BeaconSkill extends DroneSkillDefinition {
+interface BeaconSkill extends Omit<DroneSkillDefinition, 'personaId'> {
   scope: 'local' | 'coordinator';
+  personaId?: string | null;
 }
 
 /**
@@ -67,10 +74,15 @@ export async function reloadFromBeacon(ctx: SwarmContext): Promise<void> {
     ctx.coordinatorSkills = new Map();
 
     for (const s of skillsData) {
+      const definition: DroneSkillDefinition = {
+        ...s,
+        personaId: s.personaId ?? undefined,
+      };
+      const key = skillStorageKey(definition.personaId, definition.id);
       if (s.scope === 'coordinator') {
-        ctx.coordinatorSkills.set(s.id, s);
+        ctx.coordinatorSkills.set(key, definition);
       } else {
-        ctx.beaconSkills.set(s.id, s);
+        ctx.beaconSkills.set(key, definition);
       }
     }
 
@@ -189,7 +201,7 @@ export function registerSkillProviders(
     id: 'swarm-skill-beacon',
     precedence: PRECEDENCE_SWARM,
     getSkills: () => Array.from(ctx.beaconSkills.values()),
-    getSkill: (id: string) => ctx.beaconSkills.get(id),
+    getSkill: (id: string) => findSkillByPublicId(ctx.beaconSkills, id),
     reloadSkills: () => reloadFromBeacon(ctx),
   };
 
@@ -197,7 +209,7 @@ export function registerSkillProviders(
     id: 'swarm-skill-coordinator',
     precedence: PRECEDENCE_COORDINATOR,
     getSkills: () => Array.from(ctx.coordinatorSkills.values()),
-    getSkill: (id: string) => ctx.coordinatorSkills.get(id),
+    getSkill: (id: string) => findSkillByPublicId(ctx.coordinatorSkills, id),
     reloadSkills: () => reloadFromBeacon(ctx),
   };
 
@@ -237,6 +249,48 @@ export function registerSkillProviders(
   };
   skillsCap.registerWriter(beaconSkillWriter);
 
+  const beaconOwnedSkillWriter: DroneOwnedSkillWriter = {
+    id: 'swarm-owned-skill-beacon',
+    scope: 'beacon',
+    labelFor: personaId =>
+      `Owned by persona "${personaId}" (beacon-local, swarm hub)`,
+    exists: async (personaId: string, id: string) => {
+      try {
+        const res = await fetch(
+          `${ctx.baseUrl}/personas/${encodeURIComponent(personaId)}/skills`
+        );
+        if (!res.ok) return false;
+        const rows = (await res.json()) as BeaconSkill[];
+        return rows.some(s => s.id === id);
+      } catch {
+        return false;
+      }
+    },
+    writeSkill: async (personaId: string, id: string, content: string) => {
+      const res = await fetch(
+        `${ctx.baseUrl}/personas/${encodeURIComponent(personaId)}/skills`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id,
+            name: id,
+            description: '',
+            trigger: '',
+            body: content,
+          }),
+        }
+      );
+      if (!res.ok) {
+        throw new Error(`Failed to write owned skill to beacon: ${res.status}`);
+      }
+      return {
+        filePath: `${ctx.baseUrl}/personas/${personaId}/skills/${id}`,
+      };
+    },
+  };
+  skillsCap.registerOwnedWriter(beaconOwnedSkillWriter);
+
   const coordinatorSkillWriter: DroneSkillWriter = {
     id: 'swarm-skill-coordinator',
     scope: 'coordinator',
@@ -269,4 +323,48 @@ export function registerSkillProviders(
     },
   };
   skillsCap.registerWriter(coordinatorSkillWriter);
+
+  const coordinatorOwnedSkillWriter: DroneOwnedSkillWriter = {
+    id: 'swarm-owned-skill-coordinator',
+    scope: 'coordinator',
+    labelFor: personaId =>
+      `Owned by persona "${personaId}" (coordinator, global swarm hub)`,
+    exists: async (personaId: string, id: string) => {
+      try {
+        const res = await fetch(
+          `${ctx.baseUrl}/coordinator/personas/${encodeURIComponent(personaId)}/skills`
+        );
+        if (!res.ok) return false;
+        const rows = (await res.json()) as BeaconSkill[];
+        return rows.some(s => s.id === id);
+      } catch {
+        return false;
+      }
+    },
+    writeSkill: async (personaId: string, id: string, content: string) => {
+      const res = await fetch(
+        `${ctx.baseUrl}/coordinator/personas/${encodeURIComponent(personaId)}/skills`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id,
+            name: id,
+            description: '',
+            trigger: '',
+            body: content,
+          }),
+        }
+      );
+      if (!res.ok) {
+        throw new Error(
+          `Failed to write owned skill to coordinator: ${res.status}`
+        );
+      }
+      return {
+        filePath: `${ctx.baseUrl}/coordinator/personas/${personaId}/skills/${id}`,
+      };
+    },
+  };
+  skillsCap.registerOwnedWriter(coordinatorOwnedSkillWriter);
 }

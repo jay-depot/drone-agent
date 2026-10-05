@@ -3,6 +3,14 @@ import type { DroneSkillsCapability } from 'drone-core';
 import { CONFIG_DIR, INSIGHTS_SUBDIR, PRINCIPLES_SUBDIR } from './constants.js';
 
 /**
+ * A skill is local when it was loaded from disk (`user`/`project` scope).
+ * Beacon/coordinator skills live on a server, not in a local persona dir.
+ */
+function isLocalSkill(skill: { source: string }): boolean {
+  return skill.source === 'user' || skill.source === 'project';
+}
+
+/**
  * Resolve the directory and file path for an insights file.
  */
 export function resolveInsightPaths(
@@ -21,7 +29,7 @@ export function resolveInsightPaths(
 
   if (targetType === 'skill') {
     const skill = skillsCap?.getSkill(targetId);
-    if (skill?.personaId) {
+    if (skill?.personaId && isLocalSkill(skill)) {
       const personaDir = path.join(
         baseDir,
         CONFIG_DIR,
@@ -66,7 +74,7 @@ export function resolvePrinciplePaths(
 
   if (targetType === 'skill') {
     const skill = skillsCap?.getSkill(targetId);
-    if (skill?.personaId) {
+    if (skill?.personaId && isLocalSkill(skill)) {
       const personaDir = path.join(
         baseDir,
         CONFIG_DIR,
