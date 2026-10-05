@@ -269,14 +269,6 @@ export function terminateAgent(
   return true;
 }
 
-export function getActiveSpawns(): string[] {
-  return Array.from(activeSpawns.keys());
-}
-
-export function getManagedProcess(spawnId: string): ManagedProcess | undefined {
-  return activeSpawns.get(spawnId);
-}
-
 // Cleanup on shutdown - terminate all spawned agents
 export function cleanupAllSpawns(): void {
   logger.info(`Cleaning up ${activeSpawns.size} active spawns`);
