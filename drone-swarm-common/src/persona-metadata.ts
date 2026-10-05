@@ -35,7 +35,7 @@ export function derivePersonaMetadata(
   // cannot be mistaken for the persona's name.
   let inPremount = false;
   for (const line of match[1].split('\n')) {
-    const kv = line.match(/^(\s*)([\w-]+):\s*(.*)$/);
+    const kv = line.match(/^(\s*)([\w-]+):(.*)$/);
     if (!kv) continue;
     const indent = kv[1];
     const key = kv[2];
