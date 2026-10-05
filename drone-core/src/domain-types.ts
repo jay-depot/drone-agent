@@ -19,12 +19,20 @@ export type Persona = {
  * For runtime config, see DroneSkillDefinition.
  */
 export type Skill = {
+  /**
+   * Storage primary key. Global skills key on their bare public id;
+   * persona-owned skills key on `<personaId>/<skillId>`.
+   */
+  key: string;
+  /** Public skill id. Flat: it may repeat across different owners. */
   id: string;
   name: string;
   description: string;
   trigger: string;
   body: string;
   scope: 'local' | 'coordinator';
+  /** Owning persona id, or `null` for a global skill. */
+  personaId: string | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -45,4 +53,6 @@ export type CreateSkillRequest = {
   description: string;
   trigger: string;
   body: string;
+  /** Owning persona id. Omit or `null` for a global skill. */
+  personaId?: string | null;
 };

@@ -16,17 +16,27 @@ export {
   listLocalPersonas,
   updatePersona,
   deletePersona,
+  deletePersonaWithSkills,
   upsertPersonaFromCoordinator,
 } from './personas.js';
 export {
   createSkill,
   getSkill,
+  getSkillByKey,
+  getGlobalSkill,
   listSkills,
   listLocalSkills,
+  listSkillsByPersona,
   updateSkill,
+  updateSkillByKey,
   deleteSkill,
+  deleteSkillByKey,
+  deleteSkillsByPersona,
+  deleteOwnedSkillsNotIn,
+  deleteCoordinatorGlobalSkillsNotIn,
   upsertSkillFromCoordinator,
 } from './skills.js';
+export type { CreateSkillOptions } from './skills.js';
 export {
   registerAgent,
   getAgent,

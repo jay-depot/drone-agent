@@ -35,6 +35,8 @@
 import type {
   DroneElicitation,
   DroneLogger,
+  DroneOwnedSkillWriter,
+  DronePersonaCapability,
   DroneSkillWriter,
   DroneSkillsCapability,
   DroneWorkflow,
@@ -42,6 +44,7 @@ import type {
 
 type SkillsCreateInput = {
   scope?: string;
+  personaId?: string;
   id?: string;
   description?: string;
   recall?: string;
@@ -86,6 +89,65 @@ async function askScope(
   ]);
   const selected = writers.find(w => w.scope === answers.scope);
   return selected ?? writers[0];
+}
+
+/** Wrap an owned writer + owner as a plain DroneSkillWriter for the write path. */
+function bindOwnedWriter(
+  personaId: string,
+  writer: DroneOwnedSkillWriter
+): DroneSkillWriter {
+  return {
+    id: writer.id,
+    scope: writer.scope,
+    label: writer.labelFor(personaId),
+    exists: (id: string) => writer.exists(personaId, id),
+    writeSkill: (id: string, content: string) =>
+      writer.writeSkill(personaId, id, content),
+  };
+}
+
+/**
+ * Owner-first prompt: ask who should own the skill, then derive the storage
+ * scope from the owner (owned) or ask for a global scope (no owner). When no
+ * owned writers are registered the owner question is omitted entirely.
+ */
+async function askOwnerThenScope(
+  elicit: DroneElicitation,
+  writers: DroneSkillWriter[],
+  ownedWriters: DroneOwnedSkillWriter[],
+  personaCap: DronePersonaCapability | undefined
+): Promise<{ writer: DroneSkillWriter; ownerPersonaId?: string }> {
+  if (ownedWriters.length === 0) {
+    return { writer: await askScope(elicit, undefined, writers) };
+  }
+  const servableScopes = new Set(ownedWriters.map(w => w.scope));
+  const personas = (personaCap?.getPersonas() ?? []).filter(
+    p => p.scope && servableScopes.has(p.scope)
+  );
+  const answers = await elicit.ask([
+    {
+      id: 'owner',
+      prompt: 'Who should own this skill?',
+      choices: [
+        { value: '', label: 'No owner (global skill)' },
+        ...personas.map(p => {
+          const ownerWriter = ownedWriters.find(ow => ow.scope === p.scope)!;
+          return { value: p.id, label: ownerWriter.labelFor(p.id) };
+        }),
+      ],
+      defaultValue: '',
+    },
+  ]);
+  const ownerId = answers.owner ?? '';
+  if (ownerId.length === 0) {
+    return { writer: await askScope(elicit, undefined, writers) };
+  }
+  const persona = personas.find(p => p.id === ownerId)!;
+  const ownedWriter = ownedWriters.find(w => w.scope === persona.scope)!;
+  return {
+    writer: bindOwnedWriter(persona.id, ownedWriter),
+    ownerPersonaId: persona.id,
+  };
 }
 
 async function askId(
@@ -257,6 +319,11 @@ export const skillsCreateWorkflow: DroneWorkflow = {
         description:
           'Optional — skip the first prompt. One of: project, user, beacon, coordinator.',
       },
+      personaId: {
+        type: 'string',
+        description:
+          'Optional — author a skill owned by this persona. Scope is derived from the owner; `scope` is ignored. The wizard skips the owner question.',
+      },
       id: {
         type: 'string',
         description:
@@ -292,8 +359,46 @@ export const skillsCreateWorkflow: DroneWorkflow = {
       );
     }
 
-    // 1. Scope — pick a writer
-    const writer = await askScope(ctx.elicit, input.scope, writers);
+    // 1. Resolve the target writer (owner > scope > ask)
+    const personaCap = ctx.requestCapability<DronePersonaCapability>('persona');
+    const ownedWriters = skillsCap.getOwnedWriters();
+
+    let writer: DroneSkillWriter;
+    let ownerPersonaId: string | undefined;
+
+    if (
+      typeof input.personaId === 'string' &&
+      input.personaId.trim().length > 0
+    ) {
+      const personaId = input.personaId.trim().toLowerCase();
+      const persona = personaCap?.getPersonas().find(p => p.id === personaId);
+      const scope = persona?.scope;
+      const ownedWriter = scope
+        ? ownedWriters.find(w => w.scope === scope)
+        : undefined;
+      if (!persona || !ownedWriter) {
+        throw new Error(
+          `Cannot author a skill owned by persona "${personaId}": the persona is not loaded, or no owned-skill writer serves its scope.`
+        );
+      }
+      ownerPersonaId = persona.id;
+      writer = bindOwnedWriter(persona.id, ownedWriter);
+    } else if (input.scope) {
+      const match = writers.find(w => w.scope === input.scope);
+      if (!match) {
+        throw new Error(
+          `No skill writer is registered for scope "${input.scope}".`
+        );
+      }
+      writer = match;
+    } else {
+      ({ writer, ownerPersonaId } = await askOwnerThenScope(
+        ctx.elicit,
+        writers,
+        ownedWriters,
+        personaCap
+      ));
+    }
 
     // 2. Id (slugified)
     const id = await askId(ctx.elicit, input.id, logger);
@@ -348,6 +453,14 @@ export const skillsCreateWorkflow: DroneWorkflow = {
     const { filePath } = await writer.writeSkill(id, skeleton);
 
     // 9. Reload
+    if (ownerPersonaId) {
+      try {
+        await personaCap?.reloadPersonas();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.warn(`reloadPersonas after write failed: ${msg}`);
+      }
+    }
     try {
       await skillsCap.reloadSkills();
     } catch (err) {
@@ -359,10 +472,19 @@ export const skillsCreateWorkflow: DroneWorkflow = {
       recall.length > 0
         ? `The skill will be suggested when the user mentions: ${recall.join('; ')}.`
         : 'No recall conditions were set; the skill will not be automatically suggested.';
+    const ownerNote = ownerPersonaId
+      ? ownerPersonaId === personaCap?.getActivePersona()?.id
+        ? `It is owned by the active persona "${ownerPersonaId}" and is available now.`
+        : `It is owned by persona "${ownerPersonaId}" and is NOT visible to this session. ` +
+          `Switch with \`/persona select ${ownerPersonaId}\` to use it.`
+      : '';
+    const availabilityNote = ownerNote
+      ? ownerNote
+      : 'The active skill list has been reloaded.';
     const kickMessage =
       `Skill "${id}" (${description}) is now available — the skeleton file ` +
       `was written to ${filePath}. ${recallNote} ` +
-      `The active skill list has been reloaded. ` +
+      `${availabilityNote} ` +
       `Please read the skeleton file, explore the codebase to understand the context, ` +
       `and fill in the skill body with instructions, examples, and patterns. ` +
       `When done, call \`skills.reload\` to refresh the skill list. ` +
@@ -373,6 +495,7 @@ export const skillsCreateWorkflow: DroneWorkflow = {
       {
         id,
         scope: writer.scope,
+        personaId: ownerPersonaId ?? null,
         filePath,
         description,
         recallCount: recall.length,

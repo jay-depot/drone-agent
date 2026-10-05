@@ -72,6 +72,7 @@ import type {
   DroneSkillProvider,
   DroneRecallEnhancer,
   DroneSkillWriter,
+  DroneOwnedSkillWriter,
   DroneLlmProvider,
   DroneLlmProviderRegistration,
 } from './provider-types.js';
@@ -144,6 +145,12 @@ export type DroneSkillsCapability = {
   unregisterWriter: (writerId: string) => void;
   /** Get all registered skill writers, sorted by precedence. */
   getWriters: () => DroneSkillWriter[];
+  /** Register a persona-owned skill writer. Sorted by precedence (ascending). */
+  registerOwnedWriter: (writer: DroneOwnedSkillWriter) => void;
+  /** Unregister a persona-owned skill writer by id. */
+  unregisterOwnedWriter: (writerId: string) => void;
+  /** Get all registered owned-skill writers, sorted by precedence. */
+  getOwnedWriters: () => DroneOwnedSkillWriter[];
   /** Register a callback that can enhance skill recall results. */
   onRecall: (enhancer: DroneRecallEnhancer) => void;
 };

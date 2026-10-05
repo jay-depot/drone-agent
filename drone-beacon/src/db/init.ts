@@ -33,12 +33,14 @@ export function initDatabase(dataPath: string): Database.Database {
     );
 
     CREATE TABLE IF NOT EXISTS skills (
-      id TEXT PRIMARY KEY,
+      key TEXT PRIMARY KEY,
+      id TEXT NOT NULL,
       name TEXT NOT NULL,
       description TEXT NOT NULL,
       trigger TEXT NOT NULL,
       body TEXT NOT NULL,
       scope TEXT NOT NULL DEFAULT 'local',
+      personaId TEXT,
       createdAt INTEGER NOT NULL,
       updatedAt INTEGER NOT NULL
     );
@@ -277,6 +279,39 @@ export function initDatabase(dataPath: string): Database.Database {
     db.exec(
       "ALTER TABLE agent_sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'connected'"
     );
+  }
+
+  // Idempotent migration: skills gained a synthetic `key` primary key and a
+  // nullable `personaId` owner column. Rebuild legacy flat tables in place
+  // (global rows keep key === id).
+  const skillCols = db.prepare('PRAGMA table_info(skills)').all() as Array<{
+    name: string;
+  }>;
+  if (skillCols.length > 0 && !skillCols.some(c => c.name === 'key')) {
+    db.exec(`
+      CREATE TABLE skills_new (
+        key TEXT PRIMARY KEY,
+        id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        trigger TEXT NOT NULL,
+        body TEXT NOT NULL,
+        scope TEXT NOT NULL DEFAULT 'local',
+        personaId TEXT,
+        createdAt INTEGER NOT NULL,
+        updatedAt INTEGER NOT NULL
+      );
+      INSERT INTO skills_new (key, id, name, description, trigger, body, scope, personaId, createdAt, updatedAt)
+        SELECT id, id, name, description, trigger, body, scope, NULL, createdAt, updatedAt FROM skills;
+      DROP TABLE skills;
+      ALTER TABLE skills_new RENAME TO skills;
+    `);
+    logger.info('Migrated skills table to synthetic key + personaId owner');
+  } else if (
+    skillCols.length > 0 &&
+    !skillCols.some(c => c.name === 'personaId')
+  ) {
+    db.exec('ALTER TABLE skills ADD COLUMN personaId TEXT');
   }
 
   // Idempotent migration: beacon_config key must be scoped so local and

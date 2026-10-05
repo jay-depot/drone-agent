@@ -78,7 +78,7 @@ export default function personaRoutes(app: FastifyInstance) {
     '/personas/:id',
     async (request, reply) => {
       const existing = db.getPersona(request.params.id);
-      const deleted = db.deletePersona(request.params.id);
+      const deleted = db.deletePersonaWithSkills(request.params.id);
       if (!deleted) {
         return reply.code(404).send({ error: 'Persona not found' });
       }

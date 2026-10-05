@@ -121,6 +121,7 @@ export async function runMigrate(
     backupTo: migrateOptions.backupTo,
     pull: migrateOptions.pull,
     scope: migrateOptions.scope as MigrateScope | undefined,
+    personaId: migrateOptions.personaId,
     beaconHost: beaconAddr?.host,
     beaconPort: beaconAddr?.port,
   };

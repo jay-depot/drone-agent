@@ -8,11 +8,13 @@ import type {
   DronePlugin,
   DroneSkillDefinition,
   DroneSkillProvider,
+  DroneOwnedSkillWriter,
   DroneSkillsCapability,
 } from 'drone-core';
 import { PRECEDENCE_PERSONA_USER, PRECEDENCE_USER } from 'drone-core';
 import { loadPersonasFromDir } from '../persona/loader.js';
-import { loadSkillsFromDir } from '../skills/loader.js';
+import { loadPersonaOwnedSkills } from '../persona/owned-skills.js';
+import { findSkillByPublicId } from '../skills/keying.js';
 import { access, mkdir, writeFile } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 
@@ -40,7 +42,8 @@ export const personaProviderUserPlugin: DronePlugin = {
     const personaDir = path.join(os.homedir(), CONFIG_DIR, PERSONA_DIR);
 
     let personas = new Map<string, DronePersonaDefinition>();
-    // Aggregated map of persona-owned skills (id -> skill)
+    // Aggregated map of persona-owned skills, keyed by composite storage key
+    // (`<personaId>/<skillId>`) so two personas may own same-named skills.
     let personaSkills = new Map<string, DroneSkillDefinition>();
 
     // ── Persona provider ─────────────────────────────────────────────
@@ -54,40 +57,22 @@ export const personaProviderUserPlugin: DronePlugin = {
         personas = new Map(loaded.map(p => [p.id, p]));
         registration.logger.info(`reloaded ${personas.size} user persona(s)`);
 
-        // ── Reload persona-owned skills ────────────────────────────
         const skillsCap = registration.request<DroneSkillsCapability>('skills');
         if (skillsCap) {
-          // Unregister previous persona-owned skills provider
           skillsCap.unregisterProvider(PERSONA_SKILLS_PROVIDER_ID);
 
-          // Build new aggregated map of persona-owned skills.
-          // Each persona's skills live in <personaDir>/<id>/skills/.
-          // All .md files in that directory are auto-detected as owned skills.
-          const newSkills = new Map<string, DroneSkillDefinition>();
-
-          for (const persona of loaded) {
-            const personaSkillsDir = path.join(
-              personaDir,
-              persona.id,
-              SKILLS_DIR
-            );
-            const allSkills = await loadSkillsFromDir(personaSkillsDir, 'user');
-
-            for (const skill of allSkills) {
-              skill.precedence = PRECEDENCE_PERSONA_USER;
-              skill.personaId = persona.id;
-              newSkills.set(skill.id, skill);
-            }
-          }
-
-          personaSkills = newSkills;
+          personaSkills = await loadPersonaOwnedSkills(
+            personaDir,
+            loaded.map(p => p.id),
+            { source: 'user', precedence: PRECEDENCE_PERSONA_USER }
+          );
 
           if (personaSkills.size > 0) {
             const personaSkillProvider: DroneSkillProvider = {
               id: PERSONA_SKILLS_PROVIDER_ID,
               precedence: PRECEDENCE_PERSONA_USER,
               getSkills: () => Array.from(personaSkills.values()),
-              getSkill: (id: string) => personaSkills.get(id),
+              getSkill: (id: string) => findSkillByPublicId(personaSkills, id),
               reloadSkills: async () => {
                 // Skills are reloaded as part of persona reload
               },
@@ -121,6 +106,35 @@ export const personaProviderUserPlugin: DronePlugin = {
       },
     };
 
+    // ── Owned-skill writer ───────────────────────────────────────────
+    const ownedWriter: DroneOwnedSkillWriter = {
+      id: PERSONA_SKILLS_PROVIDER_ID,
+      scope: 'user',
+      labelFor: (personaId: string) =>
+        `Owned by persona "${personaId}" (~/.drone-agent/personas/${personaId}/skills/)`,
+      exists: async (personaId: string, id: string) => {
+        const filePath = path.join(
+          personaDir,
+          personaId,
+          SKILLS_DIR,
+          `${id}.md`
+        );
+        try {
+          await access(filePath, fsConstants.F_OK);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      writeSkill: async (personaId: string, id: string, content: string) => {
+        const skillsDir = path.join(personaDir, personaId, SKILLS_DIR);
+        const filePath = path.join(skillsDir, `${id}.md`);
+        await mkdir(skillsDir, { recursive: true });
+        await writeFile(filePath, content, 'utf-8');
+        return { filePath };
+      },
+    };
+
     // Register with the persona broker
     const personaCap = registration.request<DronePersonaCapability>('persona');
     if (personaCap) {
@@ -131,6 +145,8 @@ export const personaProviderUserPlugin: DronePlugin = {
         'persona broker not available; user personas will not be loaded'
       );
     }
+    const skillsCap = registration.request<DroneSkillsCapability>('skills');
+    skillsCap?.registerOwnedWriter(ownedWriter);
 
     registration.hooks.onPluginsLoaded(async () => {
       await provider.reloadPersonas();

@@ -11,6 +11,10 @@ import {
   type DroneElicitation,
   type DroneElicitationAnswers,
   type DroneElicitationQuestion,
+  type DroneOwnedSkillWriter,
+  type DronePersonaCapability,
+  type DronePersonaDefinition,
+  type DroneSkillDefinition,
   type DroneSkillWriter,
   type DroneWorkflowResult,
 } from 'drone-core';
@@ -41,6 +45,29 @@ function scriptedElicit(
           );
         }
         out[q.id] = next[q.id] as string;
+      }
+      return out;
+    },
+  };
+}
+
+/**
+ * Build an elicitation that answers each asked question from a by-id map,
+ * recording the question ids it was asked. Throws when an id has no answer.
+ */
+function dispatchElicit(
+  byId: Record<string, string>,
+  asked?: string[][]
+): DroneElicitation {
+  return {
+    ask: async (questions: DroneElicitationQuestion[]) => {
+      asked?.push(questions.map(q => q.id));
+      const out: DroneElicitationAnswers = {};
+      for (const q of questions) {
+        if (!(q.id in byId)) {
+          throw new Error(`dispatchElicit: no answer for "${q.id}"`);
+        }
+        out[q.id] = byId[q.id];
       }
       return out;
     },
@@ -117,6 +144,9 @@ function makeContext(input: {
   projectDir: string;
   elicit: DroneElicitation;
   capabilities?: Map<string, unknown>;
+  ownedWriters?: DroneOwnedSkillWriter[];
+  personas?: DronePersonaDefinition[];
+  activePersonaId?: string;
 }): DroneWorkflowContext {
   const config = createDefaultAgentConfig();
   const caps = input.capabilities ?? new Map<string, unknown>();
@@ -125,8 +155,15 @@ function makeContext(input: {
     const writers = makeWriters(input.projectDir);
     caps.set('skills', {
       getWriters: () => [writers.project, writers.user],
+      getOwnedWriters: () => input.ownedWriters ?? [],
       reloadSkills: async () => {},
     });
+  }
+  if (!caps.has('persona')) {
+    caps.set(
+      'persona',
+      makePersonaCap(input.personas ?? [], input.activePersonaId)
+    );
   }
   return {
     elicit: input.elicit,
@@ -139,6 +176,58 @@ function makeContext(input: {
       throw new Error('ctx.agent not expected in this test');
     },
   };
+}
+
+function makePersonaCap(
+  personas: DronePersonaDefinition[],
+  activePersonaId?: string
+): DronePersonaCapability {
+  const active = personas.find(p => p.id === activePersonaId) ?? null;
+  return {
+    getActivePersona: () => active,
+    getPersonas: () => personas,
+    selectPersona: () => {},
+    onPersonaChange: () => {},
+    reloadPersonas: async () => {},
+    registerProvider: () => {},
+    unregisterProvider: () => {},
+    registerWriter: () => {},
+    unregisterWriter: () => {},
+    getWriters: () => [],
+    getFilteredTools: tools => tools,
+    getFilteredSkills: (skills: DroneSkillDefinition[]) => skills,
+    isSkillVisible: () => true,
+  };
+}
+
+/**
+ * Build an owned-skill writer for a scope with a recorded write-call log and
+ * a controllable existence set (composite `<personaId>/<skillId>` keys).
+ */
+function makeOwnedWriter(
+  scope: DroneOwnedSkillWriter['scope'],
+  options: { existing?: string[] } = {}
+): {
+  writer: DroneOwnedSkillWriter;
+  calls: Array<{ personaId: string; id: string; content: string }>;
+} {
+  const existing = new Set(options.existing ?? []);
+  const calls: Array<{ personaId: string; id: string; content: string }> = [];
+  const writer: DroneOwnedSkillWriter = {
+    id: `persona-owned-skills-${scope}`,
+    scope,
+    labelFor: personaId => `Owned by persona "${personaId}" (${scope})`,
+    exists: async (personaId, id) => existing.has(`${personaId}/${id}`),
+    writeSkill: async (personaId, id, content) => {
+      calls.push({ personaId, id, content });
+      return { filePath: `/mem/personas/${personaId}/skills/${id}.md` };
+    },
+  };
+  return { writer, calls };
+}
+
+function persona(id: string, scope: DronePersonaDefinition['scope']) {
+  return { id, name: id, description: `Persona ${id}`, scope };
 }
 
 /**
@@ -425,6 +514,7 @@ describe('skillsCreateWorkflow — reload capability', () => {
           'skills',
           {
             getWriters: () => [writers.project, writers.user],
+            getOwnedWriters: () => [],
             reloadSkills: async () => {
               reloaded += 1;
             },
@@ -514,6 +604,268 @@ describe('skillsCreateWorkflow — skeleton content', () => {
       expect(written).toContain(
         '<!-- TODO: The coding agent should fill in this body'
       );
+    });
+  });
+});
+
+describe('skillsCreateWorkflow — owner-first target selection', () => {
+  it('offers the owner picker with a global default when owned writers exist', async () => {
+    await withProjectDir(async projectDir => {
+      const { writer } = makeOwnedWriter('project');
+      const asked: string[][] = [];
+      const elicit = dispatchElicit(
+        {
+          owner: '',
+          scope: 'project',
+          id: 'owned-test',
+          description: 'Owned.',
+          recall: '',
+        },
+        asked
+      );
+      const result = await runWizard(
+        {},
+        makeContext({
+          projectDir,
+          elicit,
+          ownedWriters: [writer],
+          personas: [persona('alice', 'project')],
+        })
+      );
+      expect(asked[0]).toEqual(['owner']);
+      const filePath = path.join(
+        projectDir,
+        '.drone-agent',
+        'skills',
+        'owned-test.md'
+      );
+      const written = await readFile(filePath, 'utf-8');
+      expect(written).toContain('name: owned-test');
+      const parsed = JSON.parse(result.toolResult ?? '{}');
+      expect(parsed.personaId).toBeNull();
+    });
+  });
+
+  it('derives the scope from the selected owner and never asks for one', async () => {
+    await withProjectDir(async projectDir => {
+      const { writer, calls } = makeOwnedWriter('project');
+      const asked: string[][] = [];
+      const elicit = dispatchElicit(
+        {
+          owner: 'alice',
+          id: 'owned-test',
+          description: 'Owned.',
+          recall: '',
+        },
+        asked
+      );
+      const result = await runWizard(
+        {},
+        makeContext({
+          projectDir,
+          elicit,
+          ownedWriters: [writer],
+          personas: [persona('alice', 'project')],
+        })
+      );
+      expect(asked.some(ids => ids.includes('scope'))).toBe(false);
+      expect(calls).toHaveLength(1);
+      expect(calls[0].personaId).toBe('alice');
+      expect(calls[0].id).toBe('owned-test');
+      const parsed = JSON.parse(result.toolResult ?? '{}');
+      expect(parsed.personaId).toBe('alice');
+      expect(parsed.scope).toBe('project');
+    });
+  });
+
+  it("asks exactly today's single scope question when no owned writers exist", async () => {
+    await withProjectDir(async projectDir => {
+      const asked: string[][] = [];
+      const elicit = dispatchElicit(
+        {
+          scope: 'project',
+          id: 'plain',
+          description: 'Plain.',
+          recall: '',
+        },
+        asked
+      );
+      await runWizard(
+        {},
+        makeContext({
+          projectDir,
+          elicit,
+          ownedWriters: [],
+          personas: [persona('alice', 'project')],
+        })
+      );
+      expect(asked[0]).toEqual(['scope']);
+      expect(asked.some(ids => ids.includes('owner'))).toBe(false);
+    });
+  });
+
+  it('fast-paths a supplied personaId, skipping the owner question', async () => {
+    await withProjectDir(async projectDir => {
+      const { writer, calls } = makeOwnedWriter('project');
+      const asked: string[][] = [];
+      const elicit = dispatchElicit(
+        {
+          id: 'owned-fast',
+          description: 'Fast.',
+          recall: '',
+        },
+        asked
+      );
+      const result = await runWizard(
+        { personaId: 'alice' },
+        makeContext({
+          projectDir,
+          elicit,
+          ownedWriters: [writer],
+          personas: [persona('alice', 'project')],
+        })
+      );
+      expect(asked.some(ids => ids.includes('owner'))).toBe(false);
+      expect(calls[0].personaId).toBe('alice');
+      const parsed = JSON.parse(result.toolResult ?? '{}');
+      expect(parsed.personaId).toBe('alice');
+    });
+  });
+
+  it('throws when personaId does not resolve to a loadable owner', async () => {
+    await withProjectDir(async projectDir => {
+      const { writer } = makeOwnedWriter('project');
+      await expect(
+        runWizard(
+          { personaId: 'ghost' },
+          makeContext({
+            projectDir,
+            elicit: scriptedElicit([]),
+            ownedWriters: [writer],
+            personas: [persona('alice', 'project')],
+          })
+        )
+      ).rejects.toThrow(/Cannot author a skill owned by persona "ghost"/);
+    });
+  });
+
+  it("throws when the owner's scope has no owned writer", async () => {
+    await withProjectDir(async projectDir => {
+      await expect(
+        runWizard(
+          { personaId: 'bob' },
+          makeContext({
+            projectDir,
+            elicit: scriptedElicit([]),
+            ownedWriters: [makeOwnedWriter('project').writer],
+            personas: [persona('bob', 'coordinator')],
+          })
+        )
+      ).rejects.toThrow(/Cannot author a skill owned by persona "bob"/);
+    });
+  });
+
+  it('overwrite on the owned writer keys on the composite identity', async () => {
+    await withProjectDir(async projectDir => {
+      const { writer } = makeOwnedWriter('project', {
+        existing: ['alice/existing-skill'],
+      });
+      await expect(
+        runWizard(
+          { personaId: 'alice' },
+          makeContext({
+            projectDir,
+            elicit: scriptedElicit([
+              { id: 'existing-skill' },
+              { overwrite: 'no' },
+            ]),
+            ownedWriters: [writer],
+            personas: [persona('alice', 'project')],
+          })
+        )
+      ).rejects.toThrow(/Refusing to overwrite/);
+    });
+  });
+});
+
+describe('skillsCreateWorkflow — kickMessage and reload wiring', () => {
+  it('names the persona select command when the owner is not active', async () => {
+    await withProjectDir(async projectDir => {
+      const { writer } = makeOwnedWriter('project');
+      const result = await runWizard(
+        { personaId: 'alice' },
+        makeContext({
+          projectDir,
+          elicit: scriptedElicit([
+            { id: 'owned-kick' },
+            { description: 'Kick.' },
+            { recall: '' },
+          ]),
+          ownedWriters: [writer],
+          personas: [persona('alice', 'project')],
+        })
+      );
+      expect(result.kickMessage).toMatch(/\/persona select alice/);
+    });
+  });
+
+  it('does not name the persona select command when the owner is active', async () => {
+    await withProjectDir(async projectDir => {
+      const { writer } = makeOwnedWriter('project');
+      const result = await runWizard(
+        { personaId: 'alice' },
+        makeContext({
+          projectDir,
+          elicit: scriptedElicit([
+            { id: 'owned-kick-two' },
+            { description: 'Kick.' },
+            { recall: '' },
+          ]),
+          ownedWriters: [writer],
+          personas: [persona('alice', 'project')],
+          activePersonaId: 'alice',
+        })
+      );
+      expect(result.kickMessage).not.toMatch(/\/persona select/);
+      expect(result.kickMessage).toMatch(/active persona "alice"/);
+    });
+  });
+
+  it('reloads personas before skills after an owned write', async () => {
+    await withProjectDir(async projectDir => {
+      const { writer } = makeOwnedWriter('project');
+      const order: string[] = [];
+      const writers = makeWriters(projectDir);
+      const caps = new Map<string, unknown>([
+        [
+          'skills',
+          {
+            getWriters: () => [writers.project, writers.user],
+            getOwnedWriters: () => [writer],
+            reloadSkills: async () => {
+              order.push('skills');
+            },
+          },
+        ],
+      ]);
+      const personaCap = makePersonaCap([persona('alice', 'project')]);
+      personaCap.reloadPersonas = async () => {
+        order.push('persona');
+      };
+      caps.set('persona', personaCap);
+      await runWizard(
+        { personaId: 'alice' },
+        makeContext({
+          projectDir,
+          elicit: scriptedElicit([
+            { id: 'owned-reload' },
+            { description: 'Reload.' },
+            { recall: '' },
+          ]),
+          capabilities: caps,
+        })
+      );
+      expect(order).toEqual(['persona', 'skills']);
     });
   });
 });

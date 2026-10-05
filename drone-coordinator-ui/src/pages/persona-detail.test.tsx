@@ -73,6 +73,9 @@ describe('PersonaDetailPage delete error handling', () => {
       if (url === '/api/personas/tester' && (init?.method ?? 'GET') === 'GET') {
         return jsonResponse(200, persona);
       }
+      if (url === '/api/personas/tester/skills') {
+        return jsonResponse(200, []);
+      }
       if (url === '/api/personas/tester' && init?.method === 'DELETE') {
         return deleteResponse;
       }

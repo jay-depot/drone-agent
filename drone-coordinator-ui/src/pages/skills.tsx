@@ -157,6 +157,20 @@ export default function SkillsPage() {
                     {skill.description}
                   </p>
                   <div className="text-xs text-muted-foreground space-y-1">
+                    {skill.personaId && (
+                      <div className="flex justify-between">
+                        <span>Owner</span>
+                        <span
+                          className="font-mono text-primary underline"
+                          onClick={e => {
+                            e.stopPropagation();
+                            navigate(`/personas/${skill.personaId}`);
+                          }}
+                        >
+                          {skill.personaId}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span>ID</span>
                       <span className="font-mono">{skill.id}</span>

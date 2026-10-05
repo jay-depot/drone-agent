@@ -26,6 +26,44 @@ export default function coordinatorRoutes(app: FastifyInstance) {
     }
   });
 
+  // List a coordinator persona's owned skills
+  app.get<{ Params: { id: string } }>(
+    '/coordinator/personas/:id/skills',
+    async (request, reply) => {
+      const client = getCoordinatorClient();
+      if (!client) {
+        return reply.code(503).send({ error: 'Coordinator not configured' });
+      }
+      try {
+        return await client.getOwnedSkills(request.params.id);
+      } catch (err) {
+        return reply.code(502).send({
+          error: 'Coordinator error',
+          details: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    }
+  );
+
+  // Create a coordinator persona's owned skill
+  app.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
+    '/coordinator/personas/:id/skills',
+    async (request, reply) => {
+      const client = getCoordinatorClient();
+      if (!client) {
+        return reply.code(503).send({ error: 'Coordinator not configured' });
+      }
+      const created = await client.createOwnedSkill(
+        request.params.id,
+        request.body
+      );
+      if (created === null) {
+        return reply.code(503).send({ error: 'Coordinator unavailable' });
+      }
+      return reply.code(201).send(created);
+    }
+  );
+
   // List coordinator skills
   app.get('/coordinator/skills', async (_request, reply) => {
     const client = getCoordinatorClient();

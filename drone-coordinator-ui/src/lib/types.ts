@@ -85,12 +85,14 @@ export interface CreatePersonaRequest {
 }
 
 export interface Skill {
+  key: string;
   id: string;
   name: string;
   description: string;
   trigger: string;
   body: string;
   scope: string;
+  personaId: string | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -102,6 +104,7 @@ export interface CreateSkillRequest {
   trigger: string;
   body: string;
   scope?: string;
+  personaId?: string | null;
 }
 
 export interface CoordinatorConfigEntry {
