@@ -142,8 +142,6 @@ export function registerPersonaProviders(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id,
-          name: id,
-          description: '',
           systemPrompt: content,
         }),
       });
@@ -173,8 +171,6 @@ export function registerPersonaProviders(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id,
-          name: id,
-          description: '',
           systemPrompt: content,
           scope: 'coordinator',
         }),

@@ -52,7 +52,9 @@ Precedent: commit `6c6d350` already fixed the read-back side by parsing on read 
 ## Steps (each atomic; recommended order)
 
 ### Step 1 — shared helper (drone-swarm-common) [agent: coder]
+
 New file `drone-swarm-common/src/persona-metadata.ts`:
+
 ```ts
 const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/;
 const stripQuotes = (raw: string) =>
@@ -87,11 +89,14 @@ export function derivePersonaMetadata(
   return { name, description };
 }
 ```
+
 Add `export * from './persona-metadata.js';` to `drone-swarm-common/src/index.ts`.
 Tests: `drone-swarm-common/test/persona-metadata.test.ts` — frontmatter name+desc; missing frontmatter → defaults; empty `description:` → `''`; fence at EOF (`\n?`); single-quoted values; indented/premount keys not misread.
 
 ### Step 2 — drone-core type change [agent: coder]
+
 `drone-core/src/domain-types.ts`: make `CreatePersonaRequest.name` and `.description` **optional**:
+
 ```ts
 export type CreatePersonaRequest = {
   id: string;
@@ -101,10 +106,13 @@ export type CreatePersonaRequest = {
   scope?: 'local' | 'coordinator';
 };
 ```
+
 Run `pnpm -r run build` before touching dependents.
 
 ### Step 3 — beacon DB layer [agent: coder]
+
 `drone-beacon/src/db/personas.ts` (import `derivePersonaMetadata` from `drone-swarm-common`):
+
 - `createPersona(req, scope='local')`: replace `name: req.name, description: req.description` with
   `const { name, description } = derivePersonaMetadata(req.systemPrompt, req.id);`
 - `updatePersona(id, req)`: compute `const systemPrompt = req.systemPrompt ?? existing.systemPrompt;` then `const { name, description } = derivePersonaMetadata(systemPrompt, id);` and set `systemPrompt, name, description` on the updated object (after the `...req` spread so they win).
@@ -113,9 +121,11 @@ Run `pnpm -r run build` before touching dependents.
 - Export `backfillPersonaMetadata` from `drone-beacon/src/db/index.ts`.
 
 ### Step 4 — coordinator DB layer [agent: coder]
+
 `drone-coordinator/src/db/personas.ts`: same as Step 3 for `createPersona` (scope is hardcoded `'coordinator'`), `updatePersona`, and add/export `backfillPersonaMetadata`. (Coordinator has no `upsertPersonaFromCoordinator`.) Export from `drone-coordinator/src/db/index.ts`.
 
 ### Step 5 — startup backfill wiring [agent: coder]
+
 - Beacon `src/index.ts`: after `initDatabase(config.dbPath)` (line ~263):
   ```ts
   const repairedPersonas = backfillPersonaMetadata();
@@ -125,24 +135,29 @@ Run `pnpm -r run build` before touching dependents.
 - Coordinator `src/index.ts`: after `seedDefaults()` (line ~584), same block.
 
 ### Step 6 — swarm writers stop sending junk [agent: coder]
+
 `drone-agent/src/plugins/swarm/providers.ts`: beacon writer body → `{ id, systemPrompt: content }`; coordinator writer body → `{ id, systemPrompt: content, scope: 'coordinator' }`.
 
 ### Step 7 — UI editor [agent: coder]
+
 `drone-coordinator-ui/src/pages/persona-editor.tsx`:
+
 - Remove `name`/`description` state, `handleNameChange`, their inputs, and their `handleSubmit` validations.
 - Keep `id` (with the existing "auto-generate from name on create" removed — user types it), `scope`, `systemPrompt`.
 - Load effect: drop `setName(p.name)` / `setDescription(p.description)`.
 - Submit body → `{ id: personaId.trim(), systemPrompt: systemPrompt.trim(), scope }`.
 - `drone-coordinator-ui/src/lib/types.ts`: make `CreatePersonaRequest.name`/`.description` optional (mirror drone-core).
-Leave `personas.tsx` and `persona-detail.tsx` as-is — they display the now-correct derived values.
+  Leave `personas.tsx` and `persona-detail.tsx` as-is — they display the now-correct derived values.
 
 ### Step 8 — tests [agent: tester]
+
 - Update `drone-coordinator/test/db.test.ts` ("should create a persona" name assertion ~:83, update test ~:123/:132) and `drone-beacon/test/db.test.ts` ("should update a persona") to derive-based expectations.
 - Add create/update derivation tests (frontmatter present + absent) and `backfillPersonaMetadata` tests (repairs a legacy row, is idempotent, leaves `updatedAt` unchanged) in both packages' db tests.
 - Verify existing route/seed/ownership tests still pass (they assert on ids/skills, not name/desc).
 - Add/adjust a `persona-editor` UI test asserting Name/Description inputs are gone and the POST body omits them.
 
 ### Step 9 — check the work against the Validation Criteria [agent: reviewer]
+
 Run every criterion below; report pass/fail with evidence.
 
 ## Validation criteria

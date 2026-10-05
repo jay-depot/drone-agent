@@ -3,12 +3,14 @@ import Database from 'better-sqlite3';
 import { setupDb, teardownDb } from './setup.js';
 import {
   createPersona,
+  getDatabase,
   getPersona,
   listPersonas,
   listLocalPersonas,
   updatePersona,
   deletePersona,
   upsertPersonaFromCoordinator,
+  backfillPersonaMetadata,
   createSkill,
   getSkill,
   listSkills,
@@ -147,14 +149,20 @@ describe('Beacon Persona CRUD', () => {
     expect(local[0].id).toBe('p1');
   });
 
-  it('should update a persona', () => {
+  it('should derive name/description from systemPrompt on update', () => {
     createPersona(
-      { id: 'p1', name: 'P1', description: 'd1', systemPrompt: 'sp1' },
+      {
+        id: 'p1',
+        systemPrompt: '---\nname: p1\ndescription: first\n---\nbody',
+      },
       'local'
     );
-    const updated = updatePersona('p1', { name: 'Updated' });
+    const updated = updatePersona('p1', {
+      systemPrompt: '---\nname: p1\ndescription: second\n---\nbody',
+    });
     expect(updated).toBeDefined();
-    expect(updated!.name).toBe('Updated');
+    expect(updated!.name).toBe('p1');
+    expect(updated!.description).toBe('second');
   });
 
   it('should return undefined when updating non-existent persona', () => {
@@ -183,6 +191,56 @@ describe('Beacon Persona CRUD', () => {
     const p = getPersona('p1');
     expect(p).toBeDefined();
     expect(p!.scope).toBe('coordinator');
+  });
+
+  it('derives name/description from frontmatter on create', () => {
+    const persona = createPersona(
+      {
+        id: 'my-persona',
+        systemPrompt:
+          '---\nname: my-persona\ndescription: Reviews code carefully\n---\nBody',
+      },
+      'local'
+    );
+    expect(persona.name).toBe('my-persona');
+    expect(persona.description).toBe('Reviews code carefully');
+  });
+
+  it('derives name/description on coordinator upsert', () => {
+    upsertPersonaFromCoordinator({
+      id: 'synced',
+      name: 'junk',
+      description: 'junk',
+      systemPrompt: '---\nname: synced\ndescription: real text\n---\nBody',
+      scope: 'coordinator',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const p = getPersona('synced')!;
+    expect(p.name).toBe('synced');
+    expect(p.description).toBe('real text');
+  });
+
+  it('backfills legacy rows without bumping updatedAt', () => {
+    const legacy = createPersona(
+      {
+        id: 'legacy',
+        systemPrompt: '---\nname: legacy\ndescription: real text\n---\nBody',
+      },
+      'local'
+    );
+    getDatabase()
+      .prepare("UPDATE personas SET description = '' WHERE id = 'legacy'")
+      .run();
+    const before = getPersona('legacy')!;
+    expect(before.description).toBe('');
+
+    const repaired = backfillPersonaMetadata();
+    expect(repaired).toBe(1);
+    const after = getPersona('legacy')!;
+    expect(after.description).toBe('real text');
+    expect(after.updatedAt).toBe(before.updatedAt);
+    expect(after.createdAt).toBe(legacy.createdAt);
   });
 });
 

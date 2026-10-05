@@ -8,3 +8,4 @@ export * from './search-chunker.js';
 export * from './search-searcher.js';
 export * from './search-provider-ollama.js';
 export * from './fragments-limits.js';
+export * from './persona-metadata.js';

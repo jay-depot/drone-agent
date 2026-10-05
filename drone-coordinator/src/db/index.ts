@@ -13,6 +13,7 @@ export {
   updatePersona,
   deletePersona,
   deletePersonaWithSkills,
+  backfillPersonaMetadata,
 } from './personas.js';
 export {
   createSkill,
