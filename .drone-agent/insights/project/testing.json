@@ -74,5 +74,9 @@
   {
     "timestamp": "2026-08-25T17:26:05.205Z",
     "insight": "A DroneLlmError's instanceof check in a vitest test can fail across `vi.resetModules()` because the module is re-imported fresh, giving the test file a different class identity than the driver's copy. Assert on `err?.name === 'DroneLlmError'` plus the structured fields instead of `toBeInstanceOf` when mocking via doMock/resetModules. Also, with the conversation-service retry config, the semantics of `maxRetries` is retries AFTER the initial call, so a `maxRetries: 2` test sees 3 total chat() invocations before prompting — count calls as initial + maxRetries."
+  },
+  {
+    "timestamp": "2026-10-05T19:16:44.813Z",
+    "insight": "A fully-mocked test cannot detect a hard abort in a real dependency: `drone-gateway/test/matrix-adapter.test.ts` mocked `initRustCrypto` and asserted only that it was called, so all 288 tests passed while the real Matrix adapter could not start on Node (native WASM panic → process exit 1). For any native/WASM/process-boundary dependency, add at least one test that loads the REAL module (no `vi.mock`) and asserts the observable outcome (here: `adapter.start()` resolves, and `initRustCrypto` is not called when feature-off). A crash surfaces in such a test as a vitest unhandled error / 90s timeout, which is the intended signal. Note: a WASM abort is an unhandled error that hangs the run rather than a clean per-test failure, so keep these tests few and fast."
   }
 ]
