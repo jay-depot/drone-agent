@@ -394,3 +394,79 @@ describe('DELETE /coordinator/spawn/:beaconId/:spawnId (beacon proxy)', () => {
     expect(res.statusCode).toBe(503);
   });
 });
+
+describe('GET /coordinator/personas/:id/skills (beacon proxy)', () => {
+  it('returns 503 when no coordinator client is configured', async () => {
+    setCoordinatorClient(undefined);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/coordinator/personas/alice/skills',
+    });
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('passes the persona id through and returns the owned skills', async () => {
+    const getOwnedSkills = vi
+      .fn()
+      .mockResolvedValue([{ id: 'deploy', personaId: 'alice' }]);
+    setCoordinatorClient(
+      makeFakeClient({ getOwnedSkills } as unknown as CoordinatorClient)
+    );
+    const res = await app.inject({
+      method: 'GET',
+      url: '/coordinator/personas/alice/skills',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)[0].id).toBe('deploy');
+    expect(getOwnedSkills).toHaveBeenCalledWith('alice');
+  });
+});
+
+describe('POST /coordinator/personas/:id/skills (beacon proxy)', () => {
+  it('returns 503 when no coordinator client is configured', async () => {
+    setCoordinatorClient(undefined);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/coordinator/personas/alice/skills',
+      payload: { id: 'deploy', name: 'deploy' },
+    });
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('forwards the body and returns 201 with the created skill', async () => {
+    const createOwnedSkill = vi.fn().mockResolvedValue({
+      id: 'deploy',
+      personaId: 'alice',
+      scope: 'coordinator',
+    });
+    setCoordinatorClient(
+      makeFakeClient({ createOwnedSkill } as unknown as CoordinatorClient)
+    );
+    const res = await app.inject({
+      method: 'POST',
+      url: '/coordinator/personas/alice/skills',
+      payload: { id: 'deploy', name: 'deploy', body: '# Deploy' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(JSON.parse(res.body).id).toBe('deploy');
+    expect(createOwnedSkill).toHaveBeenCalledWith('alice', {
+      id: 'deploy',
+      name: 'deploy',
+      body: '# Deploy',
+    });
+  });
+
+  it('returns 503 when the coordinator is unavailable', async () => {
+    setCoordinatorClient(
+      makeFakeClient({
+        createOwnedSkill: vi.fn().mockResolvedValue(null),
+      } as unknown as CoordinatorClient)
+    );
+    const res = await app.inject({
+      method: 'POST',
+      url: '/coordinator/personas/alice/skills',
+      payload: { id: 'deploy' },
+    });
+    expect(res.statusCode).toBe(503);
+  });
+});

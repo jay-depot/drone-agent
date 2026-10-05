@@ -16,7 +16,7 @@ import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
 import type { BeaconIdentity } from './identity.js';
 import type { DroneSwarmFragment, ResolvedConfigEntry } from 'drone-core';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
-import { enqueueOutbox } from './db/index.js';
+import { enqueueOutbox, upsertSkillFromCoordinator } from './db/index.js';
 import { getDefaultSpawnRoot, getSpawnRoots } from './spawn-roots.js';
 
 type SendMode = 'direct' | 'outbox';
@@ -82,6 +82,11 @@ export interface CoordinatorClient {
   heartbeat(): Promise<void>;
   fetchPersonas(): Promise<Persona[]>;
   fetchSkills(): Promise<Skill[]>;
+  getOwnedSkills(personaId: string): Promise<Skill[]>;
+  createOwnedSkill(
+    personaId: string,
+    body: Record<string, unknown>
+  ): Promise<Skill | null>;
   fetchCoordinatorFragments(): Promise<DroneSwarmFragment[]>;
   getCoordinatorDistribution(): Promise<ResolvedConfigEntry[]>;
 
@@ -531,6 +536,47 @@ export function createCoordinatorClient(
       const skills = data as Skill[];
       // Mark them as coordinator scope
       return skills.map(s => ({ ...s, scope: 'coordinator' as const }));
+    },
+
+    async getOwnedSkills(personaId: string): Promise<Skill[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
+      const res = await cfetch(
+        `${baseUrl}/api/personas/${encodeURIComponent(personaId)}/skills`
+      );
+      if (!res.ok) {
+        logger.warn(`Failed to get owned skills: ${res.status}`);
+        return [];
+      }
+      const rows = (await res.json()) as Skill[];
+      return rows.map(s => ({ ...s, scope: 'coordinator' as const }));
+    },
+
+    async createOwnedSkill(
+      personaId: string,
+      body: Record<string, unknown>
+    ): Promise<Skill | null> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
+      const res = await cfetch(
+        `${baseUrl}/api/personas/${encodeURIComponent(personaId)}/skills`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }
+      );
+      if (!res.ok) {
+        logger.warn(`Failed to create owned skill: ${res.status}`);
+        return null;
+      }
+      const created = (await res.json()) as Skill;
+      // Close the coordinator-sync lag: make the row visible to the local
+      // skill providers immediately (same path the periodic sync uses).
+      upsertSkillFromCoordinator({ ...created, scope: 'coordinator' });
+      return { ...created, scope: 'coordinator' as const };
     },
 
     async fetchCoordinatorFragments(): Promise<DroneSwarmFragment[]> {

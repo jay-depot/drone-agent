@@ -24,6 +24,9 @@ function makeSkillsCap(
     registerWriter: () => {},
     unregisterWriter: () => {},
     getWriters: () => [],
+    registerOwnedWriter: () => {},
+    unregisterOwnedWriter: () => {},
+    getOwnedWriters: () => [],
     onRecall: () => {},
   };
 }

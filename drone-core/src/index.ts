@@ -194,6 +194,7 @@ export type {
   DronePersonaProvider,
   DronePersonaWriter,
   DroneSkillWriter,
+  DroneOwnedSkillWriter,
   DroneLlmProvider,
   DroneChatRequest,
   DroneLlmProviderRegistration,

@@ -28,8 +28,8 @@ owned-writer registry, owned writers at all four scopes, and a small symmetric b
 coordinator-owned case works through the beacon's trust gate.
 
 **Why.** ADR 226 delivered persona-owned skills at every scope plus coordinator-UI CRUD, but explicitly
-deferred the agent-side authoring path (decision D5). This plan closes that gap for the *create* flow. A
-follow-up seed (`planning-seed-skills-management-tools`) captures the *management* surface
+deferred the agent-side authoring path (decision D5). This plan closes that gap for the _create_ flow. A
+follow-up seed (`planning-seed-skills-management-tools`) captures the _management_ surface
 (update/delete/move/rename).
 
 **Not in scope:** agent-facing skill management tools; the persona wizard prompting for owned skills; the
@@ -37,17 +37,17 @@ deferred "unified authoring-target registry" refactor (a pointer only; see the s
 
 ## Locked decisions (do not re-litigate)
 
-| # | Decision |
-|---|---|
-| Q1 | Offer **all four scopes** (`project`, `user`, `beacon`, `coordinator`). |
-| Q2 | **Parallel owned-writer registry** now: new `DroneOwnedSkillWriter` type + `registerOwnedWriter`/`unregisterOwnedWriter`/`getOwnedWriters` on `DroneSkillsCapability`. `getWriters()` is untouched. The *unified authoring-target registry* is the acknowledged eventual direction, deliberately deferred. |
-| Q3 | **Owner-first picker.** Question 1 = eligible personas + `No owner (global skill)`, with **no-owner as the default and first row**. No owner → ask storage scope over global writers (today's flow). Owner → scope is **derived** and never asked. Eligibility = personas whose scope has a registered owned writer. The owner question is omitted entirely when no owned writers are registered (today's flow is byte-identical). |
-| Q4 | **Symmetric beacon proxy pair**: add `GET` **and** `POST /coordinator/personas/:id/skills` to the beacon, plus `CoordinatorClient.getOwnedSkills`/`createOwnedSkill`. `createOwnedSkill` upserts the returned row into the beacon's local skills table (closes the coordinator-sync lag). Coordinator-owned `exists` = `GET` proxy + id filter; beacon-owned `exists` = beacon `GET /personas/:id/skills`. |
-| Q5 | **Local owned writers live in `persona-provider-{project,user}`.** `exists` uses a file `access` on `personas/<id>/skills/<id>.md`. |
-| Q6 | **`personaId?`** added to the wizard `inputSchema`. Precedence **owner > scope > ask**. A supplied `personaId` skips the owner question (`scope` ignored); a scope-only input goes straight to the global path for that scope. An unresolvable `personaId` **throws**. `personaId` is added to `toolResult`. |
-| Q7 | After an owned write: `personaCap.reloadPersonas()` **and** `skillsCap.reloadSkills()` (errors swallowed as today); the Q4 POST proxy closes the coordinator lag. **Conditional kickMessage**: if the owner is not the active persona, say the skill is owned by X and to switch with `/persona select X`. |
-| Q8 | **Full test sweep**: wizard tests; fix the one broken full-literal capability mock; per-provider owned-writer tests; the two new proxy routes; the client methods; the proxy-upsert; broker `getOwnedWriters` ordering. |
-| Q9 | New seed `planning-seed-skills-management-tools` = full management surface with owner-aware targeting + a pointer to the deferred unified registry. |
+| #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q1  | Offer **all four scopes** (`project`, `user`, `beacon`, `coordinator`).                                                                                                                                                                                                                                                                                                                                                            |
+| Q2  | **Parallel owned-writer registry** now: new `DroneOwnedSkillWriter` type + `registerOwnedWriter`/`unregisterOwnedWriter`/`getOwnedWriters` on `DroneSkillsCapability`. `getWriters()` is untouched. The _unified authoring-target registry_ is the acknowledged eventual direction, deliberately deferred.                                                                                                                         |
+| Q3  | **Owner-first picker.** Question 1 = eligible personas + `No owner (global skill)`, with **no-owner as the default and first row**. No owner → ask storage scope over global writers (today's flow). Owner → scope is **derived** and never asked. Eligibility = personas whose scope has a registered owned writer. The owner question is omitted entirely when no owned writers are registered (today's flow is byte-identical). |
+| Q4  | **Symmetric beacon proxy pair**: add `GET` **and** `POST /coordinator/personas/:id/skills` to the beacon, plus `CoordinatorClient.getOwnedSkills`/`createOwnedSkill`. `createOwnedSkill` upserts the returned row into the beacon's local skills table (closes the coordinator-sync lag). Coordinator-owned `exists` = `GET` proxy + id filter; beacon-owned `exists` = beacon `GET /personas/:id/skills`.                         |
+| Q5  | **Local owned writers live in `persona-provider-{project,user}`.** `exists` uses a file `access` on `personas/<id>/skills/<id>.md`.                                                                                                                                                                                                                                                                                                |
+| Q6  | **`personaId?`** added to the wizard `inputSchema`. Precedence **owner > scope > ask**. A supplied `personaId` skips the owner question (`scope` ignored); a scope-only input goes straight to the global path for that scope. An unresolvable `personaId` **throws**. `personaId` is added to `toolResult`.                                                                                                                       |
+| Q7  | After an owned write: `personaCap.reloadPersonas()` **and** `skillsCap.reloadSkills()` (errors swallowed as today); the Q4 POST proxy closes the coordinator lag. **Conditional kickMessage**: if the owner is not the active persona, say the skill is owned by X and to switch with `/persona select X`.                                                                                                                         |
+| Q8  | **Full test sweep**: wizard tests; fix the one broken full-literal capability mock; per-provider owned-writer tests; the two new proxy routes; the client methods; the proxy-upsert; broker `getOwnedWriters` ordering.                                                                                                                                                                                                            |
+| Q9  | New seed `planning-seed-skills-management-tools` = full management surface with owner-aware targeting + a pointer to the deferred unified registry.                                                                                                                                                                                                                                                                                |
 
 ## Verified facts (as of 2026-10-04, branch `feat/swarm-persona-owned-skills`)
 
@@ -268,7 +268,8 @@ app.get<{ Params: { id: string } }>(
   '/coordinator/personas/:id/skills',
   async (request, reply) => {
     const client = getCoordinatorClient();
-    if (!client) return reply.code(503).send({ error: 'Coordinator not configured' });
+    if (!client)
+      return reply.code(503).send({ error: 'Coordinator not configured' });
     try {
       return await client.getOwnedSkills(request.params.id);
     } catch (err) {
@@ -285,9 +286,14 @@ app.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
   '/coordinator/personas/:id/skills',
   async (request, reply) => {
     const client = getCoordinatorClient();
-    if (!client) return reply.code(503).send({ error: 'Coordinator not configured' });
-    const created = await client.createOwnedSkill(request.params.id, request.body);
-    if (created === null) return reply.code(503).send({ error: 'Coordinator unavailable' });
+    if (!client)
+      return reply.code(503).send({ error: 'Coordinator not configured' });
+    const created = await client.createOwnedSkill(
+      request.params.id,
+      request.body
+    );
+    if (created === null)
+      return reply.code(503).send({ error: 'Coordinator unavailable' });
     return reply.code(201).send(created);
   }
 );
@@ -383,7 +389,9 @@ const coordinatorOwnedSkillWriter: DroneOwnedSkillWriter = {
         `Failed to write owned skill to coordinator: ${res.status}`
       );
     }
-    return { filePath: `${ctx.baseUrl}/coordinator/personas/${personaId}/skills/${id}` };
+    return {
+      filePath: `${ctx.baseUrl}/coordinator/personas/${personaId}/skills/${id}`,
+    };
   },
 };
 skillsCap.registerOwnedWriter(coordinatorOwnedSkillWriter);
@@ -525,16 +533,16 @@ exactly one question with today's choices and default — the existing tests mus
 2. **Reload** — after the successful write, replace the current single `reloadSkills()` call with:
 
 ```ts
-    try {
-      await personaCap?.reloadPersonas();
-    } catch (err) {
-      logger.warn(`reloadPersonas after write failed: ${toMsg(err)}`);
-    }
-    try {
-      await skillsCap.reloadSkills();
-    } catch (err) {
-      logger.warn(`reloadSkills after write failed: ${toMsg(err)}`);
-    }
+try {
+  await personaCap?.reloadPersonas();
+} catch (err) {
+  logger.warn(`reloadPersonas after write failed: ${toMsg(err)}`);
+}
+try {
+  await skillsCap.reloadSkills();
+} catch (err) {
+  logger.warn(`reloadSkills after write failed: ${toMsg(err)}`);
+}
 ```
 
 (`personaCap?.reloadPersonas()` must run **before** `reloadSkills()` so the owned-skill provider re-registers.)

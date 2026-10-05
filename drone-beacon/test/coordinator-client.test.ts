@@ -766,6 +766,128 @@ describe('Coordinator Client', () => {
     });
   });
 
+  describe('getOwnedSkills', () => {
+    it('returns an empty list when the coordinator is not trusted', async () => {
+      const { createCoordinatorClient } =
+        await import('../src/coordinator-client.js');
+      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
+      const identity = await loadOrCreateIdentity('test-beacon', configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
+      const client = createCoordinatorClient(
+        {
+          host: 'localhost',
+          port: 3456,
+          beaconId: 'test-beacon',
+          beaconName: 'Test Beacon',
+        },
+        { identity, tlsIdentity, useHttps: false }
+      );
+      resetCoordinatorTrust();
+      expect(await client.getOwnedSkills('alice')).toEqual([]);
+    });
+
+    it('fetches owned skills and marks them coordinator scope', async () => {
+      const { createCoordinatorClient } =
+        await import('../src/coordinator-client.js');
+      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
+      const identity = await loadOrCreateIdentity('test-beacon', configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
+      setupMockHttpResponse(200, [
+        { key: 'alice/deploy', id: 'deploy', personaId: 'alice' },
+      ]);
+      const client = createCoordinatorClient(
+        {
+          host: 'localhost',
+          port: 3456,
+          beaconId: 'test-beacon',
+          beaconName: 'Test Beacon',
+        },
+        { identity, tlsIdentity, useHttps: false }
+      );
+      const rows = await client.getOwnedSkills('alice');
+      expect(rows).toHaveLength(1);
+      expect(rows[0].scope).toBe('coordinator');
+      expect(rows[0].personaId).toBe('alice');
+    });
+  });
+
+  describe('createOwnedSkill', () => {
+    it('returns null when the coordinator is not trusted', async () => {
+      const { createCoordinatorClient } =
+        await import('../src/coordinator-client.js');
+      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
+      const identity = await loadOrCreateIdentity('test-beacon', configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
+      const client = createCoordinatorClient(
+        {
+          host: 'localhost',
+          port: 3456,
+          beaconId: 'test-beacon',
+          beaconName: 'Test Beacon',
+        },
+        { identity, tlsIdentity, useHttps: false }
+      );
+      resetCoordinatorTrust();
+      expect(
+        await client.createOwnedSkill('alice', { id: 'deploy' })
+      ).toBeNull();
+    });
+
+    it('upserts the created row into the local skills table', async () => {
+      const { createCoordinatorClient } =
+        await import('../src/coordinator-client.js');
+      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
+      const { initDatabase, closeDatabase, getSkillByKey } =
+        await import('../src/db/index.js');
+      const dbDir = await mkdtemp(
+        path.join(os.tmpdir(), 'drone-beacon-client-upsert-')
+      );
+      initDatabase(path.join(dbDir, 'client-upsert.db'));
+      try {
+        const identity = await loadOrCreateIdentity('test-beacon', configDir);
+        const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
+        setupMockHttpResponse(201, {
+          key: 'alice/deploy',
+          id: 'deploy',
+          name: 'deploy',
+          description: '',
+          trigger: '',
+          body: '# Deploy',
+          personaId: 'alice',
+          createdAt: 1,
+          updatedAt: 1,
+        });
+        const client = createCoordinatorClient(
+          {
+            host: 'localhost',
+            port: 3456,
+            beaconId: 'test-beacon',
+            beaconName: 'Test Beacon',
+          },
+          { identity, tlsIdentity, useHttps: false }
+        );
+        const created = await client.createOwnedSkill('alice', {
+          id: 'deploy',
+        });
+        expect(created?.scope).toBe('coordinator');
+        const local = getSkillByKey('alice/deploy');
+        expect(local?.id).toBe('deploy');
+        expect(local?.scope).toBe('coordinator');
+      } finally {
+        closeDatabase();
+        await rm(dbDir, { recursive: true, force: true });
+      }
+    });
+  });
+
   describe('relayMessage', () => {
     it('should relay a message and return success', async () => {
       const { createCoordinatorClient } =

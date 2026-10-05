@@ -16,6 +16,7 @@ import type {
   DroneSkillDefinition,
   DroneSkillProvider,
   DroneSkillWriter,
+  DroneOwnedSkillWriter,
   DroneSkillsCapability,
   DroneReferenceCapability,
 } from 'drone-core';
@@ -40,6 +41,7 @@ export const skillsPlugin: DronePlugin = {
   register: async registration => {
     const providers: DroneSkillProvider[] = [];
     const writers: DroneSkillWriter[] = [];
+    const ownedWriters: DroneOwnedSkillWriter[] = [];
     const recallEnhancers: DroneRecallEnhancer[] = [];
 
     function getAllSkills(): DroneSkillDefinition[] {
@@ -217,6 +219,19 @@ export const skillsPlugin: DronePlugin = {
         registration.logger.info(`skill writer "${writerId}" unregistered`);
       },
       getWriters: () => [...writers],
+      registerOwnedWriter: (writer: DroneOwnedSkillWriter) => {
+        insertWriterSorted(ownedWriters, writer);
+        registration.logger.info(
+          `owned skill writer "${writer.id}" registered (scope: ${writer.scope})`
+        );
+      },
+      unregisterOwnedWriter: (writerId: string) => {
+        removeById(ownedWriters, writerId);
+        registration.logger.info(
+          `owned skill writer "${writerId}" unregistered`
+        );
+      },
+      getOwnedWriters: () => [...ownedWriters],
       onRecall: (enhancer: DroneRecallEnhancer) => {
         recallEnhancers.push(enhancer);
       },

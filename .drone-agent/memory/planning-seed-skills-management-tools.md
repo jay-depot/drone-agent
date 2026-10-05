@@ -15,13 +15,13 @@ updated: 2026-10-04T00:00:00.000Z
 
 **Status:** not planned. Split out 2026-10-04 from the ambiguity in the old
 `planning-seed-agent-authored-persona-owned-skills` (since deleted). That earlier seed was read two ways —
-"agent tools for writing skills" and "the skills wizard gaining persona-owned targets". The *wizard* half is now
-planned (`plan-skills-wizard-persona-owned-targets`); this seed captures the *tool* half.
+"agent tools for writing skills" and "the skills wizard gaining persona-owned targets". The _wizard_ half is now
+planned (`plan-skills-wizard-persona-owned-targets`); this seed captures the _tool_ half.
 
 ## The idea
 
 Today the agent's skill surface is **read + create only**: `skills__list`, `skills__recall`, `skills__reload`,
-`skills__create` (a wizard that writes a *skeleton*). There is no tool to **update**, **delete**, **move**, or
+`skills__create` (a wizard that writes a _skeleton_). There is no tool to **update**, **delete**, **move**, or
 **rename** a skill. Give the agent a first-class skill-management tool surface, addressed the same way the
 create wizard now is.
 
@@ -59,8 +59,8 @@ seed is planned, decide explicitly whether to land (c) first (recommended) or co
 - Writable locations: global writers (`skill-provider-{project,user}`, swarm beacon/coordinator HTTP `POST /skills`);
   owned writers (added by the create plan).
 - Server routes (already exist, ADR 226): beacon + coordinator `GET`/`POST /personas/:id/skills` and
-  `PUT`/`DELETE /personas/:id/skills/:skillId`; global `PUT`/`DELETE /skills/:id`. The beacon proxies *reads*
-  and *spawn* under `/coordinator/*`; the create plan adds the owned-skill `GET`/`POST` proxy pair.
+  `PUT`/`DELETE /personas/:id/skills/:skillId`; global `PUT`/`DELETE /skills/:id`. The beacon proxies _reads_
+  and _spawn_ under `/coordinator/*`; the create plan adds the owned-skill `GET`/`POST` proxy pair.
 - Migration: `drone-migrate` handles asset promote/demote and (ADR 226 D10) nested persona-owned listing with
   `--persona-id`.
 

@@ -7,6 +7,7 @@ import type {
   DronePlugin,
   DroneSkillDefinition,
   DroneSkillProvider,
+  DroneOwnedSkillWriter,
   DroneSkillsCapability,
 } from 'drone-core';
 import { PRECEDENCE_PERSONA_PROJECT, PRECEDENCE_PROJECT } from 'drone-core';
@@ -18,6 +19,7 @@ import { constants as fsConstants } from 'node:fs';
 
 const CONFIG_DIR = '.drone-agent';
 const PERSONA_DIR = 'personas';
+const SKILLS_DIR = 'skills';
 
 /**
  * Provider id for persona-owned project skills.
@@ -106,6 +108,35 @@ export const personaProviderProjectPlugin: DronePlugin = {
       },
     };
 
+    // ── Owned-skill writer ───────────────────────────────────────────
+    const ownedWriter: DroneOwnedSkillWriter = {
+      id: PERSONA_SKILLS_PROVIDER_ID,
+      scope: 'project',
+      labelFor: (personaId: string) =>
+        `Owned by persona "${personaId}" (./.drone-agent/personas/${personaId}/skills/)`,
+      exists: async (personaId: string, id: string) => {
+        const filePath = path.join(
+          personaDir,
+          personaId,
+          SKILLS_DIR,
+          `${id}.md`
+        );
+        try {
+          await access(filePath, fsConstants.F_OK);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      writeSkill: async (personaId: string, id: string, content: string) => {
+        const skillsDir = path.join(personaDir, personaId, SKILLS_DIR);
+        const filePath = path.join(skillsDir, `${id}.md`);
+        await mkdir(skillsDir, { recursive: true });
+        await writeFile(filePath, content, 'utf-8');
+        return { filePath };
+      },
+    };
+
     // Register with the persona broker
     const personaCap = registration.request<DronePersonaCapability>('persona');
     if (personaCap) {
@@ -116,6 +147,8 @@ export const personaProviderProjectPlugin: DronePlugin = {
         'persona broker not available; project personas will not be loaded'
       );
     }
+    const skillsCap = registration.request<DroneSkillsCapability>('skills');
+    skillsCap?.registerOwnedWriter(ownedWriter);
 
     registration.hooks.onPluginsLoaded(async () => {
       await provider.reloadPersonas();
