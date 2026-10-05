@@ -12,12 +12,17 @@ tags:
   - reconcile
   - liveness
 created: 2026-10-05T20:58:36.692Z
-updated: 2026-10-05T21:13:32.000Z
+updated: 2026-10-05T21:38:00.000Z
 ---
 
 # Plan: cross-platform agent termination ladder + boot reconcile
 
-**Status:** approved design, not yet implemented (2026-10-05).
+**Status:** COMPLETE (2026-10-05). All 8 steps implemented, tested, committed on
+`feat/gateway-swarm-console`. Commits: `88ccb4fa` (step 1), `dc75b6e2` (step 2),
+`71ea4023` (step 3), `3d3e803f` (step 4), `3ba04461` (step 5), `bd0d1c0a` (three-state
+lookup), `cbe65c23` (step 6), `3b76911e` (dead-code cleanup), `0b16e51a` (step 7),
+`e1f214bb` (step 8). Full fast suite green (3513 passed), `pnpm -r run build` and
+`pnpm run lint` clean.
 **Resolves:** follow-up `followup-swarm-spawn-terminate-beacon-restart` (terminate lost across a beacon restart).
 
 ## Goal
