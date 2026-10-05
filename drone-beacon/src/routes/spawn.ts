@@ -23,7 +23,7 @@ export default function spawnRoutes(app: FastifyInstance) {
   app.get<{ Params: { spawnId: string } }>(
     '/spawn/:spawnId',
     async (request, reply) => {
-      const { status, body } = handleGetSpawn(request.params.spawnId);
+      const { status, body } = await handleGetSpawn(request.params.spawnId);
       return reply.code(status).send(body);
     }
   );
@@ -31,7 +31,9 @@ export default function spawnRoutes(app: FastifyInstance) {
   app.delete<{ Params: { spawnId: string } }>(
     '/spawn/:spawnId',
     async (request, reply) => {
-      const { status, body } = handleTerminateSpawn(request.params.spawnId);
+      const { status, body } = await handleTerminateSpawn(
+        request.params.spawnId
+      );
       return reply.code(status).send(body);
     }
   );

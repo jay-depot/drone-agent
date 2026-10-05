@@ -193,6 +193,7 @@ async function main(): Promise<void> {
     current?: (content: string) => Promise<string>;
   } = {};
   const cancelCurrentRequestRef: { current?: () => void } = {};
+  const shutdownSignalRef: { current?: () => void } = {};
   const reference = createReferenceCapability({
     maxImageBytes: resolvedConfig.config.session.maxImageSizeBytes,
   });
@@ -214,6 +215,7 @@ async function main(): Promise<void> {
     submitUserMessage: content =>
       submitUserMessageRef.current?.(content) ?? Promise.resolve(''),
     cancelCurrentRequest: () => cancelCurrentRequestRef.current?.(),
+    onRequestShutdown: () => shutdownSignalRef.current?.(),
   });
   engineRef.current = engine;
 
@@ -525,7 +527,7 @@ async function main(): Promise<void> {
     if (invocation.options.swarm) {
       // Beacon-spawned interactive agent: source turns from the swarm
       // WebSocket (via _runtime.submitUserMessage) instead of stdin.
-      await runSwarmListenMode(engine);
+      await runSwarmListenMode(engine, shutdownSignalRef);
     } else if (invocation.options.outputJson) {
       // JSON listen mode: read chat events from stdin, emit NDJSON events
       await runJsonListenMode(conversation, engine);

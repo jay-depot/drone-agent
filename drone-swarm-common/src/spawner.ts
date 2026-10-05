@@ -26,7 +26,8 @@ export interface SpawnDb {
     spawnId: string,
     personaId: string | null,
     task: string | null,
-    config: Record<string, unknown> | null
+    config: Record<string, unknown> | null,
+    agentId?: string | null
   ): unknown;
   updateSpawnStatus(
     id: string,
@@ -111,6 +112,8 @@ export async function spawnAgent(
   // Build command arguments
   const args: string[] = [
     '--swarm',
+    '--spawn-id',
+    spawnId,
     '--session-id',
     agentId,
     '--beacon-host',
@@ -148,7 +151,8 @@ export async function spawnAgent(
     spawnId,
     personaId,
     task,
-    configOverride ?? null
+    configOverride ?? null,
+    agentId
   );
 
   // Spawn the process
@@ -263,14 +267,6 @@ export function terminateAgent(
   }
 
   return true;
-}
-
-export function getActiveSpawns(): string[] {
-  return Array.from(activeSpawns.keys());
-}
-
-export function getManagedProcess(spawnId: string): ManagedProcess | undefined {
-  return activeSpawns.get(spawnId);
 }
 
 // Cleanup on shutdown - terminate all spawned agents

@@ -74,5 +74,17 @@
   {
     "timestamp": "2026-08-25T17:26:05.205Z",
     "insight": "A DroneLlmError's instanceof check in a vitest test can fail across `vi.resetModules()` because the module is re-imported fresh, giving the test file a different class identity than the driver's copy. Assert on `err?.name === 'DroneLlmError'` plus the structured fields instead of `toBeInstanceOf` when mocking via doMock/resetModules. Also, with the conversation-service retry config, the semantics of `maxRetries` is retries AFTER the initial call, so a `maxRetries: 2` test sees 3 total chat() invocations before prompting — count calls as initial + maxRetries."
+  },
+  {
+    "timestamp": "2026-10-05T19:16:44.813Z",
+    "insight": "A fully-mocked test cannot detect a hard abort in a real dependency: `drone-gateway/test/matrix-adapter.test.ts` mocked `initRustCrypto` and asserted only that it was called, so all 288 tests passed while the real Matrix adapter could not start on Node (native WASM panic → process exit 1). For any native/WASM/process-boundary dependency, add at least one test that loads the REAL module (no `vi.mock`) and asserts the observable outcome (here: `adapter.start()` resolves, and `initRustCrypto` is not called when feature-off). A crash surfaces in such a test as a vitest unhandled error / 90s timeout, which is the intended signal. Note: a WASM abort is an unhandled error that hangs the run rather than a clean per-test failure, so keep these tests few and fast."
+  },
+  {
+    "timestamp": "2026-10-05T19:39:38.009Z",
+    "insight": "Contract-mismatch bugs against a third-party SDK are invisible to both isolated unit tests and fully-mocked tests. `sqlite-sync-store.test.ts` tested the store by itself and could not see that the SDK needs accumulated sync state; `matrix-adapter.test.ts` mocked the SDK entirely. What caught DRONE-GW-BUG-002 was a test that drives the REAL client (no `vi.mock`) through the actual lifecycle: start -> sync -> restart over the same SQLite file -> sync, asserting the observable outcome (`getSavedSync().roomsData` lists the room; `client.getRooms()` is non-empty). Rule: for code that implements a documented interface of an external library, add at least one integration-style test that exercises the real library, not a mock. The bug reproduced cleanly in ~60ms with a 1-room + incremental fixture."
+  },
+  {
+    "timestamp": "2026-10-05T19:56:06.996Z",
+    "insight": "Real-library tests caught another contract bug that mocks hid: the \"wrong/duplicate reply\" symptom was caused by matrix-js-sdk re-emitting cached-sync timeline events on restart, which the fully-mocked adapter suite could never see (it invoked the handler manually with only 3 args). The decisive test seeded a SqliteSyncStore with a sync containing a `swarm.beacon.list` message, then started the REAL MatrixClient over that store and asserted no AdapterMessage was emitted (test/matrix-adapter-replay.test.ts). Keep adding at least one real-client test whenever adapter behavior depends on SDK-internal event semantics — payload shape (`data.liveEvent`), not just event name, is part of the contract."
   }
 ]

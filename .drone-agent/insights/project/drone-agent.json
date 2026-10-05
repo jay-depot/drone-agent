@@ -600,6 +600,38 @@
     "insight": "The `file` reference resolver's binary sniff (NUL byte in the first 8000 bytes) classifies ALL image formats as binary, because PNG/JPEG/GIF/WebP all contain NUL bytes in their headers. Any content-based \"is this binary\" heuristic will misclassify images. The fix ordered the check as: extension→MIME lookup first (images), then the NUL sniff (other binaries), then the text path. If a future binary-sniff heuristic is added anywhere in the codebase, it must be image-aware or it will silently swallow image files."
   },
   {
+    "timestamp": "2026-09-26T18:39:57.503Z",
+    "insight": "Two latent swarm bugs found while planning the gateway console (2026-09-26): (1) `agent_locations` in the coordinator is likely never populated — `POST /api/agents/location` exists and the beacon client has `registerAgentLocation`, but no production caller invokes it, so `GET /api/agents/location/:agentId` may return nothing in a live swarm. Do not build features that depend on it until this is verified. (2) The coordinator UI's session \"Terminate\" button does NOT kill the agent process; it calls `DELETE /api/beacons/:id/sessions/:agentId` + `POST /api/sessions/:id/end`, both of which only mutate records. The process-kill endpoint (`DELETE /api/spawn/:beaconId/:spawnId`) exists but is unexercised by any client."
+  },
+  {
+    "timestamp": "2026-09-26T18:39:57.505Z",
+    "insight": "Roadmap drift is real and cheap to miss: the `roadmap` memory was last updated 2026-08-01 but the code had moved to 2026-09-24 (ADRs up to 222). A full audit found 2 hard contradictions (5.4 Distributed Memory and 5.6 Bootstrap Swarm Workflow both marked \"Not started\" but shipped), 2 stale labels (5.9/5.10 marked In Progress/Design but shipped), a fully-wrong `swarm` config block (0 of 8 documented keys existed), and an outdated package inventory. Also: AGENTS.md and the root README both say \"seven packages\" but pnpm-workspace.yaml lists 8 (`drone-swarm` is missing from both). Re-audit the roadmap when it is >1 month stale."
+  },
+  {
+    "timestamp": "2026-09-26T18:56:39.813Z",
+    "insight": "The gateway's `CoordinatorClient.sendMessage` posts `{toAgentId, body}` to `POST /api/messages/relay`, but the coordinator route requires `fromBeaconId`, `fromAgentId`, `toAgentId`, AND `body` (400s otherwise). So the whole gateway→coordinator message-relay path (persona-assignment via CoordinatorSpawnBackend) always fails. Separately, `CoordinatorSpawnBackend.terminateSession` passes `session.processId` (the agentId) where `DELETE /api/spawn/:beaconId/:spawnId` needs the spawnId, and defaults `targetBeaconId` to the literal `'default'`. Both are pre-existing and unfixed; the new swarm-console does both correctly, which is what surfaced the inconsistency. Worth a dedicated fix (and a gateway-side integration test) before the gateway is used in anger."
+  },
+  {
+    "timestamp": "2026-09-26T20:18:30.755Z",
+    "insight": "Plan-execution insight (gateway targetBeaconId, commit c4632e29): a plan snippet that shows a new private helper's *definition* but not its *invocation* leaves the call site unchanged — here `createControlSurface` still called `this.surfaceContext()` with no args after `surfaceContext(targetBeaconId)` gained a required parameter, producing a TS2554 that only the LSP/build caught. When executing a plan that adds/changes a helper signature, always grep for existing call sites of that helper before declaring the step done; the plan's code blocks are illustrative, not exhaustive."
+  },
+  {
+    "timestamp": "2026-09-26T20:18:30.758Z",
+    "insight": "Doc/code discrepancy: AGENTS.md's Standards say `pnpm -r run lint` must pass, but no workspace package defines a `lint` script — `pnpm -r run lint` exits non-zero with ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT (\"None of the selected packages has a lint script\"). The working command is the root `pnpm lint` (eslint --fix then prettier --write), which lints the whole monorepo. Note also that `pnpm lint` reformats files repo-wide (it touched unrelated memory/insight files in this session); revert incidental churn with `git checkout -- <path>` before committing to keep the change focused."
+  },
+  {
+    "timestamp": "2026-09-26T20:18:30.762Z",
+    "insight": "Tooling friction: `lsp__get_diagnostics` returned stale results after `file__write`/`file__apply_diff` in this session — it reported the OLD file contents (e.g. still showing the 3-arg `CoordinatorSpawnBackend(...)` after the file on disk had the 2-arg form, and an `await`-outside-async error after the test was already `async`). Verify with `file__read`/`exec` (sed) when a diagnostic contradicts what you just wrote; the authoritative check is `pnpm -r run build` (tsc -b). Do not chase phantom errors from a stale diagnostic payload."
+  },
+  {
+    "timestamp": "2026-09-26T20:27:38.812Z",
+    "insight": "Project-wiki ingest discipline (reconfirms the established workflow): the drone-agent project wiki is a SEPARATE git repo at `/home/unleet/Obsidian/drone-agent-project`, tracking the last-ingested commit in `meta.json.last_commit`. For the ADR 224 ingest the checkpoint was `0406f508` and HEAD `3926708f`, so `git diff 0406f508..HEAD --stat` yielded the exact 4-commit range (feature `c4632e29`, memory `170bf620`/`3b4e45e4`, doc fix `3926708f`). Two repos are committed independently: wiki first (commit `6904e91`), then the drone-agent repo. Always `file__read` `meta.json` first — it, not the project's HEAD, defines the ingest range."
+  },
+  {
+    "timestamp": "2026-09-26T20:27:38.815Z",
+    "insight": "Follow-up to the earlier `pnpm -r run lint` insight: AGENTS.md has now been corrected on branch `feat/gateway-swarm-console` (commit `3926708f`, \"fix: remove AGENTS.md misinformation\") — the Standards block reads `pnpm run lint` and `pnpm run test` (root scripts) instead of `pnpm -r run lint`/`pnpm -r run test`. The underlying fact is unchanged: no workspace package defines a `lint` script, so the recursive form exits `ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT`; root `pnpm lint` is the real gate. The wiki's ADR 223 page already records this gotcha."
+  },
+  {
     "timestamp": "2026-09-26T21:30:02.480Z",
     "insight": "Pre-existing test-infra gap (found 2026-09-26 while executing plan-swarm-identity-status-fragments): `drone-coordinator/test/wiki-routes.test.ts` (\"GET /api/wiki/graph returns nodes and edges from the coordinator store\") FAILS under a package-local vitest invocation (`pnpm --filter drone-coordinator exec vitest run ...`) but PASSES under the root config (`pnpm test` / `pnpm exec vitest`). Cause: the root `vitest.config.ts` aliases `drone-swarm-common` → `src/index.ts`, so tests and source share one module instance; the package-local invocation has no such alias, so the test's `import { setKnowledgeBaseDir, writePage } from '../../drone-swarm-common/src/index.js'` and the route's `import ... from 'drone-swarm-common'` (resolved to `dist/`) are TWO different module instances with separate `knowledgeBaseDir` state — the route reads the repo-local `knowledge-base/` and finds the wrong pages. Symptom side-effect: a stray `drone-coordinator/knowledge-base/` directory appears after the failing run. CI is unaffected (it uses `pnpm test`). Fix options: (a) add a package-local `vitest.config.ts` to drone-coordinator mirroring the root aliases, or (b) make the test import the bare specifier `drone-swarm-common` so it matches the route's resolution. Worth fixing so package-scoped test runs are trustworthy."
   },

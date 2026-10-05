@@ -9,13 +9,11 @@ import {
   getSpawnerConfig as sharedGetSpawnerConfig,
   spawnAgent as sharedSpawnAgent,
   terminateAgent as sharedTerminateAgent,
-  getActiveSpawns as sharedGetActiveSpawns,
-  getManagedProcess as sharedGetManagedProcess,
   cleanupAllSpawns as sharedCleanupAllSpawns,
   type SpawnerConfig,
-  type ManagedProcess,
   type SpawnDb,
 } from 'drone-swarm-common';
+import { findPidBySpawnId } from 'drone-swarm-common';
 import * as db from './db/index.js';
 import type { SpawnConfig, SpawnRecord } from './types.js';
 
@@ -26,13 +24,15 @@ const beaconSpawnDb: SpawnDb = {
     spawnId: string,
     personaId: string | null,
     task: string | null,
-    config: Record<string, unknown> | null
+    config: Record<string, unknown> | null,
+    agentId?: string | null
   ): SpawnRecord {
     return db.createSpawn(
       spawnId,
       personaId,
       task,
-      config as SpawnConfig | null
+      config as SpawnConfig | null,
+      agentId
     );
   },
 
@@ -63,7 +63,7 @@ const beaconSpawnDb: SpawnDb = {
 
 // === Re-exported API (same signatures as before) ===
 
-export { SpawnerConfig, ManagedProcess };
+export { SpawnerConfig, findPidBySpawnId };
 
 export function initSpawner(cfg: SpawnerConfig): void {
   sharedInitSpawner(cfg, beaconSpawnDb);
@@ -94,14 +94,6 @@ export function terminateAgent(
   force: boolean = false
 ): boolean {
   return sharedTerminateAgent(spawnId, force);
-}
-
-export function getActiveSpawns(): string[] {
-  return sharedGetActiveSpawns();
-}
-
-export function getManagedProcess(spawnId: string): ManagedProcess | undefined {
-  return sharedGetManagedProcess(spawnId);
 }
 
 export function cleanupAllSpawns(): void {

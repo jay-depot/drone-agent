@@ -107,10 +107,11 @@ function createCryptoSchema(db: GatewayDatabase): void {
  * Sync-store tables.
  *
  * The sync store (like matrix-js-sdk's IndexedDBStore) keeps the live
- * Room/User objects in memory and only persists the raw saved-sync response,
- * presence events, out-of-band membership, pending events, to-device
- * batches, client options, and the sync token. On startup the client replays
- * the saved sync to rebuild in-memory state.
+ * Room/User objects in memory and only persists the *accumulated* sync state
+ * (the merged result of every /sync response, not the last delta), presence
+ * events, out-of-band membership, pending events, to-device batches, client
+ * options, and the sync token. On startup the client replays the accumulated
+ * state to rebuild in-memory state.
  */
 function createSyncSchema(db: GatewayDatabase): void {
   db.exec(`

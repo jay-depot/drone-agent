@@ -3,6 +3,16 @@ import * as db from '../db/index.js';
 import type { SpawnRequest } from '../types.js';
 import { sendBeaconCommand, type CommandResponse } from '../beacon-ws.js';
 
+/**
+ * Terminate runs the beacon's three-stage ladder synchronously (graceful WS
+ * exit -> SIGTERM -> SIGKILL), whose worst case is bounded at roughly
+ * 5s + 2s (ps) + 5s, plus polling. The reverse-channel default (15s) leaves
+ * too little headroom: a slow host could time out the command while the
+ * beacon still completes the kill, reporting a false failure for a successful
+ * terminate. 30s keeps the wait comfortably above the ladder's bound.
+ */
+const TERMINATE_COMMAND_TIMEOUT_MS = 30000;
+
 function handleCommandError(
   reply: { code: (c: number) => { send: (b: unknown) => unknown } },
   err: unknown
@@ -146,7 +156,8 @@ export default function spawnRoutes(app: FastifyInstance) {
         const res = await sendBeaconCommand(
           request.params.beaconId,
           'terminateSpawn',
-          { spawnId: request.params.spawnId }
+          { spawnId: request.params.spawnId },
+          TERMINATE_COMMAND_TIMEOUT_MS
         );
         if (res.ok) {
           return reply.code(200).send(res.body);

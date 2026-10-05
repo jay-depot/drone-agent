@@ -120,4 +120,23 @@ describe('listen-host notice forwarding', () => {
     expect(out).toContain('"kind":"notice"');
     expect(out).toContain('[expanded @y.ts (2 lines, 9 B)]');
   });
+
+  it('swarm-listen exits when requestShutdown resolves the deferred', async () => {
+    const { engine } = makeEngine();
+    const shutdownSignal: { current?: () => void } = {};
+
+    const running = runSwarmListenMode(
+      engine as unknown as Parameters<typeof runSwarmListenMode>[0],
+      shutdownSignal
+    );
+    // Let the deferred register before invoking it.
+    await Promise.resolve();
+
+    expect(shutdownSignal.current).toBeTypeOf('function');
+    shutdownSignal.current?.();
+    await running;
+
+    // The handler is cleared on exit.
+    expect(shutdownSignal.current).toBeUndefined();
+  });
 });

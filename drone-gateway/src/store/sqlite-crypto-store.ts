@@ -28,9 +28,11 @@ const SESSION_BATCH_SIZE = 50;
  * are handled by better-sqlite3's auto-commit) and invoke the callback
  * with the value synchronously.
  *
- * This is the only way to get persistent E2EE keys on a headless Node host
- * (the SDK ships only Memory/LocalStorage/IndexedDB stores, none of which
- * work on a Pi without a browser runtime).
+ * NOTE: matrix-js-sdk treats `cryptoStore` as legacy-crypto (migration-only).
+ * The Rust-crypto stack ignores this store entirely and uses either its
+ * browser-only IndexedDB store or an in-memory store, so this class does NOT
+ * persist Rust-crypto (E2EE) keys. It remains useful for migrating a device
+ * that previously used legacy crypto.
  */
 export class SqliteCryptoStore implements CryptoStore {
   private db: GatewayDatabase;

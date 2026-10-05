@@ -66,6 +66,21 @@ export function connectWebSocket(ctx: SwarmContext): void {
               );
             });
           }
+        } else if (wsMsg.type === 'shutdown') {
+          // Stage 1 of the beacon's terminate ladder: exit in-process so
+          // onShutdown runs without an OS signal. This is the only graceful
+          // path where SIGTERM is not catchable (e.g. Windows).
+          const runtime = registration.request<{
+            requestShutdown?: () => void;
+          }>('runtime');
+          if (runtime?.requestShutdown) {
+            registration.logger.info('Beacon requested shutdown; exiting');
+            runtime.requestShutdown();
+          } else {
+            registration.logger.warn(
+              'Beacon requested shutdown but no shutdown handler is registered'
+            );
+          }
         } else if (wsMsg.type === 'connected') {
           registration.logger.info('WebSocket handshake complete');
           const info = wsMsg.payload?.info as SwarmBeaconInfo | undefined;
@@ -112,14 +127,16 @@ export function connectWebSocket(ctx: SwarmContext): void {
         );
         return;
       }
-      if (ctx.wsReconnectAttempts < ctx.maxReconnectAttempts) {
-        ctx.wsReconnectAttempts++;
-        const delay = Math.min(
-          1000 * Math.pow(2, ctx.wsReconnectAttempts),
-          30000
-        );
-        setTimeout(() => connectWebSocket(ctx), delay);
-      }
+      // Retry forever. The beacon is expected to come back after a restart,
+      // and a live agent must always be reachable again; a capped budget would
+      // strand an agent whose socket the beacon lost. Backoff caps at 15
+      // minutes so a long outage stays cheap.
+      ctx.wsReconnectAttempts++;
+      const delay = Math.min(
+        1000 * Math.pow(2, ctx.wsReconnectAttempts),
+        15 * 60 * 1000
+      );
+      setTimeout(() => connectWebSocket(ctx), delay);
     };
 
     ctx.ws.onerror = error => {

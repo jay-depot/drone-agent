@@ -169,14 +169,16 @@ async function handleCommand(msg: CommandMessage): Promise<void> {
         break;
       }
       case 'getSpawn': {
-        const result = handleGetSpawn(msg.payload?.spawnId as string);
+        const result = await handleGetSpawn(msg.payload?.spawnId as string);
         status = result.status;
         ok = result.status < 400;
         body = result.body;
         break;
       }
       case 'terminateSpawn': {
-        const result = handleTerminateSpawn(msg.payload?.spawnId as string);
+        const result = await handleTerminateSpawn(
+          msg.payload?.spawnId as string
+        );
         status = result.status;
         ok = result.status < 400;
         body = result.body;

@@ -7,6 +7,8 @@ export type CliOptions = {
   swarm: boolean;
   /** Session id assigned by the beacon spawner (drives swarm registration). */
   sessionId?: string;
+  /** Spawn record id assigned by the beacon spawner (used for pid lookup). */
+  spawnId?: string;
   /** Beacon host override (falls through to swarm config). */
   beaconHost?: string;
   /** Beacon port override (falls through to swarm config). */
@@ -139,6 +141,8 @@ export function parseCliArgs(argv: string[]): CliInvocation {
       options.swarm = true;
     } else if (arg === '--session-id' && i + 1 < argv.length) {
       options.sessionId = argv[++i];
+    } else if (arg === '--spawn-id' && i + 1 < argv.length) {
+      options.spawnId = argv[++i];
     } else if (arg === '--beacon-host' && i + 1 < argv.length) {
       options.beaconHost = argv[++i];
     } else if (arg === '--beacon-port' && i + 1 < argv.length) {

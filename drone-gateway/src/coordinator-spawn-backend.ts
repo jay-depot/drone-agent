@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { logger } from './logger.js';
 import { CoordinatorClient } from './coordinator-client.js';
 import type { SpawnBackend } from './spawn-backend.js';
-import type { SpawnSession } from './types.js';
+import type { SpawnSession, SpawnSessionOptions } from './types.js';
 
 /**
  * CoordinatorSpawnBackend delegates agent spawning to the coordinator's
@@ -17,42 +17,41 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
 
   private coordinatorClient: CoordinatorClient;
   private sessions: Map<string, SpawnSession> = new Map();
-  private targetBeaconId: string;
 
-  constructor(
-    coordinatorUrl: string,
-    coordinatorToken: string | undefined,
-    targetBeaconId?: string
-  ) {
+  constructor(coordinatorUrl: string, coordinatorToken: string | undefined) {
     this.coordinatorClient = new CoordinatorClient(
       coordinatorUrl,
       coordinatorToken
     );
-    this.targetBeaconId = targetBeaconId || 'default';
   }
 
   async spawnSession(
     conversationId: string,
-    personaId: string
+    personaId: string,
+    opts?: SpawnSessionOptions
   ): Promise<SpawnSession> {
-    // Return existing session if one exists
     const existing = this.sessions.get(conversationId);
     if (existing) {
       return existing;
     }
 
+    const targetBeaconId = opts?.targetBeaconId;
+    if (!targetBeaconId) {
+      throw new Error(
+        'CoordinatorSpawnBackend.spawnSession requires a targetBeaconId.'
+      );
+    }
+
     logger.info(
-      `Spawning agent on coordinator for conversation ${conversationId} (persona: ${personaId})`
+      `Spawning agent on beacon "${targetBeaconId}" for conversation ${conversationId} (persona: ${personaId})`
     );
 
     const spawnId = randomUUID();
-    const result = await this.coordinatorClient.spawnAgent(
-      this.targetBeaconId,
-      {
-        personaId,
-        spawnId,
-      }
-    );
+    const result = await this.coordinatorClient.spawnAgent({
+      targetBeaconId,
+      personaId,
+      spawnId,
+    });
 
     const spawnResult = result as {
       spawnId: string;
@@ -65,6 +64,8 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
       personaId,
       processId: spawnResult.agentId || spawnResult.spawnId,
       startedAt: Date.now(),
+      targetBeaconId,
+      spawnId: spawnResult.spawnId,
     };
 
     this.sessions.set(conversationId, session);
@@ -72,17 +73,10 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
   }
 
   async sendMessage(session: SpawnSession, message: string): Promise<string> {
-    // For coordinator mode, we send a message to the agent via the
-    // coordinator's message relay. The agent processes it and responds.
-    // This is a simplified implementation — full persistent session
-    // support via the coordinator requires the coordinator's messaging
-    // system to be fully operational.
     logger.info(
       `Sending message to agent ${session.processId} via coordinator`
     );
 
-    // Send the message to the agent via the coordinator's message API
-    // The coordinator routes it to the appropriate beacon/agent
     const response = await this.coordinatorClient.sendMessage(
       session.processId,
       message
@@ -94,10 +88,27 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
   async terminateSession(session: SpawnSession): Promise<void> {
     logger.info(`Terminating agent ${session.processId} via coordinator`);
 
+    if (!session.targetBeaconId) {
+      logger.warn(
+        `Cannot terminate agent ${session.processId}: no target beacon recorded on the session`
+      );
+      this.sessions.delete(session.conversationId);
+      return;
+    }
+    if (!session.spawnId) {
+      logger.warn(
+        `Cannot terminate agent ${session.processId}: no spawn id recorded on the session`
+      );
+      this.sessions.delete(session.conversationId);
+      return;
+    }
+
     try {
+      // The terminate endpoint is keyed on the beacon's spawnId, NOT the
+      // agentId (processId). Passing the agentId here 404s at the beacon.
       await this.coordinatorClient.terminateSpawn(
-        this.targetBeaconId,
-        session.processId
+        session.targetBeaconId,
+        session.spawnId
       );
     } catch (err) {
       logger.warn(`Failed to terminate agent ${session.processId}: ${err}`);

@@ -36,7 +36,8 @@ describe('CoordinatorClient', () => {
         })
       );
 
-      const result = await client.spawnAgent('beacon-1', {
+      const result = await client.spawnAgent({
+        targetBeaconId: 'beacon-1',
         personaId: 'coder',
         spawnId: 'my-spawn',
       });
@@ -65,9 +66,9 @@ describe('CoordinatorClient', () => {
         mockFetchResponse(400, { error: 'bad request' })
       );
 
-      await expect(client.spawnAgent('beacon-1')).rejects.toThrow(
-        'Spawn failed (400): {"error":"bad request"}'
-      );
+      await expect(
+        client.spawnAgent({ targetBeaconId: 'beacon-1' })
+      ).rejects.toThrow('Spawn failed (400): {"error":"bad request"}');
     });
   });
 
@@ -89,62 +90,6 @@ describe('CoordinatorClient', () => {
 
       await expect(client.listBeacons()).rejects.toThrow(
         'List beacons failed (500)'
-      );
-    });
-  });
-
-  describe('listAgents', () => {
-    it('sends GET to /agents/location without query when no beaconId', async () => {
-      fetchMock.mockResolvedValue(mockFetchResponse(200, []));
-
-      await client.listAgents();
-
-      expect(fetchMock).toHaveBeenCalledWith(
-        'http://localhost:8080/api/agents/location',
-        expect.anything()
-      );
-    });
-
-    it('sends GET to /agents/location with beaconId query', async () => {
-      fetchMock.mockResolvedValue(mockFetchResponse(200, []));
-
-      await client.listAgents('beacon-1');
-
-      expect(fetchMock).toHaveBeenCalledWith(
-        'http://localhost:8080/api/agents/location?beaconId=beacon-1',
-        expect.anything()
-      );
-    });
-
-    it('throws on non-OK response', async () => {
-      fetchMock.mockResolvedValue(mockFetchResponse(403, {}));
-
-      await expect(client.listAgents()).rejects.toThrow(
-        'List agents failed (403)'
-      );
-    });
-  });
-
-  describe('getSpawn', () => {
-    it('sends GET to /spawn/:beaconId/:spawnId', async () => {
-      fetchMock.mockResolvedValue(
-        mockFetchResponse(200, { status: 'running' })
-      );
-
-      const result = await client.getSpawn('beacon-1', 'spawn-1');
-
-      expect(fetchMock).toHaveBeenCalledWith(
-        'http://localhost:8080/api/spawn/beacon-1/spawn-1',
-        expect.objectContaining({ method: 'GET' })
-      );
-      expect(result).toEqual({ status: 'running' });
-    });
-
-    it('throws on non-OK response', async () => {
-      fetchMock.mockResolvedValue(mockFetchResponse(404, {}));
-
-      await expect(client.getSpawn('b', 's')).rejects.toThrow(
-        'Get spawn failed (404)'
       );
     });
   });
@@ -231,6 +176,335 @@ describe('CoordinatorClient', () => {
       await expect(client.sendMessage('agent-1', 'hi')).rejects.toThrow(
         'Send message failed (400): {"error":"bad"}'
       );
+    });
+  });
+
+  describe('listSessions', () => {
+    it('sends GET to /sessions with query params', async () => {
+      fetchMock.mockResolvedValue(
+        mockFetchResponse(200, { sessions: [{ id: 's1' }], count: 1 })
+      );
+
+      const result = await client.listSessions({
+        status: 'ended',
+        limit: 10,
+        offset: 5,
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:8080/api/sessions?status=ended&limit=10&offset=5',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(result).toEqual({ sessions: [{ id: 's1' }], count: 1 });
+    });
+
+    it('sends GET to /sessions without query when empty', async () => {
+      fetchMock.mockResolvedValue(
+        mockFetchResponse(200, { sessions: [], count: 0 })
+      );
+
+      await client.listSessions();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:8080/api/sessions',
+        expect.anything()
+      );
+    });
+
+    it('defaults count to sessions length when count absent', async () => {
+      fetchMock.mockResolvedValue(
+        mockFetchResponse(200, { sessions: [{ id: 'a' }, { id: 'b' }] })
+      );
+
+      const result = await client.listSessions();
+
+      expect(result).toEqual({
+        sessions: [{ id: 'a' }, { id: 'b' }],
+        count: 2,
+      });
+    });
+
+    it('throws on non-OK response', async () => {
+      fetchMock.mockResolvedValue(mockFetchResponse(500, {}));
+
+      await expect(client.listSessions()).rejects.toThrow(
+        'List sessions failed (500)'
+      );
+    });
+  });
+
+  describe('getSession', () => {
+    it('sends GET to /sessions/:id and unwraps session', async () => {
+      fetchMock.mockResolvedValue(
+        mockFetchResponse(200, { session: { id: 's1', status: 'ended' } })
+      );
+
+      const result = await client.getSession('s1');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:8080/api/sessions/s1',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(result).toEqual({ id: 's1', status: 'ended' });
+    });
+
+    it('throws on non-OK response', async () => {
+      fetchMock.mockResolvedValue(mockFetchResponse(404, {}));
+
+      await expect(client.getSession('nope')).rejects.toThrow(
+        'Get session failed (404)'
+      );
+    });
+  });
+
+  describe('sendSessionMessage', () => {
+    it('sends POST to /sessions/:id/message with content and steer', async () => {
+      fetchMock.mockResolvedValue(
+        mockFetchResponse(200, { success: true, delivered: true })
+      );
+
+      await client.sendSessionMessage('s1', 'hello', true);
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:8080/api/sessions/s1/message',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ content: 'hello', steer: true }),
+        })
+      );
+    });
+
+    it('throws with response body on non-OK', async () => {
+      fetchMock.mockResolvedValue(
+        mockFetchResponse(400, { error: 'content is required' })
+      );
+
+      await expect(client.sendSessionMessage('s1', '', false)).rejects.toThrow(
+        'Send session message failed (400): {"error":"content is required"}'
+      );
+    });
+  });
+
+  describe('setSessionPersona', () => {
+    it('sends PATCH to /sessions/:id/persona with personaId', async () => {
+      fetchMock.mockResolvedValue(mockFetchResponse(200, { id: 's1' }));
+
+      await client.setSessionPersona('s1', 'coder');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:8080/api/sessions/s1/persona',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ personaId: 'coder' }),
+        })
+      );
+    });
+
+    it('sends null personaId to clear', async () => {
+      fetchMock.mockResolvedValue(mockFetchResponse(200, { id: 's1' }));
+
+      await client.setSessionPersona('s1', null);
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:8080/api/sessions/s1/persona',
+        expect.objectContaining({
+          body: JSON.stringify({ personaId: null }),
+        })
+      );
+    });
+
+    it('throws on non-OK response', async () => {
+      fetchMock.mockResolvedValue(mockFetchResponse(404, {}));
+
+      await expect(client.setSessionPersona('x', 'coder')).rejects.toThrow(
+        'Set session persona failed (404)'
+      );
+    });
+  });
+
+  describe('broadcast', () => {
+    it('sends POST to /messages/broadcast with fromAgentId, channel, body', async () => {
+      fetchMock.mockResolvedValue(mockFetchResponse(200, { success: true }));
+
+      await client.broadcast({
+        fromAgentId: 'gateway',
+        channel: 'swarm-console',
+        body: 'hi',
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:8080/api/messages/broadcast',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            fromAgentId: 'gateway',
+            channel: 'swarm-console',
+            body: 'hi',
+          }),
+        })
+      );
+    });
+
+    it('throws with body on non-OK', async () => {
+      fetchMock.mockResolvedValue(
+        mockFetchResponse(400, { error: 'fromAgentId required' })
+      );
+
+      await expect(
+        client.broadcast({ fromAgentId: '', channel: 'c', body: 'b' })
+      ).rejects.toThrow(
+        'Broadcast failed (400): {"error":"fromAgentId required"}'
+      );
+    });
+  });
+
+  describe('personas', () => {
+    it('lists personas', async () => {
+      fetchMock.mockResolvedValue(mockFetchResponse(200, [{ id: 'p1' }]));
+
+      const result = await client.listPersonas();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:8080/api/personas',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(result).toEqual([{ id: 'p1' }]);
+    });
+
+    it('creates a persona', async () => {
+      fetchMock.mockResolvedValue(mockFetchResponse(201, { id: 'p1' }));
+
+      await client.createPersona({
+        id: 'p1',
+        name: 'p1',
+        description: 'desc',
+        systemPrompt: 'sys',
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:8080/api/personas',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            id: 'p1',
+            name: 'p1',
+            description: 'desc',
+            systemPrompt: 'sys',
+          }),
+        })
+      );
+    });
+
+    it('updates a persona', async () => {
+      fetchMock.mockResolvedValue(mockFetchResponse(200, { id: 'p1' }));
+
+      await client.updatePersona('p1', { systemPrompt: 'new' });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:8080/api/personas/p1',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ systemPrompt: 'new' }),
+        })
+      );
+    });
+
+    it('deletes a persona', async () => {
+      fetchMock.mockResolvedValue(mockFetchResponse(200, { success: true }));
+
+      await client.deletePersona('p1');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:8080/api/personas/p1',
+        expect.objectContaining({ method: 'DELETE' })
+      );
+    });
+
+    it('throws on list non-OK response', async () => {
+      fetchMock.mockResolvedValue(mockFetchResponse(500, {}));
+
+      await expect(client.listPersonas()).rejects.toThrow(
+        'List personas failed (500)'
+      );
+    });
+  });
+
+  describe('skills', () => {
+    it('lists skills', async () => {
+      fetchMock.mockResolvedValue(mockFetchResponse(200, [{ id: 'k1' }]));
+
+      const result = await client.listSkills();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:8080/api/skills',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(result).toEqual([{ id: 'k1' }]);
+    });
+
+    it('creates a skill', async () => {
+      fetchMock.mockResolvedValue(mockFetchResponse(201, { id: 'k1' }));
+
+      await client.createSkill({
+        id: 'k1',
+        name: 'k1',
+        description: 'desc',
+        trigger: 'desc',
+        body: 'body',
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:8080/api/skills',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            id: 'k1',
+            name: 'k1',
+            description: 'desc',
+            trigger: 'desc',
+            body: 'body',
+          }),
+        })
+      );
+    });
+
+    it('updates a skill', async () => {
+      fetchMock.mockResolvedValue(mockFetchResponse(200, { id: 'k1' }));
+
+      await client.updateSkill('k1', { body: 'new' });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:8080/api/skills/k1',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ body: 'new' }),
+        })
+      );
+    });
+
+    it('deletes a skill', async () => {
+      fetchMock.mockResolvedValue(mockFetchResponse(200, { success: true }));
+
+      await client.deleteSkill('k1');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:8080/api/skills/k1',
+        expect.objectContaining({ method: 'DELETE' })
+      );
+    });
+
+    it('throws on create non-OK response', async () => {
+      fetchMock.mockResolvedValue(mockFetchResponse(400, {}));
+
+      await expect(
+        client.createSkill({
+          id: 'k1',
+          name: 'k1',
+          description: 'd',
+          trigger: 't',
+          body: 'b',
+        })
+      ).rejects.toThrow('Create skill failed (400)');
     });
   });
 

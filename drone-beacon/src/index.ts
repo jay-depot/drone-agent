@@ -64,6 +64,7 @@ import {
   startFragmentTtlSweep,
   stopFragmentTtlSweep,
 } from './fragments-sweep.js';
+import { startSpawnReconcile, stopSpawnReconcile } from './spawn-reconcile.js';
 import { logger } from './logger.js';
 import { loadOrCreateIdentity } from './identity.js';
 import { configureSessionEndHook } from './session-end.js';
@@ -496,6 +497,9 @@ async function main() {
   await wsServer.registerWebSocketServer(app, { enforceLocalOnly: true });
   wsServer.startMessageCleanup();
   startFragmentTtlSweep();
+  // Boot-only: after a grace window, downgrade spawn rows that neither
+  // reconnected nor left a live process behind a restart.
+  startSpawnReconcile();
 
   // Start periodic TTL cleanup
   const cleanupInterval = setInterval(() => {
@@ -573,6 +577,7 @@ async function main() {
     searchIndexer.stopPeriodicSweep();
     wikiIndexer.stopPeriodicSweep();
     stopFragmentTtlSweep();
+    stopSpawnReconcile();
     if (syncInterval) {
       clearInterval(syncInterval);
     }

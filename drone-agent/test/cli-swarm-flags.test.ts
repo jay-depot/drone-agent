@@ -19,6 +19,11 @@ describe('parseCliInvocation — swarm spawn flags', () => {
     expect(inv.options.sessionId).toBe('agent-abc');
   });
 
+  it('parses --spawn-id', () => {
+    const inv = parseCliInvocation(['--swarm', '--spawn-id', 'spawn-abc']);
+    expect(inv.options.spawnId).toBe('spawn-abc');
+  });
+
   it('parses --beacon-host and --beacon-port', () => {
     const inv = parseCliInvocation([
       '--swarm',
@@ -61,6 +66,8 @@ describe('parseCliInvocation — swarm spawn flags', () => {
     expect(() =>
       parseCliInvocation([
         '--swarm',
+        '--spawn-id',
+        'spawn-1',
         '--session-id',
         'agent-1',
         '--beacon-host',

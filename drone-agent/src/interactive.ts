@@ -366,7 +366,8 @@ export async function runJsonListenMode(
  * terminateAgent sends SIGTERM), releasing the process for a clean exit.
  */
 export async function runSwarmListenMode(
-  engine: CreateDronePluginEngine
+  engine: CreateDronePluginEngine,
+  shutdownSignal?: { current?: () => void }
 ): Promise<void> {
   const ndjsonHandler = makeNdjsonOutputEventHandler();
 
@@ -439,16 +440,32 @@ export async function runSwarmListenMode(
       }
     }) ?? null;
 
+  // Hoisted above the try so the finally block can remove the listeners.
+  let onSignal: (() => void) | undefined;
   try {
-    // Keep the process alive until a termination signal arrives (the beacon's
-    // terminateAgent sends SIGTERM). Resolve on the first signal so main()
-    // proceeds to onShutdown and exits cleanly.
+    // Keep the process alive until the beacon asks us to exit. Two triggers
+    // resolve the same deferred: an OS signal (SIGTERM/SIGINT from the
+    // beacon's terminateAgent), or `_runtime.requestShutdown()` driven by the
+    // WebSocket `shutdown` command. The in-process path runs onShutdown
+    // without a signal, so it also works where SIGTERM is not catchable.
     await new Promise<void>(resolve => {
-      const onSignal = () => resolve();
+      let settled = false;
+      const settle = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      onSignal = settle;
       process.once('SIGTERM', onSignal);
       process.once('SIGINT', onSignal);
+      if (shutdownSignal) shutdownSignal.current = settle;
     });
   } finally {
+    if (shutdownSignal) shutdownSignal.current = undefined;
+    if (onSignal) {
+      process.removeListener('SIGTERM', onSignal);
+      process.removeListener('SIGINT', onSignal);
+    }
     unregister?.();
   }
 }

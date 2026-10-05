@@ -37,12 +37,13 @@ export function createSpawn(
   spawnId: string,
   personaId: string | null,
   task: string | null,
-  config: SpawnConfig | null
+  config: SpawnConfig | null,
+  agentId: string | null = null
 ): SpawnRecord {
   const now = Date.now();
   const spawn: SpawnRecord = {
     id: spawnId,
-    agentId: null,
+    agentId,
     personaId,
     task,
     configJson: config ? JSON.stringify(config) : null,
