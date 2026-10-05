@@ -255,6 +255,13 @@ type CreateDronePluginEngineOptions = {
    * plugins via `_runtime` for the "Stop & Send" steer path.
    */
   cancelCurrentRequest?: () => void;
+  /**
+   * Optional graceful-exit request for a swarm listen-mode agent. Exposed to
+   * plugins via `_runtime` so the beacon can ask the agent to exit over the
+   * WebSocket without an OS signal, which also works where SIGTERM is not
+   * catchable (Windows).
+   */
+  onRequestShutdown?: () => void;
 };
 
 function createHookBuckets(): HookBuckets {
@@ -375,6 +382,7 @@ export function createDronePluginEngine({
   resetStuckDetectors: resetStuckDetectorsFromHost,
   submitUserMessage: submitUserMessageFromHost,
   cancelCurrentRequest: cancelCurrentRequestFromHost,
+  onRequestShutdown: onRequestShutdownFromHost,
 }: CreateDronePluginEngineOptions): DronePluginEngine {
   const systemReminders = new SystemReminderQueue();
   const pluginMap = validatePluginRegistry(plugins);
@@ -952,6 +960,7 @@ export function createDronePluginEngine({
         resetStuckDetectors: resetStuckDetectorsFromHost,
         submitUserMessage: submitUserMessageFromHost,
         cancelCurrentRequest: cancelCurrentRequestFromHost,
+        requestShutdown: onRequestShutdownFromHost,
         queueSystemReminder: (content: string) =>
           systemReminders.queue(content),
         emitEvent: (event: DroneConversationEvent) => {

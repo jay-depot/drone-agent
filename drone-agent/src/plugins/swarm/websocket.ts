@@ -66,6 +66,21 @@ export function connectWebSocket(ctx: SwarmContext): void {
               );
             });
           }
+        } else if (wsMsg.type === 'shutdown') {
+          // Stage 1 of the beacon's terminate ladder: exit in-process so
+          // onShutdown runs without an OS signal. This is the only graceful
+          // path where SIGTERM is not catchable (e.g. Windows).
+          const runtime = registration.request<{
+            requestShutdown?: () => void;
+          }>('runtime');
+          if (runtime?.requestShutdown) {
+            registration.logger.info('Beacon requested shutdown; exiting');
+            runtime.requestShutdown();
+          } else {
+            registration.logger.warn(
+              'Beacon requested shutdown but no shutdown handler is registered'
+            );
+          }
         } else if (wsMsg.type === 'connected') {
           registration.logger.info('WebSocket handshake complete');
           const info = wsMsg.payload?.info as SwarmBeaconInfo | undefined;

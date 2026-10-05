@@ -118,4 +118,42 @@ describe('connectWebSocket swarm-info caching', () => {
     ws.emitMessage({ type: 'connected', payload: { agentId: 'agent-1' } });
     expect(ctx.swarmInfo.getInfo()).toBeNull();
   });
+
+  it('invokes _runtime.requestShutdown on a shutdown message', () => {
+    const requestShutdown = vi.fn();
+    const registration = {
+      logger: silentLogger(),
+      request: (id: string) =>
+        id === 'runtime' ? { requestShutdown } : undefined,
+    } as unknown as DronePluginRegistration;
+    const ctx = createSwarmContext(
+      'http://beacon.test',
+      'agent-1',
+      registration,
+      'ws://beacon.test/ws',
+      'localhost:3457'
+    );
+    connectWebSocket(ctx);
+    const ws = FakeWebSocket.instances.at(-1);
+    if (!ws) throw new Error('no WebSocket constructed');
+
+    ws.emitMessage({ type: 'shutdown' });
+
+    expect(requestShutdown).toHaveBeenCalledTimes(1);
+  });
+
+  it('warns but does not throw when no shutdown handler is registered', () => {
+    const ctx = createSwarmContext(
+      'http://beacon.test',
+      'agent-1',
+      makeRegistration(),
+      'ws://beacon.test/ws',
+      'localhost:3457'
+    );
+    connectWebSocket(ctx);
+    const ws = FakeWebSocket.instances.at(-1);
+    if (!ws) throw new Error('no WebSocket constructed');
+
+    expect(() => ws.emitMessage({ type: 'shutdown' })).not.toThrow();
+  });
 });
