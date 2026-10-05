@@ -310,9 +310,12 @@ describe('Spawn Route', () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.success).toBe(true);
-    expect(mockSend).toHaveBeenCalledWith('b-term', 'terminateSpawn', {
-      spawnId: 's1',
-    });
+    expect(mockSend).toHaveBeenCalledWith(
+      'b-term',
+      'terminateSpawn',
+      { spawnId: 's1' },
+      30000
+    );
   });
 
   it('DELETE /spawn/:beaconId/:spawnId returns 404 when beacon not found', async () => {
