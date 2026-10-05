@@ -12,6 +12,17 @@ export interface ProcessInfo {
   argv: string[];
 }
 
+/**
+ * Outcome of a pid lookup. `unavailable` means enumeration could not run at
+ * all (missing or busybox `ps`); it is NOT the same as `absent`, which is a
+ * positive finding that no process carries the id. Callers that decide
+ * liveness must never treat `unavailable` as `absent`.
+ */
+export type ProcessLookupResult =
+  | { status: 'found'; pid: number }
+  | { status: 'absent' }
+  | { status: 'unavailable' };
+
 const SPAWN_ID_FLAG = '--spawn-id';
 
 let psUnavailableLogged = false;
@@ -37,17 +48,21 @@ export function parsePsOutput(output: string): ProcessInfo[] {
 }
 
 /**
- * List OS processes via `ps`, or an empty array when enumeration is
- * unavailable (missing or busybox `ps`). Enumeration failure degrades
- * gracefully: a caller must treat "nothing found" as "cannot confirm a live
- * process" and never as "confirmed dead".
+ * List OS processes via `ps`, or null when enumeration is unavailable
+ * (missing or busybox `ps`). A caller must treat null as "cannot determine"
+ * rather than "nothing found".
  *
  * `-ww` disables command-column truncation (procps and BSD both honor it), so
  * a long command tail cannot hide the flag we match on.
  */
-export async function listProcesses(): Promise<ProcessInfo[]> {
+export async function listProcesses(): Promise<ProcessInfo[] | null> {
   try {
-    const { stdout } = await execFileAsync('ps', ['-A', '-ww', '-o', 'pid=,command=']);
+    const { stdout } = await execFileAsync('ps', [
+      '-A',
+      '-ww',
+      '-o',
+      'pid=,command=',
+    ]);
     return parsePsOutput(stdout);
   } catch (err) {
     if (!psUnavailableLogged) {
@@ -56,13 +71,13 @@ export async function listProcesses(): Promise<ProcessInfo[]> {
         `Process enumeration unavailable (ps failed): ${err instanceof Error ? err.message : String(err)}`
       );
     }
-    return [];
+    return null;
   }
 }
 
 /**
  * Find the pid whose argv carries an exact `--spawn-id <spawnId>` pair.
- * Returns null when no process matches.
+ * Returns null when no process in the given list matches.
  */
 export function matchPidBySpawnId(
   processes: readonly ProcessInfo[],
@@ -78,11 +93,17 @@ export function matchPidBySpawnId(
 }
 
 /**
- * Look up a spawned agent's pid by its spawn id. Returns null when no live
- * process carries the id.
+ * Look up a spawned agent's pid by its spawn id. Returns `found` with the pid,
+ * `absent` when enumeration ran and no process carries the id, or
+ * `unavailable` when enumeration could not run.
  */
 export async function findPidBySpawnId(
   spawnId: string
-): Promise<number | null> {
-  return matchPidBySpawnId(await listProcesses(), spawnId);
+): Promise<ProcessLookupResult> {
+  const processes = await listProcesses();
+  if (processes === null) {
+    return { status: 'unavailable' };
+  }
+  const pid = matchPidBySpawnId(processes, spawnId);
+  return pid === null ? { status: 'absent' } : { status: 'found', pid };
 }

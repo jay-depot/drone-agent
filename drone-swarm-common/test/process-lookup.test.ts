@@ -75,12 +75,12 @@ describe('listProcesses', () => {
     ]);
   });
 
-  it('returns empty when ps is unavailable', async () => {
+  it('returns null when ps is unavailable', async () => {
     execFileMock.mockImplementation(
       (_f: string, _a: string[], cb: (err: unknown) => void) =>
         cb(new Error('spawn ps ENOENT'))
     );
-    await expect(listProcesses()).resolves.toEqual([]);
+    await expect(listProcesses()).resolves.toBeNull();
   });
 });
 
@@ -89,20 +89,32 @@ describe('findPidBySpawnId', () => {
     execFileMock.mockReset();
   });
 
-  it('resolves the pid from live ps output', async () => {
+  it('reports found with the pid from live ps output', async () => {
     resolveWith(
       ['  10 drone-agent --spawn-id other', '  20 drone-agent --spawn-id target'].join(
         '\n'
       )
     );
-    await expect(findPidBySpawnId('target')).resolves.toBe(20);
+    await expect(findPidBySpawnId('target')).resolves.toEqual({
+      status: 'found',
+      pid: 20,
+    });
   });
 
-  it('resolves null when enumeration is unavailable', async () => {
+  it('reports absent when enumeration ran but nothing matched', async () => {
+    resolveWith('  10 drone-agent --spawn-id other');
+    await expect(findPidBySpawnId('target')).resolves.toEqual({
+      status: 'absent',
+    });
+  });
+
+  it('reports unavailable when enumeration could not run', async () => {
     execFileMock.mockImplementation(
       (_f: string, _a: string[], cb: (err: unknown) => void) =>
         cb(new Error('ps unsupported'))
     );
-    await expect(findPidBySpawnId('target')).resolves.toBeNull();
+    await expect(findPidBySpawnId('target')).resolves.toEqual({
+      status: 'unavailable',
+    });
   });
 });
