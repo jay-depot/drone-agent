@@ -304,7 +304,7 @@ describe('MatrixServiceAdapter', () => {
 
       const event = makeEventStub();
 
-      timelineHandler(event, room, false);
+      timelineHandler(event, room, false, false, { liveEvent: true });
 
       expect(messages).toHaveLength(1);
       expect(messages[0].adapterId).toBe('matrix-1');
@@ -343,7 +343,7 @@ describe('MatrixServiceAdapter', () => {
         getSender: vi.fn().mockReturnValue('@bob:matrix.org'),
       });
 
-      timelineHandler(event, room, false);
+      timelineHandler(event, room, false, false, { liveEvent: true });
 
       expect(messages).toHaveLength(1);
       expect(messages[0].conversationId).toBe('!room:matrix.org');
@@ -373,7 +373,7 @@ describe('MatrixServiceAdapter', () => {
 
       const event = makeEventStub();
 
-      timelineHandler(event, room, false);
+      timelineHandler(event, room, false, false, { liveEvent: true });
 
       expect(messages).toHaveLength(0);
     });
@@ -399,7 +399,7 @@ describe('MatrixServiceAdapter', () => {
         getSender: vi.fn().mockReturnValue('@bot:matrix.org'),
       });
 
-      timelineHandler(event, room, false);
+      timelineHandler(event, room, false, false, { liveEvent: true });
 
       expect(messages).toHaveLength(0);
     });
@@ -423,7 +423,55 @@ describe('MatrixServiceAdapter', () => {
       const room = makeRoomStub();
       const event = makeEventStub();
 
-      timelineHandler(event, room, true); // toStartOfTimeline = true
+      timelineHandler(event, room, true, false, { liveEvent: false });
+
+      expect(messages).toHaveLength(0);
+    });
+
+    it('skips events replayed from the cached sync (liveEvent=false)', async () => {
+      adapter = new MatrixServiceAdapter('matrix-1', {
+        homeserverUrl: 'https://matrix.org',
+        accessToken: 'syt_token',
+        userId: '@bot:matrix.org',
+      });
+
+      const messages: AdapterMessage[] = [];
+      adapter.onMessage(msg => messages.push(msg));
+
+      await adapter.start();
+
+      const timelineHandler = mockOn.mock.calls.find(
+        call => call[0] === 'Room.timeline'
+      )?.[1];
+
+      const room = makeRoomStub();
+      const event = makeEventStub();
+
+      timelineHandler(event, room, false, false, { liveEvent: false });
+
+      expect(messages).toHaveLength(0);
+    });
+
+    it('skips removed (redacted) events', async () => {
+      adapter = new MatrixServiceAdapter('matrix-1', {
+        homeserverUrl: 'https://matrix.org',
+        accessToken: 'syt_token',
+        userId: '@bot:matrix.org',
+      });
+
+      const messages: AdapterMessage[] = [];
+      adapter.onMessage(msg => messages.push(msg));
+
+      await adapter.start();
+
+      const timelineHandler = mockOn.mock.calls.find(
+        call => call[0] === 'Room.timeline'
+      )?.[1];
+
+      const room = makeRoomStub();
+      const event = makeEventStub();
+
+      timelineHandler(event, room, false, true, { liveEvent: true });
 
       expect(messages).toHaveLength(0);
     });
@@ -451,7 +499,7 @@ describe('MatrixServiceAdapter', () => {
       });
 
       const event = makeEventStub();
-      timelineHandler(event, room, false);
+      timelineHandler(event, room, false, false, { liveEvent: true });
 
       // Now send a message to the same room
       await adapter.sendMessage('!test:matrix.org', 'Hello **world**');

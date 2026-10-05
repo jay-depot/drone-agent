@@ -6,6 +6,7 @@ import { openGatewayDb } from '../store/db.js';
 import { SqliteCryptoStore } from '../store/sqlite-crypto-store.js';
 import { SqliteSyncStore } from '../store/sqlite-sync-store.js';
 import type { GatewayDatabase } from '../store/db.js';
+import type { IRoomTimelineData } from 'matrix-js-sdk/lib/models/event-timeline-set.js';
 import type {
   DroneServiceAdapter,
   AdapterMessage,
@@ -172,9 +173,11 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
       (
         event: MatrixEvent,
         room: Room | undefined,
-        toStartOfTimeline: boolean | undefined
+        toStartOfTimeline: boolean | undefined,
+        removed: boolean,
+        data: IRoomTimelineData
       ) => {
-        this.onTimelineEvent(event, room, toStartOfTimeline);
+        this.onTimelineEvent(event, room, toStartOfTimeline, removed, data);
       }
     );
 
@@ -213,10 +216,17 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
   private onTimelineEvent(
     event: MatrixEvent,
     room: Room | undefined,
-    toStartOfTimeline: boolean | undefined
+    toStartOfTimeline: boolean | undefined,
+    removed: boolean,
+    data: IRoomTimelineData
   ): void {
-    // Skip backlog (initial sync) and non-message events
-    if (toStartOfTimeline || event.getType() !== 'm.room.message') return;
+    // Only live events are new input. Backlog (toStartOfTimeline), replayed
+    // cached sync (/sync from the persistent store, data.liveEvent=false),
+    // redactions (removed), and non-message events must all be ignored —
+    // otherwise a restart re-dispatches historical commands and their replies
+    // answer unrelated later messages.
+    if (removed || !data?.liveEvent) return;
+    if (event.getType() !== 'm.room.message') return;
 
     const sender = event.getSender();
     if (!sender || sender === this.config.userId) return;
