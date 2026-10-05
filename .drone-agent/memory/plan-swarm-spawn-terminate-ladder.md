@@ -12,7 +12,7 @@ tags:
   - reconcile
   - liveness
 created: 2026-10-05T20:58:36.692Z
-updated: 2026-10-05T21:12:22.471Z
+updated: 2026-10-05T21:13:32.000Z
 ---
 
 # Plan: cross-platform agent termination ladder + boot reconcile
@@ -118,7 +118,7 @@ Make `handleTerminateSpawn` (`drone-beacon/src/routes/spawn-handlers.ts`) async.
 
 ## Open decisions
 
-- **D2.** Stage-1 wait timeout before escalating to SIGTERM. Default 3 s unless a preference emerges.
+- **D2 (resolved): 5 s.** Stage-1 wait timeout before escalating to SIGTERM. Chosen so bulkier MCP servers get time to exit in-process.
 
 ## Tests
 
