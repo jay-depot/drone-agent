@@ -16,6 +16,7 @@ import {
   type ManagedProcess,
   type SpawnDb,
 } from 'drone-swarm-common';
+import { findPidBySpawnId } from 'drone-swarm-common';
 import * as db from './db/index.js';
 import type { SpawnConfig, SpawnRecord } from './types.js';
 
@@ -65,7 +66,7 @@ const beaconSpawnDb: SpawnDb = {
 
 // === Re-exported API (same signatures as before) ===
 
-export { SpawnerConfig, ManagedProcess };
+export { SpawnerConfig, ManagedProcess, findPidBySpawnId };
 
 export function initSpawner(cfg: SpawnerConfig): void {
   sharedInitSpawner(cfg, beaconSpawnDb);
