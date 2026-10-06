@@ -690,5 +690,9 @@
   {
     "timestamp": "2026-10-05T23:06:50.931Z",
     "insight": "`drone-agent --working-dir` is parsed in cli.ts but never consumed anywhere in the package — the value is dead. Spawned agents only land in the right directory because the beacon/gateway spawner passes `cwd` to spawn(). A flag that sets a process-wide cwd must take effect before config load / external-plugin discovery / any plugin that reads process.cwd() (startup, log, macros, memory, prompt-file, config), so the correct fix is an early `process.chdir()` in main(), not a late consumer. Lesson: when a CLI flag is added, grep for a reader before shipping; a parsed-but-unread flag is invisible because the surrounding machinery often has a second mechanism (here, cwd) that masks it."
+  },
+  {
+    "timestamp": "2026-10-06T00:39:09.191Z",
+    "insight": "Parallel `apply_diff` calls on the SAME file race and silently lose one edit (ADR 227's documented mutex-less read-modify-write hazard). This session I fired two `apply_diff` calls at `plugin-engine.ts` in one turn (interface member + implementation member); one landed, the other vanished, and the file tail was duplicated. Rule: never issue two edits to the same file in one tool batch. Issue them sequentially, and when two edits genuinely belong together, prefer a single hunk or a python rewrite. The build caught it (`Property 'queueSystemReminder' does not exist`), which is the safety net that made recovery cheap."
   }
 ]

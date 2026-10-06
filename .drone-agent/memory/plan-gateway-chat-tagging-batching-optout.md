@@ -11,7 +11,8 @@ tags:
   - spawn-backend
   - multi-user
 created: 2026-10-05T20:20:00.000Z
-updated: 2026-10-05T20:20:00.000Z
+updated: 2026-10-06T00:39:00.000Z
+status: completed
 ---
 
 # Plan: Gateway chat tagging + drain-on-idle batching + multi-user response opt-out
@@ -636,3 +637,61 @@ All must pass. Do not consider the job done until every item is green.
 - **Mixed-surface conversation batching** (seed: `planning-seed-mixed-conversation-batching`).
 - **Per-sender session isolation.**
 - A silence **tool** (`chat__stay_silent`).
+
+---
+
+## Execution summary (2026-10-06) — COMPLETED
+
+Executed on branch `feat/gateway-surface-lifecycle-and-workdir` (no new branch, per plan).
+Commit `b7c2af64`.
+
+**What landed** (all 23 steps S1–S23):
+- **Tagging**: new `drone-gateway/src/chat-format.ts` (`formatChatTurn`, `NO_RESPONSE_SENTINEL`,
+  `ROOM_INSTRUCTION`, `isNoResponse`); `persona-assignment` tags every inbound turn `[Alice] …`
+  (senderName → senderId → 'unknown') in rooms **and** DMs. `AdapterMessage` gained a required
+  `conversationKind: 'dm' | 'room'` (set by the Matrix adapter from `isDM`).
+- **Batching**: new `drone-gateway/src/batcher.ts` (`MessageBatcher`, drain-on-idle + debounce).
+  The engine buffers a message when it resolves to an **exact** conversation whose **sole**
+  surface defines `handleBatch`; the buffer flushes as one turn through the conversation's serial
+  tail. Debounce: surface `config.batch.debounceMs` ?? gateway `batch.debounceMs` ?? 500 ms; `0`
+  disables. No disable flag (structural opt-in). Multi-surface conversations keep the immediate path.
+- **Opt-out**: `[NO_RESPONSE]` sentinel — the surface returns `{ response: null, handled: true }`
+  when the reply is exactly `<<NO_RESPONSE>>` (trimmed); the gateway posts nothing and logs
+  "Agent chose not to respond". A room-only per-turn `systemReminder` carries the instruction.
+- **Transport (partially)**: `SpawnBackend.sendMessage` gained `opts?: SendMessageOptions` and now
+  returns `Promise<string | null>`. `LocalSpawnBackend` forwards `systemReminder` in the NDJSON
+  chat event. `CoordinatorSpawnBackend` delivers via `CoordinatorClient.sendSessionMessage(...)`
+  (was a dead relay that 400'd at hop 1) and returns `null` (no synchronous reply); the surface
+  posts nothing for `null`. The dead relay `CoordinatorClient.sendMessage` was removed.
+- **Agent**: `InputEvent` chat variant gained `systemReminder?`; `runJsonListenMode` queues it via
+  the new public `engine.queueSystemReminder` (non-persisted `<system-reminder>`).
+- **Docs**: `drone-gateway/docs/adr/006-chat-tagging-batching-optout.md`; `CONTEXT.md` gained
+  Chat Tag / Message Batcher / Batch Debounce / No-Response Sentinel / Room Instruction and
+  amended Control Surface / Persona Assignment / Adapter Message / config layout.
+
+**Validation** (all green):
+- LSP clean; `pnpm -r run build` (8 pkgs) green; `pnpm typecheck` 0; `pnpm run lint` 0
+  (one real unused-var caught and fixed; prettier churn reverted: pnpm-lock, insights x4,
+  memory .md x3).
+- Fast suite: **3586 passed / 14 skipped / 262 files**.
+- New tests: `chat-format` (10), `batcher` (5), `persona-assignment-surface` (16, rewritten),
+  `interactive-listen-reminder` (3). Updated: `session-lifecycle` (12), `config-load` (30),
+  `coordinator-client` (34), `coordinator-spawn-backend` (12), `engine` (22, +4 batching, the
+  serialization test repointed to a non-batch conversation), `matrix-adapter`, `plugin-engine`
+  (43), `helpers.ts` (mock engines gained `queueSystemReminder`).
+- Behavioral acceptance documented in the session; dead-code sweep clean.
+
+**Deviations from the plan (all within intent):**
+1. S7: the plan implied a ~3-line send-path fix; tracing showed the gateway has **no WS client**,
+   so the receive half is unbuildable here. Split per the grilling: send-half fixed + `null`
+   sentinel; the receive path is deferred.
+2. S13 was already satisfied by the S1 type edit (`handleBatch?`), verified only.
+3. S19 required repointing the pre-existing "serialize two messages" engine test — with batching,
+   a single-surface `persona-assignment` conversation coalesces, so serialization is now exercised
+   via a multi-surface (non-batch) conversation.
+4. Repeated `apply_diff` tail-duplication on `engine.ts` / `plugin-engine.ts` was repaired by
+   truncation; those files (and the template-literal test files) were edited via python/heredoc.
+
+**Deferred (unchanged):** coordinator receive path; `systemReminder` over the coordinator
+transport; mixed-surface batching (`planning-seed-mixed-conversation-batching`); per-sender
+session isolation; a silence tool.
