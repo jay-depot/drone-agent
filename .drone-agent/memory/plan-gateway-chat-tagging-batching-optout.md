@@ -16,10 +16,10 @@ updated: 2026-10-05T20:20:00.000Z
 
 # Plan: Gateway chat tagging + drain-on-idle batching + multi-user response opt-out
 
-**Branch to create:** `feat/gateway-chat-tagging-batching-optout`, branched from the current
-`feat/gateway-surface-lifecycle-and-workdir` tip (`ff030dc7`).
+**Branch:** stay on the current branch `feat/gateway-surface-lifecycle-and-workdir`
+(tip `135f4e93`). **Do NOT create a new branch** — execute this plan on the existing branch.
 **Base dependency:** ADR 232 (surface lifecycle + per-surface `workingDir` + per-conversation
-serialization) is already committed on that branch. This plan builds directly on it.
+serialization) is already committed on this branch. This plan builds directly on it.
 
 ## 1. What and why
 
