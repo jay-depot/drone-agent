@@ -1,9 +1,10 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { createPersonaAssignmentSurface } from '../src/surfaces/persona-assignment.js';
 import { DEFAULT_IDLE_TIMEOUT_MS } from '../src/surfaces/lifecycle.js';
-import type { SpawnBackend } from '../src/spawn-backend.js';
+import { NO_RESPONSE_SENTINEL, ROOM_INSTRUCTION } from '../src/chat-format.js';
+import type { SpawnBackend, SendMessageOptions } from '../src/spawn-backend.js';
 import type { SurfaceContext } from '../src/surfaces/types.js';
-import type { SpawnSession } from '../src/types.js';
+import type { AdapterMessage, SpawnSession } from '../src/types.js';
 
 function makeSession(id: string): SpawnSession {
   return {
@@ -42,8 +43,36 @@ function makeSurface(
   );
 }
 
-function msg(text: string) {
-  return { adapterId: 'a', conversationId: 'conv-1', text };
+function msg(
+  text: string,
+  overrides: Partial<AdapterMessage> = {}
+): AdapterMessage {
+  return {
+    adapterId: 'a',
+    conversationId: 'conv-1',
+    text,
+    senderName: 'Alice',
+    senderId: '@alice:x',
+    conversationKind: 'dm',
+    ...overrides,
+  };
+}
+
+/** The text passed to the backend's sendMessage (arg 1). */
+function sentText(backend: SpawnBackend, call = 0): string {
+  return (backend.sendMessage as ReturnType<typeof vi.fn>).mock.calls[
+    call
+  ][1] as string;
+}
+
+/** The options passed to the backend's sendMessage (arg 2). */
+function sentOpts(
+  backend: SpawnBackend,
+  call = 0
+): SendMessageOptions | undefined {
+  return (backend.sendMessage as ReturnType<typeof vi.fn>).mock.calls[
+    call
+  ][2] as SendMessageOptions | undefined;
 }
 
 describe('createPersonaAssignmentSurface', () => {
@@ -81,6 +110,41 @@ describe('createPersonaAssignmentSurface', () => {
     expect(backend.sendMessage).toHaveBeenCalledTimes(1);
   });
 
+  it('tags a DM message with the sender name and attaches no room reminder', async () => {
+    const backend = makeBackend();
+    const surface = makeSurface(backend);
+
+    await surface.handleMessage(msg('fix the build'));
+
+    expect(sentText(backend)).toBe('[Alice] fix the build');
+    expect(sentOpts(backend)).toBeUndefined();
+  });
+
+  it('falls back through senderId then "unknown" for the tag', async () => {
+    const backend = makeBackend();
+    const surface = makeSurface(backend);
+
+    await surface.handleMessage(msg('a', { senderName: undefined }));
+    await surface.handleMessage(
+      msg('b', { senderName: undefined, senderId: undefined })
+    );
+
+    expect(sentText(backend, 0)).toBe('[@alice:x] a');
+    expect(sentText(backend, 1)).toBe('[unknown] b');
+  });
+
+  it('attaches the room instruction for a room conversation', async () => {
+    const backend = makeBackend();
+    const surface = makeSurface(backend);
+
+    await surface.handleMessage(
+      msg('anyone around?', { conversationKind: 'room' })
+    );
+
+    expect(sentText(backend)).toBe('[Alice] anyone around?');
+    expect(sentOpts(backend)).toEqual({ systemReminder: ROOM_INSTRUCTION });
+  });
+
   it('reuses the session for a second message', async () => {
     const backend = makeBackend();
     const surface = makeSurface(backend);
@@ -90,6 +154,59 @@ describe('createPersonaAssignmentSurface', () => {
 
     expect(backend.spawnSession).toHaveBeenCalledTimes(1);
     expect(backend.sendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('joins a batch by newline with each line tagged', async () => {
+    const backend = makeBackend();
+    const surface = makeSurface(backend);
+
+    await surface.handleBatch?.([
+      msg('first', { senderName: 'Alice' }),
+      msg('second', {
+        senderName: 'Bob',
+        senderId: '@bob:x',
+        conversationKind: 'room',
+      }),
+    ]);
+
+    expect(backend.sendMessage).toHaveBeenCalledTimes(1);
+    expect(sentText(backend)).toBe('[Alice] first\n[Bob] second');
+    // The room instruction is driven by the FIRST message's kind.
+    expect(sentOpts(backend)).toBeUndefined();
+  });
+
+  it('attaches the room instruction when the batch is a room', async () => {
+    const backend = makeBackend();
+    const surface = makeSurface(backend);
+
+    await surface.handleBatch?.([
+      msg('first', { conversationKind: 'room' }),
+      msg('second', { senderName: 'Bob', conversationKind: 'room' }),
+    ]);
+
+    expect(sentOpts(backend)).toEqual({ systemReminder: ROOM_INSTRUCTION });
+  });
+
+  it('posts nothing when the agent replies with the no-response sentinel', async () => {
+    const backend = makeBackend({
+      sendMessage: vi.fn(async () => NO_RESPONSE_SENTINEL),
+    });
+    const surface = makeSurface(backend);
+
+    const result = await surface.handleMessage(msg('hi'));
+
+    expect(result).toEqual({ response: null, handled: true });
+  });
+
+  it('posts nothing when the backend returns a null reply', async () => {
+    const backend = makeBackend({
+      sendMessage: vi.fn(async () => null as string | null),
+    });
+    const surface = makeSurface(backend);
+
+    const result = await surface.handleMessage(msg('hi'));
+
+    expect(result).toEqual({ response: null, handled: true });
   });
 
   it('forwards targetBeaconId and workingDir from the context', async () => {

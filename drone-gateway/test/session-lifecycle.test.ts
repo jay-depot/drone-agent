@@ -80,6 +80,43 @@ describe('SessionLifecycle', () => {
     });
   });
 
+  it('forwards send options to the backend and returns a null reply as-is', async () => {
+    const sendMessage = vi.fn(async () => null as string | null);
+    const backend = makeBackend({ sendMessage });
+    const lifecycle = new SessionLifecycle({
+      surfaceType: 'persona-assignment',
+      conversationId: 'conv-1',
+      personaId: 'coder',
+      ctx: makeCtx(backend),
+    });
+
+    await expect(
+      lifecycle.send('hi', { systemReminder: 'ROOM' })
+    ).resolves.toBeNull();
+    expect(sendMessage).toHaveBeenCalledWith(expect.anything(), 'hi', {
+      systemReminder: 'ROOM',
+    });
+  });
+
+  it('treats a null reply as normal: no re-spawn, idle timer still arms', async () => {
+    const backend = makeBackend({
+      sendMessage: vi.fn(async () => null as string | null),
+    });
+    const lifecycle = new SessionLifecycle({
+      surfaceType: 'persona-assignment',
+      conversationId: 'conv-1',
+      personaId: 'coder',
+      ctx: makeCtx(backend, { idleTimeoutMs: 1000 }),
+    });
+
+    await expect(lifecycle.send('hi')).resolves.toBeNull();
+    expect(backend.spawnSession).toHaveBeenCalledTimes(1);
+    expect(backend.terminateSession).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1001);
+    expect(backend.terminateSession).toHaveBeenCalledTimes(1);
+  });
+
   it('terminates after the default idle timeout and re-spawns on the next message', async () => {
     const backend = makeBackend();
     const lifecycle = new SessionLifecycle({

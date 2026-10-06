@@ -95,22 +95,6 @@ export class CoordinatorClient implements SwarmApi {
     );
   }
 
-  /**
-   * Send a message to an agent via the coordinator's message relay.
-   */
-  async sendMessage(agentId: string, message: string): Promise<unknown> {
-    return this.mutate(
-      'POST',
-      '/api/messages/relay',
-      {
-        toAgentId: agentId,
-        body: JSON.stringify({ type: 'chat', text: message }),
-      },
-      'Send message failed',
-      true
-    );
-  }
-
   async listSessions(query?: {
     status?: string;
     limit?: number;

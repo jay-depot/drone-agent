@@ -385,6 +385,50 @@ describe('loadGatewayConfig conversation parsing', () => {
       ?.surfaces?.[0].config as { lifecycle?: { idleTimeoutMs?: number } };
     expect(bad.lifecycle).not.toHaveProperty('idleTimeoutMs');
   });
+
+  it('keeps a valid surface config.batch.debounceMs (including 0) and drops an invalid one', async () => {
+    writeConversation('matrix', 'batch.json', {
+      conversationId: '!batch:server',
+      controlSurfaces: [
+        {
+          type: 'persona-assignment',
+          personaId: 'me',
+          config: { batch: { debounceMs: 250 } },
+        },
+      ],
+    });
+    writeConversation('matrix', 'batch-zero.json', {
+      conversationId: '!batch-zero:server',
+      controlSurfaces: [
+        {
+          type: 'persona-assignment',
+          personaId: 'me',
+          config: { batch: { debounceMs: 0 } },
+        },
+      ],
+    });
+    writeConversation('matrix', 'batch-neg.json', {
+      conversationId: '!batch-neg:server',
+      controlSurfaces: [
+        {
+          type: 'persona-assignment',
+          personaId: 'me',
+          config: { batch: { debounceMs: -5 } },
+        },
+      ],
+    });
+    const config = await load();
+    const ok = config.serviceAdapters[0].conversations.get('!batch:server')
+      ?.surfaces?.[0].config as { batch?: { debounceMs?: number } };
+    expect(ok.batch?.debounceMs).toBe(250);
+    const zero = config.serviceAdapters[0].conversations.get(
+      '!batch-zero:server'
+    )?.surfaces?.[0].config as { batch?: { debounceMs?: number } };
+    expect(zero.batch?.debounceMs).toBe(0);
+    const neg = config.serviceAdapters[0].conversations.get('!batch-neg:server')
+      ?.surfaces?.[0].config as { batch?: { debounceMs?: number } };
+    expect(neg.batch).not.toHaveProperty('debounceMs');
+  });
 });
 
 describe('loadGatewayConfig idleTimeoutMs validation', () => {

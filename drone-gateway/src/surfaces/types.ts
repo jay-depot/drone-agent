@@ -28,6 +28,13 @@ export interface SurfaceContext {
    * SessionLifecycle when this is absent.
    */
   idleTimeoutMs?: number;
+  /**
+   * Engine-resolved batch debounce in ms (`config.batch.debounceMs` ??
+   * gateway-wide `batch.debounceMs`). `0` disables the debounce. Defaults are
+   * applied by the engine's MessageBatcher when this is absent. Inert in a
+   * multi-surface conversation (batching is single-surface only).
+   */
+  debounceMs?: number;
 }
 
 export type SurfaceFactory = (

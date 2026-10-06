@@ -32,6 +32,8 @@ _Avoid_: Null surface, dev-null, black hole
 
 **Persona Assignment**:
 A lifecycle-managed control surface that routes all messages in a conversation to a specific persona. The gateway spawns an agent with that persona on the conversation's resolved **Spawn Target Beacon** and with the conversation's resolved **Working Directory**, sends the message as a task, and returns the response. The agent is kept alive between turns, terminated after the **Idle Timeout** (and re-spawned lazily on the next message), re-spawned once if `sendMessage` fails because the agent died, and disposed at gateway shutdown. There is no session resume: a re-spawn starts with fresh in-memory context, and continuity comes from the on-disk **Working Directory**.
+
+Each inbound turn is tagged with the speaker's name (see **Chat Tag**). In a multi-user room the turn also carries a per-turn **Room Instruction** telling the model it may decline to respond; a reply equal to the **No-Response Sentinel** (or a `null` reply) posts nothing. Because it defines `handleBatch`, it is **batch-eligible**: a burst of messages in a single-surface conversation is coalesced and answered once (see **Message Batcher**).
 _Avoid_: Persona router, persona mapper, persona binding
 
 **Swarm Console**:
@@ -67,8 +69,28 @@ A control surface that watches for `!persona` mentions in a conversation and rou
 _Avoid_: Mention handler, persona mention, dispatch surface
 
 **Adapter Message**:
-The internal message format used by the gateway. Contains the adapter ID, conversation ID, message text, and optional sender information. Service adapters translate platform-specific messages into this format.
+The internal message format used by the gateway. Contains the adapter ID, conversation ID, message text, optional sender information (`senderId?`/`senderName?`), and a required `conversationKind: 'dm' | 'room'` set by the adapter (only it knows group-ness). Service adapters translate platform-specific messages into this format.
 _Avoid_: Gateway message, internal message, envelope
+
+**Chat Tag**:
+The `[Alice] fix the build` prefix applied to each inbound turn by a spawning surface (via `chat-format.ts`). The name falls back `senderName → senderId → 'unknown'`, and only the first line of a multi-line message is prefixed. Applied in **both rooms and DMs**, with no toggle. Kept in the surface (not the engine) so `swarm-console` still sees raw `swarm.` lines.
+_Avoid_: Speaker prefix, username label, attribution
+
+**Message Batcher**:
+The engine's per-conversation coalescer (`batcher.ts`). When a message resolves to an **exact** conversation whose **sole** surface defines `handleBatch`, the message is buffered and the flush timer is (re)armed for the **Batch Debounce**. On flush the buffer is dispatched as **one** turn through the conversation's serial tail, and one merged reply is posted. Every other case (the wildcard, non-batch surfaces, multi-surface conversations) keeps the immediate per-message path.
+_Avoid_: Coalescer, debouncer, aggregator
+
+**Batch Debounce**:
+How long a batch waits for stragglers before flushing. Resolved as `controlSurfaces[].config.batch.debounceMs ?? config.batch.debounceMs` (gateway-wide) ?? a built-in default (500 ms). `0` disables the debounce (flush on the next tick). Inert in a multi-surface conversation, where surface `batch.debounceMs` is silently ignored (batching is single-surface only).
+_Avoid_: batch window, coalesce interval
+
+**No-Response Sentinel**:
+The exact string `<<NO_RESPONSE>>` an agent replies with to decline to respond. A spawning surface checks the reply with an exact match modulo trim and, on a match, returns `{ response: null, handled: true }` so the engine posts nothing (and logs it distinctly). The sentinel and the **Room Instruction** that names it live together in the gateway (`chat-format.ts`), the single source of truth.
+_Avoid_: silence token, mute marker
+
+**Room Instruction**:
+The gateway-owned per-turn instruction delivered (only in a multi-user room) as a non-persisted system reminder, telling the model to decide whether a reply is warranted and naming the **No-Response Sentinel**. It rides the turn payload as `systemReminder`, which the agent's listen host queues via `queueSystemReminder` (drained as a `<system-reminder>`, never entering session history).
+_Avoid_: group prompt, room prompt
 
 **Coordinator Client**:
 The HTTP client used by the gateway to communicate with the coordinator's web port (8080). Uses Bearer token authentication. Provides methods for spawning agents, listing beacons, and managing spawns.
@@ -121,7 +143,10 @@ _Avoid_: Coordinator API, coordinator proxy, coordinator connector
                                                   # coordinator: must be a
                                                   # beacon spawnRoot. Absent =
                                                   # mode default.
-                lifecycle: { idleTimeoutMs: 1000 } # optional; 0 disables
+                lifecycle: { idleTimeoutMs: 1000 }, # optional; 0 disables
+                batch: { debounceMs: 500 }        # optional; 0 disables the
+                                                  # debounce. Single-surface
+                                                  # conversations only.
               } },
             { type: "swarm-console" },
             { type: "discard" }

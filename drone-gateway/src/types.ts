@@ -15,6 +15,11 @@ export interface AdapterMessage {
   text: string;
   senderId?: string;
   senderName?: string;
+  /**
+   * Whether this conversation is a 1:1 DM or a multi-user room. Computed by the
+   * adapter (it owns conversation routing); the gateway never inspects the id.
+   */
+  conversationKind: 'dm' | 'room';
 }
 
 // === Control Surface Interface ===
@@ -24,6 +29,14 @@ export interface DroneControlSurface {
   type: string; // "persona-assignment", "swarm-console", "mention-router", "discard"
   handleMessage(
     message: AdapterMessage
+  ): Promise<{ response: string | null; handled: boolean }>;
+  /**
+   * Batch-eligible surfaces implement this. When present on a conversation's
+   * sole surface, incoming messages are buffered and delivered here as one
+   * ordered batch (see MessageBatcher). Absence = immediate per-message path.
+   */
+  handleBatch?(
+    messages: AdapterMessage[]
   ): Promise<{ response: string | null; handled: boolean }>;
   /**
    * Called once by the engine at shutdown, after adapters stop. Implementations
@@ -92,6 +105,12 @@ export interface GatewayConfig {
    * A surface-level `config.lifecycle.idleTimeoutMs` overrides it; `0` disables.
    */
   idleTimeoutMs?: number;
+  /**
+   * Gateway-wide default batch debounce (ms) for batching control surfaces.
+   * A surface-level `config.batch.debounceMs` overrides it; `0` disables the
+   * debounce (flush on the next tick).
+   */
+  batch?: { debounceMs?: number };
   agentPath?: string; // path to drone-agent binary (local mode)
   serviceAdapters: ResolvedServiceAdapter[];
 }

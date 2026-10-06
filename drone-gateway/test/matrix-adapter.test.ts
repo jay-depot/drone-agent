@@ -312,6 +312,7 @@ describe('MatrixServiceAdapter', () => {
       expect(messages[0].text).toBe('Hello, world!');
       expect(messages[0].senderId).toBe('@alice:matrix.org');
       expect(messages[0].senderName).toBe('Alice');
+      expect(messages[0].conversationKind).toBe('dm');
     });
 
     it('emits AdapterMessage for room timeline events', async () => {
@@ -347,6 +348,7 @@ describe('MatrixServiceAdapter', () => {
 
       expect(messages).toHaveLength(1);
       expect(messages[0].conversationId).toBe('!room:matrix.org');
+      expect(messages[0].conversationKind).toBe('room');
     });
 
     it('drops events from non-allowlisted rooms', async () => {

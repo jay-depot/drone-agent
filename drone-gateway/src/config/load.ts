@@ -46,16 +46,17 @@ function sanitizeWorkingDir(
 }
 
 /**
- * Sanitize an idle timeout: a finite, non-negative number (ms). `0` is valid
- * and disables the timer. Anything else is warned about and dropped.
+ * Sanitize a non-negative number (a timeout or debounce in ms). `0` is valid
+ * and disables the feature. Anything else is warned about and dropped.
  */
-function sanitizeIdleTimeoutMs(
+function sanitizeNonNegativeNumber(
   value: unknown,
+  label: string,
   log: (msg: string) => void
 ): number | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
-    log('idleTimeoutMs must be a non-negative number; ignoring');
+    log(`${label} must be a non-negative number; ignoring`);
     return undefined;
   }
   return value;
@@ -64,7 +65,8 @@ function sanitizeIdleTimeoutMs(
 /**
  * Sanitize a control surface's `config` bag: `targetBeaconId` must be a
  * non-empty string, `workingDir` must be an absolute path, and
- * `lifecycle.idleTimeoutMs` must be a non-negative number. Invalid keys are
+ * `lifecycle.idleTimeoutMs` and `batch.debounceMs` must be non-negative
+ * numbers. Invalid keys are
  * warned about and dropped (the surface falls back to the gateway default);
  * the load itself always succeeds.
  */
@@ -111,11 +113,35 @@ function sanitizeSurfaceConfig(
     } else {
       const bag = { ...(lifecycle as Record<string, unknown>) };
       if (bag.idleTimeoutMs !== undefined) {
-        const sanitized = sanitizeIdleTimeoutMs(bag.idleTimeoutMs, warn);
+        const sanitized = sanitizeNonNegativeNumber(
+          bag.idleTimeoutMs,
+          'idleTimeoutMs',
+          warn
+        );
         if (sanitized === undefined) delete bag.idleTimeoutMs;
         else bag.idleTimeoutMs = sanitized;
       }
       rest.lifecycle = bag;
+    }
+  }
+
+  const batch = rest.batch;
+  if (batch !== undefined) {
+    if (typeof batch !== 'object' || batch === null || Array.isArray(batch)) {
+      warn('batch is not an object; ignoring');
+      delete rest.batch;
+    } else {
+      const bag = { ...(batch as Record<string, unknown>) };
+      if (bag.debounceMs !== undefined) {
+        const sanitized = sanitizeNonNegativeNumber(
+          bag.debounceMs,
+          'debounceMs',
+          warn
+        );
+        if (sanitized === undefined) delete bag.debounceMs;
+        else bag.debounceMs = sanitized;
+      }
+      rest.batch = bag;
     }
   }
 
@@ -219,8 +245,17 @@ export async function loadGatewayConfig(
   }
 
   // Validate the gateway-wide default idle timeout (inert in local mode).
-  const idleTimeoutMs = sanitizeIdleTimeoutMs(
+  const idleTimeoutMs = sanitizeNonNegativeNumber(
     gatewayConfig.idleTimeoutMs,
+    'idleTimeoutMs',
+    msg => logger.warn(`Config field ${msg}.`)
+  );
+
+  // Validate the gateway-wide default batch debounce (ms).
+  const rawBatch = gatewayConfig.batch as { debounceMs?: unknown } | undefined;
+  const batchDebounceMs = sanitizeNonNegativeNumber(
+    rawBatch?.debounceMs,
+    'batch.debounceMs',
     msg => logger.warn(`Config field ${msg}.`)
   );
 
@@ -231,6 +266,10 @@ export async function loadGatewayConfig(
     spawnBackend,
     targetBeaconId,
     idleTimeoutMs,
+    batch:
+      batchDebounceMs !== undefined
+        ? { debounceMs: batchDebounceMs }
+        : undefined,
     agentPath: gatewayConfig.agentPath as string | undefined,
     serviceAdapters: [],
   };

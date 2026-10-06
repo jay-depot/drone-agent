@@ -51,7 +51,12 @@ function makeSurface(ctx: Partial<SurfaceContext>) {
 }
 
 function msg(text: string) {
-  return { adapterId: 'a', conversationId: 'conv-1', text };
+  return {
+    adapterId: 'a',
+    conversationId: 'conv-1',
+    text,
+    conversationKind: 'dm' as const,
+  };
 }
 
 describe('createSwarmConsoleSurface', () => {

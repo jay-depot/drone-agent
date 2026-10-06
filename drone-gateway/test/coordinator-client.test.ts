@@ -150,35 +150,6 @@ describe('CoordinatorClient', () => {
     });
   });
 
-  describe('sendMessage', () => {
-    it('sends POST to /messages with toAgentId and body', async () => {
-      fetchMock.mockResolvedValue(mockFetchResponse(200, { ok: true }));
-
-      const result = await client.sendMessage('agent-1', 'Hello!');
-
-      expect(fetchMock).toHaveBeenCalledWith(
-        'http://localhost:8080/api/messages/relay',
-        expect.objectContaining({
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            toAgentId: 'agent-1',
-            body: JSON.stringify({ type: 'chat', text: 'Hello!' }),
-          }),
-        })
-      );
-      expect(result).toEqual({ ok: true });
-    });
-
-    it('throws on non-OK response with error text', async () => {
-      fetchMock.mockResolvedValue(mockFetchResponse(400, { error: 'bad' }));
-
-      await expect(client.sendMessage('agent-1', 'hi')).rejects.toThrow(
-        'Send message failed (400): {"error":"bad"}'
-      );
-    });
-  });
-
   describe('listSessions', () => {
     it('sends GET to /sessions with query params', async () => {
       fetchMock.mockResolvedValue(

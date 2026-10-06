@@ -1,6 +1,7 @@
 import { logger } from '../logger.js';
 import type { SpawnSession } from '../types.js';
 import type { SurfaceContext } from './types.js';
+import type { SendMessageOptions } from '../spawn-backend.js';
 
 export const DEFAULT_IDLE_TIMEOUT_MS = 300_000;
 
@@ -83,14 +84,15 @@ export class SessionLifecycle {
     }
   }
 
-  async send(text: string): Promise<string> {
+  async send(text: string, opts?: SendMessageOptions): Promise<string | null> {
     return this.run(async () => {
       if (this.disposed) throw new Error('surface disposed');
       const session = await this.ensureSession();
       try {
         const response = await this.opts.ctx.spawnBackend.sendMessage(
           session,
-          text
+          text,
+          opts
         );
         this.armIdleTimer();
         return response;
@@ -108,7 +110,8 @@ export class SessionLifecycle {
         const fresh = await this.ensureSession();
         const response = await this.opts.ctx.spawnBackend.sendMessage(
           fresh,
-          text
+          text,
+          opts
         );
         this.armIdleTimer();
         return response;

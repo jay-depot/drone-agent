@@ -100,17 +100,25 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
     return session;
   }
 
-  async sendMessage(session: SpawnSession, message: string): Promise<string> {
+  async sendMessage(
+    session: SpawnSession,
+    message: string
+  ): Promise<string | null> {
     logger.info(
       `Sending message to agent ${session.processId} via coordinator`
     );
-
-    const response = await this.coordinatorClient.sendMessage(
+    // Deliver the turn as a real user message (the same path the coordinator UI
+    // uses). The receive path is not implemented yet — the gateway has no WS
+    // subscription to observe the agent's reply — so there is no synchronous
+    // reply. Return null so the surface posts nothing instead of posting the
+    // delivery ack as the reply.
+    await this.coordinatorClient.sendSessionMessage(
       session.processId,
-      message
+      message,
+      false
     );
 
-    return response as string;
+    return null;
   }
 
   async terminateSession(session: SpawnSession): Promise<void> {

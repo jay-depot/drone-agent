@@ -12,6 +12,10 @@ import type { SwarmApi } from './console/swarm-api.js';
 import { SurfaceRegistry } from './surfaces/registry.js';
 import { registerBuiltInSurfaces } from './surfaces/builtins.js';
 import type { SurfaceContext } from './surfaces/types.js';
+import { MessageBatcher } from './batcher.js';
+
+/** Default batch debounce (ms) when neither the surface nor the gateway sets one. */
+export const DEFAULT_DEBOUNCE_MS = 500;
 
 /**
  * A conversation's instantiated surfaces plus its optional sender allowlist.
@@ -20,6 +24,7 @@ type InstantiatedConversation = {
   allowedSenders?: string[];
   surfaces: DroneControlSurface[];
   tail: Promise<unknown>;
+  batcher?: MessageBatcher;
 };
 
 /**
@@ -54,6 +59,22 @@ function runOnTail<T>(
     () => undefined
   );
   return result;
+}
+
+/**
+ * Resolve a conversation's batch debounce: the surface's
+ * `config.batch.debounceMs` when present, otherwise the gateway-wide
+ * `batch.debounceMs`, otherwise the built-in default.
+ */
+function resolveDebounceMs(
+  specConfig: Record<string, unknown> | undefined,
+  gatewayConfig: GatewayConfig
+): number {
+  const batch = specConfig?.batch as { debounceMs?: number } | undefined;
+  if (typeof batch?.debounceMs === 'number') return batch.debounceMs;
+  const gatewayMs = gatewayConfig.batch?.debounceMs;
+  if (typeof gatewayMs === 'number') return gatewayMs;
+  return DEFAULT_DEBOUNCE_MS;
 }
 
 export class GatewayEngine {
@@ -94,11 +115,25 @@ export class GatewayEngine {
         const surfaces = conv.surfaces.map(spec =>
           this.createControlSurface(spec, convId)
         );
-        byConv.set(convId, {
+        // Batching is enabled only for an EXACT conversation (never the
+        // wildcard) whose sole surface opts in by defining handleBatch.
+        const soleSurface = surfaces.length === 1 ? surfaces[0] : undefined;
+        const eligible =
+          convId !== '*' && soleSurface?.handleBatch !== undefined;
+        const record: InstantiatedConversation = {
           allowedSenders: conv.allowedSenders,
           surfaces,
           tail: Promise.resolve(),
-        });
+        };
+        if (eligible) {
+          record.batcher = new MessageBatcher(
+            resolveDebounceMs(conv.surfaces[0]?.config, this.config),
+            batch => {
+              void this.dispatchBatch(adapterConfig.id, convId, record, batch);
+            }
+          );
+        }
+        byConv.set(convId, record);
       }
       this.controlSurfaces.set(adapterConfig.id, byConv);
 
@@ -125,6 +160,15 @@ export class GatewayEngine {
 
     const exactApplies =
       exact !== undefined && senderAllowed(exact.allowedSenders, msg.senderId);
+
+    // Batch-eligible exact conversation: buffer and flush as one turn. The
+    // immediate path below is untouched for every other case (wildcard,
+    // non-batch surfaces, multi-surface conversations).
+    if (exactApplies && exact?.batcher) {
+      exact.batcher.push(msg);
+      return;
+    }
+
     const wildcardApplies =
       wildcard !== undefined &&
       senderAllowed(wildcard.allowedSenders, msg.senderId);
@@ -160,6 +204,37 @@ export class GatewayEngine {
     });
   }
 
+  /**
+   * Dispatch a buffered batch as one turn, serialized on the conversation's
+   * tail so it queues behind any in-flight turn. The sole batch-eligible
+   * surface owns tagging + merge; the engine only posts the reply.
+   */
+  private async dispatchBatch(
+    adapterId: string,
+    conversationId: string,
+    conv: InstantiatedConversation,
+    batch: AdapterMessage[]
+  ): Promise<void> {
+    await runOnTail(conv, async () => {
+      const surface = conv.surfaces[0];
+      if (!surface?.handleBatch) return;
+      const result = await surface.handleBatch(batch);
+      if (result.handled) {
+        if (result.response) {
+          const adapter = this.adapters.get(adapterId);
+          if (adapter) {
+            await adapter.sendMessage(conversationId, result.response);
+          }
+        }
+        return;
+      }
+      logger.debug(
+        { adapterId, conversationId },
+        'Batch unhandled by any control surface'
+      );
+    });
+  }
+
   async stop(): Promise<void> {
     logger.info('Stopping gateway...');
     for (const [id, adapter] of this.adapters) {
@@ -167,6 +242,13 @@ export class GatewayEngine {
       await adapter.stop();
     }
     this.adapters.clear();
+
+    // Drop any pending batch flush before tearing down surfaces.
+    for (const byConv of this.controlSurfaces.values()) {
+      for (const conv of byConv.values()) {
+        conv.batcher?.dispose();
+      }
+    }
 
     // Dispose every instantiated surface so spawning surfaces terminate their
     // live agents instead of leaking them past shutdown.
@@ -239,6 +321,7 @@ export class GatewayEngine {
       targetBeaconId: this.resolveTargetBeaconId(spec),
       workingDir: cfg.workingDir as string | undefined,
       idleTimeoutMs: lifecycle?.idleTimeoutMs ?? this.config.idleTimeoutMs,
+      debounceMs: resolveDebounceMs(cfg, this.config),
     };
   }
 }

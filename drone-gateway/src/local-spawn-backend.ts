@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import { logger } from './logger.js';
 import { resolveDroneExecutable } from 'drone-core';
-import type { SpawnBackend } from './spawn-backend.js';
+import type { SendMessageOptions, SpawnBackend } from './spawn-backend.js';
 import type { SpawnSession, SpawnSessionOptions } from './types.js';
 
 /**
@@ -113,7 +113,11 @@ export class LocalSpawnBackend implements SpawnBackend {
     return session;
   }
 
-  async sendMessage(session: SpawnSession, message: string): Promise<string> {
+  async sendMessage(
+    session: SpawnSession,
+    message: string,
+    opts?: SendMessageOptions
+  ): Promise<string | null> {
     const managed = this.sessions.get(session.conversationId);
     if (!managed) {
       throw new Error(
@@ -128,7 +132,14 @@ export class LocalSpawnBackend implements SpawnBackend {
     }
 
     // Send the chat event as NDJSON
-    const chatEvent = JSON.stringify({ type: 'chat', message }) + '\n';
+    const chatEvent =
+      JSON.stringify({
+        type: 'chat',
+        message,
+        ...(opts?.systemReminder
+          ? { systemReminder: opts.systemReminder }
+          : {}),
+      }) + '\n';
     childProcess.stdin.write(chatEvent);
 
     // Read NDJSON events from stdout until we get turnComplete

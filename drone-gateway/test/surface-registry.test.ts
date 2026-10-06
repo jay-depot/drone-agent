@@ -63,6 +63,7 @@ describe('registerBuiltInSurfaces', () => {
         adapterId: 'a',
         conversationId: 'conv-1',
         text: 'hi',
+        conversationKind: 'dm',
       })
     ).resolves.toEqual({ response: null, handled: true });
     expect(surface.id).toBe('discard-conv-1');
@@ -103,6 +104,7 @@ describe('registerBuiltInSurfaces', () => {
       adapterId: 'a',
       conversationId: 'conv-1',
       text: 'hi',
+      conversationKind: 'dm',
     });
     expect(result).toEqual({ response: 'hello back', handled: true });
     expect(spawnBackend.spawnSession).toHaveBeenCalledWith('conv-1', 'coder', {
@@ -134,6 +136,7 @@ describe('registerBuiltInSurfaces', () => {
       adapterId: 'a',
       conversationId: 'conv-1',
       text: 'hi',
+      conversationKind: 'dm',
     });
     expect(spawnBackend.spawnSession).toHaveBeenCalledWith('conv-1', 'coder', {
       targetBeaconId: 'beacon-9',
@@ -161,6 +164,7 @@ describe('registerBuiltInSurfaces', () => {
       adapterId: 'a',
       conversationId: 'conv-1',
       text: 'hi',
+      conversationKind: 'dm',
     });
     expect(result).toEqual({ response: 'Error: boom', handled: true });
   });

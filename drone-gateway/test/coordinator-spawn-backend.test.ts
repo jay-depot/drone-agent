@@ -3,14 +3,14 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 // Mock CoordinatorClient at module level since CoordinatorSpawnBackend
 // creates its own instance internally
 const mockSpawnAgent = vi.fn();
-const mockSendMessage = vi.fn();
+const mockSendSessionMessage = vi.fn();
 const mockTerminateSpawn = vi.fn();
 
 vi.mock('../src/coordinator-client.js', () => ({
   CoordinatorClient: vi.fn().mockImplementation(function () {
     return {
       spawnAgent: mockSpawnAgent,
-      sendMessage: mockSendMessage,
+      sendSessionMessage: mockSendSessionMessage,
       terminateSpawn: mockTerminateSpawn,
     };
   }),
@@ -147,21 +147,26 @@ describe('CoordinatorSpawnBackend', () => {
   });
 
   describe('sendMessage', () => {
-    it('calls coordinatorClient.sendMessage with correct agentId and message', async () => {
+    it('delivers via sendSessionMessage and returns null (no synchronous reply)', async () => {
       mockSpawnAgent.mockResolvedValue({
         spawnId: 'spawn-abc',
         agentId: 'agent-xyz',
         status: 'running',
       });
-      mockSendMessage.mockResolvedValue('Hello back!');
-
+      mockSendSessionMessage.mockResolvedValue({
+        success: true,
+        delivered: true,
+      });
       const session = await backend.spawnSession('conv-1', 'coder', {
         targetBeaconId: 'beacon-1',
       });
       const response = await backend.sendMessage(session, 'Hi there');
-
-      expect(mockSendMessage).toHaveBeenCalledWith('agent-xyz', 'Hi there');
-      expect(response).toBe('Hello back!');
+      expect(mockSendSessionMessage).toHaveBeenCalledWith(
+        'agent-xyz',
+        'Hi there',
+        false
+      );
+      expect(response).toBeNull();
     });
   });
 

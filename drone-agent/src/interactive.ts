@@ -26,7 +26,16 @@ export type CreateSessionManager = ReturnType<typeof createSessionManager>;
  * Input event types for JSON mode (NDJSON input from stdin).
  */
 export type InputEvent =
-  { type: 'kickoff'; task: string } | { type: 'chat'; message: string };
+  | { type: 'kickoff'; task: string }
+  | {
+      type: 'chat';
+      message: string;
+      /**
+       * A non-persisted system instruction to deliver with this turn. Queued
+       * as a system reminder (never entered into session history).
+       */
+      systemReminder?: string;
+    };
 
 function getPersonaCapability(
   engine: CreateDronePluginEngine
@@ -272,6 +281,15 @@ export async function runJsonListenMode(
 
       // Process the message
       await engine.runHooks('onBeforePrompt');
+
+      // A per-turn system instruction (e.g. the room "decide whether to
+      // respond" prompt) rides the chat event as a non-persisted reminder.
+      if (
+        typeof event.systemReminder === 'string' &&
+        event.systemReminder.trim()
+      ) {
+        engine.queueSystemReminder(event.systemReminder);
+      }
 
       const conversationHandler: ConversationEventHandler = (
         convEvent: ConversationEvent
