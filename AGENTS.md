@@ -1,6 +1,6 @@
 # AGENTS.md — drone-agent
 
-This file describes how to work on the `drone-agent` project itself. The project is a monorepo (pnpm workspace) with seven packages.
+This file describes how to work on the `drone-agent` project itself. The project is a monorepo (pnpm workspace) with eight packages.
 
 **If you encounter any discrepancy between this document and the code, the code is the source of truth, and this document should be updated.**
 
@@ -16,7 +16,7 @@ If classification is ambiguous, ask for clarification before editing that specif
 
 ## Project Structure
 
-The project is a pnpm workspace with seven packages:
+The project is a pnpm workspace with eight packages:
 
 | Package                 | Purpose                                                                            |
 | ----------------------- | ---------------------------------------------------------------------------------- |
@@ -26,6 +26,7 @@ The project is a pnpm workspace with seven packages:
 | `drone-coordinator/`    | Global hub for swarm coordination (Fastify + SQLite).                              |
 | `drone-coordinator-ui/` | Web UI for the coordinator (React + Vite + Tailwind).                              |
 | `drone-swarm-common/`   | Shared utilities for beacon and coordinator.                                       |
+| `drone-swarm/`          | Standalone REST CLI for the swarm (session pipeline + wiki).                       |
 | `drone-gateway/`        | Chat API gateway (Matrix, Discord, Slack).                                         |
 | `skill-library/`        | Reusable skill `.md` files (not a workspace package).                              |
 
