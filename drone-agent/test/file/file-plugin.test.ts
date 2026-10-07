@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { stat, writeFile } from 'node:fs/promises';
 import { captureRegistration, enhanceFsError } from './setup.js';
 import { filePlugin } from '../../src/plugins/file.js';
 

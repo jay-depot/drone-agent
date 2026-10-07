@@ -1,12 +1,15 @@
-import path from 'node:path';
 import { filePlugin, __testing } from '../../src/plugins/file.js';
 import {
   createDefaultAgentConfig,
   toToolResultContent,
   type DronePluginRegistration,
+  type DroneToolResult,
 } from 'drone-core';
 import { silentLogger } from '../helpers.js';
-import type { ChangeZoneLine, PatchHunk } from '../../src/shared/patch-applier.js';
+import type {
+  ChangeZoneLine,
+  PatchHunk,
+} from '../../src/shared/patch-applier.js';
 
 export const { enhanceFsError } = __testing;
 

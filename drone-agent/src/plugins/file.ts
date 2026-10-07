@@ -14,6 +14,7 @@ import { FileGlobBlock } from '../tui/components/FileGlobBlock.js';
 import { renderDiffV2 } from '../shared/diff-renderer.js';
 import { applyPatch, type PatchError } from '../shared/patch-applier.js';
 import { parseUnifiedDiff } from '../shared/unified-diff-parser.js';
+import { withPathLock } from '../shared/file-lock.js';
 
 /**
  * Wraps a raw Node.js fs error (ENOENT, EACCES, EISDIR, ...) into a clearer
@@ -271,31 +272,34 @@ export const filePlugin: DronePlugin = {
           throw new Error('file__write requires a content string.');
         }
         const filePath = path.resolve(input.path.trim());
-        try {
-          await writeFile(filePath, input.content, 'utf-8');
-        } catch (err) {
-          throw enhanceFsError('file__write', filePath, err);
-        }
-
-        // Verify the write by reading back and comparing.
-        let verified = true;
-        let verificationError: string | undefined;
-        try {
-          const written = await readFile(filePath, 'utf-8');
-          if (written !== input.content) {
-            verified = false;
-            verificationError = `Content mismatch: wrote ${input.content.length} bytes but read back ${written.length} bytes`;
+        const fileContent = input.content;
+        return withPathLock(filePath, async () => {
+          try {
+            await writeFile(filePath, fileContent, 'utf-8');
+          } catch (err) {
+            throw enhanceFsError('file__write', filePath, err);
           }
-        } catch (err) {
-          verified = false;
-          verificationError = `Could not verify: ${err instanceof Error ? err.message : String(err)}`;
-        }
 
-        return JSON.stringify(
-          { path: filePath, written: true, verified, verificationError },
-          null,
-          2
-        );
+          // Verify the write by reading back and comparing.
+          let verified = true;
+          let verificationError: string | undefined;
+          try {
+            const written = await readFile(filePath, 'utf-8');
+            if (written !== fileContent) {
+              verified = false;
+              verificationError = `Content mismatch: wrote ${fileContent.length} bytes but read back ${written.length} bytes`;
+            }
+          } catch (err) {
+            verified = false;
+            verificationError = `Could not verify: ${err instanceof Error ? err.message : String(err)}`;
+          }
+
+          return JSON.stringify(
+            { path: filePath, written: true, verified, verificationError },
+            null,
+            2
+          );
+        });
       },
     });
 
@@ -374,92 +378,99 @@ export const filePlugin: DronePlugin = {
         }
 
         const filePath = path.resolve(input.path.trim());
-        let content: string;
-        try {
-          content = await readFile(filePath, 'utf-8');
-        } catch (err) {
-          throw enhanceFsError('file__apply_diff', filePath, err);
-        }
-        const lines = content.split('\n');
-
-        // Parse unified diff string into our internal hunk format
-        const hunks = parseUnifiedDiff(input.patch);
-
-        if (hunks.length === 0) {
-          throw new Error(
-            'file__apply_diff: no hunks found in the patch string.\n\n' +
-              'The patch did not contain any @@ ... @@ hunk headers. ' +
-              'Make sure the patch uses unified diff format, e.g.:\n' +
-              '@@ -5,7 +5,7 @@ function_name():\n' +
-              '     context\n' +
-              '-    old line\n' +
-              '+    new line\n\n' +
-              'Re-read the file with file__read to confirm the current contents, then try again.'
-          );
-        }
-
-        // Apply the patch (applies to a copy internally, returns patchedLines)
-        const result = applyPatch(lines, hunks);
-
-        // Build DiffHunkV2 array for rendering (only applied hunks).
-        // Each AppliedHunk carries its original hunkIndex so we can correlate.
-        const fuzzByIndex = new Map(
-          result.appliedHunks.map(a => [a.hunkIndex, a.fuzz])
-        );
-        const diffHunks = hunks
-          .map((hunk, i) => ({ hunk, i }))
-          .filter(({ i }) => fuzzByIndex.has(i))
-          .map(({ hunk, i }) => ({
-            anchors: hunk.anchors,
-            contextBefore: hunk.contextBefore,
-            changeZone: hunk.changeZone,
-            oldLines: hunk.oldLines,
-            newLines: hunk.newLines,
-            contextAfter: hunk.contextAfter,
-            fuzz: fuzzByIndex.get(i),
-          }));
-
-        // Always use plain text — the diff result goes to both the LLM (which
-        // shouldn't see ANSI codes) and the TUI (which does its own coloring
-        // in formatDiffOutput).
-        const diffResult = renderDiffV2(filePath, diffHunks, false);
-        const diffOutput = diffResult.plain;
-
-        // Partial success: write the file if at least one hunk succeeded.
-        // If zero hunks succeeded, do not write (nothing changed).
-        const anyApplied = result.appliedHunks.length > 0;
-        if (anyApplied) {
+        const patchText = input.patch;
+        return withPathLock(filePath, async () => {
+          let content: string;
           try {
-            await writeFile(filePath, result.patchedLines.join('\n'), 'utf-8');
+            content = await readFile(filePath, 'utf-8');
           } catch (err) {
             throw enhanceFsError('file__apply_diff', filePath, err);
           }
-        }
+          const lines = content.split('\n');
 
-        if (!result.success) {
-          const errorMessages = result.errors
-            .map(formatPatchError)
-            .join('\n\n');
-          const writeNote = anyApplied
-            ? `The file was written with the ${result.appliedHunks.length} successful hunk(s) applied. The failed hunk(s) were not applied.`
-            : `No changes were written.`;
-          throw new Error(
-            `file__apply_diff: ${result.errors.length} of ${hunks.length} hunk(s) failed to apply.\n` +
-              `${writeNote}\n\n${errorMessages}\n\n` +
-              `Tip: Re-read the file with file__read to confirm the current contents, then correct the patch and try again.`
+          // Parse unified diff string into our internal hunk format
+          const hunks = parseUnifiedDiff(patchText);
+
+          if (hunks.length === 0) {
+            throw new Error(
+              'file__apply_diff: no hunks found in the patch string.\n\n' +
+                'The patch did not contain any @@ ... @@ hunk headers. ' +
+                'Make sure the patch uses unified diff format, e.g.:\n' +
+                '@@ -5,7 +5,7 @@ function_name():\n' +
+                '     context\n' +
+                '-    old line\n' +
+                '+    new line\n\n' +
+                'Re-read the file with file__read to confirm the current contents, then try again.'
+            );
+          }
+
+          // Apply the patch (applies to a copy internally, returns patchedLines)
+          const result = applyPatch(lines, hunks);
+
+          // Build DiffHunkV2 array for rendering (only applied hunks).
+          // Each AppliedHunk carries its original hunkIndex so we can correlate.
+          const fuzzByIndex = new Map(
+            result.appliedHunks.map(a => [a.hunkIndex, a.fuzz])
           );
-        }
+          const diffHunks = hunks
+            .map((hunk, i) => ({ hunk, i }))
+            .filter(({ i }) => fuzzByIndex.has(i))
+            .map(({ hunk, i }) => ({
+              anchors: hunk.anchors,
+              contextBefore: hunk.contextBefore,
+              changeZone: hunk.changeZone,
+              oldLines: hunk.oldLines,
+              newLines: hunk.newLines,
+              contextAfter: hunk.contextAfter,
+              fuzz: fuzzByIndex.get(i),
+            }));
 
-        return JSON.stringify(
-          {
-            path: filePath,
-            patched: true,
-            summary: diffResult.summary,
-            diff: diffOutput,
-          },
-          null,
-          2
-        );
+          // Always use plain text — the diff result goes to both the LLM (which
+          // shouldn't see ANSI codes) and the TUI (which does its own coloring
+          // in formatDiffOutput).
+          const diffResult = renderDiffV2(filePath, diffHunks, false);
+          const diffOutput = diffResult.plain;
+
+          // Partial success: write the file if at least one hunk succeeded.
+          // If zero hunks succeeded, do not write (nothing changed).
+          const anyApplied = result.appliedHunks.length > 0;
+          if (anyApplied) {
+            try {
+              await writeFile(
+                filePath,
+                result.patchedLines.join('\n'),
+                'utf-8'
+              );
+            } catch (err) {
+              throw enhanceFsError('file__apply_diff', filePath, err);
+            }
+          }
+
+          if (!result.success) {
+            const errorMessages = result.errors
+              .map(formatPatchError)
+              .join('\n\n');
+            const writeNote = anyApplied
+              ? `The file was written with the ${result.appliedHunks.length} successful hunk(s) applied. The failed hunk(s) were not applied.`
+              : `No changes were written.`;
+            throw new Error(
+              `file__apply_diff: ${result.errors.length} of ${hunks.length} hunk(s) failed to apply.\n` +
+                `${writeNote}\n\n${errorMessages}\n\n` +
+                `Tip: Re-read the file with file__read to confirm the current contents, then correct the patch and try again.`
+            );
+          }
+
+          return JSON.stringify(
+            {
+              path: filePath,
+              patched: true,
+              summary: diffResult.summary,
+              diff: diffOutput,
+            },
+            null,
+            2
+          );
+        });
       },
     });
 
