@@ -124,8 +124,8 @@ For a project wiki, use this directory layout:
 │   ├── tool-call-loop.md
 │   ├── startup.md
 │   └── ...
-├── decisions/            ← Architecture Decision Records
-│   ├── 001-use-ink.md
+├── decisions/            ← Architecture Decision Records (pointer stubs; the
+│   ├── 001-use-ink.md       canonical copies live in the project's docs/adr/)
 │   ├── 002-plugin-system.md
 │   └── ...
 └── meta/                 ← Open questions, decisions, and declarations about how to use the project wiki itself

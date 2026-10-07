@@ -81,7 +81,7 @@ If any of the three is missing, skip the ADR. Use the format specified under "AD
 
 # ADR Format
 
-ADRs live in `docs/adr/` and use sequential numbering: `0001-slug.md`, `0002-slug.md`, etc.
+ADRs live in `docs/adr/` and use sequential numbering: `0001-slug.md`, `0002-slug.md`, etc. Match the width your repo already uses and continue that series rather than re-padding it — a repo already at `001-` continues `002-`, not `0002-` (renumbering existing files breaks inbound links).
 
 Create the `docs/adr/` directory lazily — only when the first ADR is needed.
 

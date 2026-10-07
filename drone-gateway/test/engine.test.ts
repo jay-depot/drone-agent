@@ -7,6 +7,11 @@ import type {
 } from '../src/types.js';
 import type { SpawnBackend } from '../src/spawn-backend.js';
 import { ROOM_INSTRUCTION } from '../src/chat-format.js';
+import {
+  UnknownAdapterError,
+  UnknownConversationError,
+  InjectionNotEnabledError,
+} from '../src/errors.js';
 
 vi.mock('../src/coordinator-client.js', () => ({
   CoordinatorClient: vi.fn().mockImplementation(function () {
@@ -91,9 +96,10 @@ function makeConvSpec(
 
 function conv(
   surfaces: ControlSurfaceSpec[],
-  allowedSenders?: string[]
+  allowedSenders?: string[],
+  injectionEnabled?: boolean
 ): ResolvedConversation {
-  return { allowedSenders, surfaces };
+  return { allowedSenders, surfaces, injectionEnabled };
 }
 
 type SentMessage = { conversationId: string; text: string };
@@ -748,6 +754,85 @@ describe('GatewayEngine', () => {
 
       await engine.stop();
       expect(backend.terminateSession).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('injection', () => {
+    function injectionConfig(): GatewayConfig {
+      return makeMinimalConfig({
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              ['!room:server', conv([], undefined, true)],
+              ['!plain:server', conv([makeConvSpec('discard')])],
+              ['*', conv([makeConvSpec('swarm-console')])],
+            ]),
+          }),
+        ],
+      });
+    }
+
+    async function startEngine(): Promise<{
+      engine: InstanceType<typeof GatewayEngine>;
+      sent: SentMessage[];
+    }> {
+      const sent: SentMessage[] = [];
+      const engine = new GatewayEngine(injectionConfig(), mockSpawnBackend);
+      await engine.start();
+      const matrix = (await import('../src/adapters/matrix.js'))
+        .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
+      const adapter = matrix.mock.results.at(-1)?.value as {
+        sendMessage: ReturnType<typeof vi.fn>;
+      };
+      adapter.sendMessage.mockImplementation(
+        async (conversationId: string, text: string) => {
+          sent.push({ conversationId, text });
+        }
+      );
+      return { engine, sent };
+    }
+
+    it('posts directly to the adapter for an injection target', async () => {
+      const { engine, sent } = await startEngine();
+      await engine.injectMessage('matrix-1', '!room:server', 'hello');
+      expect(sent).toEqual([{ conversationId: '!room:server', text: 'hello' }]);
+    });
+
+    it('throws UnknownAdapterError for an unknown adapter', async () => {
+      const { engine } = await startEngine();
+      await expect(
+        engine.injectMessage('nope', '!room:server', 'x')
+      ).rejects.toBeInstanceOf(UnknownAdapterError);
+    });
+
+    it('throws UnknownConversationError for an unknown conversation', async () => {
+      const { engine } = await startEngine();
+      await expect(
+        engine.injectMessage('matrix-1', '!missing:server', 'x')
+      ).rejects.toBeInstanceOf(UnknownConversationError);
+    });
+
+    it('throws InjectionNotEnabledError for a non-opted-in conversation', async () => {
+      const { engine } = await startEngine();
+      await expect(
+        engine.injectMessage('matrix-1', '!plain:server', 'x')
+      ).rejects.toBeInstanceOf(InjectionNotEnabledError);
+    });
+
+    it('never treats the wildcard as injectable', async () => {
+      const { engine } = await startEngine();
+      await expect(
+        engine.injectMessage('matrix-1', '*', 'x')
+      ).rejects.toBeInstanceOf(InjectionNotEnabledError);
+    });
+
+    it('lists adapter ids and injectable conversations', async () => {
+      const { engine } = await startEngine();
+      expect(engine.listAdapterIds()).toEqual(['matrix-1']);
+      expect(engine.listInjectableConversations()).toEqual([
+        { adapterId: 'matrix-1', conversationId: '!room:server' },
+      ]);
     });
   });
 });

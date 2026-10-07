@@ -307,6 +307,9 @@ importers:
       drone-core:
         specifier: workspace:*
         version: link:../drone-core
+      fastify:
+        specifier: ^5.12.5
+        version: 5.12.5
       matrix-js-sdk:
         specifier: ^38.2.0
         version: 38.2.0

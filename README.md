@@ -24,11 +24,12 @@ The `drone` agent platform aims to be "the Arch of AI agents": minimalist out of
 - `drone-coordinator`: The `drone-coordinator` manages communication between `drone-beacon` instances, including cross-beacon message relay and broadcast. It also provides a web UI to monitor any running agents in the swarm, and task-manage them as well as interact with a coordinator management persona. The coordinator also provides swarm-wide personas, skills, and memory store.
 - `drone-coordinator-ui`: A React + Vite + Tailwind web UI for the coordinator, served by the coordinator server.
 - `drone-swarm-common`: Shared utilities for beacon and coordinator, including TLS certificate management, wiki filesystem storage, and database helpers.
+- `drone-swarm`: A standalone REST CLI for the swarm — drives the session pipeline (list/log/transcript/process/archive/restore) and the wiki (read/write/search) over the beacon or coordinator REST API. Used by the memory-ingestion pipeline on the coordinator host.
 - `drone-gateway` (in testing): A standalone service that can connect to chat APIs (Matrix, Discord, Slack, etc.) and relay messages into assigned personas in the swarm, launching new agent instances when needed to handle conversations. Currently in testing with Matrix adapter support.
 
 ## Current State
 
-The `drone-agent`, `drone-beacon`, and `drone-coordinator` are all implemented and functional. The swarm mode is operational with agents connecting to beacons, and beacons coordinating through the coordinator. Cross-beacon messaging, shared session storage, swarm-wide insights and principles, and a swarm knowledge base (LLM Wiki) are all implemented. The gateway layer is in testing and the web UI is functional.
+The `drone-agent`, `drone-beacon`, and `drone-coordinator` are all implemented and functional, as are `drone-core`, `drone-swarm-common`, `drone-swarm`, and `drone-coordinator-ui`. The swarm mode is operational with agents connecting to beacons, and beacons coordinating through the coordinator. Cross-beacon messaging, shared session storage, swarm-wide insights and principles, and a swarm knowledge base (LLM Wiki) are all implemented. The gateway layer (`drone-gateway`) is in testing, with Matrix adapter support.
 
 ## Installation
 

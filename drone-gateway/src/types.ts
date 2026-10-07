@@ -85,11 +85,24 @@ export interface ResolvedServiceAdapter {
 export interface ResolvedConversation {
   allowedSenders?: string[];
   surfaces: ControlSurfaceSpec[];
+  /** Opt-in for outbound message injection from external processes. */
+  injectionEnabled?: boolean;
 }
 
 // === Config Types ===
 
 export type SpawnBackendType = 'local' | 'coordinator';
+
+/**
+ * Loopback control API for external-process message injection. Disabled by
+ * default; when enabled and no token is set, loopback callers are trusted.
+ */
+export interface ControlApiConfig {
+  enabled: boolean;
+  host: string;
+  port: number;
+  token?: string;
+}
 
 export interface GatewayConfig {
   coordinatorUrl: string;
@@ -112,6 +125,7 @@ export interface GatewayConfig {
    */
   batch?: { debounceMs?: number };
   agentPath?: string; // path to drone-agent binary (local mode)
+  controlApi?: ControlApiConfig;
   serviceAdapters: ResolvedServiceAdapter[];
 }
 

@@ -14,5 +14,13 @@
   {
     "timestamp": "2026-10-05T23:17:39.541Z",
     "insight": "`pnpm run lint` = `eslint --fix` then `prettier --write .` repo-wide, and the only `.prettierignore` entry is `dist/`. So every lint run reformats `pnpm-lock.yaml` (~5800-line reflow) and adds trailing newlines to `.drone-agent/insights/*.json` — none of which belong to your change and none of which HEAD is clean over. After linting and before committing, run `git checkout HEAD -- pnpm-lock.yaml .drone-agent/insights/` (plus any pre-existing memory files prettier touched) and keep only reformats of files you actually changed. Note this is already recorded as an insight in `.drone-agent/insights/project/tooling.json` — it happened again this session, so it is a recurring trap, not a one-off."
+  },
+  {
+    "timestamp": "2026-10-07T01:17:14.658Z",
+    "insight": "Recurring trap confirmed again: `pnpm run lint` runs `prettier --write .` repo-wide (only `.prettierignore` entry is `dist/`), so every lint run reformats `pnpm-lock.yaml` (~5800-line reflow) and touches `.drone-agent/` files that HEAD is otherwise clean over. Sequence that works: run lint, then `git checkout HEAD -- pnpm-lock.yaml .drone-agent/` (plus any other pre-existing files prettier touched), THEN restore the legitimate lockfile change with `pnpm install --no-frozen-lockfile` (which re-adds only the real specifier deltas, e.g. fastify@^5.12.5) and verify with `pnpm install --frozen-lockfile`. Do this before committing so the lockfile diff is minimal and CI's frozen-lockfile install passes."
+  },
+  {
+    "timestamp": "2026-10-07T02:10:48.517Z",
+    "insight": "Stale editor buffers can silently clobber agent edits (confirmed cause, 2026-10-06): during the ADR-link session, `drone-gateway/CONTEXT.md` was found reverted in the working tree to its pre-feature `55eb2d74` content (sha1-identical to `55eb2d74:drone-gateway/CONTEXT.md`, 28 injection-glossary lines dropped) while HEAD `d950a1ce` held the correct content. Root cause: the user had the file open in VSCode with a stale (pre-feature) buffer, and saving/auto-saving wrote that old content back over the agent's edits. Recovery: `git checkout HEAD -- <file>` (or re-apply the edit). Mitigation: when editing tracked files, prefer the agent's edit and re-verify with `git diff`/`sha1sum` right before committing; if a file the agent never touched shows as modified, suspect an external editor buffer rather than corruption. Do not attribute such reverts to the tool."
   }
 ]
