@@ -22,5 +22,9 @@
   {
     "timestamp": "2026-10-07T02:10:48.517Z",
     "insight": "Stale editor buffers can silently clobber agent edits (confirmed cause, 2026-10-06): during the ADR-link session, `drone-gateway/CONTEXT.md` was found reverted in the working tree to its pre-feature `55eb2d74` content (sha1-identical to `55eb2d74:drone-gateway/CONTEXT.md`, 28 injection-glossary lines dropped) while HEAD `d950a1ce` held the correct content. Root cause: the user had the file open in VSCode with a stale (pre-feature) buffer, and saving/auto-saving wrote that old content back over the agent's edits. Recovery: `git checkout HEAD -- <file>` (or re-apply the edit). Mitigation: when editing tracked files, prefer the agent's edit and re-verify with `git diff`/`sha1sum` right before committing; if a file the agent never touched shows as modified, suspect an external editor buffer rather than corruption. Do not attribute such reverts to the tool."
+  },
+  {
+    "timestamp": "2026-10-07T04:04:29.863Z",
+    "insight": "`pnpm run lint` runs Prettier repo-wide, and the repo is NOT Prettier-clean at HEAD. On 2026-10-07 (branch fix/apply-diff-concurrency) a single `pnpm run lint` reformatted 218 unrelated files — every ADR under docs/adr/ (YAML frontmatter `related:` lists reflowed), drone-{beacon,coordinator}/README.md, and pnpm-lock.yaml — on a tree that was verifiably git-clean before the run. So: (a) `prettier --check docs/adr/index.md` fails at HEAD, confirming the drift is pre-existing, not introduced by any one change; (b) the AGENTS.md instruction \"run lint, then re-read your files\" is insufficient — a lint run silently creates a 200+ file staging surface, and a naive `git commit -a` would sweep it into the commit. Mitigation used: after lint, diff against an explicit allowlist of intended paths and `git checkout --` everything else. Worth a dedicated repo-wide `prettier --write` cleanup commit at some point so lint stops manufacturing churn."
   }
 ]

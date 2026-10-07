@@ -357,3 +357,55 @@ All nine must pass before the plan is "done".
 - Swarm wiki `drone-agent-tool-call-serialization-mechanisms` — the full inventory of serialization mechanisms (and the confirmed absence of a generic exclusive-tool concept).
 - Swarm wiki `drone-agent-file-apply-diff-tool-internals` — the apply_diff read→patch→write internals + result contract.
 - `test/self-improvement/` — the test-split precedent (session `agent-1783380256406`).
+
+---
+
+## Completion Summary (implemented 2026-10-07, branch `fix/apply-diff-concurrency`)
+
+**Status: COMPLETE — all 12 decisions implemented, all 9 validation criteria pass.**
+
+Commits:
+- `dc290c79` — `refactor(test): split file.test.ts into test/file/ topic files` (Step 2b, pre-fix).
+- `751cafad` — `fix(file): serialize per-file apply_diff/write to stop parallel patch race (#237)`.
+
+### What was done
+- **Extracted** `withFileLock` from `plugins/self-improvement/io.ts` to the new
+  `src/shared/file-lock.ts` (no re-export; one home). Repointed
+  `self-improvement/file-engine.ts` to the shared module. Added `withPathLock(filePath, task)`
+  keyed on `path.resolve(filePath).toLowerCase()`.
+- **Wrapped** the full read-modify-write span of `file__write` (write → verify read-back)
+  and `file__apply_diff` (read → parse → `applyPatch` → write) in `withPathLock`. Reads
+  (`read`/`read_image`/`list`/`glob`) stay unlocked. Always-on, in-process, silent, tool-site.
+- **Split** the 1168-line `test/file.test.ts` into `test/file/`: `setup.ts`,
+  `file-plugin.test.ts` (14), `patch-applier.test.ts` (21), `apply-diff.test.ts` (8) —
+  43 tests preserved verbatim.
+- **Added** `test/file/concurrency.test.ts` (8 tests): helper unit tests (`maxActive`
+  serialization, throw-releases-key, `withPathLock` normalization) + integration
+  regressions (6 concurrent same-file `apply_diff` all survive; 8 concurrent `write` all
+  `verified: true`; different files independent; mixed `write`+`apply_diff` coherent).
+- **Wrote** `docs/adr/237-serialize-file-tool-writes.md` + index row.
+
+### Validation results
+1. LSP clean on every touched file + workspace.
+2. `pnpm typecheck` exit 0. 3. `pnpm -r run build` exit 0 (8 packages).
+4. `pnpm run lint` exit 0. 5. `pnpm run test` — **3680 passed / 14 skipped / 0 failed**
+   (271 files; `test/file/` contributes 51).
+6. RED→GREEN proof recorded in the ADR (pre-fix the same-file tests fail: only the last
+   `apply_diff` survives; `verified:false` for concurrent writes).
+7. Behavioral check: 3 parallel same-file `apply_diff` → all 3 hunks present, all report
+   `patched:true`.
+8. No new config surface. 9. Single home for `withFileLock`.
+
+### Plan deviations (documented in the ADR)
+- **Step ordering:** the plan put the concurrency test file (Step 3) before the shared helper
+  module (Step 4), but the test imports the helper. The module was created first; the RED gate
+  was observed with the helper present and the tools unwrapped. Net effect identical.
+- **Prettier churn:** `pnpm run lint` reformats repo-wide and reformatted 218 unrelated files
+  (all ADRs, READMEs, `pnpm-lock.yaml`) — a pre-existing repo-hygiene drift (the tree was
+  git-clean but not Prettier-clean at session start; `docs/adr/index.md` fails `prettier
+  --check` at HEAD too). The unrelated churn was reverted so the commit is scoped to the plan's
+  files; only my own files were kept.
+- **Pre-existing flake:** `test/self-improvement/` intermittently fails under full-suite
+  file-parallelism (`ENOENT`/`ENOTEMPTY` on `Date.now()`-named temp dirs + `process.chdir`),
+  varying 3–10 failures run to run. It fails identically with this change stashed → not caused
+  by the lock move. The full fast suite passed cleanly on the validation run.
