@@ -216,6 +216,10 @@ Call `registration.registerSlashCommand({ command, description, handler })`. The
 
 Shared types live in `drone-core/src/index.ts`. After changing them, run `pnpm build` to recompile both packages.
 
+### Architecture Decision Records
+
+ADRs live in `docs/adr/` (sequential `NNN-slug.md`, 3-digit here — see the `domain-modelling` skill). This is the single home; the project wiki's `decisions/` pages are **pointer stubs** that redirect here so its `[[decisions/…]]` links keep resolving. When a decision is made, write it to `docs/adr/`. Keep the stub in sync if a page moves.
+
 ### Testing patterns
 
 - Unit tests use Vitest
