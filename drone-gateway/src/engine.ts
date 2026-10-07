@@ -13,6 +13,11 @@ import { SurfaceRegistry } from './surfaces/registry.js';
 import { registerBuiltInSurfaces } from './surfaces/builtins.js';
 import type { SurfaceContext } from './surfaces/types.js';
 import { MessageBatcher } from './batcher.js';
+import {
+  UnknownAdapterError,
+  UnknownConversationError,
+  InjectionNotEnabledError,
+} from './errors.js';
 
 /** Default batch debounce (ms) when neither the surface nor the gateway sets one. */
 export const DEFAULT_DEBOUNCE_MS = 500;
@@ -25,6 +30,8 @@ type InstantiatedConversation = {
   surfaces: DroneControlSurface[];
   tail: Promise<unknown>;
   batcher?: MessageBatcher;
+  /** True when this conversation opted into external-process injection. */
+  injectionEnabled: boolean;
 };
 
 /**
@@ -124,6 +131,7 @@ export class GatewayEngine {
           allowedSenders: conv.allowedSenders,
           surfaces,
           tail: Promise.resolve(),
+          injectionEnabled: conv.injectionEnabled === true,
         };
         if (eligible) {
           record.batcher = new MessageBatcher(
@@ -266,6 +274,48 @@ export class GatewayEngine {
       }
     }
     this.controlSurfaces.clear();
+  }
+
+  /** Adapter ids currently started. Backs GET /status. */
+  listAdapterIds(): string[] {
+    return [...this.adapters.keys()];
+  }
+
+  /** Conversations that opted into injection. Backs GET /conversations. */
+  listInjectableConversations(): Array<{
+    adapterId: string;
+    conversationId: string;
+  }> {
+    const out: Array<{ adapterId: string; conversationId: string }> = [];
+    for (const [adapterId, byConv] of this.controlSurfaces) {
+      for (const [conversationId, conv] of byConv) {
+        if (conv.injectionEnabled) out.push({ adapterId, conversationId });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Post text into a conversation from an external process. Outbound only:
+   * the message is handed straight to the adapter and does NOT go through any
+   * control surface or the per-conversation dispatch tail (it may interleave
+   * with a live agent turn).
+   */
+  async injectMessage(
+    adapterId: string,
+    conversationId: string,
+    text: string
+  ): Promise<void> {
+    const byConv = this.controlSurfaces.get(adapterId);
+    if (!byConv) throw new UnknownAdapterError(adapterId);
+    const conv = byConv.get(conversationId);
+    if (!conv) throw new UnknownConversationError(adapterId, conversationId);
+    if (!conv.injectionEnabled) {
+      throw new InjectionNotEnabledError(adapterId, conversationId);
+    }
+    const adapter = this.adapters.get(adapterId);
+    if (!adapter) throw new UnknownAdapterError(adapterId);
+    await adapter.sendMessage(conversationId, text);
   }
 
   private async createAdapter(

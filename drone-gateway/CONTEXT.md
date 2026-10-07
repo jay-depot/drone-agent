@@ -96,6 +96,26 @@ _Avoid_: group prompt, room prompt
 The HTTP client used by the gateway to communicate with the coordinator's web port (8080). Uses Bearer token authentication. Provides methods for spawning agents, listing beacons, and managing spawns.
 _Avoid_: Coordinator API, coordinator proxy, coordinator connector
 
+**Injection**:
+Outbound posting of text into a conversation by an external process (a cron job, CI hook, or script). It bypasses control surfaces entirely — the text is handed straight to the adapter's `sendMessage` — and it does **not** serialize on the conversation's dispatch tail, so it may interleave with a live agent turn.
+_Avoid_: push, publish, post
+
+**Injection API**:
+The daemon's loopback HTTP control API (`POST /inject`, `GET /status`, `GET /conversations`), served by `ControlApiServer`. Disabled by default (`controlApi.enabled`); when enabled and no `token` is set, loopback callers are trusted. Typed errors map to statuses: unknown adapter/conversation → 404, conversation not opted in → 403, bad body → 400.
+_Avoid_: control endpoint, admin API, injection endpoint
+
+**Injection Target**:
+A conversation whose file sets `injection: { enabled: true }`. These are the only conversations the **Injection API** will post to. The **Wildcard Control Surface** (`*`) is never an injection target — an `injection` block on `_default_.json` is ignored with a warning.
+_Avoid_: injectable conversation, injection sink
+
+**Agent Helper**:
+The `drone-gateway-inject run-agent` subcommand. It spawns a local one-shot `drone-agent --once --output-json` child, writes a `{ type: "kickoff", task }` event to the child's stdin (then closes it), and injects the child's **final chat message** (the last `assistantMessage`) via the **Injection API**. With `--no-response-sentinel`, a final message equal to the **No-Response Sentinel** injects nothing and exits 0.
+_Avoid_: runner, agent launcher
+
+**Message Helper**:
+The `drone-gateway-inject inject-message` subcommand. It injects a literal string via the **Injection API** with no LLM involved.
+_Avoid_: poster, message sender
+
 ## Config Layout
 
 ```
@@ -110,6 +130,12 @@ _Avoid_: Coordinator API, coordinator proxy, coordinator connector
     idleTimeoutMs?: number            # Gateway-wide default idle timeout (ms)
                                       # for spawning surfaces; 0 disables.
                                       # Overridden per-surface (see below).
+    controlApi?: {                    # Opt-in inbound control API for external-process
+      enabled: boolean               #   injection. Disabled by default.
+      host: string                   # Default 127.0.0.1 (loopback only).
+      port: number                   # Default 8090.
+      token?: string                 # Optional Bearer token; unset = trust loopback.
+    }
     agentPath?: string                # For local spawn backend
   adapters/
     <adapter-id>/
@@ -135,6 +161,8 @@ _Avoid_: Coordinator API, coordinator proxy, coordinator connector
           allowedSenders?: string[]  # Optional: only these senderIds match this
                                      # conversation; others fall through to the
                                      # wildcard. Unset = every sender allowed.
+          injection?: { enabled: boolean }  # Opt this conversation into external-process
+                                            # injection. Not allowed on _default_.
           controlSurfaces: [
             { type: "persona-assignment", personaId: "...",
               config: {

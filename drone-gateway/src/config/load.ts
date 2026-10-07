@@ -11,6 +11,7 @@ import type {
   ResolvedConversation,
   ControlSurfaceSpec,
   SpawnBackendType,
+  ControlApiConfig,
 } from '../types.js';
 
 const MAX_WORKING_DIR_LENGTH = 4096;
@@ -148,6 +149,79 @@ function sanitizeSurfaceConfig(
   return rest;
 }
 
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
+
+/**
+ * Parse the optional `controlApi` block. Disabled unless explicitly enabled;
+ * a non-loopback host while enabled is warned about (the API is otherwise
+ * unauthenticated and should carry a token).
+ */
+function parseControlApi(
+  raw: unknown,
+  warn: (msg: string) => void
+): ControlApiConfig {
+  const defaults: ControlApiConfig = {
+    enabled: false,
+    host: '127.0.0.1',
+    port: 8090,
+  };
+  if (raw === undefined) return defaults;
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    warn('controlApi is not an object; ignoring');
+    return defaults;
+  }
+  const bag = raw as Record<string, unknown>;
+
+  let enabled = defaults.enabled;
+  if (bag.enabled !== undefined) {
+    if (typeof bag.enabled !== 'boolean') {
+      warn('controlApi.enabled must be a boolean; ignoring');
+    } else {
+      enabled = bag.enabled;
+    }
+  }
+
+  let host = defaults.host;
+  if (bag.host !== undefined) {
+    if (typeof bag.host !== 'string' || bag.host.trim() === '') {
+      warn('controlApi.host must be a non-empty string; using default');
+    } else {
+      host = bag.host;
+    }
+  }
+  if (enabled && !LOOPBACK_HOSTS.has(host)) {
+    warn(
+      `controlApi.host "${host}" is not loopback; configure controlApi.token — ` +
+        `the API is otherwise unauthenticated`
+    );
+  }
+
+  let port = defaults.port;
+  if (bag.port !== undefined) {
+    if (
+      typeof bag.port !== 'number' ||
+      !Number.isInteger(bag.port) ||
+      bag.port < 1 ||
+      bag.port > 65535
+    ) {
+      warn('controlApi.port must be an integer in 1–65535; using default');
+    } else {
+      port = bag.port;
+    }
+  }
+
+  let token: string | undefined;
+  if (bag.token !== undefined) {
+    if (typeof bag.token !== 'string' || bag.token.trim() === '') {
+      warn('controlApi.token must be a non-empty string; ignoring');
+    } else {
+      token = bag.token;
+    }
+  }
+
+  return { enabled, host, port, token };
+}
+
 /**
  * Load and validate the full gateway configuration from a folder hierarchy.
  *
@@ -271,6 +345,9 @@ export async function loadGatewayConfig(
         ? { debounceMs: batchDebounceMs }
         : undefined,
     agentPath: gatewayConfig.agentPath as string | undefined,
+    controlApi: parseControlApi(gatewayConfig.controlApi, msg =>
+      logger.warn(`Config field ${msg}.`)
+    ),
     serviceAdapters: [],
   };
 
@@ -389,17 +466,17 @@ async function loadAdapter(
     }
 
     // Read control surfaces
-    const rawSurfaces = convData.controlSurfaces as unknown[];
-    if (!Array.isArray(rawSurfaces) || rawSurfaces.length === 0) {
+    const rawSurfaces = convData.controlSurfaces;
+    if (rawSurfaces !== undefined && !Array.isArray(rawSurfaces)) {
       logger.warn(
         { adapterId, file, convId },
-        `Conversation "${convId}" has no controlSurfaces array`
+        `Conversation "${convId}" controlSurfaces is not an array; ignoring it`
       );
-      continue;
     }
+    const surfaceEntries = Array.isArray(rawSurfaces) ? rawSurfaces : [];
 
     const specs: ControlSurfaceSpec[] = [];
-    for (const raw of rawSurfaces) {
+    for (const raw of surfaceEntries) {
       const spec = raw as Record<string, unknown>;
       if (!spec.type || typeof spec.type !== 'string') {
         logger.warn(
@@ -420,12 +497,21 @@ async function loadAdapter(
       });
     }
 
-    if (specs.length > 0) {
-      conversations.set(convId, {
-        allowedSenders: parseAllowedSenders(convData, adapterId, file),
-        surfaces: specs,
-      });
+    const injectionEnabled = parseInjection(convData, adapterId, file, convId);
+
+    if (specs.length === 0 && !injectionEnabled) {
+      logger.warn(
+        { adapterId, file, convId },
+        `Conversation "${convId}" has no controlSurfaces and no injection opt-in; skipping`
+      );
+      continue;
     }
+
+    conversations.set(convId, {
+      allowedSenders: parseAllowedSenders(convData, adapterId, file),
+      surfaces: specs,
+      injectionEnabled,
+    });
   }
 
   return {
@@ -460,4 +546,44 @@ function parseAllowedSenders(
     return undefined;
   }
   return raw as string[];
+}
+
+/**
+ * Reads the optional `injection.enabled` opt-in from a conversation file. It
+ * must be a boolean `true`; anything else is warned about and ignored. The
+ * wildcard conversation is never an injection target.
+ */
+function parseInjection(
+  convData: Record<string, unknown>,
+  adapterId: string,
+  file: string,
+  convId: string
+): boolean {
+  const raw = convData.injection;
+  if (raw === undefined) return false;
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    logger.warn(
+      { adapterId, file, convId },
+      'injection is not an object; ignoring'
+    );
+    return false;
+  }
+  const enabled = (raw as Record<string, unknown>).enabled;
+  if (enabled === undefined) return false;
+  if (typeof enabled !== 'boolean') {
+    logger.warn(
+      { adapterId, file, convId },
+      'injection.enabled must be a boolean; ignoring'
+    );
+    return false;
+  }
+  if (!enabled) return false;
+  if (convId === '*') {
+    logger.warn(
+      { adapterId, file, convId },
+      'injection.enabled is not allowed on the wildcard conversation; ignoring'
+    );
+    return false;
+  }
+  return true;
 }

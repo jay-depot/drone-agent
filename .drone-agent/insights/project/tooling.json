@@ -14,5 +14,9 @@
   {
     "timestamp": "2026-10-05T23:17:39.541Z",
     "insight": "`pnpm run lint` = `eslint --fix` then `prettier --write .` repo-wide, and the only `.prettierignore` entry is `dist/`. So every lint run reformats `pnpm-lock.yaml` (~5800-line reflow) and adds trailing newlines to `.drone-agent/insights/*.json` — none of which belong to your change and none of which HEAD is clean over. After linting and before committing, run `git checkout HEAD -- pnpm-lock.yaml .drone-agent/insights/` (plus any pre-existing memory files prettier touched) and keep only reformats of files you actually changed. Note this is already recorded as an insight in `.drone-agent/insights/project/tooling.json` — it happened again this session, so it is a recurring trap, not a one-off."
+  },
+  {
+    "timestamp": "2026-10-07T01:17:14.658Z",
+    "insight": "Recurring trap confirmed again: `pnpm run lint` runs `prettier --write .` repo-wide (only `.prettierignore` entry is `dist/`), so every lint run reformats `pnpm-lock.yaml` (~5800-line reflow) and touches `.drone-agent/` files that HEAD is otherwise clean over. Sequence that works: run lint, then `git checkout HEAD -- pnpm-lock.yaml .drone-agent/` (plus any other pre-existing files prettier touched), THEN restore the legitimate lockfile change with `pnpm install --no-frozen-lockfile` (which re-adds only the real specifier deltas, e.g. fastify@^5.12.5) and verify with `pnpm install --frozen-lockfile`. Do this before committing so the lockfile diff is minimal and CI's frozen-lockfile install passes."
   }
 ]

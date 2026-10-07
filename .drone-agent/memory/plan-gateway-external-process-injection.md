@@ -10,12 +10,11 @@ tags:
   - helper-cli
   - one-shot-agent
 created: 2026-10-07T00:57:40.780Z
-updated: 2026-10-07T00:57:40.780Z
+updated: 2026-10-07T01:18:00.000Z
 ---
 
 # Plan: Gateway external-process injection + one-shot agent helper
 
-**Status:** READY FOR EXECUTION
 **Created:** 2026-10-06 (plan session)
 **Target package:** `drone-gateway` (with a `drone-core` reuse point)
 

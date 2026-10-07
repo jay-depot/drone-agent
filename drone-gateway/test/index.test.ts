@@ -47,6 +47,17 @@ vi.mock('../src/engine.js', () => ({
   }),
 }));
 
+const mockControlApiStart = vi.fn();
+const mockControlApiStop = vi.fn();
+vi.mock('../src/control-api/server.js', () => ({
+  ControlApiServer: vi.fn().mockImplementation(function () {
+    return {
+      start: mockControlApiStart,
+      stop: mockControlApiStop,
+    };
+  }),
+}));
+
 const { parseArgs, loadConfig, createSpawnBackend, main } =
   await import('../src/index.js');
 
@@ -207,5 +218,20 @@ describe('main', () => {
 
     expect(mockExit).toHaveBeenCalledWith(1);
     expect(mockEngineStop).toHaveBeenCalled();
+  });
+
+  it('starts the control API when controlApi is enabled', async () => {
+    mockEngineStart.mockResolvedValue(undefined);
+    mockLoadGatewayConfig.mockResolvedValue({
+      coordinatorUrl: 'http://localhost:8080',
+      spawnBackend: 'local' as const,
+      serviceAdapters: [],
+      controlApi: { enabled: true, host: '127.0.0.1', port: 8090 },
+    });
+
+    // main() never resolves (it awaits a never-settling promise); assert the
+    // server was started without awaiting completion.
+    void main();
+    await vi.waitFor(() => expect(mockControlApiStart).toHaveBeenCalled());
   });
 });

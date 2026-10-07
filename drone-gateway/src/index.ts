@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { logger } from './logger.js';
@@ -8,6 +9,7 @@ import { CoordinatorSpawnBackend } from './coordinator-spawn-backend.js';
 import { CoordinatorClient } from './coordinator-client.js';
 import { loadGatewayConfig } from './config/load.js';
 import { cleanupAdapter } from './cleanup.js';
+import { ControlApiServer } from './control-api/server.js';
 import type { GatewayConfig, SpawnBackendType } from './types.js';
 import type { SpawnBackend } from './spawn-backend.js';
 
@@ -100,6 +102,18 @@ export function createSpawnBackend(config: GatewayConfig): SpawnBackend {
   }
 }
 
+async function readGatewayVersion(): Promise<string> {
+  try {
+    const raw = await readFile(
+      new URL('../package.json', import.meta.url),
+      'utf-8'
+    );
+    return (JSON.parse(raw) as { version?: string }).version ?? 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 export async function main(): Promise<void> {
   const cliConfig = parseArgs();
 
@@ -128,8 +142,11 @@ export async function main(): Promise<void> {
       : undefined;
   const engine = new GatewayEngine(config, spawnBackend, swarm);
 
+  let controlApi: ControlApiServer | undefined;
+
   const shutdown = async () => {
     logger.info('Shutting down...');
+    await controlApi?.stop();
     await engine.stop();
     process.exit(0);
   };
@@ -139,11 +156,22 @@ export async function main(): Promise<void> {
 
   try {
     await engine.start();
+
+    if (config.controlApi?.enabled) {
+      controlApi = new ControlApiServer({
+        engine,
+        config: config.controlApi,
+        version: await readGatewayVersion(),
+      });
+      await controlApi.start();
+    }
+
     logger.info('Gateway started successfully');
     // Keep running until SIGINT/SIGTERM
     await new Promise(() => {}); // never resolves
   } catch (err) {
     logger.error(err, 'Failed to start gateway');
+    await controlApi?.stop();
     await engine.stop();
     process.exit(1);
   }

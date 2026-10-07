@@ -468,3 +468,172 @@ describe('loadGatewayConfig idleTimeoutMs validation', () => {
     expect(config.idleTimeoutMs).toBeUndefined();
   });
 });
+
+describe('loadGatewayConfig controlApi parsing', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(path.join(os.tmpdir(), 'gateway-control-api-test-'));
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  async function load(config: Record<string, unknown>): Promise<GatewayConfig> {
+    const configPath = path.join(tmpDir, 'config.json');
+    writeFileSync(configPath, JSON.stringify(config));
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    return loadGatewayConfig(configPath);
+  }
+
+  it('defaults controlApi when absent', async () => {
+    const config = await load({ spawnBackend: 'local' });
+    expect(config.controlApi).toEqual({
+      enabled: false,
+      host: '127.0.0.1',
+      port: 8090,
+    });
+  });
+
+  it('parses a valid controlApi block', async () => {
+    const config = await load({
+      spawnBackend: 'local',
+      controlApi: { enabled: true, host: 'localhost', port: 9000, token: 't' },
+    });
+    expect(config.controlApi).toEqual({
+      enabled: true,
+      host: 'localhost',
+      port: 9000,
+      token: 't',
+    });
+  });
+
+  it('warns and defaults on a non-object controlApi', async () => {
+    const config = await load({ spawnBackend: 'local', controlApi: 42 });
+    expect(config.controlApi).toEqual({
+      enabled: false,
+      host: '127.0.0.1',
+      port: 8090,
+    });
+  });
+
+  it('ignores a non-boolean enabled', async () => {
+    const config = await load({
+      spawnBackend: 'local',
+      controlApi: { enabled: 'yes' },
+    });
+    expect(config.controlApi?.enabled).toBe(false);
+  });
+
+  it('uses the default host for an empty host', async () => {
+    const config = await load({
+      spawnBackend: 'local',
+      controlApi: { host: '  ' },
+    });
+    expect(config.controlApi?.host).toBe('127.0.0.1');
+  });
+
+  it('uses the default port for an out-of-range port', async () => {
+    const config = await load({
+      spawnBackend: 'local',
+      controlApi: { port: 99999 },
+    });
+    expect(config.controlApi?.port).toBe(8090);
+  });
+
+  it('ignores a non-string token', async () => {
+    const config = await load({
+      spawnBackend: 'local',
+      controlApi: { token: 5 },
+    });
+    expect(config.controlApi?.token).toBeUndefined();
+  });
+
+  it('accepts a non-loopback host but warns', async () => {
+    const config = await load({
+      spawnBackend: 'local',
+      controlApi: { enabled: true, host: '0.0.0.0' },
+    });
+    expect(config.controlApi?.host).toBe('0.0.0.0');
+  });
+});
+
+describe('loadGatewayConfig injection parsing', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(path.join(os.tmpdir(), 'gateway-injection-test-'));
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  function writeConversation(
+    adapterId: string,
+    file: string,
+    data: Record<string, unknown>
+  ): void {
+    const convDir = path.join(tmpDir, 'adapters', adapterId, 'conversations');
+    mkdirSync(convDir, { recursive: true });
+    writeFileSync(path.join(convDir, file), JSON.stringify(data));
+  }
+
+  async function load(): Promise<GatewayConfig> {
+    const configPath = path.join(tmpDir, 'config.json');
+    writeFileSync(configPath, JSON.stringify({ spawnBackend: 'local' }));
+    writeFileSync(
+      path.join(tmpDir, 'adapters', 'matrix', 'adapter.json'),
+      JSON.stringify({ type: 'matrix' })
+    );
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    return loadGatewayConfig(configPath);
+  }
+
+  it('keeps an injection-only conversation (no surfaces)', async () => {
+    writeConversation('matrix', 'inj.json', {
+      conversationId: '!inj:server',
+      injection: { enabled: true },
+    });
+    const config = await load();
+    const conversation =
+      config.serviceAdapters[0].conversations.get('!inj:server');
+    expect(conversation?.injectionEnabled).toBe(true);
+    expect(conversation?.surfaces).toEqual([]);
+  });
+
+  it('skips a conversation with neither surfaces nor injection', async () => {
+    writeConversation('matrix', 'empty.json', {
+      conversationId: '!empty:server',
+    });
+    const config = await load();
+    expect(config.serviceAdapters[0].conversations.has('!empty:server')).toBe(
+      false
+    );
+  });
+
+  it('ignores injection on the wildcard conversation', async () => {
+    writeConversation('matrix', '_default_.json', {
+      conversationId: '*',
+      injection: { enabled: true },
+      controlSurfaces: [{ type: 'discard' }],
+    });
+    const config = await load();
+    const wildcard = config.serviceAdapters[0].conversations.get('*');
+    expect(wildcard?.injectionEnabled).toBe(false);
+  });
+
+  it('ignores a non-boolean injection.enabled', async () => {
+    writeConversation('matrix', 'bad.json', {
+      conversationId: '!bad:server',
+      injection: { enabled: 'yes' },
+      controlSurfaces: [{ type: 'discard' }],
+    });
+    const config = await load();
+    expect(
+      config.serviceAdapters[0].conversations.get('!bad:server')
+        ?.injectionEnabled
+    ).toBe(false);
+  });
+});
