@@ -34,9 +34,11 @@ import {
   getLlmCapability,
 } from './interactive.js';
 import { runMigrate } from './migrate.js';
+import { applyWorkingDir } from './working-dir.js';
 
 async function main(): Promise<void> {
   const invocation = parseCliArgs(process.argv.slice(2));
+  await applyWorkingDir(invocation.options.workingDir);
   const logger = createConsoleLogger('drone-agent', {
     toStderr: invocation.options.outputJson,
   });

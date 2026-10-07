@@ -1107,6 +1107,26 @@ describe('--debug tools — tool surface change logging', () => {
     expect(capturedRuntime[1].isSubagent).toBe(true);
     expect(capturedRuntime[1].subagentId).toBe('subagent-test-123');
   });
+  it('queueSystemReminder feeds drainSystemReminders and clearSystemReminders empties it', async () => {
+    const engine = createDronePluginEngine({
+      plugins: [],
+      config: createDefaultAgentConfig(),
+      logger: silentLogger(),
+    });
+    await engine.initialize();
+
+    expect(engine.drainSystemReminders()).toEqual([]);
+
+    engine.queueSystemReminder('first');
+    engine.queueSystemReminder('second');
+    expect(engine.drainSystemReminders()).toEqual(['first', 'second']);
+    // Draining empties the queue.
+    expect(engine.drainSystemReminders()).toEqual([]);
+
+    engine.queueSystemReminder('stale');
+    engine.clearSystemReminders();
+    expect(engine.drainSystemReminders()).toEqual([]);
+  });
 });
 
 describe('workflow run contract (ADR 183)', () => {

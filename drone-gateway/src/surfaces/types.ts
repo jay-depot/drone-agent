@@ -16,6 +16,25 @@ export interface SurfaceContext {
    * gateway-wide default. Absent in local spawn-backend mode.
    */
   targetBeaconId?: string;
+  /**
+   * Engine-resolved per-surface working directory (validated at load).
+   * Absent means "use the default": local mode inherits the gateway cwd;
+   * coordinator mode lets the beacon apply its `defaultSpawnRoot`.
+   */
+  workingDir?: string;
+  /**
+   * Engine-resolved idle timeout in ms (`config.lifecycle.idleTimeoutMs` ??
+   * gateway-wide `idleTimeoutMs`). `0` disables. Defaults are applied by
+   * SessionLifecycle when this is absent.
+   */
+  idleTimeoutMs?: number;
+  /**
+   * Engine-resolved batch debounce in ms (`config.batch.debounceMs` ??
+   * gateway-wide `batch.debounceMs`). `0` disables the debounce. Defaults are
+   * applied by the engine's MessageBatcher when this is absent. Inert in a
+   * multi-surface conversation (batching is single-surface only).
+   */
+  debounceMs?: number;
 }
 
 export type SurfaceFactory = (

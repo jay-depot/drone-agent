@@ -3,14 +3,14 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 // Mock CoordinatorClient at module level since CoordinatorSpawnBackend
 // creates its own instance internally
 const mockSpawnAgent = vi.fn();
-const mockSendMessage = vi.fn();
+const mockSendSessionMessage = vi.fn();
 const mockTerminateSpawn = vi.fn();
 
 vi.mock('../src/coordinator-client.js', () => ({
   CoordinatorClient: vi.fn().mockImplementation(function () {
     return {
       spawnAgent: mockSpawnAgent,
-      sendMessage: mockSendMessage,
+      sendSessionMessage: mockSendSessionMessage,
       terminateSpawn: mockTerminateSpawn,
     };
   }),
@@ -89,24 +89,84 @@ describe('CoordinatorSpawnBackend', () => {
 
       expect(session.processId).toBe('spawn-abc');
     });
-  });
 
-  describe('sendMessage', () => {
-    it('calls coordinatorClient.sendMessage with correct agentId and message', async () => {
+    it('forwards workingDir as config.workingDir', async () => {
       mockSpawnAgent.mockResolvedValue({
         spawnId: 'spawn-abc',
         agentId: 'agent-xyz',
         status: 'running',
       });
-      mockSendMessage.mockResolvedValue('Hello back!');
 
+      const session = await backend.spawnSession('conv-1', 'coder', {
+        targetBeaconId: 'beacon-1',
+        workingDir: '/srv/bots/coder',
+      });
+
+      expect(mockSpawnAgent).toHaveBeenCalledWith({
+        targetBeaconId: 'beacon-1',
+        personaId: 'coder',
+        spawnId: expect.any(String),
+        config: { workingDir: '/srv/bots/coder' },
+      });
+      expect(session.workingDir).toBe('/srv/bots/coder');
+    });
+
+    it('omits config when no workingDir is supplied', async () => {
+      mockSpawnAgent.mockResolvedValue({
+        spawnId: 'spawn-abc',
+        agentId: 'agent-xyz',
+        status: 'running',
+      });
+
+      await backend.spawnSession('conv-1', 'coder', {
+        targetBeaconId: 'beacon-1',
+      });
+
+      expect(mockSpawnAgent).toHaveBeenCalledWith({
+        targetBeaconId: 'beacon-1',
+        personaId: 'coder',
+        spawnId: expect.any(String),
+      });
+    });
+
+    it('dedupes concurrent spawns for the same conversation', async () => {
+      mockSpawnAgent.mockResolvedValue({
+        spawnId: 'spawn-abc',
+        agentId: 'agent-xyz',
+        status: 'running',
+      });
+
+      const [a, b] = await Promise.all([
+        backend.spawnSession('conv-1', 'coder', { targetBeaconId: 'beacon-1' }),
+        backend.spawnSession('conv-1', 'coder', { targetBeaconId: 'beacon-1' }),
+      ]);
+
+      expect(a).toBe(b);
+      expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('sendMessage', () => {
+    it('delivers via sendSessionMessage and returns null (no synchronous reply)', async () => {
+      mockSpawnAgent.mockResolvedValue({
+        spawnId: 'spawn-abc',
+        agentId: 'agent-xyz',
+        status: 'running',
+      });
+      mockSendSessionMessage.mockResolvedValue({
+        success: true,
+        delivered: true,
+      });
       const session = await backend.spawnSession('conv-1', 'coder', {
         targetBeaconId: 'beacon-1',
       });
       const response = await backend.sendMessage(session, 'Hi there');
-
-      expect(mockSendMessage).toHaveBeenCalledWith('agent-xyz', 'Hi there');
-      expect(response).toBe('Hello back!');
+      expect(mockSendSessionMessage).toHaveBeenCalledWith(
+        'agent-xyz',
+        'Hi there',
+        false
+      );
+      expect(response).toBeNull();
     });
   });
 

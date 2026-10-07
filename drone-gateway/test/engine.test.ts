@@ -6,6 +6,7 @@ import type {
   ControlSurfaceSpec,
 } from '../src/types.js';
 import type { SpawnBackend } from '../src/spawn-backend.js';
+import { ROOM_INSTRUCTION } from '../src/chat-format.js';
 
 vi.mock('../src/coordinator-client.js', () => ({
   CoordinatorClient: vi.fn().mockImplementation(function () {
@@ -100,7 +101,12 @@ type SentMessage = { conversationId: string; text: string };
 async function startAndDrive(
   config: GatewayConfig,
   spawnBackend: SpawnBackend,
-  message: { conversationId: string; text: string; senderId?: string }
+  message: {
+    conversationId: string;
+    text: string;
+    senderId?: string;
+    conversationKind?: 'dm' | 'room';
+  }
 ): Promise<SentMessage[]> {
   const sent: SentMessage[] = [];
   const engine = new GatewayEngine(config, spawnBackend);
@@ -121,8 +127,9 @@ async function startAndDrive(
     conversationId: string;
     text: string;
     senderId?: string;
+    conversationKind: 'dm' | 'room';
   }) => void;
-  handler({ adapterId: 'matrix-1', ...message });
+  handler({ adapterId: 'matrix-1', conversationKind: 'dm', ...message });
   await vi.waitFor(() => expect(sent).toHaveLength(1));
   return sent;
 }
@@ -358,6 +365,7 @@ describe('GatewayEngine', () => {
       });
       expect(spawnedBeacon(backend)).toEqual({
         targetBeaconId: 'beacon-default',
+        workingDir: undefined,
       });
     });
 
@@ -387,6 +395,7 @@ describe('GatewayEngine', () => {
       });
       expect(spawnedBeacon(backend)).toEqual({
         targetBeaconId: 'beacon-override',
+        workingDir: undefined,
       });
     });
 
@@ -396,7 +405,349 @@ describe('GatewayEngine', () => {
         conversationId: 'dm:@me:server',
         text: 'hello',
       });
-      expect(spawnedBeacon(backend)).toEqual({ targetBeaconId: undefined });
+      expect(spawnedBeacon(backend)).toEqual({
+        targetBeaconId: undefined,
+        workingDir: undefined,
+      });
+    });
+
+    it('forwards the surface workingDir to spawnSession', async () => {
+      const backend = makeRespondingSpawnBackend('local');
+      const config = beaconConfig('local', {
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              [
+                'dm:@me:server',
+                conv([
+                  makeConvSpec('persona-assignment', {
+                    personaId: 'me',
+                    config: { workingDir: '/srv/bots/me' },
+                  }),
+                ]),
+              ],
+            ]),
+          }),
+        ],
+      });
+      await startAndDrive(config, backend, {
+        conversationId: 'dm:@me:server',
+        text: 'hello',
+      });
+      expect(spawnedBeacon(backend)).toEqual({
+        targetBeaconId: undefined,
+        workingDir: '/srv/bots/me',
+      });
+    });
+  });
+
+  describe('per-conversation serialization', () => {
+    it('runs two messages for one conversation serially', async () => {
+      const order: string[] = [];
+      const backend = makeRespondingSpawnBackend('local');
+      backend.sendMessage = vi.fn(async (_session, text: string) => {
+        order.push(`start:${text}`);
+        await new Promise(resolve => setTimeout(resolve, 10));
+        order.push(`end:${text}`);
+        return 'ok';
+      }) as unknown as SpawnBackend['sendMessage'];
+
+      const config = makeMinimalConfig({
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              [
+                'dm:@me:server',
+                conv([
+                  makeConvSpec('swarm-console'),
+                  makeConvSpec('persona-assignment', { personaId: 'me' }),
+                ]),
+              ],
+            ]),
+          }),
+        ],
+      });
+      const engine = new GatewayEngine(config, backend);
+      await engine.start();
+      const matrix = (await import('../src/adapters/matrix.js'))
+        .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
+      const adapter = matrix.mock.results.at(-1)?.value as {
+        onMessage: ReturnType<typeof vi.fn>;
+      };
+      const handler = adapter.onMessage.mock.calls[0][0] as (m: {
+        adapterId: string;
+        conversationId: string;
+        text: string;
+      }) => void;
+
+      handler({
+        adapterId: 'matrix-1',
+        conversationId: 'dm:@me:server',
+        text: 'a',
+      });
+      handler({
+        adapterId: 'matrix-1',
+        conversationId: 'dm:@me:server',
+        text: 'b',
+      });
+      await vi.waitFor(() => expect(order).toHaveLength(4));
+
+      // The immediate path tags each turn too, so the labels carry the
+      // '[unknown]' fallback prefix (this fixture has no sender name).
+      expect(order).toEqual([
+        'start:[unknown] a',
+        'end:[unknown] a',
+        'start:[unknown] b',
+        'end:[unknown] b',
+      ]);
+    });
+  });
+
+  describe('message batching', () => {
+    it('coalesces a burst in a batch-eligible conversation into one turn', async () => {
+      const backend = makeRespondingSpawnBackend('local');
+      const config = makeMinimalConfig({
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              [
+                'dm:@me:server',
+                conv([
+                  makeConvSpec('persona-assignment', {
+                    personaId: 'me',
+                    config: { batch: { debounceMs: 20 } },
+                  }),
+                ]),
+              ],
+            ]),
+          }),
+        ],
+      });
+      const engine = new GatewayEngine(config, backend);
+      await engine.start();
+      const matrix = (await import('../src/adapters/matrix.js'))
+        .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
+      const adapter = matrix.mock.results.at(-1)?.value as {
+        onMessage: ReturnType<typeof vi.fn>;
+      };
+      const handler = adapter.onMessage.mock.calls[0][0] as (m: {
+        adapterId: string;
+        conversationId: string;
+        text: string;
+        senderName?: string;
+        conversationKind?: 'dm' | 'room';
+      }) => void;
+
+      handler({
+        adapterId: 'matrix-1',
+        conversationId: 'dm:@me:server',
+        text: 'a',
+        senderName: 'Alice',
+      });
+      handler({
+        adapterId: 'matrix-1',
+        conversationId: 'dm:@me:server',
+        text: 'b',
+        senderName: 'Bob',
+      });
+
+      await vi.waitFor(() => expect(backend.sendMessage).toHaveBeenCalled());
+      await new Promise(resolve => setTimeout(resolve, 30));
+      expect(backend.sendMessage).toHaveBeenCalledTimes(1);
+      const sendMessage = backend.sendMessage as unknown as ReturnType<
+        typeof vi.fn
+      >;
+      expect(sendMessage.mock.calls[0][1]).toBe('[Alice] a\n[Bob] b');
+      await engine.stop();
+    });
+
+    it('forwards the room instruction for a batched room turn', async () => {
+      const backend = makeRespondingSpawnBackend('local');
+      const config = makeMinimalConfig({
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              [
+                '!room:server',
+                conv([
+                  makeConvSpec('persona-assignment', {
+                    personaId: 'me',
+                    config: { batch: { debounceMs: 20 } },
+                  }),
+                ]),
+              ],
+            ]),
+          }),
+        ],
+      });
+      const engine = new GatewayEngine(config, backend);
+      await engine.start();
+      const matrix = (await import('../src/adapters/matrix.js'))
+        .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
+      const adapter = matrix.mock.results.at(-1)?.value as {
+        onMessage: ReturnType<typeof vi.fn>;
+      };
+      const handler = adapter.onMessage.mock.calls[0][0] as (m: {
+        adapterId: string;
+        conversationId: string;
+        text: string;
+        senderName?: string;
+        conversationKind?: 'dm' | 'room';
+      }) => void;
+
+      handler({
+        adapterId: 'matrix-1',
+        conversationId: '!room:server',
+        text: 'hi',
+        senderName: 'Alice',
+        conversationKind: 'room',
+      });
+
+      const sendMessage = backend.sendMessage as unknown as ReturnType<
+        typeof vi.fn
+      >;
+      await vi.waitFor(() => expect(sendMessage).toHaveBeenCalled());
+      await new Promise(resolve => setTimeout(resolve, 30));
+      expect(sendMessage).toHaveBeenCalledTimes(1);
+      expect(sendMessage.mock.calls[0][2]).toEqual({
+        systemReminder: ROOM_INSTRUCTION,
+      });
+      await engine.stop();
+    });
+
+    it('does not batch a multi-surface conversation (immediate path)', async () => {
+      const backend = makeRespondingSpawnBackend('local');
+      const config = makeMinimalConfig({
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              [
+                'dm:@me:server',
+                conv([
+                  makeConvSpec('swarm-console'),
+                  makeConvSpec('persona-assignment', { personaId: 'me' }),
+                ]),
+              ],
+            ]),
+          }),
+        ],
+      });
+      const engine = new GatewayEngine(config, backend);
+      await engine.start();
+      const matrix = (await import('../src/adapters/matrix.js'))
+        .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
+      const adapter = matrix.mock.results.at(-1)?.value as {
+        onMessage: ReturnType<typeof vi.fn>;
+      };
+      const handler = adapter.onMessage.mock.calls[0][0] as (m: {
+        adapterId: string;
+        conversationId: string;
+        text: string;
+      }) => void;
+
+      handler({
+        adapterId: 'matrix-1',
+        conversationId: 'dm:@me:server',
+        text: 'a',
+      });
+      handler({
+        adapterId: 'matrix-1',
+        conversationId: 'dm:@me:server',
+        text: 'b',
+      });
+
+      await vi.waitFor(() =>
+        expect(backend.sendMessage).toHaveBeenCalledTimes(2)
+      );
+      await engine.stop();
+    });
+
+    it('drops a pending batch flush on stop', async () => {
+      const backend = makeRespondingSpawnBackend('local');
+      const config = makeMinimalConfig({
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              [
+                'dm:@me:server',
+                conv([
+                  makeConvSpec('persona-assignment', {
+                    personaId: 'me',
+                    config: { batch: { debounceMs: 10000 } },
+                  }),
+                ]),
+              ],
+            ]),
+          }),
+        ],
+      });
+      const engine = new GatewayEngine(config, backend);
+      await engine.start();
+      const matrix = (await import('../src/adapters/matrix.js'))
+        .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
+      const adapter = matrix.mock.results.at(-1)?.value as {
+        onMessage: ReturnType<typeof vi.fn>;
+      };
+      const handler = adapter.onMessage.mock.calls[0][0] as (m: {
+        adapterId: string;
+        conversationId: string;
+        text: string;
+      }) => void;
+
+      handler({
+        adapterId: 'matrix-1',
+        conversationId: 'dm:@me:server',
+        text: 'a',
+      });
+      await engine.stop();
+      await new Promise(resolve => setTimeout(resolve, 40));
+      expect(backend.sendMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('shutdown disposal', () => {
+    it('disposes instantiated surfaces on stop (terminating live agents)', async () => {
+      const backend = makeRespondingSpawnBackend('local');
+      const config = makeMinimalConfig({
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              [
+                'dm:@me:server',
+                conv([makeConvSpec('persona-assignment', { personaId: 'me' })]),
+              ],
+            ]),
+          }),
+        ],
+      });
+      const engine = new GatewayEngine(config, backend);
+      await engine.start();
+      const matrix = (await import('../src/adapters/matrix.js'))
+        .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
+      const adapter = matrix.mock.results.at(-1)?.value as {
+        onMessage: ReturnType<typeof vi.fn>;
+      };
+      const handler = adapter.onMessage.mock.calls[0][0] as (m: {
+        adapterId: string;
+        conversationId: string;
+        text: string;
+      }) => void;
+      handler({
+        adapterId: 'matrix-1',
+        conversationId: 'dm:@me:server',
+        text: 'hi',
+      });
+      await vi.waitFor(() => expect(backend.sendMessage).toHaveBeenCalled());
+
+      await engine.stop();
+      expect(backend.terminateSession).toHaveBeenCalledTimes(1);
     });
   });
 });

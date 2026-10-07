@@ -162,6 +162,12 @@ export type DronePluginEngine = {
    */
   clearSystemReminders: () => void;
   /**
+   * Queue a one-shot, non-persisted system reminder for the next LLM call.
+   * Used by listen-mode hosts to inject a per-turn instruction (e.g. the
+   * room "decide whether to respond" prompt) without touching session history.
+   */
+  queueSystemReminder: (content: string) => void;
+  /**
    * Set the host's elicitation capability. Must be called by the CLI shell
    * or TUI App BEFORE any workflow runs (and before `onSessionStart` if
    * plugins want to elicit during session bootstrap).
@@ -1083,6 +1089,7 @@ export function createDronePluginEngine({
     },
     drainSystemReminders: () => systemReminders.drainAll(),
     clearSystemReminders: () => systemReminders.clear(),
+    queueSystemReminder: (content: string) => systemReminders.queue(content),
     unregisterTool: (canonicalName: string) => {
       unregisterToolImpl(canonicalName);
     },

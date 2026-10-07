@@ -5,6 +5,17 @@ import type {
 } from './types.js';
 
 /**
+ * Options for a single `sendMessage` turn.
+ */
+export interface SendMessageOptions {
+  /**
+   * A non-persisted system instruction to deliver with this turn. The agent
+   * queues it as a system reminder (never entered into session history).
+   */
+  systemReminder?: string;
+}
+
+/**
  * Pluggable spawn backend interface.
  *
  * Implementations manage the lifecycle of persistent agent processes
@@ -35,8 +46,16 @@ export interface SpawnBackend {
    * Send a message to an existing agent session and return the response.
    * The implementation waits for the agent to complete its turn before
    * returning (i.e., it waits for the `turnComplete` event).
+   *
+   * Returns `null` when the backend cannot supply a synchronous reply (used
+   * by coordinator mode until the receive path lands). The caller must post
+   * nothing for `null`.
    */
-  sendMessage(session: SpawnSession, message: string): Promise<string>;
+  sendMessage(
+    session: SpawnSession,
+    message: string,
+    opts?: SendMessageOptions
+  ): Promise<string | null>;
 
   /**
    * Terminate an agent session and clean up resources.

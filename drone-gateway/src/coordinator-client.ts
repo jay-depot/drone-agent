@@ -69,6 +69,7 @@ export class CoordinatorClient implements SwarmApi {
     personaId?: string;
     task?: string;
     spawnId?: string;
+    config?: { workingDir?: string };
   }): Promise<unknown> {
     return this.mutate('POST', '/api/spawn', input, 'Spawn failed', true);
   }
@@ -91,22 +92,6 @@ export class CoordinatorClient implements SwarmApi {
       `/api/spawn/${beaconId}/${spawnId}`,
       undefined,
       'Terminate spawn failed'
-    );
-  }
-
-  /**
-   * Send a message to an agent via the coordinator's message relay.
-   */
-  async sendMessage(agentId: string, message: string): Promise<unknown> {
-    return this.mutate(
-      'POST',
-      '/api/messages/relay',
-      {
-        toAgentId: agentId,
-        body: JSON.stringify({ type: 'chat', text: message }),
-      },
-      'Send message failed',
-      true
     );
   }
 

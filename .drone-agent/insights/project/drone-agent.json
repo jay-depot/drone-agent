@@ -686,5 +686,21 @@
   {
     "timestamp": "2026-10-05T16:12:41.790Z",
     "insight": "When a DB column is derived from a blob (e.g. persona name/description derived from the systemPrompt .md frontmatter), the clean chokepoint is the DB layer's create/update/upsert functions — NOT the HTTP routes and NOT the clients. Routes and clients proliferate (wizard, swarm writers, seed, coordinator-sync, migration tool); the DB layer is the single seam every write path crosses, so the invariant \"columns always match the blob\" holds unconditionally. Prefer deriving in the persistence layer plus an idempotent startup backfill for legacy rows."
+  },
+  {
+    "timestamp": "2026-10-05T23:06:50.931Z",
+    "insight": "`drone-agent --working-dir` is parsed in cli.ts but never consumed anywhere in the package — the value is dead. Spawned agents only land in the right directory because the beacon/gateway spawner passes `cwd` to spawn(). A flag that sets a process-wide cwd must take effect before config load / external-plugin discovery / any plugin that reads process.cwd() (startup, log, macros, memory, prompt-file, config), so the correct fix is an early `process.chdir()` in main(), not a late consumer. Lesson: when a CLI flag is added, grep for a reader before shipping; a parsed-but-unread flag is invisible because the surrounding machinery often has a second mechanism (here, cwd) that masks it."
+  },
+  {
+    "timestamp": "2026-10-06T00:39:09.191Z",
+    "insight": "Parallel `apply_diff` calls on the SAME file race and silently lose one edit (ADR 227's documented mutex-less read-modify-write hazard). This session I fired two `apply_diff` calls at `plugin-engine.ts` in one turn (interface member + implementation member); one landed, the other vanished, and the file tail was duplicated. Rule: never issue two edits to the same file in one tool batch. Issue them sequentially, and when two edits genuinely belong together, prefer a single hunk or a python rewrite. The build caught it (`Property 'queueSystemReminder' does not exist`), which is the safety net that made recovery cheap."
+  },
+  {
+    "timestamp": "2026-10-07T00:57:58.583Z",
+    "insight": "Planning insight (gateway external-process injection): the gateway's local docs/adr/ series (001–006) and the project wiki's decisions/ are now genuinely redundant and drifting apart — they document overlapping ground (e.g. ADR 006 chat tagging/batching vs the wiki's 233-gateway-chat-tagging-batching-optout) with no cross-reference. A reconciliation pass is needed before either can be trusted as the single source of truth for gateway design. Captured as a deferred follow-up in plan-gateway-external-process-injection."
+  },
+  {
+    "timestamp": "2026-10-07T00:57:58.586Z",
+    "insight": "Reusable convention: the gateway/config layer validates optional config with a consistent \"warn-and-drop, load always succeeds\" style (sanitizeNonNegativeNumber, sanitizeWorkingDir, parseAllowedSenders). New config fields (controlApi, injection) should follow the same pattern — and note that the gateway loader deliberately has NO ${VAR} interpolation (render-from-env), unlike drone-core's provider config. This asymmetry is easy to forget when adding secret-bearing fields."
   }
 ]

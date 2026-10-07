@@ -1,6 +1,7 @@
 import { readFile, access } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { readdir } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { logger } from '../logger.js';
 import { validateConversationId } from './files.js';
@@ -12,10 +13,62 @@ import type {
   SpawnBackendType,
 } from '../types.js';
 
+const MAX_WORKING_DIR_LENGTH = 4096;
+
 /**
- * Reads the optional `config.targetBeaconId` override on a control surface.
- * It must be a non-empty string; anything else is warned about and dropped so
- * the conversation falls back to the gateway-wide default.
+ * Sanitize a surface `workingDir`: expand `~`/`~/` via the home directory,
+ * require an absolute result within the length cap. Anything invalid is
+ * warned about and dropped so the surface falls back to the mode default.
+ */
+function sanitizeWorkingDir(
+  value: unknown,
+  log: (msg: string) => void
+): string | undefined {
+  if (typeof value !== 'string' || value.trim() === '') {
+    log('workingDir is not a non-empty string; ignoring');
+    return undefined;
+  }
+  let expanded = value;
+  if (expanded === '~') {
+    expanded = os.homedir();
+  } else if (expanded.startsWith('~/')) {
+    expanded = path.join(os.homedir(), expanded.slice(2));
+  }
+  if (!path.isAbsolute(expanded)) {
+    log('workingDir must be an absolute path; ignoring');
+    return undefined;
+  }
+  if (expanded.length > MAX_WORKING_DIR_LENGTH) {
+    log(`workingDir exceeds ${MAX_WORKING_DIR_LENGTH} chars; ignoring`);
+    return undefined;
+  }
+  return path.normalize(expanded);
+}
+
+/**
+ * Sanitize a non-negative number (a timeout or debounce in ms). `0` is valid
+ * and disables the feature. Anything else is warned about and dropped.
+ */
+function sanitizeNonNegativeNumber(
+  value: unknown,
+  label: string,
+  log: (msg: string) => void
+): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    log(`${label} must be a non-negative number; ignoring`);
+    return undefined;
+  }
+  return value;
+}
+
+/**
+ * Sanitize a control surface's `config` bag: `targetBeaconId` must be a
+ * non-empty string, `workingDir` must be an absolute path, and
+ * `lifecycle.idleTimeoutMs` and `batch.debounceMs` must be non-negative
+ * numbers. Invalid keys are
+ * warned about and dropped (the surface falls back to the gateway default);
+ * the load itself always succeeds.
  */
 function sanitizeSurfaceConfig(
   config: Record<string, unknown> | undefined,
@@ -24,15 +77,74 @@ function sanitizeSurfaceConfig(
   convId: string
 ): Record<string, unknown> | undefined {
   if (!config) return config;
-  const override = config.targetBeaconId;
-  if (override === undefined) return config;
-  if (typeof override === 'string' && override.trim() !== '') return config;
-  logger.warn(
-    { adapterId, file, convId },
-    `Control surface targetBeaconId in "${file}" is not a non-empty string; ignoring the override`
-  );
-  const rest = { ...config };
-  delete rest.targetBeaconId;
+
+  const warn = (msg: string) =>
+    logger.warn(
+      { adapterId, file, convId },
+      `Control surface ${msg} in "${file}"`
+    );
+
+  const rest: Record<string, unknown> = { ...config };
+
+  const override = rest.targetBeaconId;
+  if (override !== undefined) {
+    if (typeof override !== 'string' || override.trim() === '') {
+      warn('targetBeaconId is not a non-empty string; ignoring');
+      delete rest.targetBeaconId;
+    }
+  }
+
+  const workingDir = rest.workingDir;
+  if (workingDir !== undefined) {
+    const sanitized = sanitizeWorkingDir(workingDir, warn);
+    if (sanitized === undefined) delete rest.workingDir;
+    else rest.workingDir = sanitized;
+  }
+
+  const lifecycle = rest.lifecycle;
+  if (lifecycle !== undefined) {
+    if (
+      typeof lifecycle !== 'object' ||
+      lifecycle === null ||
+      Array.isArray(lifecycle)
+    ) {
+      warn('lifecycle is not an object; ignoring');
+      delete rest.lifecycle;
+    } else {
+      const bag = { ...(lifecycle as Record<string, unknown>) };
+      if (bag.idleTimeoutMs !== undefined) {
+        const sanitized = sanitizeNonNegativeNumber(
+          bag.idleTimeoutMs,
+          'idleTimeoutMs',
+          warn
+        );
+        if (sanitized === undefined) delete bag.idleTimeoutMs;
+        else bag.idleTimeoutMs = sanitized;
+      }
+      rest.lifecycle = bag;
+    }
+  }
+
+  const batch = rest.batch;
+  if (batch !== undefined) {
+    if (typeof batch !== 'object' || batch === null || Array.isArray(batch)) {
+      warn('batch is not an object; ignoring');
+      delete rest.batch;
+    } else {
+      const bag = { ...(batch as Record<string, unknown>) };
+      if (bag.debounceMs !== undefined) {
+        const sanitized = sanitizeNonNegativeNumber(
+          bag.debounceMs,
+          'debounceMs',
+          warn
+        );
+        if (sanitized === undefined) delete bag.debounceMs;
+        else bag.debounceMs = sanitized;
+      }
+      rest.batch = bag;
+    }
+  }
+
   return rest;
 }
 
@@ -132,12 +244,32 @@ export async function loadGatewayConfig(
     );
   }
 
+  // Validate the gateway-wide default idle timeout (inert in local mode).
+  const idleTimeoutMs = sanitizeNonNegativeNumber(
+    gatewayConfig.idleTimeoutMs,
+    'idleTimeoutMs',
+    msg => logger.warn(`Config field ${msg}.`)
+  );
+
+  // Validate the gateway-wide default batch debounce (ms).
+  const rawBatch = gatewayConfig.batch as { debounceMs?: unknown } | undefined;
+  const batchDebounceMs = sanitizeNonNegativeNumber(
+    rawBatch?.debounceMs,
+    'batch.debounceMs',
+    msg => logger.warn(`Config field ${msg}.`)
+  );
+
   // Build the base config
   const config: GatewayConfig = {
     coordinatorUrl: coordinatorUrl ?? '',
     coordinatorToken: gatewayConfig.coordinatorToken as string | undefined,
     spawnBackend,
     targetBeaconId,
+    idleTimeoutMs,
+    batch:
+      batchDebounceMs !== undefined
+        ? { debounceMs: batchDebounceMs }
+        : undefined,
     agentPath: gatewayConfig.agentPath as string | undefined,
     serviceAdapters: [],
   };

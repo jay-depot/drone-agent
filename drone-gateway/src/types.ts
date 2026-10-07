@@ -15,6 +15,11 @@ export interface AdapterMessage {
   text: string;
   senderId?: string;
   senderName?: string;
+  /**
+   * Whether this conversation is a 1:1 DM or a multi-user room. Computed by the
+   * adapter (it owns conversation routing); the gateway never inspects the id.
+   */
+  conversationKind: 'dm' | 'room';
 }
 
 // === Control Surface Interface ===
@@ -25,6 +30,19 @@ export interface DroneControlSurface {
   handleMessage(
     message: AdapterMessage
   ): Promise<{ response: string | null; handled: boolean }>;
+  /**
+   * Batch-eligible surfaces implement this. When present on a conversation's
+   * sole surface, incoming messages are buffered and delivered here as one
+   * ordered batch (see MessageBatcher). Absence = immediate per-message path.
+   */
+  handleBatch?(
+    messages: AdapterMessage[]
+  ): Promise<{ response: string | null; handled: boolean }>;
+  /**
+   * Called once by the engine at shutdown, after adapters stop. Implementations
+   * must be idempotent and must not throw (the engine logs and swallows).
+   */
+  dispose?(): Promise<void>;
 }
 
 // === Control Surface Spec (per-conversation config) ===
@@ -82,6 +100,17 @@ export interface GatewayConfig {
    * `spawnBackend` is "coordinator"; inert (and warned about) in local mode.
    */
   targetBeaconId?: string;
+  /**
+   * Gateway-wide default idle timeout (ms) for spawning control surfaces.
+   * A surface-level `config.lifecycle.idleTimeoutMs` overrides it; `0` disables.
+   */
+  idleTimeoutMs?: number;
+  /**
+   * Gateway-wide default batch debounce (ms) for batching control surfaces.
+   * A surface-level `config.batch.debounceMs` overrides it; `0` disables the
+   * debounce (flush on the next tick).
+   */
+  batch?: { debounceMs?: number };
   agentPath?: string; // path to drone-agent binary (local mode)
   serviceAdapters: ResolvedServiceAdapter[];
 }
@@ -116,9 +145,17 @@ export interface SpawnSession {
    * is the agentId and is used for message relay).
    */
   spawnId?: string;
+  /** The working directory the spawn was placed with. Absent = mode default. */
+  workingDir?: string;
 }
 
 export interface SpawnSessionOptions {
   /** Beacon to spawn on. Required in coordinator mode. */
   targetBeaconId?: string;
+  /**
+   * Working directory for the spawned agent. Local mode uses it as the child
+   * cwd; coordinator mode forwards it as the beacon's `config.workingDir`
+   * (subject to the beacon's spawnRoots whitelist).
+   */
+  workingDir?: string;
 }

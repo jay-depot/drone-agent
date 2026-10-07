@@ -2,8 +2,8 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import { logger } from './logger.js';
 import { resolveDroneExecutable } from 'drone-core';
-import type { SpawnBackend } from './spawn-backend.js';
-import type { SpawnSession } from './types.js';
+import type { SendMessageOptions, SpawnBackend } from './spawn-backend.js';
+import type { SpawnSession, SpawnSessionOptions } from './types.js';
 
 /**
  * LocalSpawnBackend spawns `drone-agent` processes on the host.
@@ -19,6 +19,7 @@ export class LocalSpawnBackend implements SpawnBackend {
 
   private agentPath: string;
   private sessions: Map<string, ManagedAgentSession> = new Map();
+  private pending: Map<string, Promise<SpawnSession>> = new Map();
 
   constructor(agentPath?: string) {
     this.agentPath = agentPath || 'drone-agent';
@@ -26,15 +27,35 @@ export class LocalSpawnBackend implements SpawnBackend {
 
   async spawnSession(
     conversationId: string,
-    personaId: string
+    personaId: string,
+    opts?: SpawnSessionOptions
   ): Promise<SpawnSession> {
-    // Return existing session if one exists
     const existing = this.sessions.get(conversationId);
     if (existing) {
       return existing.session;
     }
 
-    // Resolve agent binary path
+    // Concurrent callers for one conversation share a single in-flight spawn
+    // so no two child processes are created for the same session.
+    const inFlight = this.pending.get(conversationId);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const promise = this.startSession(conversationId, personaId, opts);
+    this.pending.set(conversationId, promise);
+    try {
+      return await promise;
+    } finally {
+      this.pending.delete(conversationId);
+    }
+  }
+
+  private async startSession(
+    conversationId: string,
+    personaId: string,
+    opts: SpawnSessionOptions | undefined
+  ): Promise<SpawnSession> {
     const resolvedPath = await resolveDroneExecutable({
       commandName: this.agentPath,
     });
@@ -42,15 +63,21 @@ export class LocalSpawnBackend implements SpawnBackend {
       `Spawning agent for conversation ${conversationId} using ${resolvedPath}`
     );
 
+    const workingDir = opts?.workingDir;
     const args: string[] = ['--output-json'];
 
     if (personaId) {
       args.push('--persona', personaId);
     }
 
+    if (workingDir) {
+      args.push('--working-dir', workingDir);
+    }
+
     const childProcess = spawn(resolvedPath, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env },
+      ...(workingDir ? { cwd: workingDir } : {}),
     });
 
     const session: SpawnSession = {
@@ -58,6 +85,7 @@ export class LocalSpawnBackend implements SpawnBackend {
       personaId,
       processId: `pid-${childProcess.pid}`,
       startedAt: Date.now(),
+      workingDir,
     };
 
     const managed: ManagedAgentSession = {
@@ -85,7 +113,11 @@ export class LocalSpawnBackend implements SpawnBackend {
     return session;
   }
 
-  async sendMessage(session: SpawnSession, message: string): Promise<string> {
+  async sendMessage(
+    session: SpawnSession,
+    message: string,
+    opts?: SendMessageOptions
+  ): Promise<string | null> {
     const managed = this.sessions.get(session.conversationId);
     if (!managed) {
       throw new Error(
@@ -100,7 +132,14 @@ export class LocalSpawnBackend implements SpawnBackend {
     }
 
     // Send the chat event as NDJSON
-    const chatEvent = JSON.stringify({ type: 'chat', message }) + '\n';
+    const chatEvent =
+      JSON.stringify({
+        type: 'chat',
+        message,
+        ...(opts?.systemReminder
+          ? { systemReminder: opts.systemReminder }
+          : {}),
+      }) + '\n';
     childProcess.stdin.write(chatEvent);
 
     // Read NDJSON events from stdout until we get turnComplete

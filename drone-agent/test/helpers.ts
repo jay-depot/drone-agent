@@ -216,6 +216,7 @@ export function createFakeEngine(
     getHelpSnippets: () => [],
     drainSystemReminders: () => [],
     clearSystemReminders: () => {},
+    queueSystemReminder: () => {},
     getConfig: () => {
       throw new Error('getConfig not implemented in fake engine');
     },
@@ -328,6 +329,7 @@ export function createMockEngine(
     getSlashCommands: () => [],
     drainSystemReminders: () => reminderQueue.drainAll(),
     clearSystemReminders: () => reminderQueue.clear(),
+    queueSystemReminder: (content: string) => reminderQueue.queue(content),
     onConversationEvent: () => () => {},
     registerBuiltinSlashCommand: () => {},
     getBuiltinSlashCommands: () => [],

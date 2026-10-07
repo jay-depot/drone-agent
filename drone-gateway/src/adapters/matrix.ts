@@ -265,6 +265,7 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
       text: body,
       senderId: sender,
       senderName,
+      conversationKind: isDM ? 'dm' : 'room',
     });
   }
 
