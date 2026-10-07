@@ -41,7 +41,7 @@ A control surface that exposes coordinator commands as chat-accessible dot-notat
 _Avoid_: Admin console, swarm shell, command surface
 
 **Surface Registry**:
-The engine's lookup table from a control surface `type` to the factory that builds per-conversation surface instances. Factories receive `(spec, conversationId, ctx)` where `ctx` is a `SurfaceContext` (`spawnBackend` + optional `swarm` API + engine-resolved `targetBeaconId`, `workingDir`, `idleTimeoutMs`). Replaced the earlier hardcoded `switch` in the engine.
+The engine's lookup table from a control surface `type` to the factory that builds per-conversation surface instances. Factories receive `(spec, conversationId, ctx)` where `ctx` is a `SurfaceContext` (`spawnBackend` + optional `swarm` API + engine-resolved `targetBeaconId`, `workingDir`, `idleTimeoutMs`, `debounceMs`). Replaced the earlier hardcoded `switch` in the engine.
 _Avoid_: Surface table, factory map
 
 **Spawn Target Beacon**:
@@ -186,7 +186,7 @@ _Avoid_: poster, message sender
 
 ```
 Matrix event ──(adapter: ONLY thing that knows room vs DM vs *)──▶ AdapterMessage{
-  adapterId, conversationId, text, senderId?, senderName? }
+  adapterId, conversationId, text, senderId?, senderName?, conversationKind }
         │
         ▼  engine: perAdapter[adapterId] = Map<convId, ControlSurface[]>
   exact convId? → try in order (first-match-wins)
