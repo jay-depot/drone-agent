@@ -1,6 +1,6 @@
 # drone swarm
 
-Shared vocabulary for cross-cutting concepts that span all three contexts (drone-agent, drone-beacon, drone-coordinator).
+Shared vocabulary for cross-cutting concepts that span the swarm (drone-agent, drone-beacon, drone-coordinator, drone-gateway). Package-local terms live in each package's own `CONTEXT.md`.
 
 ## Language
 

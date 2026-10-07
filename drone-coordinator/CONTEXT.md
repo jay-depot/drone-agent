@@ -31,3 +31,23 @@ _Avoid_: Beacon connect, beacon join, beacon handshake
 **Heartbeat**:
 A periodic signal from a beacon to indicate it's still connected. Used to detect stale connections.
 _Avoid_: Ping, keepalive, check-in
+
+**Beacon Trust**:
+The coordinator's record of a beacon's identity and approval, keyed by beacon ID and anchored on the beacon's public key. A re-registration presenting a different public key is rejected as a possible spoofing attempt (the record must be deleted first to accept a new key).
+_Avoid_: Beacon approval, trust record, allowlist entry
+
+**Trust Status**:
+A beacon trust record's lifecycle state: `pending` → `approved` (or `rejected`). A new beacon starts `pending` unless it registered over a loopback socket or the deployment opted into `autoApproveBeacons`; only `approved` beacons pass the mTLS and reverse-channel gates.
+_Avoid_: Approval state, trust level, status flag
+
+**Fingerprint Confirmed**:
+Whether the beacon has confirmed the coordinator's own TLS fingerprint (`fingerprint_confirmed_at`) — the coordinator-side half of the TOFU exchange. A loopback beacon is treated as confirmed at registration. Approval requires it: `approveBeaconById` only flips `pending → approved` when it is set, so the UI's Approve stays disabled until then.
+_Avoid_: Fingerprint verified, pin confirmed
+
+**Verification Code**:
+A short human-readable code derived from the beacon's public key, the beacon's TLS fingerprint, and the coordinator's TLS fingerprint. Both sides compute the same code and the operator compares them out-of-band to detect a man-in-the-middle. Never displayed by the beacon itself; recomputed on every re-registration.
+_Avoid_: Approval token, pairing code, auth code
+
+**TLS Fingerprint**:
+The SHA-256 of a peer's TLS certificate, used for TOFU pinning. The coordinator stores the beacon's (pins it at first sight, flags a later mismatch) and the beacon stores the coordinator's; each verifies the other on reconnect.
+_Avoid_: Cert hash, certificate ID
