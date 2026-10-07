@@ -22,7 +22,7 @@ Add an optional/nullable **`lastExamined`** timestamp to every insight entry —
 
 ### 2. File engine (`drone-agent`)
 
-`file-engine.ts` implements `markInsightsExamined`: within `withFileLock`, set `entry.lastExamined = now` on every entry, then `writeJsonArrayAtomic` (skipping the write when there are zero entries to avoid an ENOENT on a nonexistent target directory). Reuses the existing per-file mutex + atomic-write hardening from [[decisions/112-self-improvement-file-write-race-fix]].
+`file-engine.ts` implements `markInsightsExamined`: within `withFileLock`, set `entry.lastExamined = now` on every entry, then `writeJsonArrayAtomic` (skipping the write when there are zero entries to avoid an ENOENT on a nonexistent target directory). Reuses the existing per-file mutex + atomic-write hardening from [112-self-improvement-file-write-race-fix](112-self-improvement-file-write-race-fix.md).
 
 ### 3. Swarm storage (beacon + coordinator)
 
@@ -71,8 +71,8 @@ While wiring up the reflect persona, discovered it used `automountTools:` as its
 
 ## Related
 
-- [[concepts/self-improvement]] — The insight/principle system this extends
-- [[modules/drone-core]] — `DroneInsightEntry` / `DroneInsightStorageEngine`
-- [[decisions/013-swarm-insights-principles]] — Swarm-wide insights/principles promotion
-- [[decisions/112-self-improvement-file-write-race-fix]] — Concurrency hardening reused by the file-engine mark operation
-- [[concepts/default-hidden-tools]] — Why `defaultHidden` gating matters
+- self-improvement — The insight/principle system this extends
+- [drone-core](../../drone-core/) — `DroneInsightEntry` / `DroneInsightStorageEngine`
+- [013-swarm-insights-principles](013-swarm-insights-principles.md) — Swarm-wide insights/principles promotion
+- [112-self-improvement-file-write-race-fix](112-self-improvement-file-write-race-fix.md) — Concurrency hardening reused by the file-engine mark operation
+- default-hidden-tools — Why `defaultHidden` gating matters

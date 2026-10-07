@@ -69,8 +69,8 @@ export type DroneToolExecutionContext = {
 
 ## Related
 
-- [[concepts/subagent]] — Subagent system
-- [[flows/tool-call-loop]] — Tool-call loop with the new stop-loop break
-- [[entities/DronePlugin]] — `DroneToolExecutionContext` on `DroneToolDefinition.execute`
-- [[decisions/071-tool-consolidation-batch-2]] — Prior pokemon-name fix for `subagent__dispatch`
-- [[decisions/104-subagent-activity-timeout-and-error-detection]] — Activity timeout, hard cap, error detection
+- subagent — Subagent system
+- tool-call-loop — Tool-call loop with the new stop-loop break
+- [DronePlugin](../../drone-core/src/plugin-system.ts) — `DroneToolExecutionContext` on `DroneToolDefinition.execute`
+- [071-tool-consolidation-batch-2](071-tool-consolidation-batch-2.md) — Prior pokemon-name fix for `subagent__dispatch`
+- [104-subagent-activity-timeout-and-error-detection](104-subagent-activity-timeout-and-error-detection.md) — Activity timeout, hard cap, error detection

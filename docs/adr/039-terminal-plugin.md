@@ -88,6 +88,6 @@ This mirrors the distinction in real terminal usage between "scroll back through
 
 ## Related
 
-- [[terminal-plugin]] — Concept page with implementation details
-- [[plugin-system]] — Plugin architecture
-- [[drone-agent-plugins]] — All built-in plugins
+- terminal-plugin — Concept page with implementation details
+- [plugin-system](002-plugin-system.md) — Plugin architecture
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — All built-in plugins

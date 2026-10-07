@@ -106,7 +106,7 @@ Follow-ups: onSelect stub-writing is plumbed but currently a no-op in the `/mode
 
 ## Related
 
-- [[concepts/provider-model-selection]] — the selection identity + resolution chain reference
-- [[modules/drone-core]] — foundation types (`provider-config-types.ts`, `model-selection.ts`)
-- [[modules/drone-agent-plugins]] — protocol plugin rows
-- [[entities/DroneAgentConfig]] — the `providers` section schema
+- provider-model-selection — the selection identity + resolution chain reference
+- [drone-core](../../drone-core/) — foundation types (`provider-config-types.ts`, `model-selection.ts`)
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — protocol plugin rows
+- [DroneAgentConfig](../../drone-core/src/config-types.ts) — the `providers` section schema

@@ -83,6 +83,6 @@ All validation criteria were met:
 
 ## Related
 
-- [[modules/drone-swarm-common]] — Module overview
-- [[modules/drone-beacon]] — Consumer
-- [[modules/drone-coordinator]] — Consumer
+- [drone-swarm-common](../../drone-swarm-common/) — Module overview
+- [drone-beacon](../../drone-beacon/) — Consumer
+- [drone-coordinator](../../drone-coordinator/) — Consumer

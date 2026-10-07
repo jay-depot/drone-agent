@@ -63,8 +63,8 @@ Create custom Ink render components for the seven core tools, and add genuine st
 
 ## Related
 
-- [[047-plugin-customizable-tool-render]] — The plugin-customizable render component system that this builds on
-- [[079-pretty-tool-output-phase-2]] — Phase 2: 12 more tools across 6 plugins
-- [[080-subagent-dispatch-pretty-output]] — Subagent dispatch TUI rendering
-- [[081-meta-tool-pretty-output]] — Reusable list/mount/unmount meta-tool components
-- [[modules/drone-agent-tui]] — TUI module documentation
+- [047-plugin-customizable-tool-render](047-plugin-customizable-tool-render.md) — The plugin-customizable render component system that this builds on
+- [079-pretty-tool-output-phase-2](079-pretty-tool-output-phase-2.md) — Phase 2: 12 more tools across 6 plugins
+- [080-subagent-dispatch-pretty-output](080-subagent-dispatch-pretty-output.md) — Subagent dispatch TUI rendering
+- [081-meta-tool-pretty-output](081-meta-tool-pretty-output.md) — Reusable list/mount/unmount meta-tool components
+- [drone-agent-tui](../../drone-agent/src/tui/) — TUI module documentation

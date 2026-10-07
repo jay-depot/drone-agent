@@ -84,7 +84,7 @@ Both test harnesses serve `resources/templates/list`:
 
 ## Related
 
-- [[modules/drone-agent-mcp-client]] — The MCP client module page (updated with resource template section)
-- [[decisions/050-mcp-client-session-id-iserror]] — Previous MCP client fix (session-id + isError)
-- [[decisions/054-mcp-http-sse-stream-delete]] — Previous MCP client fix (GET SSE stream + DELETE)
-- [[decisions/051-mcp-client-test-suite]] — MCP test suite design
+- [drone-agent-mcp-client](../../drone-agent/src/plugins/mcp/) — The MCP client module page (updated with resource template section)
+- [050-mcp-client-session-id-iserror](050-mcp-client-session-id-iserror.md) — Previous MCP client fix (session-id + isError)
+- [054-mcp-http-sse-stream-delete](054-mcp-http-sse-stream-delete.md) — Previous MCP client fix (GET SSE stream + DELETE)
+- [051-mcp-client-test-suite](051-mcp-client-test-suite.md) — MCP test suite design

@@ -41,5 +41,5 @@ Implement a spawn system in the beacon with a `spawns` table, `spawner.ts` modul
 
 ## Related
 
-- [[drone-beacon]] — Beacon implementation
-- [[subagent]] — Subagent spawning
+- [drone-beacon](../../drone-beacon/) — Beacon implementation
+- subagent — Subagent spawning

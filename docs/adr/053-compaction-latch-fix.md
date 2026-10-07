@@ -66,7 +66,7 @@ The two top guards (`!config.enabled`, already-in-flight) remain plain early ret
 
 ## Related
 
-- [[concepts/session-management]] — Compaction is driven by the context budget service and runs via plugin hooks.
-- [[modules/drone-agent-plugins]] — The `compaction` plugin row.
-- [[flows/tool-call-loop]] — Documents the `onAfterToolCall` ordering (after tool results appended).
+- session-management — Compaction is driven by the context budget service and runs via plugin hooks.
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — The `compaction` plugin row.
+- tool-call-loop — Documents the `onAfterToolCall` ordering (after tool results appended).
 - Project memory `compaction-bug-review` (root-cause trace) and `compaction-latch-fix-plan` (completed plan) were deleted after ingest.

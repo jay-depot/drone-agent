@@ -15,7 +15,7 @@ Swarm personas are stored as a *single blob*: the wizard (`persona__create`) wri
 
 The two sources had also drifted into inconsistent authority: `scope` is explicitly **DB-authoritative** (`providers.ts` overrides the parsed scope from the DB row), while `name`/`description` were *runtime*-authoritative (via the parse) but DB-authoritative for the UI — a per-field split that depended on who authored the row. This ADR picks one rule for metadata: **the frontmatter wins; the columns mirror it.**
 
-Precedent: the read-back half was already fixed by commit `6c6d350` ([[decisions/227-skills-wizard-persona-owned-targets]]'s sibling fix — the swarm plugin's `reloadFromBeacon` began calling `parsePersonaMd()` on the `.md` content and the beacon route began honoring `scope`). This ADR fixes the *write* half and the inert columns.
+Precedent: the read-back half was already fixed by commit `6c6d350` ([227-skills-wizard-persona-owned-targets](227-skills-wizard-persona-owned-targets.md)'s sibling fix — the swarm plugin's `reloadFromBeacon` began calling `parsePersonaMd()` on the `.md` content and the beacon route began honoring `scope`). This ADR fixes the *write* half and the inert columns.
 
 ## Locked design decisions (8)
 
@@ -56,12 +56,12 @@ LSP clean; `pnpm -r run build` (8 packages), root `pnpm typecheck`, and `pnpm li
 
 ## Related
 
-- [[concepts/identity-assets]] — personas as an identity asset; where metadata lives.
-- [[entities/Persona]] — the persona `.md` format, including the `name`/`description` fields.
-- [[modules/drone-swarm-common]] — new `persona-metadata.ts` + `derivePersonaMetadata`.
-- [[modules/drone-core]] — `CreatePersonaRequest` (name/description now optional).
-- [[modules/drone-beacon]] — `db/personas.ts` derivation + startup backfill.
-- [[modules/drone-coordinator]] — same, coordinator-side.
-- [[modules/drone-coordinator-ui]] — persona editor drops the Name/Description fields.
-- [[modules/drone-agent-plugins]] — swarm persona writers stop sending junk metadata.
-- [[decisions/227-skills-wizard-persona-owned-targets]] — the sibling persona/skills-wizard work; its commit range includes the read-back half (`6c6d350`) this ADR's write half completes.
+- identity-assets — personas as an identity asset; where metadata lives.
+- [Persona](../../drone-core/src/domain-types.ts) — the persona `.md` format, including the `name`/`description` fields.
+- [drone-swarm-common](../../drone-swarm-common/) — new `persona-metadata.ts` + `derivePersonaMetadata`.
+- [drone-core](../../drone-core/) — `CreatePersonaRequest` (name/description now optional).
+- [drone-beacon](../../drone-beacon/) — `db/personas.ts` derivation + startup backfill.
+- [drone-coordinator](../../drone-coordinator/) — same, coordinator-side.
+- [drone-coordinator-ui](../../drone-coordinator-ui/) — persona editor drops the Name/Description fields.
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — swarm persona writers stop sending junk metadata.
+- [227-skills-wizard-persona-owned-targets](227-skills-wizard-persona-owned-targets.md) — the sibling persona/skills-wizard work; its commit range includes the read-back half (`6c6d350`) this ADR's write half completes.

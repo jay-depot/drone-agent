@@ -38,6 +38,6 @@ Three changes:
 
 ## Related
 
-- [[entities/Persona]] — Persona definition with rich fields
-- [[broker-provider]] — Broker + provider pattern
-- [[swarm-architecture]] — Swarm mode
+- [Persona](../../drone-core/src/domain-types.ts) — Persona definition with rich fields
+- broker-provider — Broker + provider pattern
+- swarm-architecture — Swarm mode

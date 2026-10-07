@@ -98,19 +98,19 @@ The drone swarm needs a way to receive messages from chat platforms (Matrix, Tel
 
 - The gateway is a separate deployable unit with its own config file and lifecycle.
 - New chat platform integrations require implementing the `DroneServiceAdapter` interface.
-- New control surface types require implementing the `DroneControlSurface` interface and registering them (originally in `createControlSurface()`; since [[decisions/223-gateway-swarm-console-control-surface]] via the engine `SurfaceRegistry`).
+- New control surface types require implementing the `DroneControlSurface` interface and registering them (originally in `createControlSurface()`; since [223-gateway-swarm-console-control-surface](223-gateway-swarm-console-control-surface.md) via the engine `SurfaceRegistry`).
 - The gateway can be deployed in two modes: local (spawns agents on the same host) or coordinator (delegates to the coordinator).
 - The gateway has no adapter implementations yet — these will be added in follow-up phases (4.2 Matrix, 4.6 Telegram, 4.7 Slack).
 
 ## Later extensions
 
-The architecture above was extended by follow-on ADRs rather than a rewrite: the flat config became the folder hierarchy of [[decisions/058-gateway-config-model]] (with per-conversation dedicated surface instances and a built-in `discard` surface); [[decisions/059-matrix-adapter]] implemented the first service adapter (`MatrixServiceAdapter`, rooms + DMs, markdown→HTML replies with receipts + typing); and [[decisions/044-gateway-core]] records the standalone-mode core (persistent sessions, `--output-json` protocol, `turnComplete`, the shared spawner).
+The architecture above was extended by follow-on ADRs rather than a rewrite: the flat config became the folder hierarchy of [058-gateway-config-model](058-gateway-config-model.md) (with per-conversation dedicated surface instances and a built-in `discard` surface); [059-matrix-adapter](059-matrix-adapter.md) implemented the first service adapter (`MatrixServiceAdapter`, rooms + DMs, markdown→HTML replies with receipts + typing); and [044-gateway-core](044-gateway-core.md) records the standalone-mode core (persistent sessions, `--output-json` protocol, `turnComplete`, the shared spawner).
 
 ## Related
 
-- [[modules/drone-gateway]] — The gateway package
-- [[decisions/044-gateway-core]] — Gateway core implementation
-- [[decisions/058-gateway-config-model]] — Config model refactor
-- [[decisions/059-matrix-adapter]] — Matrix adapter
-- [[concepts/spawn-backend]] — Pluggable spawn backend architecture
-- [[concepts/json-listen-mode]] — JSON listen mode for persistent agent sessions
+- [drone-gateway](../../drone-gateway/) — The gateway package
+- [044-gateway-core](044-gateway-core.md) — Gateway core implementation
+- [058-gateway-config-model](058-gateway-config-model.md) — Config model refactor
+- [059-matrix-adapter](059-matrix-adapter.md) — Matrix adapter
+- spawn-backend — Pluggable spawn backend architecture
+- json-listen-mode — JSON listen mode for persistent agent sessions

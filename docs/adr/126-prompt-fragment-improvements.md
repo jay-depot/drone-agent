@@ -84,6 +84,6 @@ Clarified boundaries and added a "user override" clause to resolve contradiction
 
 ## Related
 
-- [[modules/drone-agent-plugins]] — The `file`, `notepad`, `focus`, and `startup` plugin rows
-- [[concepts/notepad]] — Session notepad concept
-- [[concepts/session-management]] — Session state and context budgeting
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — The `file`, `notepad`, `focus`, and `startup` plugin rows
+- notepad — Session notepad concept
+- session-management — Session state and context budgeting

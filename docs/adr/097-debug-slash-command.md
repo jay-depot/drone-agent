@@ -69,6 +69,6 @@ All 1650 existing tests pass. No new tests were added — the feature is a thin 
 
 ## Related
 
-- [[decisions/082-debug-flag-llm-logging]] — The original `--debug` CLI flag
-- [[modules/drone-agent]] — The agent package
-- [[modules/drone-core]] — Shared types including plugin system types
+- [082-debug-flag-llm-logging](082-debug-flag-llm-logging.md) — The original `--debug` CLI flag
+- [drone-agent](../../drone-agent/) — The agent package
+- [drone-core](../../drone-core/) — Shared types including plugin system types

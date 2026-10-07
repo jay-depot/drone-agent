@@ -40,5 +40,5 @@ Move all built-in slash commands into the engine's slash command registry with a
 
 ## Related
 
-- [[plugin-system]] — Plugin architecture
-- [[entities/DronePlugin]] — Plugin interface
+- [plugin-system](002-plugin-system.md) — Plugin architecture
+- [DronePlugin](../../drone-core/src/plugin-system.ts) — Plugin interface

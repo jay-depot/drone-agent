@@ -13,7 +13,7 @@ The TUI needed a framework for building a terminal UI. The initial prototype use
 
 ## Decision
 
-Use Ink (React for CLIs) instead of Blessed. Initially Ink 5.x + React 18; later upgraded to Ink 6.x + React 19 (see [[036-ink-6-react-19]]).
+Use Ink (React for CLIs) instead of Blessed. Initially Ink 5.x + React 18; later upgraded to Ink 6.x + React 19 (see [036-ink-6-react-19](036-ink-6-react-19.md)).
 
 ## Rationale
 
@@ -29,11 +29,11 @@ Use Ink (React for CLIs) instead of Blessed. Initially Ink 5.x + React 18; later
 - Layout is managed declaratively (Box, Text, Static, etc.)
 - Testing uses `ink-testing-library`
 - The TUI deliberately avoids the alternate screen buffer
-- Ink 6 uses standard full-redraw mode — `incrementalRendering` was briefly tried but removed due to a bordered box rendering bug (see [[037-incremental-rendering-removal]])
+- Ink 6 uses standard full-redraw mode — `incrementalRendering` was briefly tried but removed due to a bordered box rendering bug (see [037-incremental-rendering-removal](037-incremental-rendering-removal.md))
 - React 19 removed global `JSX` namespace — all ReturnType annotations use `React.JSX.Element`
 
 ## Related
 
-- [[drone-agent-tui]] — TUI architecture
-- [[036-ink-6-react-19]] — Details of the Ink 5→6 + React 18→19 upgrade
-- [[037-incremental-rendering-removal]] — Why `incrementalRendering` was removed
+- [drone-agent-tui](../../drone-agent/src/tui/) — TUI architecture
+- [036-ink-6-react-19](036-ink-6-react-19.md) — Details of the Ink 5→6 + React 18→19 upgrade
+- [037-incremental-rendering-removal](037-incremental-rendering-removal.md) — Why `incrementalRendering` was removed

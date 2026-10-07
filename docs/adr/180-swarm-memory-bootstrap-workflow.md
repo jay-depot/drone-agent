@@ -42,6 +42,6 @@ Four pieces, shaped by explicit user direction (see log for the interview): a se
 
 ## Related
 
-- [[decisions/151-memory-pipeline-infra]] · [[decisions/179-swarm-memory-rag-retrieval]] (read side)
-- [[concepts/memory-pipeline]] · [[concepts/session-processing-pipeline]]
-- [[decisions/146-swarm-session-import]] — transcript builder shared with the ingest hook
+- [151-memory-pipeline-infra](151-memory-pipeline-infra.md) · [179-swarm-memory-rag-retrieval](179-swarm-memory-rag-retrieval.md) (read side)
+- memory-pipeline · session-processing-pipeline
+- [146-swarm-session-import](146-swarm-session-import.md) — transcript builder shared with the ingest hook

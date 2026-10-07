@@ -32,5 +32,5 @@ Everything is a plugin. Each plugin implements `DronePlugin` with a `register(re
 
 ## Related
 
-- [[plugin-system]] — Plugin architecture
-- [[entities/DronePlugin]] — Plugin interface
+- plugin-system — Plugin architecture
+- [DronePlugin](../../drone-core/src/plugin-system.ts) — Plugin interface

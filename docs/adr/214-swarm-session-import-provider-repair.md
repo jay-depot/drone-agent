@@ -55,7 +55,7 @@ LSP zero errors workspace-wide. Root `pnpm typecheck` exit 0 (0 TS errors; the p
 
 ## Related
 
-- [[decisions/146-swarm-session-import]] — the feature this repairs after the provider refactor
-- [[decisions/156-broker-context-windows-migration-persistence]] · [[decisions/196-context-window-fallback-fix]] — the context-window resolution chain the funnel conversion routes through
-- [[concepts/provider-model-selection]] — provider/model identity and the metadata resolution chain
-- [[concepts/test-infrastructure]] — why a runtime-green suite can still fail the typecheck gate
+- [146-swarm-session-import](146-swarm-session-import.md) — the feature this repairs after the provider refactor
+- [156-broker-context-windows-migration-persistence](156-broker-context-windows-migration-persistence.md) · [196-context-window-fallback-fix](196-context-window-fallback-fix.md) — the context-window resolution chain the funnel conversion routes through
+- provider-model-selection — provider/model identity and the metadata resolution chain
+- test-infrastructure — why a runtime-green suite can still fail the typecheck gate

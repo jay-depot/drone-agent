@@ -9,7 +9,7 @@ related: [concepts/beacon-verification.md, modules/drone-beacon.md, modules/dron
 
 ## Context
 
-The bidirectional verification code ([[decisions/119-bidirectional-verification-code]]) was computed on both sides but **never surfaced or enforced**. The coordinator computed it in `registerBeaconTrust` but never persisted it (no `verification_code` column), so the web UI's beacon detail page never actually showed it. The beacon computed and logged its copy but never surfaced it to a connecting agent. Meanwhile the web UI's Approve flow still required the admin to paste an opaque `approvalToken` that was generated server-side and only ever shown to the beacon's operator — never to the coordinator admin, who actually needed it.
+The bidirectional verification code ([119-bidirectional-verification-code](119-bidirectional-verification-code.md)) was computed on both sides but **never surfaced or enforced**. The coordinator computed it in `registerBeaconTrust` but never persisted it (no `verification_code` column), so the web UI's beacon detail page never actually showed it. The beacon computed and logged its copy but never surfaced it to a connecting agent. Meanwhile the web UI's Approve flow still required the admin to paste an opaque `approvalToken` that was generated server-side and only ever shown to the beacon's operator — never to the coordinator admin, who actually needed it.
 
 Separately, the agent only surfaced **one** of the two halves of the both-sides trust gate: the coordinator-fingerprint-confirmed half. The beacon-pending-approval half was invisible, so after `/trust-coordinator` succeeded the swarm silently stayed off until approval happened elsewhere.
 
@@ -56,18 +56,18 @@ This design naturally forces the user to compare the two codes — one side disp
 
 ## Related
 
-- [[concepts/beacon-verification]] — The MitM verification code concept
-- [[modules/drone-beacon]] — Beacon holds the compare-only copy
-- [[modules/drone-coordinator]] — Coordinator stores/serves the display-only copy
-- [[modules/drone-coordinator-ui]] — Web UI display-only + approve-by-ID
-- [[modules/drone-agent-plugins]] — `/trust-coordinator <code>` command
-- [[decisions/117-tofu-fingerprint-pinning]] — Provides the coordinator fingerprint
-- [[decisions/118-tofu-interactive-confirmation]] — The flow this strengthens
-- [[decisions/119-bidirectional-verification-code]] — The code this UX makes usable
+- beacon-verification — The MitM verification code concept
+- [drone-beacon](../../drone-beacon/) — Beacon holds the compare-only copy
+- [drone-coordinator](../../drone-coordinator/) — Coordinator stores/serves the display-only copy
+- [drone-coordinator-ui](../../drone-coordinator-ui/) — Web UI display-only + approve-by-ID
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — `/trust-coordinator <code>` command
+- [117-tofu-fingerprint-pinning](117-tofu-fingerprint-pinning.md) — Provides the coordinator fingerprint
+- [118-tofu-interactive-confirmation](118-tofu-interactive-confirmation.md) — The flow this strengthens
+- [119-bidirectional-verification-code](119-bidirectional-verification-code.md) — The code this UX makes usable
 
 ## Follow-up correction
 
-This decision shipped with two bugs that were later fixed in [[decisions/121-verification-code-ux-fix]]:
+This decision shipped with two bugs that were later fixed in [121-verification-code-ux-fix](121-verification-code-ux-fix.md):
 
 - The agent surfaced and pre-filled the beacon's **own** verification code (so the beacon compared it to itself and always matched — MITM protection inverted). The agent and beacon now **never display** the code; it appears only in the coordinator web UI.
 - The coordinator only persisted `verification_code` on a beacon's **first** registration, so existing beacons showed no code. The re-registration path now recomputes and persists it.

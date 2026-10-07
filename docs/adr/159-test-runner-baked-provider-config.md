@@ -9,7 +9,7 @@ related: [concepts/test-infrastructure.md, concepts/provider-model-selection.md,
 
 ## Context
 
-The isolated integration swarm ([[decisions/137-integration-test-isolation]]) bakes a user-level agent config into the test-runner image at build time: `docker/test-runner.Dockerfile` writes `/root/.drone-agent/config.json` with a `RUN echo '…' >` line. After the provider/protocol/model refactor ([[decisions/155-provider-model-config]]) merged to `main`, CI's `pnpm test:integration` failed all 6 subagent dispatch tests with:
+The isolated integration swarm ([137-integration-test-isolation](137-integration-test-isolation.md)) bakes a user-level agent config into the test-runner image at build time: `docker/test-runner.Dockerfile` writes `/root/.drone-agent/config.json` with a `RUN echo '…' >` line. After the provider/protocol/model refactor ([155-provider-model-config](155-provider-model-config.md)) merged to `main`, CI's `pnpm test:integration` failed all 6 subagent dispatch tests with:
 
 ```
 AssertionError: expected 'No active LLM provider. Ensure a providers config
@@ -77,7 +77,7 @@ Choices within the fix:
 
 ## Related
 
-- [[decisions/155-provider-model-config]] — the refactor that changed the config shape
-- [[decisions/137-integration-test-isolation]] — the Docker swarm this image belongs to (and round 1 of this plan's fixes)
-- [[concepts/test-infrastructure]] — integration testing infrastructure
-- [[concepts/provider-model-selection]] — the selection identity `llm.active` must satisfy
+- [155-provider-model-config](155-provider-model-config.md) — the refactor that changed the config shape
+- [137-integration-test-isolation](137-integration-test-isolation.md) — the Docker swarm this image belongs to (and round 1 of this plan's fixes)
+- test-infrastructure — integration testing infrastructure
+- provider-model-selection — the selection identity `llm.active` must satisfy

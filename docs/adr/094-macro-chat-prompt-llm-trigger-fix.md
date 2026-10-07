@@ -7,7 +7,7 @@ related: [decisions/040-message-queue-cancel.md, decisions/045-macro-event-strea
 
 **Status**: Implemented on branch `fix/macro-chat-prompt-not-triggering-llm`, commit `7a53ace`.
 
-> **Superseded (2026-08-27, [[decisions/168-macro-duplicate-render-fix]])**: the event-logging half of this fix (the inline `onEvent` callback in the chat-prompt step) is **undone**. It re-introduced the double-render of `reasoning`/`assistantMessage` that ADR 045 had removed. The `sendUserMessage`-without-callback + lifecycle-hooks behavior this fix restored is kept, but events now flow only through engine hooks (a console global listener preserves console-mode streaming).
+> **Superseded (2026-08-27, [168-macro-duplicate-render-fix](168-macro-duplicate-render-fix.md))**: the event-logging half of this fix (the inline `onEvent` callback in the chat-prompt step) is **undone**. It re-introduced the double-render of `reasoning`/`assistantMessage` that ADR 045 had removed. The `sendUserMessage`-without-callback + lifecycle-hooks behavior this fix restored is kept, but events now flow only through engine hooks (a console global listener preserves console-mode streaming).
 
 ## Problem
 
@@ -57,8 +57,8 @@ Added the typed import for the event handler, with a cast from `unknown` (since 
 
 ## Related
 
-- [[decisions/040-message-queue-cancel]] — The refactor that introduced the regression
-- [[decisions/045-macro-event-streaming-unified-hooks]] — Previous macro event streaming fix (also regressed by ADR 040)
-- [[decisions/086-macro-argument-reuse]] — Previous macro parser fix
-- [[decisions/168-macro-duplicate-render-fix]] — Undoes this fix's event-logging half (re-unifies engine-hook streaming)
-- [[modules/drone-agent-plugins]] — Macros plugin documentation
+- [040-message-queue-cancel](040-message-queue-cancel.md) — The refactor that introduced the regression
+- [045-macro-event-streaming-unified-hooks](045-macro-event-streaming-unified-hooks.md) — Previous macro event streaming fix (also regressed by ADR 040)
+- [086-macro-argument-reuse](086-macro-argument-reuse.md) — Previous macro parser fix
+- [168-macro-duplicate-render-fix](168-macro-duplicate-render-fix.md) — Undoes this fix's event-logging half (re-unifies engine-hook streaming)
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — Macros plugin documentation

@@ -87,7 +87,7 @@ The plan's premise ("correctness depends on lockstep") was **false**. The origin
 
 ## Related
 
-- [[concepts/lsp-symbolic-resolution]] — The concept page for LSP symbolic resolution
-- [[decisions/136-lsp-symbolic-resolution]] — The original implementation
-- [[decisions/138-lsp-symbolic-resolution-round-2]] — Round-2 fixes this round builds on
-- [[modules/drone-agent-plugins]] — LSP plugin
+- lsp-symbolic-resolution — The concept page for LSP symbolic resolution
+- [136-lsp-symbolic-resolution](136-lsp-symbolic-resolution.md) — The original implementation
+- [138-lsp-symbolic-resolution-round-2](138-lsp-symbolic-resolution-round-2.md) — Round-2 fixes this round builds on
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — LSP plugin

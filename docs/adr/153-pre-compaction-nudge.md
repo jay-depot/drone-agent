@@ -9,7 +9,7 @@ related: [concepts/session-management.md, flows/tool-call-loop.md, modules/drone
 
 ## Context
 
-drone-agent's compaction ([[decisions/134-compaction-correctness-fix]]) summarizes the oldest turn slice into free-form prioritized prose, accumulates multiple discrete summaries at the session head, and evicts the oldest summary wholesale once the summary region exceeds `summaryBudgetPercent` (20%). That makes summaries a *lossy, evictable* place for durable session state — yet nothing tells the model that a compaction deadline is approaching. The model is expected to curate its notepad/todo continuously on its own initiative; there is no signal saying "persist what you need now."
+drone-agent's compaction ([134-compaction-correctness-fix](134-compaction-correctness-fix.md)) summarizes the oldest turn slice into free-form prioritized prose, accumulates multiple discrete summaries at the session head, and evicts the oldest summary wholesale once the summary region exceeds `summaryBudgetPercent` (20%). That makes summaries a *lossy, evictable* place for durable session state — yet nothing tells the model that a compaction deadline is approaching. The model is expected to curate its notepad/todo continuously on its own initiative; there is no signal saying "persist what you need now."
 
 Peer agents close this gap structurally: Pi's structured summary schema dedicates Goal / Next Steps / Critical Context sections (plus cumulative `<modified-files>` tracking) so critical state survives every compaction by construction; OpenCode V2's checkpoints carry objective/active-work/blockers/next-moves fields. drone-agent's incremental-slice design needs an equivalent guarantee without abandoning model-centric flexibility.
 
@@ -62,9 +62,9 @@ The compaction plugin owns the threshold math (its estimator is the single sourc
 
 ## Related
 
-- [[concepts/session-management]] — Nudge band semantics alongside compaction triggering
-- [[flows/tool-call-loop]] — Where the drain sits in the outgoing-message assembly
-- [[modules/drone-agent-plugins]] — The compaction plugin row
-- [[decisions/134-compaction-correctness-fix]] — The convergence loop whose evaluations host the crossing check
-- [[decisions/135-compaction-slash-command]] — Manual `/compact` paths that skip the nudge via `force`
-- [[decisions/145-guardrail-reliability-features]] — The hardcoded non-persisted nudges this primitive generalizes
+- session-management — Nudge band semantics alongside compaction triggering
+- tool-call-loop — Where the drain sits in the outgoing-message assembly
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — The compaction plugin row
+- [134-compaction-correctness-fix](134-compaction-correctness-fix.md) — The convergence loop whose evaluations host the crossing check
+- [135-compaction-slash-command](135-compaction-slash-command.md) — Manual `/compact` paths that skip the nudge via `force`
+- [145-guardrail-reliability-features](145-guardrail-reliability-features.md) — The hardcoded non-persisted nudges this primitive generalizes

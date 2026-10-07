@@ -58,5 +58,5 @@ The `SubagentDispatchBlock` component now handles `error:` prefix events, render
 
 ## Related
 
-- [[concepts/subagent]] — Subagent system overview
-- [[decisions/080-subagent-dispatch-pretty-output]] — Subagent dispatch TUI rendering with live progress
+- subagent — Subagent system overview
+- [080-subagent-dispatch-pretty-output](080-subagent-dispatch-pretty-output.md) — Subagent dispatch TUI rendering with live progress

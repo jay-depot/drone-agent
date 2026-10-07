@@ -44,6 +44,6 @@ Implement an LLM Wiki-style knowledge base for the swarm. Wiki pages are stored 
 
 ## Related
 
-- [[self-improvement]] — Self-improvement system
-- [[swarm-architecture]] — Swarm mode
-- [[decisions/013-swarm-insights-principles]] — Related swarm learning feature
+- self-improvement — Self-improvement system
+- swarm-architecture — Swarm mode
+- [013-swarm-insights-principles](013-swarm-insights-principles.md) — Related swarm learning feature

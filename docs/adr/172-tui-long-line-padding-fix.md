@@ -57,6 +57,6 @@ While testing, it was discovered that bare ` ``` ` fences carry an empty `lang` 
 
 ## Related
 
-- [[modules/drone-agent-tui]] — the TUI module page (syntax highlighting section)
-- [[decisions/163-tui-markdown-color-collision-fix]] — the prior SyntaxStyle/SyntaxTheme collision fix that this builds on
-- [[decisions/077-tui-syntax-highlighting-ansi-escape-codes]] — the original ANSI-escape rendering approach
+- [drone-agent-tui](../../drone-agent/src/tui/) — the TUI module page (syntax highlighting section)
+- [163-tui-markdown-color-collision-fix](163-tui-markdown-color-collision-fix.md) — the prior SyntaxStyle/SyntaxTheme collision fix that this builds on
+- [077-tui-syntax-highlighting-ansi-escape-codes](077-tui-syntax-highlighting-ansi-escape-codes.md) — the original ANSI-escape rendering approach

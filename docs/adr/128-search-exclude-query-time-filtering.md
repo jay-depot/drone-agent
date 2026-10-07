@@ -79,7 +79,7 @@ For unscoped queries (no `path`), the agent sends **all** configured excludes, a
 
 ## Related
 
-- [[decisions/127-semantic-search-beacon]] — semantic search moved to the beacon
-- [[concepts/semantic-search]] — the semantic search concept
-- [[modules/drone-beacon]] — beacon module
-- [[modules/drone-agent-plugins]] — search plugin
+- [127-semantic-search-beacon](127-semantic-search-beacon.md) — semantic search moved to the beacon
+- semantic-search — the semantic search concept
+- [drone-beacon](../../drone-beacon/) — beacon module
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — search plugin

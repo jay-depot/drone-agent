@@ -44,5 +44,5 @@ Add `reasoning` to the `OpenAiMessage` type and check `choice.message.reasoning`
 
 ## Related
 
-- [[052-reasoning-level]] — Reasoning level control across providers
-- [[modules/drone-core]] — Shared types
+- [052-reasoning-level](052-reasoning-level.md) — Reasoning level control across providers
+- [drone-core](../../drone-core/) — Shared types

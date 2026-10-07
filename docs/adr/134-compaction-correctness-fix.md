@@ -66,9 +66,9 @@ Removed the `startIndex` parameter entirely; slice turns are now numbered Turn 1
 
 ## Related
 
-- [[concepts/session-management]] — Context budgeting, safety trim, and compaction
-- [[modules/drone-agent-plugins]] — The `compaction` plugin row
-- [[decisions/053-compaction-latch-fix]] — Prior compaction latch fix
-- [[decisions/125-compaction-summary-eviction]] — Prior compaction summary eviction fix
-- [[decisions/133-compaction-oldest-turns-helper-consolidation]] — Prior oldest-turns fix + helper consolidation
-- [[decisions/135-compaction-slash-command]] — The `/compact` slash command built on top of this fix
+- session-management — Context budgeting, safety trim, and compaction
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — The `compaction` plugin row
+- [053-compaction-latch-fix](053-compaction-latch-fix.md) — Prior compaction latch fix
+- [125-compaction-summary-eviction](125-compaction-summary-eviction.md) — Prior compaction summary eviction fix
+- [133-compaction-oldest-turns-helper-consolidation](133-compaction-oldest-turns-helper-consolidation.md) — Prior oldest-turns fix + helper consolidation
+- [135-compaction-slash-command](135-compaction-slash-command.md) — The `/compact` slash command built on top of this fix

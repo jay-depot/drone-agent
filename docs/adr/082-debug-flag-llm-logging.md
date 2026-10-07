@@ -55,5 +55,5 @@ Added tests for each provider verifying debug output is written to stderr when `
 
 ## Related
 
-- [[modules/drone-agent]] — The agent package
-- [[modules/drone-core]] — Shared types including provider types
+- [drone-agent](../../drone-agent/) — The agent package
+- [drone-core](../../drone-core/) — Shared types including provider types

@@ -22,10 +22,10 @@ Only `reasoning` and `assistantMessage` doubled (not tools) because the conversa
 
 ## History
 
-This was a **regression of ADR 045** ([[decisions/045-macro-event-streaming-unified-hooks]], commit `18406f0`), which had deliberately removed the macro's inline `onEvent` callback in favor of unified engine-hook streaming:
+This was a **regression of ADR 045** ([045-macro-event-streaming-unified-hooks](045-macro-event-streaming-unified-hooks.md), commit `18406f0`), which had deliberately removed the macro's inline `onEvent` callback in favor of unified engine-hook streaming:
 
 - **ADR 045** unified all conversation event streaming through the engine's `onConversationEvent` hooks, removing the macro's inline event handler (which logged everything through the lossy `DroneLogger` and rendered it as `>` user input).
-- **ADR 094** ([[decisions/094-macro-chat-prompt-llm-trigger-fix]], commit `d62ac76`) re-introduced the inline `onEvent` callback in order to fix a separate regression (macro chat-prompt steps not triggering the LLM). This re-introduced the double-render ADR 045 had fixed.
+- **ADR 094** ([094-macro-chat-prompt-llm-trigger-fix](094-macro-chat-prompt-llm-trigger-fix.md), commit `d62ac76`) re-introduced the inline `onEvent` callback in order to fix a separate regression (macro chat-prompt steps not triggering the LLM). This re-introduced the double-render ADR 045 had fixed.
 
 The complication: the console/readline host (`interactive.ts` `runInteractiveLoop`) did **not** register a global `onConversationEvent` listener, so in console mode the macro's `onEvent` logging was the *only* thing that showed macro streaming + reply. Removing the callback naively would have fixed the TUI but **regressed console-mode macro streaming**.
 
@@ -72,9 +72,9 @@ Full fast suite green (2300 passed / 9 skipped), `pnpm -r run build` + `pnpm lin
 
 ## Related
 
-- [[decisions/045-macro-event-streaming-unified-hooks]] — the design this fix re-affirms and extends (console host now gets a global listener too)
-- [[decisions/094-macro-chat-prompt-llm-trigger-fix]] — re-introduced the inline callback this fix removes; its `onEvent` logging half is superseded
-- [[decisions/236-tui-final-reply-dedup]] — the TUI's exactly-once final-reply render this fix extends to macros
-- [[modules/drone-agent]] — `interactive.ts` + `output-handlers.ts`
-- [[modules/drone-agent-tui]] — TUI event streaming
-- [[modules/drone-agent-plugins]] — macros plugin
+- [045-macro-event-streaming-unified-hooks](045-macro-event-streaming-unified-hooks.md) — the design this fix re-affirms and extends (console host now gets a global listener too)
+- [094-macro-chat-prompt-llm-trigger-fix](094-macro-chat-prompt-llm-trigger-fix.md) — re-introduced the inline callback this fix removes; its `onEvent` logging half is superseded
+- [236-tui-final-reply-dedup](236-tui-final-reply-dedup.md) — the TUI's exactly-once final-reply render this fix extends to macros
+- [drone-agent](../../drone-agent/) — `interactive.ts` + `output-handlers.ts`
+- [drone-agent-tui](../../drone-agent/src/tui/) — TUI event streaming
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — macros plugin

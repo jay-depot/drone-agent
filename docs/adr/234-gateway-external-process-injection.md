@@ -12,7 +12,7 @@ related: [modules/drone-gateway.md, decisions/232-gateway-surface-lifecycle-and-
 ## Why
 
 1. **Inbound-only.** Every path led *into* the gateway; nothing could post *out* except a live control surface answering a message. Recurring jobs (heartbeats, triage, reports) had no way to surface a result.
-2. **External processes cannot hold platform credentials.** E2EE keys ([[decisions/229-gateway-matrix-crypto-opt-in]]) live only in the daemon process, so a stand-alone helper cannot post directly — the daemon must do the post on the helper's behalf.
+2. **External processes cannot hold platform credentials.** E2EE keys ([229-gateway-matrix-crypto-opt-in](229-gateway-matrix-crypto-opt-in.md)) live only in the daemon process, so a stand-alone helper cannot post directly — the daemon must do the post on the helper's behalf.
 3. **A spawn-and-report job needs a one-shot agent, not a resident session.** The existing machinery (`LocalSpawnBackend`) is built for a persistent child answering turn after turn; a report job launches an agent, lets it finish, and exits.
 
 ## Locked decisions (27, from the planning grilling)
@@ -91,10 +91,10 @@ New suites: `control-api-server.test.ts` (10), `inject-args.test.ts` (21), `inje
 
 ## Related
 
-- [[modules/drone-gateway]] — the gateway module page (config model, key files, types, tests).
-- [[decisions/232-gateway-surface-lifecycle-and-working-dir]] — the prior gateway slice (surface lifecycle; the `workingDir` precedent the helper's `--working-dir` mirrors).
-- [[decisions/233-gateway-chat-tagging-batching-optout]] — the sibling outbound work; `isNoResponse`/`NO_RESPONSE_SENTINEL` reused by `--no-response-sentinel`.
-- [[decisions/224-gateway-spawn-targeting]] — the per-surface config pattern the `injection` opt-in parallels.
-- [[decisions/223-gateway-swarm-console-control-surface]] — the other "chat drives the system" surface (no LLM), contrasted with injection (no dispatch at all).
-- [[concepts/spawn-backend]] — the persistent-session machinery `spawn-once` deliberately avoids.
-- [[concepts/json-listen-mode]] — the `runJsonMode` (`--once --output-json`) protocol the helper drives.
+- [drone-gateway](../../drone-gateway/) — the gateway module page (config model, key files, types, tests).
+- [232-gateway-surface-lifecycle-and-working-dir](232-gateway-surface-lifecycle-and-working-dir.md) — the prior gateway slice (surface lifecycle; the `workingDir` precedent the helper's `--working-dir` mirrors).
+- [233-gateway-chat-tagging-batching-optout](233-gateway-chat-tagging-batching-optout.md) — the sibling outbound work; `isNoResponse`/`NO_RESPONSE_SENTINEL` reused by `--no-response-sentinel`.
+- [224-gateway-spawn-targeting](224-gateway-spawn-targeting.md) — the per-surface config pattern the `injection` opt-in parallels.
+- [223-gateway-swarm-console-control-surface](223-gateway-swarm-console-control-surface.md) — the other "chat drives the system" surface (no LLM), contrasted with injection (no dispatch at all).
+- spawn-backend — the persistent-session machinery `spawn-once` deliberately avoids.
+- json-listen-mode — the `runJsonMode` (`--once --output-json`) protocol the helper drives.

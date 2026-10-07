@@ -58,11 +58,11 @@ The auth middleware only applies to API routes and `/ws`. Static files (`/assets
 - **Positive**: Tailscale users get seamless access (CGNAT range bypass)
 - **Positive**: Token persists across page reloads (localStorage)
 - **Negative**: The SPA JavaScript bundle is publicly accessible on the web port (no secrets in the bundle, so this is acceptable)
-- **Negative**: Tailscale detection currently uses only IP range check — may need refinement later (see [[meta/web-ui-tailscale-detection-research]])
+- **Negative**: Tailscale detection currently uses only IP range check — may need refinement later (see web-ui-tailscale-detection-research)
 
 ## Related
 
-- [[021-coordinator-web-ui]] — Original Web UI decision
-- [[modules/drone-coordinator]] — Coordinator module
-- [[modules/drone-coordinator-ui]] — Web UI module
-- [[concepts/coordinator-web-auth]] — Web auth concept
+- [021-coordinator-web-ui](021-coordinator-web-ui.md) — Original Web UI decision
+- [drone-coordinator](../../drone-coordinator/) — Coordinator module
+- [drone-coordinator-ui](../../drone-coordinator-ui/) — Web UI module
+- coordinator-web-auth — Web auth concept

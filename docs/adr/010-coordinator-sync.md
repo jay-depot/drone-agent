@@ -43,5 +43,5 @@ Implement bidirectional sync: beacons push sessions and local knowledge to the c
 
 ## Related
 
-- [[drone-beacon]] — Beacon implementation
-- [[drone-coordinator]] — Coordinator implementation
+- [drone-beacon](../../drone-beacon/) — Beacon implementation
+- [drone-coordinator](../../drone-coordinator/) — Coordinator implementation

@@ -31,7 +31,7 @@ The persona creation wizard (`persona__create`) queries the coordinator for the 
 - `DroneToolDescriptor.defaultHidden` — added to `drone-core/src/session-types.ts`
 - Engine propagation — `plugin-engine.ts` `listTools()` includes `defaultHidden`
 - Persona filtering — `persona/index.ts` `getFilteredTools()` respects `defaultHidden`
-- Built-in tools originally marked: `swarm__wiki_write`, `swarm__wiki_delete`, `self-improvement__insight`, `self-improvement__principles-store`, `self-improvement__principles-delete`, `memory__store`, `memory__delete`. Note: the self-improvement and memory tools were later consolidated in [[decisions/071-tool-consolidation-batch-2]] into single action-based tools (`self-improvement__insight`, `self-improvement__principle`, `memory__manage`, `memory__browse`) which are no longer `defaultHidden`. The terminal plugin's 7 tools are the remaining `defaultHidden` tools.
+- Built-in tools originally marked: `swarm__wiki_write`, `swarm__wiki_delete`, `self-improvement__insight`, `self-improvement__principles-store`, `self-improvement__principles-delete`, `memory__store`, `memory__delete`. Note: the self-improvement and memory tools were later consolidated in [071-tool-consolidation-batch-2](071-tool-consolidation-batch-2.md) into single action-based tools (`self-improvement__insight`, `self-improvement__principle`, `memory__manage`, `memory__browse`) which are no longer `defaultHidden`. The terminal plugin's 7 tools are the remaining `defaultHidden` tools.
 - Tool definitions table in coordinator DB with pre-seeded built-in hidden tools
 - Agent pushes tool definitions on connect via `POST /sync/tools/push`
 - Coordinator serves `GET /tools/default-hidden` for the persona wizard

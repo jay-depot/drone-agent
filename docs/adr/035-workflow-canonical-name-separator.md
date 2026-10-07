@@ -29,5 +29,5 @@ Change the workflow canonical name reassembly from dot to double-underscore to m
 
 ## Related
 
-- [[028-tool-name-separator]] — The original tool name separator change
-- [[flows/startup]] — Startup flow including workflow dispatch
+- [028-tool-name-separator](028-tool-name-separator.md) — The original tool name separator change
+- startup — Startup flow including workflow dispatch

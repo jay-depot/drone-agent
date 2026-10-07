@@ -48,12 +48,12 @@ Since Ink 6.8.0 does NOT export `useWindowSize`, a custom `useDebouncedWindowSiz
 
 ## Post-Release Fix: `incrementalRendering` Removed
 
-Shortly after the upgrade was shipped, `incrementalRendering: true` was removed (see [[037-incremental-rendering-removal]]). Ink 6.8.0's incremental mode has a bug with bordered `<Box>` components — the line-by-line diffing mispositions content when text inside a bordered box changes, causing input text to appear below the box. The `useDebouncedWindowSize` hook already mitigates resize flicker, making `incrementalRendering` redundant.
+Shortly after the upgrade was shipped, `incrementalRendering: true` was removed (see [037-incremental-rendering-removal](037-incremental-rendering-removal.md)). Ink 6.8.0's incremental mode has a bug with bordered `<Box>` components — the line-by-line diffing mispositions content when text inside a bordered box changes, causing input text to appear below the box. The `useDebouncedWindowSize` hook already mitigates resize flicker, making `incrementalRendering` redundant.
 
 ## Files Changed
 
 - `drone-agent/package.json` — version bumps
-- `drone-agent/src/tui/index.tsx` — enabled `incrementalRendering: true` (later removed in [[037-incremental-rendering-removal]])
+- `drone-agent/src/tui/index.tsx` — enabled `incrementalRendering: true` (later removed in [037-incremental-rendering-removal](037-incremental-rendering-removal.md))
 - `drone-agent/src/tui/hooks/useDebouncedWindowSize.ts` — **new file**, debounced resize hook
 - `drone-agent/src/tui/app.tsx` — wired debounced hook
 - 11 TUI component/test files — `JSX.Element` → `React.JSX.Element` migration
@@ -61,6 +61,6 @@ Shortly after the upgrade was shipped, `incrementalRendering: true` was removed 
 
 ## Related
 
-- [[037-incremental-rendering-removal]] — Post-release fix: removed `incrementalRendering`
-- [[drone-agent-tui]] — TUI architecture
-- [[001-use-ink]] — Original Ink decision
+- [037-incremental-rendering-removal](037-incremental-rendering-removal.md) — Post-release fix: removed `incrementalRendering`
+- [drone-agent-tui](../../drone-agent/src/tui/) — TUI architecture
+- [001-use-ink](001-use-ink.md) — Original Ink decision

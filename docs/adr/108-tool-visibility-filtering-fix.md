@@ -9,7 +9,7 @@ related: [concepts/default-hidden-tools.md, entities/Persona.md, entities/DroneP
 
 ## Context
 
-When the list-mount pattern was promoted to the runtime level ([[105-runtime-level-list-mount]]), a bug was introduced in the `runtime__list_tools` meta-tool: it **hardcoded `defaultHidden: false`** on every descriptor it passed to the persona capability's `getFilteredTools()`. This broke the **default visibility layer** entirely — default-hidden tools (e.g. all `terminal__*` tools) were never filtered out of `runtime__list_tools` results, so they were discoverable and mountable by **every** persona. The user observed this concretely: the terminal plugin was available to all personas and the LLM kept misusing it, forcing them to disable the plugin.
+When the list-mount pattern was promoted to the runtime level ([105-runtime-level-list-mount](105-runtime-level-list-mount.md)), a bug was introduced in the `runtime__list_tools` meta-tool: it **hardcoded `defaultHidden: false`** on every descriptor it passed to the persona capability's `getFilteredTools()`. This broke the **default visibility layer** entirely — default-hidden tools (e.g. all `terminal__*` tools) were never filtered out of `runtime__list_tools` results, so they were discoverable and mountable by **every** persona. The user observed this concretely: the terminal plugin was available to all personas and the LLM kept misusing it, forcing them to disable the plugin.
 
 The correct behavior is a composition of two layers that must filter both (a) the list returned by `runtime__list_tools` and (b) the actual mounted tool list sent to the LLM:
 
@@ -81,6 +81,6 @@ Added regression tests in:
 
 ## Related
 
-- [[concepts/default-hidden-tools]] — The default-hidden concept and `allowedTools` overlay
-- [[decisions/105-runtime-level-list-mount]] — The runtime-level list-mount that introduced this bug
-- [[flows/tool-call-loop]] — `getLlmTools()` in the conversation service
+- default-hidden-tools — The default-hidden concept and `allowedTools` overlay
+- [105-runtime-level-list-mount](105-runtime-level-list-mount.md) — The runtime-level list-mount that introduced this bug
+- tool-call-loop — `getLlmTools()` in the conversation service

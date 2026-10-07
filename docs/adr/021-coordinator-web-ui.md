@@ -53,5 +53,5 @@ The UI is a workspace package (`drone-coordinator-ui`) in the pnpm monorepo. The
 
 ## Related
 
-- [[drone-coordinator]] — The backend
-- [[modules/drone-coordinator-ui]] — UI module details
+- [drone-coordinator](../../drone-coordinator/) — The backend
+- [drone-coordinator-ui](../../drone-coordinator-ui/) — UI module details

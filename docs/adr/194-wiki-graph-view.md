@@ -9,11 +9,11 @@ related: [modules/drone-swarm-common.md, modules/drone-coordinator.md, modules/d
 
 ## Context
 
-The wiki browser ([[decisions/187-coordinator-ui-wiki-browser-improvements]],
-[[decisions/189-coordinator-wiki-tag-scaleup]]) had list/grid/tag views but no
+The wiki browser ([187-coordinator-ui-wiki-browser-improvements](187-coordinator-ui-wiki-browser-improvements.md),
+[189-coordinator-wiki-tag-scaleup](189-coordinator-wiki-tag-scaleup.md)) had list/grid/tag views but no
 way to *see* the wiki's link structure: orphans, broken `[[wikilinks]]`, and
 page neighborhoods were only discoverable through `POST /wiki/lint` output.
-The memory wiki is a densely cross-referenced corpus ([[concepts/memory-pipeline]]),
+The memory wiki is a densely cross-referenced corpus (memory-pipeline),
 and its structure is itself information.
 
 ## Decision
@@ -61,7 +61,7 @@ coordinator-only graph endpoint.
   as first-class nodes.
 - All further graph rendering work (sizing, labels, forces, focus, animation)
   lives in the wrapper + `lib/wiki-graph-utils.ts`
-  ([[decisions/195-wiki-graph-visual-polish]]).
+  ([195-wiki-graph-visual-polish](195-wiki-graph-visual-polish.md)).
 
 ## Tests
 
@@ -73,6 +73,6 @@ coordinator-only graph endpoint.
 
 ## Related
 
-- [[decisions/195-wiki-graph-visual-polish]] — the rendering work built on this
-- [[decisions/187-coordinator-ui-wiki-browser-improvements]] — the wiki browser
-- [[decisions/189-coordinator-wiki-tag-scaleup]] — tag pages/list filtering
+- [195-wiki-graph-visual-polish](195-wiki-graph-visual-polish.md) — the rendering work built on this
+- [187-coordinator-ui-wiki-browser-improvements](187-coordinator-ui-wiki-browser-improvements.md) — the wiki browser
+- [189-coordinator-wiki-tag-scaleup](189-coordinator-wiki-tag-scaleup.md) — tag pages/list filtering

@@ -70,6 +70,6 @@ Both services now call `setKnowledgeBaseDir(path.join(config.configDir, 'knowled
 
 ## Related
 
-- [[decisions/041-beacon-coordinator-test-suite]] — Route test suite that depends on this refactor
-- [[modules/drone-coordinator]] — Coordinator module with updated config defaults
-- [[modules/drone-beacon]] — Beacon module with updated config defaults
+- [041-beacon-coordinator-test-suite](041-beacon-coordinator-test-suite.md) — Route test suite that depends on this refactor
+- [drone-coordinator](../../drone-coordinator/) — Coordinator module with updated config defaults
+- [drone-beacon](../../drone-beacon/) — Beacon module with updated config defaults

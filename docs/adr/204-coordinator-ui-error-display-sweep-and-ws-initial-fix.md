@@ -5,7 +5,7 @@ related: [drone-coordinator-ui.md, decisions/203-coordinator-ui-archive-undo-and
 
 # Coordinator UI error-display sweep + sessions WS initial-prepend fix
 
-**Summary**: Executes the deferred error-display sweep from [[decisions/203-coordinator-ui-archive-undo-and-error-display]] — promotes the previously-unused `useApi` hook as the shared fetch layer (fixing two latent bugs that zero tests and zero consumers had hidden), wires toast errors into every remaining silent-failure handler (six delete handlers, the topology trust dialog, the session-detail events load, the wiki search effect), swaps all nine remaining copy-pasted destructive banners for the shared `ErrorBanner`, and adds a 350ms debounce to wiki search. Then resolves the backlog's separate list-integrity item: the sessions page stops consuming the WebSocket `initial` snapshot (which blindly prepended active-only sessions at the top of the list on every reconnect) in favor of a session-lifecycle event allowlist that triggers debounced server-truth refetches.
+**Summary**: Executes the deferred error-display sweep from [203-coordinator-ui-archive-undo-and-error-display](203-coordinator-ui-archive-undo-and-error-display.md) — promotes the previously-unused `useApi` hook as the shared fetch layer (fixing two latent bugs that zero tests and zero consumers had hidden), wires toast errors into every remaining silent-failure handler (six delete handlers, the topology trust dialog, the session-detail events load, the wiki search effect), swaps all nine remaining copy-pasted destructive banners for the shared `ErrorBanner`, and adds a 350ms debounce to wiki search. Then resolves the backlog's separate list-integrity item: the sessions page stops consuming the WebSocket `initial` snapshot (which blindly prepended active-only sessions at the top of the list on every reconnect) in favor of a session-lifecycle event allowlist that triggers debounced server-truth refetches.
 
 ## Context
 
@@ -54,8 +54,8 @@ Validation: UI suite 166 → 205 passed; UI typecheck + root lint (prettier incl
 
 ## Related
 
-- [[decisions/203-coordinator-ui-archive-undo-and-error-display]] — the toast/banner primitives and sessions-page hardening this sweep extends
-- [[decisions/190-coordinator-session-archive]] — archive/restore backend + the `exclude=`/`status=` filters the refetch path respects
-- [[decisions/191-topology-live-ws-status]] — topology's `initial` + `event` subscription pattern the sessions page now partially follows
-- [[decisions/198-coordinator-ui-launch-interact]] — the WS reverse-channel context for coordinator pushes
-- [[modules/drone-coordinator-ui]] — module overview
+- [203-coordinator-ui-archive-undo-and-error-display](203-coordinator-ui-archive-undo-and-error-display.md) — the toast/banner primitives and sessions-page hardening this sweep extends
+- [190-coordinator-session-archive](190-coordinator-session-archive.md) — archive/restore backend + the `exclude=`/`status=` filters the refetch path respects
+- [191-topology-live-ws-status](191-topology-live-ws-status.md) — topology's `initial` + `event` subscription pattern the sessions page now partially follows
+- [198-coordinator-ui-launch-interact](198-coordinator-ui-launch-interact.md) — the WS reverse-channel context for coordinator pushes
+- [drone-coordinator-ui](../../drone-coordinator-ui/) — module overview

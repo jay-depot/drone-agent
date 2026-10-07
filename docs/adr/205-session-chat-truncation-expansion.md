@@ -52,7 +52,7 @@ Also in context: the transcript's typical bloated items are persona instructions
 
 ## Related
 
-- [[decisions/202-session-chat-view-blob-delivery]] — the feed DTO, content endpoint, and PREVIEW_CHARS this extends; the placeholder this revises
-- [[decisions/201-session-detail-live-chat-resilience]] — the session-detail page hosting the chat view
-- [[modules/drone-coordinator]] — `chat-feed.ts` transform changes
-- [[modules/drone-coordinator-ui]] — `MessageBody`/`SessionChat` expansion state
+- [202-session-chat-view-blob-delivery](202-session-chat-view-blob-delivery.md) — the feed DTO, content endpoint, and PREVIEW_CHARS this extends; the placeholder this revises
+- [201-session-detail-live-chat-resilience](201-session-detail-live-chat-resilience.md) — the session-detail page hosting the chat view
+- [drone-coordinator](../../drone-coordinator/) — `chat-feed.ts` transform changes
+- [drone-coordinator-ui](../../drone-coordinator-ui/) — `MessageBody`/`SessionChat` expansion state

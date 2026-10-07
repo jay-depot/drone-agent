@@ -56,9 +56,9 @@ Config field first (`agentPath`), fall back to `$PATH` lookup via a `which()` ut
 
 ## Related
 
-- [[modules/drone-gateway]] — The gateway package
-- [[concepts/spawn-backend]] — Pluggable spawn backend architecture
-- [[concepts/json-listen-mode]] — JSON listen mode for persistent agent sessions
-- [[modules/drone-swarm-common]] — Shared spawner in drone-swarm-common
-- [[decisions/027-drone-swarm-common]] — Original drone-swarm-common extraction
-- [[decisions/235-gateway-architecture-standalone-service]] — Gateway architecture ADR (in drone-gateway/docs/adr/)
+- [drone-gateway](../../drone-gateway/) — The gateway package
+- spawn-backend — Pluggable spawn backend architecture
+- json-listen-mode — JSON listen mode for persistent agent sessions
+- [drone-swarm-common](../../drone-swarm-common/) — Shared spawner in drone-swarm-common
+- [027-drone-swarm-common](027-drone-swarm-common.md) — Original drone-swarm-common extraction
+- [235-gateway-architecture-standalone-service](235-gateway-architecture-standalone-service.md) — Gateway architecture ADR (in drone-gateway/docs/adr/)

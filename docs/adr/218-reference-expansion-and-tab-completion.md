@@ -7,7 +7,7 @@ related: [decisions/215-slash-commands-during-work.md, decisions/217-steer-and-b
 
 **Status**: Implemented (2026-09-19) · **Branch**: `feat/inline-object-refs` (PR #109, open) · **Plan**: project-memory `plan-reference-expansion-tab-completion` — *deleted from project memory after ingest*
 
-**Summary**: User messages now expand `@`-references before they become session turns. **`@path`** inserts a file's contents (`bare` → CWD, `~/` → home, `./`/`../`/absolute), a directory lists recursively (names only), and a glob (`*`/`?`) expands to matching files — all bounded by per-file, per-listing, and total-message caps. **`@skill:<id>`** inserts a skill's body. Expansion is a **registry capability** (`reference`) seeded by the engine *before* plugin registration, so core owns the `file:` kind and the skills plugin contributes `skill:`; future kinds register without touching the runtime. Expansion runs in the **conversation service** at the three direct append sites, so every host (TUI, readline, JSON-listen, swarm, `/steer`, macro chat steps) behaves identically. The TUI also gains **tab completion** for `@`-file refs, `@skill:` ids, and `/`-commands. A one-line persona-loader bug found while verifying the feature is recorded separately as [[decisions/219-persona-premountedtools-hyphen-fix]].
+**Summary**: User messages now expand `@`-references before they become session turns. **`@path`** inserts a file's contents (`bare` → CWD, `~/` → home, `./`/`../`/absolute), a directory lists recursively (names only), and a glob (`*`/`?`) expands to matching files — all bounded by per-file, per-listing, and total-message caps. **`@skill:<id>`** inserts a skill's body. Expansion is a **registry capability** (`reference`) seeded by the engine *before* plugin registration, so core owns the `file:` kind and the skills plugin contributes `skill:`; future kinds register without touching the runtime. Expansion runs in the **conversation service** at the three direct append sites, so every host (TUI, readline, JSON-listen, swarm, `/steer`, macro chat steps) behaves identically. The TUI also gains **tab completion** for `@`-file refs, `@skill:` ids, and `/`-commands. A one-line persona-loader bug found while verifying the feature is recorded separately as [219-persona-premountedtools-hyphen-fix](219-persona-premountedtools-hyphen-fix.md).
 
 ## Context
 
@@ -73,7 +73,7 @@ Two design constraints shaped the architecture:
 1. **The double-expansion trap lives in the `'own-round'` drain.** That branch re-enters `service.sendUserMessage(entry.content)`, which is *itself* an expansion site — so expanding in the drain too would expand twice. The fix is to expand only at the three *direct* append sites; a regression test pins "exactly once".
 2. **Unknown-kind-prefix tokens need the whole body.** `@a:b.ts` tokenizes with `kind='a'` (a syntactically valid kind name) but no resolver; the resolver must fall back to the *entire original body* as a file path, not the post-colon remainder.
 3. **`reference` must be an *optional* dependency of the skills plugin.** The engine's dependency validation checks *enabled plugin ids*, and `reference` is a capability, not a plugin — a non-optional dep would fail startup.
-4. **`file__apply_diff` fuzzy matching corrupted a file.** A large hunk near a damaged tail duplicated/mangled the end of `plugin-engine.ts` and silently dropped two hunks (an import and a destructure) while reporting `patched: true`; repaired by deterministic exact-string replacement over the shell and verified with `tsc -b`. (Same silent-no-op class flagged in [[decisions/217-steer-and-btw-commands]].)
+4. **`file__apply_diff` fuzzy matching corrupted a file.** A large hunk near a damaged tail duplicated/mangled the end of `plugin-engine.ts` and silently dropped two hunks (an import and a destructure) while reporting `patched: true`; repaired by deterministic exact-string replacement over the shell and verified with `tsc -b`. (Same silent-no-op class flagged in [217-steer-and-btw-commands](217-steer-and-btw-commands.md).)
 
 ## Consequences
 
@@ -90,12 +90,12 @@ Two design constraints shaped the architecture:
 
 ## Related
 
-- [[decisions/215-slash-commands-during-work]] — the unified queue whose `'own-round'` drain is the double-expansion trap
-- [[decisions/217-steer-and-btw-commands]] — the mid-round steering loop that is one of the three expansion sites
-- [[decisions/219-persona-premountedtools-hyphen-fix]] — the persona-loader bug found while verifying this feature
-- [[concepts/session-management]] — where a user string becomes a session turn
-- [[flows/tool-call-loop]] — the append sites in the loop
-- [[modules/drone-core]] — the reference types + `renderSkillBody`
-- [[modules/drone-agent]] — the runtime module + conversation-service wiring
-- [[modules/drone-agent-tui]] — the completion menu + controlled caret
-- [[modules/drone-agent-plugins]] — the skills plugin's `skill:` kind
+- [215-slash-commands-during-work](215-slash-commands-during-work.md) — the unified queue whose `'own-round'` drain is the double-expansion trap
+- [217-steer-and-btw-commands](217-steer-and-btw-commands.md) — the mid-round steering loop that is one of the three expansion sites
+- [219-persona-premountedtools-hyphen-fix](219-persona-premountedtools-hyphen-fix.md) — the persona-loader bug found while verifying this feature
+- session-management — where a user string becomes a session turn
+- tool-call-loop — the append sites in the loop
+- [drone-core](../../drone-core/) — the reference types + `renderSkillBody`
+- [drone-agent](../../drone-agent/) — the runtime module + conversation-service wiring
+- [drone-agent-tui](../../drone-agent/src/tui/) — the completion menu + controlled caret
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — the skills plugin's `skill:` kind

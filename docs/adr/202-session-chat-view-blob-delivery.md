@@ -47,8 +47,8 @@ ADR 198 delivered interactive remote chat, but the session page rendered each ev
 
 ## Related
 
-- [[decisions/198-coordinator-ui-launch-interact]] — the interactive chat this view renders; the raw view it supersedes
-- [[decisions/201-session-detail-live-chat-resilience]] — the crash/recovery fixes under this page; the lifecycle-refetch list chat mode also relies on
-- [[modules/drone-coordinator]] — `chat-feed.ts`, the `/chat` + content routes, db keyset query
-- [[modules/drone-coordinator-ui]] — `SessionChat`, base `Markdown`, the `?view=raw` toggle
-- [[decisions/205-session-chat-truncation-expansion]] — the expansion affordance for this ADR's truncation slugs; revises the placeholder rule for resolved blobbed payloads
+- [198-coordinator-ui-launch-interact](198-coordinator-ui-launch-interact.md) — the interactive chat this view renders; the raw view it supersedes
+- [201-session-detail-live-chat-resilience](201-session-detail-live-chat-resilience.md) — the crash/recovery fixes under this page; the lifecycle-refetch list chat mode also relies on
+- [drone-coordinator](../../drone-coordinator/) — `chat-feed.ts`, the `/chat` + content routes, db keyset query
+- [drone-coordinator-ui](../../drone-coordinator-ui/) — `SessionChat`, base `Markdown`, the `?view=raw` toggle
+- [205-session-chat-truncation-expansion](205-session-chat-truncation-expansion.md) — the expansion affordance for this ADR's truncation slugs; revises the placeholder rule for resolved blobbed payloads

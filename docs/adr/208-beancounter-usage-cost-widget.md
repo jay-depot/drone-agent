@@ -55,10 +55,10 @@ drone-agent never tracked how many tokens it consumed or what it cost. The provi
 
 ## Related
 
-- [[modules/drone-core]] — `DroneLlmUsage`, `DroneLlmUsageLedgerEntry`, capability additions
-- [[modules/drone-agent-plugins]] — llm broker ledger, drivers, beancounter plugin
-- [[modules/drone-agent-tui]] — generalized mid-panel widget discovery
-- [[concepts/provider-model-selection]] — the role-tagged ledger entries (`main`/role name/`image_describer`)
-- [[decisions/155-provider-model-config]] — the broker `enrichProvider` interception point that now also records usage
-- [[decisions/164-model-role-bindings]] — model roles whose calls are now ledger-tagged by role
-- [[decisions/165-image-describer-role]] — the `image_describer` role that is ledger-tagged `'image_describer'`
+- [drone-core](../../drone-core/) — `DroneLlmUsage`, `DroneLlmUsageLedgerEntry`, capability additions
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — llm broker ledger, drivers, beancounter plugin
+- [drone-agent-tui](../../drone-agent/src/tui/) — generalized mid-panel widget discovery
+- provider-model-selection — the role-tagged ledger entries (`main`/role name/`image_describer`)
+- [155-provider-model-config](155-provider-model-config.md) — the broker `enrichProvider` interception point that now also records usage
+- [164-model-role-bindings](164-model-role-bindings.md) — model roles whose calls are now ledger-tagged by role
+- [165-image-describer-role](165-image-describer-role.md) — the `image_describer` role that is ledger-tagged `'image_describer'`

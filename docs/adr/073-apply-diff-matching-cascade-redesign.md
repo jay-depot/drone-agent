@@ -7,7 +7,7 @@ related: [drone-agent-plugins.md, 033-file-apply-diff-v2.md, 038-file-apply-diff
 
 **Status**: Implemented (2026-07-19)
 
-**Supersedes**: [[038-file-apply-diff-unified-diff]] (matching engine only — the unified diff *input format* is preserved)
+**Supersedes**: [038-file-apply-diff-unified-diff](038-file-apply-diff-unified-diff.md) (matching engine only — the unified diff *input format* is preserved)
 
 ## Context
 
@@ -114,7 +114,7 @@ Unroll to the last step that had multiple matches and report like Type 1.
 | `patch-applier/levenshtein.ts` | Levenshtein edit distance + `findFuzzySuggestions` (top 5, cap-at-5 for ties) |
 | `patch-applier/errors.ts` | Type 1/2/3 failure builders + reworked-hunk cheat sheet builder |
 
-See [[048-large-file-splitting]] for the broader refactoring pattern.
+See [048-large-file-splitting](048-large-file-splitting.md) for the broader refactoring pattern.
 
 ## Implementation Notes
 
@@ -160,7 +160,7 @@ See [[048-large-file-splitting]] for the broader refactoring pattern.
 
 ## Related
 
-- [[drone-agent-plugins]] — File plugin
-- [[033-file-apply-diff-v2]] — Original content-anchor format (superseded by 038)
-- [[038-file-apply-diff-unified-diff]] — Unified diff input format (matching engine superseded by this ADR; input format preserved)
-- [[048-large-file-splitting]] — Large file splitting pattern (this ADR split `patch-applier.ts` into a directory)
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — File plugin
+- [033-file-apply-diff-v2](033-file-apply-diff-v2.md) — Original content-anchor format (superseded by 038)
+- [038-file-apply-diff-unified-diff](038-file-apply-diff-unified-diff.md) — Unified diff input format (matching engine superseded by this ADR; input format preserved)
+- [048-large-file-splitting](048-large-file-splitting.md) — Large file splitting pattern (this ADR split `patch-applier.ts` into a directory)

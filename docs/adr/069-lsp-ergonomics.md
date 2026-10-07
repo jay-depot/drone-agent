@@ -85,5 +85,5 @@ All modified tools' descriptions updated to mention the new capabilities.
 
 ## Related
 
-- [[modules/drone-agent-plugins]] — LSP plugin entry
-- [[decisions/048-large-file-splitting]] — LSP server.ts and tools.ts were split in that refactor
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — LSP plugin entry
+- [048-large-file-splitting](048-large-file-splitting.md) — LSP server.ts and tools.ts were split in that refactor

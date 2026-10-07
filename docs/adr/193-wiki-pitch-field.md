@@ -9,7 +9,7 @@ related: [modules/drone-core.md, modules/drone-swarm-common.md, modules/drone-be
 
 ## Context
 
-The swarm-memory RAG fragment ([[decisions/179-swarm-memory-rag-retrieval]])
+The swarm-memory RAG fragment ([179-swarm-memory-rag-retrieval](179-swarm-memory-rag-retrieval.md))
 displayed a per-page "pitch" assembled **procedurally**:
 `truncatePitch(result.matchedChunk ?? '')` — the first chunk of the page that
 happened to win the vector search. An arbitrary retrieval artifact was standing
@@ -75,6 +75,6 @@ pages written without one) stay valid.
 
 ## Related
 
-- [[decisions/179-swarm-memory-rag-retrieval]] — the RAG pipeline consuming it
-- [[decisions/180-swarm-memory-bootstrap-workflow]] — the librarian persona it curates for
-- [[concepts/memory-pipeline]] — write/read sides
+- [179-swarm-memory-rag-retrieval](179-swarm-memory-rag-retrieval.md) — the RAG pipeline consuming it
+- [180-swarm-memory-bootstrap-workflow](180-swarm-memory-bootstrap-workflow.md) — the librarian persona it curates for
+- memory-pipeline — write/read sides

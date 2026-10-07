@@ -77,7 +77,7 @@ Added `coordinatorUrl` to both `SwarmConfig` (plugin interface) and `DroneSwarmC
 
 ## Related
 
-- [[012-agent-spawn]] — Beacon-level agent spawn execution
-- [[009-cross-beacon-messaging]] — Cross-beacon message relay (same forwarding pattern)
-- [[drone-coordinator]] — Coordinator implementation
-- [[swarm-architecture]] — Swarm mode
+- [012-agent-spawn](012-agent-spawn.md) — Beacon-level agent spawn execution
+- [009-cross-beacon-messaging](009-cross-beacon-messaging.md) — Cross-beacon message relay (same forwarding pattern)
+- [drone-coordinator](../../drone-coordinator/) — Coordinator implementation
+- swarm-architecture — Swarm mode

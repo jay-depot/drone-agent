@@ -7,11 +7,11 @@ related: [decisions/040-message-queue-cancel.md, decisions/015-unified-slash-com
 
 **Status**: Implemented (2026-09-11) · **Branch**: `feat/slash-commands-during-working-fix` · **Plan**: project-memory `slash-commands-during-work-fix` — *deleted from project memory after ingest*
 
-**Summary**: A slash command typed while a turn was in flight (e.g. `/focus set clear`) was delivered to the LLM as a **plain-text steering message** instead of being executed. Two causes: the TUI's busy `onSubmit` routed any non-`/cancel` input to `enqueueUserMessage`, and the remote-steering path (`_runtime.submitUserMessage`, fed by the coordinator UI's `sendMessage(steer)`) never checked for a leading `/` at all. This ADR completes the split that [[decisions/040-message-queue-cancel]] explicitly deferred — a slash command is **never** sent as plain text, at **every** user-role entry point — and adds a plugin-supplied busy-behavior classifier, a universal `--now` escape hatch, shared subcommand/flag parsing, and one unified ordered entry queue.
+**Summary**: A slash command typed while a turn was in flight (e.g. `/focus set clear`) was delivered to the LLM as a **plain-text steering message** instead of being executed. Two causes: the TUI's busy `onSubmit` routed any non-`/cancel` input to `enqueueUserMessage`, and the remote-steering path (`_runtime.submitUserMessage`, fed by the coordinator UI's `sendMessage(steer)`) never checked for a leading `/` at all. This ADR completes the split that [040-message-queue-cancel](040-message-queue-cancel.md) explicitly deferred — a slash command is **never** sent as plain text, at **every** user-role entry point — and adds a plugin-supplied busy-behavior classifier, a universal `--now` escape hatch, shared subcommand/flag parsing, and one unified ordered entry queue.
 
 ## Context
 
-[[decisions/040-message-queue-cancel]] added a message queue and soft cancel to the conversation service, and routed TUI input by `isLlmActive`. It deliberately left the read-only/immediate vs. mutating/queued distinction unimplemented: while busy, *everything* except `/cancel` became queued **text**. So a command like `/focus set clear` was appended to the session as a user utterance and sent to the model, which is both wrong (the command never ran) and confusing (the model sees command syntax as natural language).
+[040-message-queue-cancel](040-message-queue-cancel.md) added a message queue and soft cancel to the conversation service, and routed TUI input by `isLlmActive`. It deliberately left the read-only/immediate vs. mutating/queued distinction unimplemented: while busy, *everything* except `/cancel` became queued **text**. So a command like `/focus set clear` was appended to the session as a user utterance and sent to the model, which is both wrong (the command never ran) and confusing (the model sees command syntax as natural language).
 
 The gap was wider than the TUI. The coordinator UI's "Send"/"Stop & Send" path reaches the agent through `_runtime.submitUserMessage` → `conversation.submitUserMessage`, which performed **no** leading-`/` check whatsoever. Any remote operator typing a command mid-turn hit the same defect, with no TUI involved.
 
@@ -71,8 +71,8 @@ New tests: `slash-parse.test.ts` (12) and `slash-queue-conversation.test.ts` (9 
 
 ## Related
 
-- [[decisions/040-message-queue-cancel]] — the queue/soft-cancel foundation whose deferred split this completes
-- [[decisions/015-unified-slash-commands]] — the unified slash-command registry
-- [[decisions/198-coordinator-ui-launch-interact]] — the remote steering path that shares this chokepoint
-- [[concepts/session-management]] — queue, drain, and cancel semantics
-- [[flows/tool-call-loop]] — where drain points sit in the loop
+- [040-message-queue-cancel](040-message-queue-cancel.md) — the queue/soft-cancel foundation whose deferred split this completes
+- [015-unified-slash-commands](015-unified-slash-commands.md) — the unified slash-command registry
+- [198-coordinator-ui-launch-interact](198-coordinator-ui-launch-interact.md) — the remote steering path that shares this chokepoint
+- session-management — queue, drain, and cancel semantics
+- tool-call-loop — where drain points sit in the loop

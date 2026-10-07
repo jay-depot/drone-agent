@@ -7,7 +7,7 @@ related: [concepts/lsp-symbolic-resolution.md, decisions/069-lsp-ergonomics.md, 
 
 **Status**: Implemented (2026-08-17)
 
-> **Superseded in part by [[decisions/138-lsp-symbolic-resolution-round-2]]** — the `suggestedSurroundingText` field was renamed to `suggestedContext` (now a dense context block), the filter was changed to exact-match (trim-only) sized to the handed-back block, the reference cache gained a cap + TTL + staleness detection, `code_action` referenceId now targets `ref.filePath`, and `get_diagnostics` became file/severity-only.
+> **Superseded in part by [138-lsp-symbolic-resolution-round-2](138-lsp-symbolic-resolution-round-2.md)** — the `suggestedSurroundingText` field was renamed to `suggestedContext` (now a dense context block), the filter was changed to exact-match (trim-only) sized to the handed-back block, the reference cache gained a cap + TTL + staleness detection, `code_action` referenceId now targets `ref.filePath`, and `get_diagnostics` became file/severity-only.
 
 ## Context
 
@@ -96,7 +96,7 @@ Removed `surroundingText` from the diagnostics tool schema — whole-file granul
 
 ## Related
 
-- [[concepts/lsp-symbolic-resolution]] — The original plan this decision implements
-- [[decisions/069-lsp-ergonomics]] — Prior LSP ergonomics (text/symbol resolution)
-- [[modules/drone-core]] — Position types live in drone-core
-- [[modules/drone-agent-plugins]] — LSP plugin
+- lsp-symbolic-resolution — The original plan this decision implements
+- [069-lsp-ergonomics](069-lsp-ergonomics.md) — Prior LSP ergonomics (text/symbol resolution)
+- [drone-core](../../drone-core/) — Position types live in drone-core
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — LSP plugin

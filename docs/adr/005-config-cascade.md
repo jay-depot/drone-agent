@@ -31,5 +31,5 @@ Use a layered config cascade with last-write-wins per key, except `enabledPlugin
 
 ## Related
 
-- [[config-cascade]] — Config layering
-- [[entities/DroneAgentConfig]] — Config schema
+- config-cascade — Config layering
+- [DroneAgentConfig](../../drone-core/src/config-types.ts) — Config schema

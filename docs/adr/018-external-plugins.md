@@ -63,6 +63,6 @@ In this iteration, external plugins are only loaded from well-known directories.
 
 ## Related
 
-- [[concepts/external-plugins]] — How external plugins work
-- [[plugin-system]] — Plugin architecture
-- [[entities/DroneAgentConfig]] — Config schema with new fields
+- external-plugins — How external plugins work
+- [plugin-system](002-plugin-system.md) — Plugin architecture
+- [DroneAgentConfig](../../drone-core/src/config-types.ts) — Config schema with new fields

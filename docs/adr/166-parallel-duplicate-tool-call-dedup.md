@@ -68,7 +68,7 @@ Dedup has no cross-iteration counters, so it needs no reset wiring in `resetStuc
 
 ## Related
 
-- [[concepts/session-management]] — Session lifecycle and guardrail reset semantics
-- [[flows/tool-call-loop]] — Where the guardrail hooks into the loop
-- [[decisions/145-guardrail-reliability-features]] — The original guardrail reliability features and `session.guardrail` config
-- [[entities/Session]] — `DroneToolCall` and `DroneConversationEvent` (the `notice` kind)
+- session-management — Session lifecycle and guardrail reset semantics
+- tool-call-loop — Where the guardrail hooks into the loop
+- [145-guardrail-reliability-features](145-guardrail-reliability-features.md) — The original guardrail reliability features and `session.guardrail` config
+- [Session](../../drone-core/src/session-types.ts) — `DroneToolCall` and `DroneConversationEvent` (the `notice` kind)

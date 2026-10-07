@@ -9,7 +9,7 @@ related: [decisions/082-debug-flag-llm-logging.md, decisions/097-debug-slash-com
 
 ## Context
 
-The `--debug llm` flag ([[082-debug-flag-llm-logging]]) logged LLM request/response bodies, but there was no way to trace the **tool surface** — when tools are mounted, unmounted, registered, unregistered, or when plugins are enabled. Debugging tool-surface issues (e.g. why a tool disappeared, why a mount failed) required adding temporary `console.log` statements.
+The `--debug llm` flag ([082-debug-flag-llm-logging](082-debug-flag-llm-logging.md)) logged LLM request/response bodies, but there was no way to trace the **tool surface** — when tools are mounted, unmounted, registered, unregistered, or when plugins are enabled. Debugging tool-surface issues (e.g. why a tool disappeared, why a mount failed) required adding temporary `console.log` statements.
 
 A deeper structural problem: the debug subsystem set (`debugSet`) lived **privately inside the conversation service**. The plugin engine — where all tool-surface mutations happen — is created *before* the conversation service in `index.tsx`, so it could not read that set. There was no shared, single source of truth for which debug subsystems are active.
 
@@ -36,7 +36,7 @@ Backed by a `Set<string>`, created once from `invocation.options.debugSubsystems
 
 The conversation service's `debugSubsystems?: string[]` constructor param was **removed**. Verified no test or other call site passed it — only `cli.ts` produces it as CLI input and `index.tsx` wires it. The registry is seeded once and becomes the single source of truth, making sync issues structurally impossible (no dual source of truth) with zero test churn.
 
-The conversation service's existing `getDebugSubsystems`/`enableDebugSubsystem`/`disableDebugSubsystem` methods now **delegate to the registry**, so the `/debug` command ([[097-debug-slash-command]]) and TUI wiring stay unchanged. `debug: debugFlags.isEnabled('llm')` replaces `debugSet.has('llm')`.
+The conversation service's existing `getDebugSubsystems`/`enableDebugSubsystem`/`disableDebugSubsystem` methods now **delegate to the registry**, so the `/debug` command ([097-debug-slash-command](097-debug-slash-command.md)) and TUI wiring stay unchanged. `debug: debugFlags.isEnabled('llm')` replaces `debugSet.has('llm')`.
 
 ### Engine logging
 
@@ -77,7 +77,7 @@ The conversation service's existing `getDebugSubsystems`/`enableDebugSubsystem`/
 
 ## Related
 
-- [[decisions/082-debug-flag-llm-logging]] — The original `--debug llm` flag this extends
-- [[decisions/097-debug-slash-command]] — The `/debug` command that mutates the shared registry at runtime
-- [[modules/drone-core]] — `DebugFlagRegistry` and `createDebugFlagRegistry`
-- [[modules/drone-agent]] — Wiring in `index.tsx`, engine + conversation service
+- [082-debug-flag-llm-logging](082-debug-flag-llm-logging.md) — The original `--debug llm` flag this extends
+- [097-debug-slash-command](097-debug-slash-command.md) — The `/debug` command that mutates the shared registry at runtime
+- [drone-core](../../drone-core/) — `DebugFlagRegistry` and `createDebugFlagRegistry`
+- [drone-agent](../../drone-agent/) — Wiring in `index.tsx`, engine + conversation service

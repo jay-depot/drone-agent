@@ -53,8 +53,8 @@ LSP clean; `pnpm -r run build` and `pnpm lint` zero errors; fast suite 2398 pass
 
 ## Related
 
-- [[entities/Skill]] — the field on the definition type
-- [[decisions/161-runtime-enforcement-required-tool-inputs]] — why an unadvertised optional input works as a gate
-- [[decisions/029-dynamic-writer-registration]] — creation scopes (remark not wired into the wizard in v1)
-- [[concepts/identity-assets]] — personas are near-future remark work
-- [[modules/drone-core]], [[modules/drone-agent-plugins]] — where the field and surfaces live
+- [Skill](../../drone-core/src/domain-types.ts) — the field on the definition type
+- [161-runtime-enforcement-required-tool-inputs](161-runtime-enforcement-required-tool-inputs.md) — why an unadvertised optional input works as a gate
+- [029-dynamic-writer-registration](029-dynamic-writer-registration.md) — creation scopes (remark not wired into the wizard in v1)
+- identity-assets — personas are near-future remark work
+- [drone-core](../../drone-core/), [drone-agent-plugins](../../drone-agent/src/plugins/) — where the field and surfaces live

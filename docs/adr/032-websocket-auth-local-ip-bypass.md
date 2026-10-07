@@ -40,6 +40,6 @@ Three changes across two files:
 
 ## Related
 
-- [[concepts/coordinator-web-auth]] — Web auth concept (updated with WebSocket auth details)
-- [[modules/drone-coordinator]] — Coordinator module (updated WebSocket section)
-- [[meta/web-ui-tailscale-detection-research]] — Research note on tailscale detection
+- coordinator-web-auth — Web auth concept (updated with WebSocket auth details)
+- [drone-coordinator](../../drone-coordinator/) — Coordinator module (updated WebSocket section)
+- web-ui-tailscale-detection-research — Research note on tailscale detection

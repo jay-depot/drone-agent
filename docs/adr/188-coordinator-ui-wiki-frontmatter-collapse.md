@@ -16,7 +16,7 @@ coordinator already stores. The librarian's habit is harmless — the storage
 layer (`drone-swarm-common/src/wiki-storage.ts`) strips only the *outer*
 frontmatter that `writePage()` builds, so `page.content` still begins with the
 librarian's own `---\n...\n---\n` block. The wiki browser's read view
-(`WikiMarkdown`, added in [[decisions/187-coordinator-ui-wiki-browser-improvements]])
+(`WikiMarkdown`, added in [187-coordinator-ui-wiki-browser-improvements](187-coordinator-ui-wiki-browser-improvements.md))
 rendered the whole `content` string, so this redundant block showed as raw text
 at the top of every such page.
 

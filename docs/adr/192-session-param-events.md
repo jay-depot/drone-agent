@@ -11,7 +11,7 @@ related: [modules/drone-core.md, modules/drone-agent.md, modules/drone-agent-plu
 
 Four session-parameter changes were invisible to the swarm event pipeline and
 absent from the readable transcript consumed by the swarm-memory ingest agent
-([[concepts/memory-pipeline]]): persona changes, focus-string changes, macro
+(memory-pipeline): persona changes, focus-string changes, macro
 executions, and subagent session starts. The librarian reading a session
 transcript could not see *which* persona was active, *what* the focus was, or
 *that* a macro ran — it only saw chat and tool turns.
@@ -70,6 +70,6 @@ is an open string).
 
 ## Related
 
-- [[concepts/memory-pipeline]] — the librarian is the consumer motivating this
-- [[entities/Session]] — `DroneConversationEvent` union
-- [[flows/tool-call-loop]] — event dispatch path
+- memory-pipeline — the librarian is the consumer motivating this
+- [Session](../../drone-core/src/session-types.ts) — `DroneConversationEvent` union
+- tool-call-loop — event dispatch path

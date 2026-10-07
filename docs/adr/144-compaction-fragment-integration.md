@@ -32,11 +32,11 @@ A review of the compaction plugin found critical string-escaping bugs and a miss
 
 - Token counting for compaction's fallback context window and usage estimate now matches the real prompt-fragment accounting, so compaction's soft-threshold decision is accurate.
 - The escaped-newline fixes produce well-formed summary transcripts and prompts.
-- This is a correctness/consistency pass on the compaction plugin, complementary to the turn-granularity fix ([[decisions/142-compaction-turn-granularity-fix]]).
+- This is a correctness/consistency pass on the compaction plugin, complementary to the turn-granularity fix ([142-compaction-turn-granularity-fix](142-compaction-turn-granularity-fix.md)).
 
 ## Related
 
-- [[concepts/session-management]] — Compaction triggering and context budgeting
-- [[decisions/134-compaction-correctness-fix]] — sliceSize + convergence loop
-- [[decisions/135-compaction-slash-command]] — `/compact` + extended capability
-- [[decisions/142-compaction-turn-granularity-fix]] — Turn granularity fix
+- session-management — Compaction triggering and context budgeting
+- [134-compaction-correctness-fix](134-compaction-correctness-fix.md) — sliceSize + convergence loop
+- [135-compaction-slash-command](135-compaction-slash-command.md) — `/compact` + extended capability
+- [142-compaction-turn-granularity-fix](142-compaction-turn-granularity-fix.md) — Turn granularity fix

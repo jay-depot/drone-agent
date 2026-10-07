@@ -64,7 +64,7 @@ All 5 CodeQL alert classes addressed. Validation: LSP clean, `pnpm lint` clean, 
 
 ## Follow-up (recorded 2026-09-18)
 
-The **`js/path-injection` sinks in `wiki-storage.ts`** (the four `pagePath` call sites plus `resolvePageScope`) were not part of this ADR's five classes, but were later cleared the same way — **in-source `// codeql[js/path-injection]` dismissals** on each sink, with the comment stating that `pagePath()` sanitizes the id to `[a-zA-Z0-9_-]` (dots become underscores, so `..` traversal is impossible). The `spawner.ts` `cwd:` sink got the same treatment (see [[decisions/171-codeql-reenable-in-source-dismissal]]).
+The **`js/path-injection` sinks in `wiki-storage.ts`** (the four `pagePath` call sites plus `resolvePageScope`) were not part of this ADR's five classes, but were later cleared the same way — **in-source `// codeql[js/path-injection]` dismissals** on each sink, with the comment stating that `pagePath()` sanitizes the id to `[a-zA-Z0-9_-]` (dots become underscores, so `..` traversal is impossible). The `spawner.ts` `cwd:` sink got the same treatment (see [171-codeql-reenable-in-source-dismissal](171-codeql-reenable-in-source-dismissal.md)).
 
 A companion planning document had proposed a **different** fix — a `MAX_PAGE_ID_LENGTH = 4096` length guard inside `pagePath()` (with over-length `readPage`/`deletePage` returning `null`/`false` gracefully), plus an over-length page-ID test suite. That approach was **not** implemented: `pagePath` has no length check and `wiki-storage.test.ts` has no over-length-ID tests. The sanitization argument made the guard redundant for the traversal class, and the in-source dismissal is what actually keeps scanning green. The spawner half of that plan *was* implemented as written (`MAX_WORKING_DIR_LENGTH = 4096` + throw + a new `spawner.test.ts`), because a *length* bound is the right control there — dots are legitimate in a directory path.
 
@@ -72,8 +72,8 @@ A companion planning document had proposed a **different** fix — a `MAX_PAGE_I
 
 ## Related
 
-- [[modules/drone-beacon]] — coordinator-client.ts TLS suppression, routes/skills.ts + routes/personas.ts XSS suppressions
-- [[modules/drone-coordinator]] — routes/skills.ts + routes/personas.ts XSS suppressions
-- [[modules/drone-swarm-common]] — wiki-storage.ts length guard
-- [[modules/drone-agent-plugins]] — git plugin test no-op removal
-- [[decisions/117-tofu-fingerprint-pinning]] — earlier CodeQL suppression work for TLS
+- [drone-beacon](../../drone-beacon/) — coordinator-client.ts TLS suppression, routes/skills.ts + routes/personas.ts XSS suppressions
+- [drone-coordinator](../../drone-coordinator/) — routes/skills.ts + routes/personas.ts XSS suppressions
+- [drone-swarm-common](../../drone-swarm-common/) — wiki-storage.ts length guard
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — git plugin test no-op removal
+- [117-tofu-fingerprint-pinning](117-tofu-fingerprint-pinning.md) — earlier CodeQL suppression work for TLS

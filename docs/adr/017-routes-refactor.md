@@ -42,5 +42,5 @@ Split the monolithic `routes.ts` files into per-domain route files under a `rout
 
 ## Related
 
-- [[drone-beacon]] — Beacon implementation
-- [[drone-coordinator]] — Coordinator implementation
+- [drone-beacon](../../drone-beacon/) — Beacon implementation
+- [drone-coordinator](../../drone-coordinator/) — Coordinator implementation

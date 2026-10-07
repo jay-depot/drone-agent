@@ -61,6 +61,6 @@ The truncation runs after `Promise.all(toolCalls.map(...))` resolves and before 
 
 ## Related
 
-- [[session-management]] — Context budgeting and safety trim
-- [[tool-call-loop]] — How the conversation service processes tool calls
-- [[drone-core]] — Token estimation functions
+- session-management — Context budgeting and safety trim
+- tool-call-loop — How the conversation service processes tool calls
+- [drone-core](../../drone-core/) — Token estimation functions

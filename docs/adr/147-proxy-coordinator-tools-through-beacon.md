@@ -11,7 +11,7 @@ related: [architecture/swarm-architecture.md, modules/drone-beacon.md, modules/d
 
 The swarm plugin's agent side has a hard architectural rule: **the agent never talks to the coordinator directly** — the beacon is the sole coordinator-facing trust gate (TOFU fingerprint + beacon approval). This was established incrementally:
 
-- The `/swarm-session` feature ([[decisions/146-swarm-session-import]]) already proxied session reads through the beacon (`GET /sessions`, `GET /sessions/:id/transcript`).
+- The `/swarm-session` feature ([146-swarm-session-import](146-swarm-session-import.md)) already proxied session reads through the beacon (`GET /sessions`, `GET /sessions/:id/transcript`).
 - But the six pre-existing **coordinator tools** — `swarm_list_beacons`, `swarm_list_agents`, `swarm_spawn`, `swarm_get_spawn`, `swarm_list_spawns`, `swarm_terminate_spawn` — still hit the coordinator directly via a `coordinatorUrl` config value, bypassing the beacon's trust gate.
 
 The `coordinatorUrl` config itself was a mistake: it was added on the false assumption that the beacon would share the agent's config file, which turned out to be false. Keeping it around caused exactly the kind of direct-coordinator call this refactor removes.
@@ -53,11 +53,11 @@ The `coordinatorUrl` config itself was a mistake: it was added on the false assu
 
 ## Related
 
-- [[architecture/swarm-architecture]] — The swarm plugin's coordinator tools
-- [[modules/drone-beacon]] — `/coordinator/*` proxy routes + CoordinatorClient methods
-- [[modules/drone-agent-plugins]] — swarm plugin tools now hit the beacon proxy
-- [[modules/drone-core]] — `DroneSwarmConfig` no longer has `coordinatorUrl`
-- [[entities/DroneAgentConfig]] — swarm config section corrected
-- [[decisions/146-swarm-session-import]] — The prior step that proxied session reads through the beacon
-- [[decisions/043-inter-beacon-spawn-routing]] — The original coordinator spawn/info tools
-- [[decisions/024-swarm-event-push-404-fix]] — Beacon proxy routes design precedent
+- swarm-architecture — The swarm plugin's coordinator tools
+- [drone-beacon](../../drone-beacon/) — `/coordinator/*` proxy routes + CoordinatorClient methods
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — swarm plugin tools now hit the beacon proxy
+- [drone-core](../../drone-core/) — `DroneSwarmConfig` no longer has `coordinatorUrl`
+- [DroneAgentConfig](../../drone-core/src/config-types.ts) — swarm config section corrected
+- [146-swarm-session-import](146-swarm-session-import.md) — The prior step that proxied session reads through the beacon
+- [043-inter-beacon-spawn-routing](043-inter-beacon-spawn-routing.md) — The original coordinator spawn/info tools
+- [024-swarm-event-push-404-fix](024-swarm-event-push-404-fix.md) — Beacon proxy routes design precedent

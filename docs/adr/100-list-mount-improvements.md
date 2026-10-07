@@ -9,7 +9,7 @@ related: [decisions/064-mcp-deferred-tool-loading.md, decisions/065-mcp-tool-mou
 
 ## Context
 
-After converting the LSP and File plugins to the list-mount pattern ([[decisions/098-lsp-file-list-mount-conversion]]), three issues emerged:
+After converting the LSP and File plugins to the list-mount pattern ([098-lsp-file-list-mount-conversion](098-lsp-file-list-mount-conversion.md)), three issues emerged:
 
 1. **No system-prompt-level explainer** — The list-mount pattern was communicated entirely through tool descriptions. The LLM had to infer the workflow from `__list_tools`/`__mount_tool` descriptions alone, with no overarching guidance.
 
@@ -114,7 +114,7 @@ Three layers to make `apply_diff` the preferred edit path:
 - **Files changed** (27 total):
 ### Follow-up: `/systemprompt` Runtime Flags Visibility
 
-After implementation, it was discovered that the `/systemprompt` slash command did not show the runtime flags block — it was sent to the LLM but invisible to the user. Fixed in commit `693e44d` by adding `buildSystemMessages` to the engine interface and having the handler use it instead of manually assembling the pieces. See [[decisions/101-systemprompt-runtime-flags]].
+After implementation, it was discovered that the `/systemprompt` slash command did not show the runtime flags block — it was sent to the LLM but invisible to the user. Fixed in commit `693e44d` by adding `buildSystemMessages` to the engine interface and having the handler use it instead of manually assembling the pieces. See [101-systemprompt-runtime-flags](101-systemprompt-runtime-flags.md).
 
 **Validation**: 108 test files, 1694 tests passed. Lint, build, LSP diagnostics all clean.
   - **New**: `drone-core/src/runtime-flags.ts`, `drone-core/test/runtime-flags.test.ts`, `drone-agent/test/context-budget-service.test.ts`

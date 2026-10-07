@@ -42,7 +42,7 @@ Unified the conversation-service tool-call branch: a single `sessionManager.appe
 
 ## Related
 
-- [[concepts/session-management]] — Turn model and compaction triggering
-- [[decisions/134-compaction-correctness-fix]] — Prior sliceSize + convergence-loop fix
-- [[decisions/135-compaction-slash-command]] — `/compact` command + extended capability
-- [[decisions/053-compaction-latch-fix]] — The `compactionInFlight` latch bug
+- session-management — Turn model and compaction triggering
+- [134-compaction-correctness-fix](134-compaction-correctness-fix.md) — Prior sliceSize + convergence-loop fix
+- [135-compaction-slash-command](135-compaction-slash-command.md) — `/compact` command + extended capability
+- [053-compaction-latch-fix](053-compaction-latch-fix.md) — The `compactionInFlight` latch bug

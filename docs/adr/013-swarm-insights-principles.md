@@ -43,6 +43,6 @@ Make the self-improvement plugin a **storage broker** that delegates to provider
 
 ## Related
 
-- [[self-improvement]] — Self-improvement system
-- [[swarm-architecture]] — Swarm mode
-- [[decisions/003-broker-provider]] — Broker pattern
+- self-improvement — Self-improvement system
+- swarm-architecture — Swarm mode
+- [003-broker-provider](003-broker-provider.md) — Broker pattern

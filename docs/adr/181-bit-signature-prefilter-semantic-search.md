@@ -53,6 +53,6 @@ Motivation is the wiki corpus's expected growth (the workspace index is the prov
 
 ## Related
 
-- [[concepts/semantic-search]] — the vector index this prefilter sits in front of
-- [[decisions/179-swarm-memory-rag-retrieval]] — the wiki stack awaiting the phase-2 port
-- [[modules/drone-beacon]] · [[modules/drone-swarm-common]] — `rescoreByCosine` lives beside `dedupeAndCombineChunks`
+- semantic-search — the vector index this prefilter sits in front of
+- [179-swarm-memory-rag-retrieval](179-swarm-memory-rag-retrieval.md) — the wiki stack awaiting the phase-2 port
+- [drone-beacon](../../drone-beacon/) · [drone-swarm-common](../../drone-swarm-common/) — `rescoreByCosine` lives beside `dedupeAndCombineChunks`

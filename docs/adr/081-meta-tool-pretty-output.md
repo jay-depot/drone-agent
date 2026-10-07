@@ -64,10 +64,10 @@ All three handle running/error/unparseable-result states gracefully.
 
 ## Related
 
-- [[078-pretty-tool-output]] — Phase 1: 7 core tools
-- [[079-pretty-tool-output-phase-2]] — Phase 2: 12 more tools
-- [[080-subagent-dispatch-pretty-output]] — Subagent dispatch TUI rendering
-- [[modules/drone-agent-tui]] — TUI module documentation
-- [[modules/drone-agent-mcp-client]] — MCP client module
-- [[decisions/064-mcp-deferred-tool-loading]] — The list/mount pattern for MCP
-- [[decisions/068-tool-reduction-followup]] — Git and swarm list/mount pattern
+- [078-pretty-tool-output](078-pretty-tool-output.md) — Phase 1: 7 core tools
+- [079-pretty-tool-output-phase-2](079-pretty-tool-output-phase-2.md) — Phase 2: 12 more tools
+- [080-subagent-dispatch-pretty-output](080-subagent-dispatch-pretty-output.md) — Subagent dispatch TUI rendering
+- [drone-agent-tui](../../drone-agent/src/tui/) — TUI module documentation
+- [drone-agent-mcp-client](../../drone-agent/src/plugins/mcp/) — MCP client module
+- [064-mcp-deferred-tool-loading](064-mcp-deferred-tool-loading.md) — The list/mount pattern for MCP
+- [068-tool-reduction-followup](068-tool-reduction-followup.md) — Git and swarm list/mount pattern

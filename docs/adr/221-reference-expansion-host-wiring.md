@@ -5,7 +5,7 @@ related: [decisions/218-reference-expansion-and-tab-completion.md, decisions/222
 
 # 221 — `@`-reference expansion host wiring: engine capability as the default expander (+ missing receipts)
 
-**Summary**: Despite [[decisions/218-reference-expansion-and-tab-completion]] landing S1–S15, `@`-reference expansion **never fired in any real host**. `createConversationService` defaulted its `expandUserMessage` option to identity, and `index.tsx` handed the `reference` capability to the **engine** but never to the **service** — so the TUI, readline, JSON-listen, swarm WS, and workflow `ctx.agent` hosts all stayed literal while tab completion worked (completion calls the resolver helpers directly, bypassing the expander). Fix: make the engine's `reference` capability the **default** expander (lazily resolved), so "every host behaves identically" becomes true by construction. Also delivers the success receipt the plan/docs specified but production never emitted, plus glob aggregate receipts and notice forwarding in the listen hosts.
+**Summary**: Despite [218-reference-expansion-and-tab-completion](218-reference-expansion-and-tab-completion.md) landing S1–S15, `@`-reference expansion **never fired in any real host**. `createConversationService` defaulted its `expandUserMessage` option to identity, and `index.tsx` handed the `reference` capability to the **engine** but never to the **service** — so the TUI, readline, JSON-listen, swarm WS, and workflow `ctx.agent` hosts all stayed literal while tab completion worked (completion calls the resolver helpers directly, bypassing the expander). Fix: make the engine's `reference` capability the **default** expander (lazily resolved), so "every host behaves identically" becomes true by construction. Also delivers the success receipt the plan/docs specified but production never emitted, plus glob aggregate receipts and notice forwarding in the listen hosts.
 
 ## Context
 
@@ -64,7 +64,7 @@ A glob previously emitted one receipt per matched file via the inherited `buildF
 
 ## Related
 
-- [[decisions/218-reference-expansion-and-tab-completion]] — the feature whose host-wiring half (S13) this supplies
-- [[decisions/222-reference-expansion-image-inlining]] — the sibling follow-up (images through the same expansion seam)
-- [[concepts/reference-expansion]] — the concept page
-- [[modules/drone-agent]] — `conversation-service.ts`, `index.tsx`, `interactive.ts`, `output-handlers.ts`, `reference-expansion/file-kinds.ts`
+- [218-reference-expansion-and-tab-completion](218-reference-expansion-and-tab-completion.md) — the feature whose host-wiring half (S13) this supplies
+- [222-reference-expansion-image-inlining](222-reference-expansion-image-inlining.md) — the sibling follow-up (images through the same expansion seam)
+- reference-expansion — the concept page
+- [drone-agent](../../drone-agent/) — `conversation-service.ts`, `index.tsx`, `interactive.ts`, `output-handlers.ts`, `reference-expansion/file-kinds.ts`

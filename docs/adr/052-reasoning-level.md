@@ -64,4 +64,4 @@ The `--raw` flag accepts any string and passes it directly to the provider, bypa
 
 ## Research
 
-Full provider comparison table in [[concepts/reasoning-level]].
+Full provider comparison table in reasoning-level.

@@ -39,7 +39,7 @@ Created `src/tui/hooks/useSgrMouse.ts` which enabled SGR mouse mode 1000 + 1006 
 
 Mouse click events were parsed from stdin data events matching the regex `^\x1b\[<(\d+);(\d+);(\d+)([Mm])`. The hook returned `{ lastClick }` state which was passed as a prop to `MultilineTextInput` and processed in a `useEffect`.
 
-**This mouse support was removed** in commit `189693a`. See [[107-tui-input-bug-fixes]] for the full rationale. Summary of why it was removed:
+**This mouse support was removed** in commit `189693a`. See [107-tui-input-bug-fixes](107-tui-input-bug-fixes.md) for the full rationale. Summary of why it was removed:
 
 - **Mouse click positioning was too imprecise** — Ink doesn't expose component positions, so the click row could only be heuristically mapped to a visual line. The result was approximate and barely useful.
 - **SGR sequences leaked into the input text** — the `data`-event listener never fired because Ink uses `readable` mode on stdin; instead Ink's `inputParser` treated the SGR sequences (`\x1b[<row;col;buttonM`) as valid CSI sequences and emitted them as `input` events, which fell through to the printable-character handler and inserted raw escape sequences into the text.
@@ -75,7 +75,7 @@ The `FreeformInput` component in `ElicitationPrompt.tsx` was removed entirely an
 
 ### Negative
 
-- **Removed**: mouse click-to-position — the implementation was approximate (no precise screen position tracking) and caused SGR escape sequences to leak into the input, breaking native text selection. See [[107-tui-input-bug-fixes]].
+- **Removed**: mouse click-to-position — the implementation was approximate (no precise screen position tracking) and caused SGR escape sequences to leak into the input, breaking native text selection. See [107-tui-input-bug-fixes](107-tui-input-bug-fixes.md).
 - The visual line model adds complexity to what was a simple flat-offset cursor
 
 ### Neutral
@@ -105,6 +105,6 @@ The `FreeformInput` component in `ElicitationPrompt.tsx` was removed entirely an
 
 ## Related
 
-- [[drone-agent-tui]] — The TUI module
-- [[099-tui-paste-handling]] — Paste handling (uses same `useBracketedPaste` hook)
-- [[107-tui-input-bug-fixes]] — Follow-up bug fixes: removed mouse nav, fixed soft-wrap text shift, fixed cursor at end of non-last lines
+- [drone-agent-tui](../../drone-agent/src/tui/) — The TUI module
+- [099-tui-paste-handling](099-tui-paste-handling.md) — Paste handling (uses same `useBracketedPaste` hook)
+- [107-tui-input-bug-fixes](107-tui-input-bug-fixes.md) — Follow-up bug fixes: removed mouse nav, fixed soft-wrap text shift, fixed cursor at end of non-last lines

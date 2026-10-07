@@ -85,9 +85,9 @@ The pre-existing flaky test-isolation fix (coordinator spawn test holds its own 
 
 ## Related
 
-- [[concepts/lsp-symbolic-resolution]] — The concept page for LSP symbolic resolution
-- [[decisions/136-lsp-symbolic-resolution]] — The original implementation
-- [[decisions/138-lsp-symbolic-resolution-round-2]] — Round-2 fixes (dense blocks, exact-match, cache hardening)
-- [[decisions/139-lsp-symbolic-resolution-round-3]] — Round-3 fixes (referenceId precedence, cache concurrency guard)
-- [[modules/drone-core]] — `position-types.ts` `suggestContext`
-- [[modules/drone-agent-plugins]] — LSP plugin
+- lsp-symbolic-resolution — The concept page for LSP symbolic resolution
+- [136-lsp-symbolic-resolution](136-lsp-symbolic-resolution.md) — The original implementation
+- [138-lsp-symbolic-resolution-round-2](138-lsp-symbolic-resolution-round-2.md) — Round-2 fixes (dense blocks, exact-match, cache hardening)
+- [139-lsp-symbolic-resolution-round-3](139-lsp-symbolic-resolution-round-3.md) — Round-3 fixes (referenceId precedence, cache concurrency guard)
+- [drone-core](../../drone-core/) — `position-types.ts` `suggestContext`
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — LSP plugin

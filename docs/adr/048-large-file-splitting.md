@@ -31,4 +31,4 @@ related: [architecture/large-file-splitting.md]
 - Neutral: The `lsp/server.ts` factory closure was left mostly intact (only module-level helpers extracted) — converting to a class is future work
 - Negative: Vitest exclude pattern `'**/spawn.test.ts'` was too broad and caught the new coordinator route test — had to narrow to `'drone-agent/test/spawn.test.ts'`
 
-**Related**: [[architecture/large-file-splitting]]
+**Related**: large-file-splitting

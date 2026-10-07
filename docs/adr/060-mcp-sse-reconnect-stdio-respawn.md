@@ -13,7 +13,7 @@ related: [modules/drone-agent-mcp-client.md, decisions/054-mcp-http-sse-stream-d
 
 The MCP client had two resilience gaps identified in the `mcp-client-gaps` audit:
 
-- **Point 15**: The streamable-HTTP GET SSE stream (added in point 8, [[decisions/054-mcp-http-sse-stream-delete]]) was fire-and-forget — if the stream dropped due to a transient network issue, it stayed closed until the next connection. The `streaming` flag was set once and never updated.
+- **Point 15**: The streamable-HTTP GET SSE stream (added in point 8, [054-mcp-http-sse-stream-delete](054-mcp-http-sse-stream-delete.md)) was fire-and-forget — if the stream dropped due to a transient network issue, it stayed closed until the next connection. The `streaming` flag was set once and never updated.
 
 - **Point 16**: A crashed stdio child process left the connection permanently dead. The `onTransportIssue` callback set `state.status = 'error'` but nothing ever attempted to respawn the child. The only recovery path was a full agent restart.
 
@@ -87,7 +87,7 @@ When a stdio child respawns, the old tool registrations must be cleared before r
 
 ## Related
 
-- [[modules/drone-agent-mcp-client]] — The client module page (updated for SSE reconnect + stdio respawn).
-- [[decisions/054-mcp-http-sse-stream-delete]] — The point-8 fix that established the GET SSE stream (now with auto-reconnect).
-- [[decisions/050-mcp-client-session-id-iserror]] — Earlier MCP client fix (session-id capture + isError throwing).
-- [[decisions/051-mcp-client-test-suite]] — The two-layer test harness.
+- [drone-agent-mcp-client](../../drone-agent/src/plugins/mcp/) — The client module page (updated for SSE reconnect + stdio respawn).
+- [054-mcp-http-sse-stream-delete](054-mcp-http-sse-stream-delete.md) — The point-8 fix that established the GET SSE stream (now with auto-reconnect).
+- [050-mcp-client-session-id-iserror](050-mcp-client-session-id-iserror.md) — Earlier MCP client fix (session-id capture + isError throwing).
+- [051-mcp-client-test-suite](051-mcp-client-test-suite.md) — The two-layer test harness.

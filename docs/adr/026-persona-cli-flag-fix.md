@@ -77,8 +77,8 @@ This works because `onSessionStart` runs after **all** `onPluginsLoaded` hooks h
 
 ## Related
 
-- [[entities/Persona]] — Persona definition and capabilities
-- [[flows/plugin-lifecycle]] — Hook ordering and lifecycle
-- [[concepts/broker-provider]] — Broker + provider pattern
-- [[architecture/plugin-system]] — Plugin architecture
-- [[concepts/subagent]] — Subagent spawning (also uses `_runtime`)
+- [Persona](../../drone-core/src/domain-types.ts) — Persona definition and capabilities
+- plugin-lifecycle — Hook ordering and lifecycle
+- broker-provider — Broker + provider pattern
+- [plugin-system](002-plugin-system.md) — Plugin architecture
+- subagent — Subagent spawning (also uses `_runtime`)

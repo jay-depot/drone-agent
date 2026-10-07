@@ -42,5 +42,5 @@ Start with a **KV store with TTL** for beacon-level memory. Simple, predictable,
 
 ## Related
 
-- [[drone-beacon]] — Beacon implementation
-- [[decisions/006-sqlite-over-plugins]] — SQLite decision
+- [drone-beacon](../../drone-beacon/) — Beacon implementation
+- [006-sqlite-over-plugins](006-sqlite-over-plugins.md) — SQLite decision

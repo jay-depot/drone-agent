@@ -9,7 +9,7 @@ related: [drone-agent-tui.md, 106-cursor-navigation-visual-line-model.md, 099-tu
 
 ## Context
 
-After the enhanced cursor navigation in [[106-cursor-navigation-visual-line-model]], several bugs surfaced in the TUI input (`MultilineTextInput`, `InputLine`, `ElicitationPrompt`, `app.tsx`):
+After the enhanced cursor navigation in [106-cursor-navigation-visual-line-model](106-cursor-navigation-visual-line-model.md), several bugs surfaced in the TUI input (`MultilineTextInput`, `InputLine`, `ElicitationPrompt`, `app.tsx`):
 
 1. **Mouse clicks dumped control characters into the text** — clicking dumped sequences like `[<0;17;59M[<0;17;59m...` into the text entry instead of positioning the cursor. Scroll wheel events were also caught, and native text selection stopped working.
 2. **Vertical navigation was off across soft-wraps** — Up/Down navigation landed on the wrong visual line.
@@ -73,6 +73,6 @@ Ink's `Box` defaults to `flexShrink: 1`. In `InputLine`, the prompt label and LL
 
 ## Related
 
-- [[drone-agent-tui]] — The TUI module
-- [[106-cursor-navigation-visual-line-model]] — The original cursor navigation ADR (mouse support added then removed)
-- [[099-tui-paste-handling]] — Paste handling (shared `useBracketedPaste` hook)
+- [drone-agent-tui](../../drone-agent/src/tui/) — The TUI module
+- [106-cursor-navigation-visual-line-model](106-cursor-navigation-visual-line-model.md) — The original cursor navigation ADR (mouse support added then removed)
+- [099-tui-paste-handling](099-tui-paste-handling.md) — Paste handling (shared `useBracketedPaste` hook)

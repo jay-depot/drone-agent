@@ -41,5 +41,5 @@ Four grilled decisions (Q1–Q4), plus two approved fold-ins:
 
 ## Related
 
-- [[decisions/164-model-role-bindings]] · [[decisions/180-swarm-memory-bootstrap-workflow]] · [[decisions/182-web-port-api-auth-enforcement]]
-- [[concepts/workflow-system]] · [[concepts/session-management]] · [[modules/drone-agent-tui]]
+- [164-model-role-bindings](164-model-role-bindings.md) · [180-swarm-memory-bootstrap-workflow](180-swarm-memory-bootstrap-workflow.md) · [182-web-port-api-auth-enforcement](182-web-port-api-auth-enforcement.md)
+- workflow-system · session-management · [drone-agent-tui](../../drone-agent/src/tui/)

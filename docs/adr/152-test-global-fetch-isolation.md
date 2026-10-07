@@ -33,4 +33,4 @@ Two rules, now applied and worth holding as conventions:
 
 ## Related
 
-- [[concepts/test-infrastructure]] · [[modules/drone-swarm]]
+- test-infrastructure · [drone-swarm](../../drone-swarm/)

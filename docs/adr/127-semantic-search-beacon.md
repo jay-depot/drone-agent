@@ -60,7 +60,7 @@ The `SearchIndexer` is instantiated in `drone-beacon/src/index.ts:186-191`, wire
 
 ## Config
 
-`DroneSearchPath` (in `drone-core/src/config-types.ts`) gained `includeHidden`, `includeNodeModules`, and `exclude` flags (see [[decisions/128-search-exclude-query-time-filtering]]). The `search` section was added to the TypeBox schema (`config-schema.ts`).
+`DroneSearchPath` (in `drone-core/src/config-types.ts`) gained `includeHidden`, `includeNodeModules`, and `exclude` flags (see [128-search-exclude-query-time-filtering](128-search-exclude-query-time-filtering.md)). The `search` section was added to the TypeBox schema (`config-schema.ts`).
 
 ## Reindexing Strategy
 
@@ -77,7 +77,7 @@ Two-pronged:
 
 ## Related
 
-- [[decisions/128-search-exclude-query-time-filtering]] — query-time `exclude` glob filtering
-- [[concepts/semantic-search]] — the semantic search concept
-- [[modules/drone-beacon]] — beacon module
-- [[modules/drone-swarm-common]] — shared vector primitives
+- [128-search-exclude-query-time-filtering](128-search-exclude-query-time-filtering.md) — query-time `exclude` glob filtering
+- semantic-search — the semantic search concept
+- [drone-beacon](../../drone-beacon/) — beacon module
+- [drone-swarm-common](../../drone-swarm-common/) — shared vector primitives

@@ -39,7 +39,7 @@ Once the store persists room history with a valid token, on every restart `syncF
 
 ## Related
 
-- [[modules/drone-gateway]] — the Matrix adapter + store sections.
-- [[decisions/229-gateway-matrix-crypto-opt-in]] — the crypto half of the same bug-fix arc.
-- [[decisions/059-matrix-adapter]] — the adapter's original design.
-- [[decisions/062-gateway-sqlite-stores]] — the store work these fixes correct.
+- [drone-gateway](../../drone-gateway/) — the Matrix adapter + store sections.
+- [229-gateway-matrix-crypto-opt-in](229-gateway-matrix-crypto-opt-in.md) — the crypto half of the same bug-fix arc.
+- [059-matrix-adapter](059-matrix-adapter.md) — the adapter's original design.
+- [062-gateway-sqlite-stores](062-gateway-sqlite-stores.md) — the store work these fixes correct.

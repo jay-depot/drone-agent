@@ -9,7 +9,7 @@ related: [drone-agent-tui.md, 036-ink-6-react-19.md]
 
 ## Context
 
-The Ink 5→6 upgrade ([[036-ink-6-react-19]]) enabled `incrementalRendering: true` in `createTui()` — an Ink 6 feature that only redraws changed lines instead of the entire output, intended to reduce flicker on resize. However, this mode has a bug with bordered `<Box>` components.
+The Ink 5→6 upgrade ([036-ink-6-react-19](036-ink-6-react-19.md)) enabled `incrementalRendering: true` in `createTui()` — an Ink 6 feature that only redraws changed lines instead of the entire output, intended to reduce flicker on resize. However, this mode has a bug with bordered `<Box>` components.
 
 When text inside a bordered `<Box>` (the input line) changed during typing, the incremental line-by-line diffing in Ink's `createIncremental()` (`log-update.js`) mispositioned the content line one row below the box instead of inside it. On submit, the box's top border (with corners) got "attached" to the submitted text in the chat log, confirming the line-positioning math was off by exactly one row.
 
@@ -41,6 +41,6 @@ The `useDebouncedWindowSize` hook (added in the same Ink 5→6 upgrade) already 
 
 ## Related
 
-- [[drone-agent-tui]] — TUI architecture
-- [[036-ink-6-react-19]] — The original Ink 5→6 upgrade that introduced this option
-- [[001-use-ink]] — Original Ink decision
+- [drone-agent-tui](../../drone-agent/src/tui/) — TUI architecture
+- [036-ink-6-react-19](036-ink-6-react-19.md) — The original Ink 5→6 upgrade that introduced this option
+- [001-use-ink](001-use-ink.md) — Original Ink decision

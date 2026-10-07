@@ -9,7 +9,7 @@ related: [concepts/beacon-verification.md, modules/drone-beacon.md, modules/dron
 
 ## Context
 
-After [[decisions/117-tofu-fingerprint-pinning]], the beacon pinned the coordinator's TLS fingerprint on first connection but did not prompt the user to verify it — the TOFU window was unguarded. The beacon logged the observed fingerprint but trusted it immediately.
+After [117-tofu-fingerprint-pinning](117-tofu-fingerprint-pinning.md), the beacon pinned the coordinator's TLS fingerprint on first connection but did not prompt the user to verify it — the TOFU window was unguarded. The beacon logged the observed fingerprint but trusted it immediately.
 
 ## Decision
 
@@ -62,9 +62,9 @@ Swarm communications start only after **both** sides accept: the coordinator's T
 
 ## Related
 
-- [[concepts/beacon-verification]] — The MitM verification code concept
-- [[modules/drone-beacon]] — Beacon module (hosts the trust state)
-- [[modules/drone-coordinator]] — Coordinator module (surfaces its fingerprint)
-- [[modules/drone-agent-plugins]] — Swarm plugin `/trust-coordinator` command
-- [[decisions/117-tofu-fingerprint-pinning]] — The TOFU pinning this builds on
-- [[decisions/119-bidirectional-verification-code]] — Makes the verification code bidirectional
+- beacon-verification — The MitM verification code concept
+- [drone-beacon](../../drone-beacon/) — Beacon module (hosts the trust state)
+- [drone-coordinator](../../drone-coordinator/) — Coordinator module (surfaces its fingerprint)
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — Swarm plugin `/trust-coordinator` command
+- [117-tofu-fingerprint-pinning](117-tofu-fingerprint-pinning.md) — The TOFU pinning this builds on
+- [119-bidirectional-verification-code](119-bidirectional-verification-code.md) — Makes the verification code bidirectional

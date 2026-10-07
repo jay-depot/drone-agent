@@ -38,6 +38,6 @@ Three changes to `drone-agent/src/plugins/swarm/index.ts`:
 
 ## Related
 
-- [[swarm-architecture]] — Swarm mode
-- [[modules/drone-agent-plugins]] — Swarm plugin
-- [[flows/swarm-connection]] — Connection flow
+- swarm-architecture — Swarm mode
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — Swarm plugin
+- swarm-connection — Connection flow

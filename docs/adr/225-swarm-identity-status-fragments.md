@@ -67,10 +67,10 @@ LSP clean; `pnpm -r run build` **8/8 packages**; `pnpm lint:eslint` clean (one u
 
 ## Related
 
-- [[concepts/swarm-prompt-fragments]] — the fragment subsystem this extends (reserved-id policy + coordinator authoring).
-- [[decisions/173-swarm-prompt-fragments]] — the original fragment ADR (storage, delivery, caps).
-- [[modules/drone-agent-plugins]] — the swarm plugin registration surface.
-- [[modules/drone-beacon]] — `GET /info`, `beacon-info.ts`, the `fragmentsChanged` handler.
-- [[modules/drone-coordinator]] — fragment authoring routes + the nudge.
-- [[modules/drone-coordinator-ui]] — the Identity page.
-- [[modules/drone-swarm-common]] — the shared `fragments-limits.ts` + reserved-id policy.
+- swarm-prompt-fragments — the fragment subsystem this extends (reserved-id policy + coordinator authoring).
+- [173-swarm-prompt-fragments](173-swarm-prompt-fragments.md) — the original fragment ADR (storage, delivery, caps).
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — the swarm plugin registration surface.
+- [drone-beacon](../../drone-beacon/) — `GET /info`, `beacon-info.ts`, the `fragmentsChanged` handler.
+- [drone-coordinator](../../drone-coordinator/) — fragment authoring routes + the nudge.
+- [drone-coordinator-ui](../../drone-coordinator-ui/) — the Identity page.
+- [drone-swarm-common](../../drone-swarm-common/) — the shared `fragments-limits.ts` + reserved-id policy.

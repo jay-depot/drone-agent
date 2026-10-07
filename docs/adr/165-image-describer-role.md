@@ -13,7 +13,7 @@ When a tool result contains an image (e.g. `file__read_image`) and the **target 
 
 The fix: describe the image with a **vision-capable** model (the `image_describer` role) and store the text description alongside the image in the abstract context. Presentation is then derived per-request: a vision-capable target receives the image bytes; a non-vision target receives the description text. The stored turn is model-agnostic (both representations persisted); exactly one representation crosses the wire per model.
 
-This slots into the open model-role namespace established by [[decisions/164-model-role-bindings]] — `image_describer` is a new well-known role alongside `summarizer`/`wizard`/`describer`.
+This slots into the open model-role namespace established by [164-model-role-bindings](164-model-role-bindings.md) — `image_describer` is a new well-known role alongside `summarizer`/`wizard`/`describer`.
 
 ## Decision
 
@@ -43,7 +43,7 @@ The describer reuses the shared `withBoundedSilentRetry` helper (extracted from 
 
 In the tool loop, after tool results are appended:
 
-- **Per-tool image-extractor registry (D11)**: `file__read_image` registers a structured extractor producing `DroneImageContent[]` directly (knows its own return shape); unregistered tools fall back to the content-scan heuristic (`extractImageFromToolResult`/`findDataUri`). MCP stays on the heuristic fallback. **Superseded 2026-08-27 (V2)**: the extractor registry and content-scan heuristic were deleted — images now flow purely via the structured `DroneToolResult.images[]` channel (see [[decisions/167-image-content-refactor-v2]]).
+- **Per-tool image-extractor registry (D11)**: `file__read_image` registers a structured extractor producing `DroneImageContent[]` directly (knows its own return shape); unregistered tools fall back to the content-scan heuristic (`extractImageFromToolResult`/`findDataUri`). MCP stays on the heuristic fallback. **Superseded 2026-08-27 (V2)**: the extractor registry and content-scan heuristic were deleted — images now flow purely via the structured `DroneToolResult.images[]` channel (see [167-image-content-refactor-v2](167-image-content-refactor-v2.md)).
 - **Durability gate (D5)**: when `log.enabled || swarm active`, images are described **eagerly at append** so the description lands in the persisted store (structural guarantee, no shutdown race). Otherwise description is **lazy** (D3).
 - **Parallel across batch (D1)**: describe calls run via `Promise.all` across the batch, then results are applied to the session store sequentially.
 - **Lazy-once (D3)**: at request assembly, when the target model `hasVision === false`, undescribed images are described now (once-cached into the stored message). Vision-capable targets skip generation.
@@ -55,7 +55,7 @@ Before building the summary (`formatTurnsForSummary`), compaction calls `llm.des
 
 ### 6. Token accounting (D7)
 
-Per-image budget contribution in `estimateMessageTokens` changes from a flat `256` to `max(256, estimateTextTokens(description))` — model-agnostic (no `hasVision` at estimate time). The pre-existing base64 double-count (content-text + images[]) is intentionally NOT fixed (deferred to the V2 content refactor). **Resolved 2026-08-27 (V2)**: V2 removes base64 from `content`, so the double-count disappears (see [[decisions/167-image-content-refactor-v2]]).
+Per-image budget contribution in `estimateMessageTokens` changes from a flat `256` to `max(256, estimateTextTokens(description))` — model-agnostic (no `hasVision` at estimate time). The pre-existing base64 double-count (content-text + images[]) is intentionally NOT fixed (deferred to the V2 content refactor). **Resolved 2026-08-27 (V2)**: V2 removes base64 from `content`, so the double-count disappears (see [167-image-content-refactor-v2](167-image-content-refactor-v2.md)).
 
 ## Implementation notes
 
@@ -70,8 +70,8 @@ Full fast suite green (2350 passed, 9 skipped), `pnpm -r run build` clean, `pnpm
 
 ## Related
 
-- [[decisions/164-model-role-bindings]] — the model-role namespace `image_describer` slots into
-- [[decisions/160-unified-llm-error-retry-semantics]] — the shared `withBoundedSilentRetry` T1 policy the describer rides
-- [[decisions/155-provider-model-config]] — `hasVision` as resolved model metadata
-- [[concepts/vision-support]] — image input handling across providers
-- [[concepts/provider-model-selection]] — selection identity + resolution chains
+- [164-model-role-bindings](164-model-role-bindings.md) — the model-role namespace `image_describer` slots into
+- [160-unified-llm-error-retry-semantics](160-unified-llm-error-retry-semantics.md) — the shared `withBoundedSilentRetry` T1 policy the describer rides
+- [155-provider-model-config](155-provider-model-config.md) — `hasVision` as resolved model metadata
+- vision-support — image input handling across providers
+- provider-model-selection — selection identity + resolution chains

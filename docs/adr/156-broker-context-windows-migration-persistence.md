@@ -11,7 +11,7 @@ related: [155-provider-model-config.md, ../concepts/provider-model-selection.md,
 ## Context
 
 Two defects shared one root: the provider/protocol/model refactor's data
-([[decisions/155-provider-model-config]]) was only half-wired at its two
+([155-provider-model-config](155-provider-model-config.md)) was only half-wired at its two
 consumption ends.
 
 1. **Every context-window calculation used the wrong denominator.** Phase 2's
@@ -100,7 +100,7 @@ RAW JSON still carries legacy sections:
   existing `providers` block (mixed-format files), eliminating the dual-source
   ambiguity that produced bug (1).
 - **Scope rules**: user scope rewrites; project scope never receives
-  `providers` (banned by [[concepts/scope-hierarchy|scope policy]] there) and
+  `providers` (banned by scope policy there) and
   only produces a redirect warning; swarm underlays stay memory-only
   (server-owned).
 - `llm.active` seeding during persist only fills a file that lacks it entirely;
@@ -135,6 +135,6 @@ user (rewrites their real user config; spends tokens).
 
 ## Related
 
-- [[decisions/155-provider-model-config]] — parent refactor whose half-wired consumption ends caused both bugs
-- [[provider-model-selection]] — the metadata chain this decision extends to context windows
-- [[session-management]] — consumers of the corrected denominator
+- [155-provider-model-config](155-provider-model-config.md) — parent refactor whose half-wired consumption ends caused both bugs
+- provider-model-selection — the metadata chain this decision extends to context windows
+- session-management — consumers of the corrected denominator

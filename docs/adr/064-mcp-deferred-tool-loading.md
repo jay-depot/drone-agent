@@ -70,8 +70,8 @@ The list/mount pattern is a novel approach — "the road less travelled" — tha
 
 ## Related
 
-- [[drone-agent-mcp-client]] — The MCP client module (updated for list/mount)
-- [[architecture/plugin-system]] — Plugin tool registration, `unregisterTool`
-- [[entities/DronePlugin]] — `DronePluginRegistration` interface (added `unregisterTool`)
-- [[decisions/061-mcp-notifications-tools-list-changed]] — Prior `list_changed` handling (now surgical)
-- [[decisions/054-mcp-http-sse-stream-delete]] — GET SSE stream (enables notifications)
+- [drone-agent-mcp-client](../../drone-agent/src/plugins/mcp/) — The MCP client module (updated for list/mount)
+- [plugin-system](002-plugin-system.md) — Plugin tool registration, `unregisterTool`
+- [DronePlugin](../../drone-core/src/plugin-system.ts) — `DronePluginRegistration` interface (added `unregisterTool`)
+- [061-mcp-notifications-tools-list-changed](061-mcp-notifications-tools-list-changed.md) — Prior `list_changed` handling (now surgical)
+- [054-mcp-http-sse-stream-delete](054-mcp-http-sse-stream-delete.md) — GET SSE stream (enables notifications)

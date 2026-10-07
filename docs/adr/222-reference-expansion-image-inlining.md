@@ -57,8 +57,8 @@ Directory-listing inlining (Q7); fs-level retry (Q10); partial/half-written dete
 
 ## Related
 
-- [[decisions/218-reference-expansion-and-tab-completion]] — the reference-expansion feature this extends
-- [[decisions/221-reference-expansion-host-wiring]] — the sibling fix that made expansion actually fire in hosts
-- [[decisions/167-image-content-refactor-v2]] — the structured `DroneToolResult.images[]` + `maxImagesPerMessage` standard reused here
-- [[concepts/reference-expansion]] / [[concepts/vision-support]] — concept pages
-- [[modules/drone-core]] (`image-mime.ts`) / [[modules/drone-agent]] (`image-cap.ts`)
+- [218-reference-expansion-and-tab-completion](218-reference-expansion-and-tab-completion.md) — the reference-expansion feature this extends
+- [221-reference-expansion-host-wiring](221-reference-expansion-host-wiring.md) — the sibling fix that made expansion actually fire in hosts
+- [167-image-content-refactor-v2](167-image-content-refactor-v2.md) — the structured `DroneToolResult.images[]` + `maxImagesPerMessage` standard reused here
+- reference-expansion / vision-support — concept pages
+- [drone-core](../../drone-core/) (`image-mime.ts`) / [drone-agent](../../drone-agent/) (`image-cap.ts`)

@@ -11,7 +11,7 @@ related: [modules/drone-agent-mcp-client.md, architecture/plugin-system.md, deci
 
 The MCP plugin mounts tools statically at startup. If an MCP server changes its tool list (e.g., a dynamic server that adds/removes tools based on context), the client never finds out because it ignores `notifications/tools/list_changed`.
 
-The `onNotification` callback was already plumbed through the streamable HTTP transport (from [[decisions/054-mcp-http-sse-stream-delete]]), but:
+The `onNotification` callback was already plumbed through the streamable HTTP transport (from [054-mcp-http-sse-stream-delete](054-mcp-http-sse-stream-delete.md)), but:
 
 1. The stdio transport clients (`createContentLengthJsonRpcClient` and `createLineDelimitedJsonRpcClient`) didn't dispatch notification messages at all — they silently skipped messages without an `id`.
 2. The `index.ts` handler had a placeholder comment but no actual logic.
@@ -71,7 +71,7 @@ The critical bug: `unregisterPluginToolsImpl` only iterated over `registered.too
 
 ## Related
 
-- [[modules/drone-agent-mcp-client]] — The MCP client module
-- [[architecture/plugin-system]] — Plugin tool registration, `unregisterPluginTools`
-- [[decisions/054-mcp-http-sse-stream-delete]] — GET SSE stream + best-effort DELETE (wired `onNotification`)
-- [[decisions/060-mcp-sse-reconnect-stdio-respawn]] — SSE reconnect + stdio respawn (wired `onReconnected`)
+- [drone-agent-mcp-client](../../drone-agent/src/plugins/mcp/) — The MCP client module
+- [plugin-system](002-plugin-system.md) — Plugin tool registration, `unregisterPluginTools`
+- [054-mcp-http-sse-stream-delete](054-mcp-http-sse-stream-delete.md) — GET SSE stream + best-effort DELETE (wired `onNotification`)
+- [060-mcp-sse-reconnect-stdio-respawn](060-mcp-sse-reconnect-stdio-respawn.md) — SSE reconnect + stdio respawn (wired `onReconnected`)

@@ -90,7 +90,7 @@ Added `restSubscribeToChannel()` / `restUnsubscribeFromChannel()` wrappers to `w
 
 ## Related
 
-- [[concepts/test-infrastructure]] — Test patterns and infrastructure
-- [[concepts/subagent]] — Subagent dispatch (the test fixture that needed the guards)
-- [[modules/drone-beacon]] — Beacon module (channels routes, session status)
-- [[modules/drone-coordinator]] — Coordinator module
+- test-infrastructure — Test patterns and infrastructure
+- subagent — Subagent dispatch (the test fixture that needed the guards)
+- [drone-beacon](../../drone-beacon/) — Beacon module (channels routes, session status)
+- [drone-coordinator](../../drone-coordinator/) — Coordinator module

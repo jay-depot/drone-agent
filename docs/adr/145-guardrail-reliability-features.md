@@ -90,10 +90,10 @@ Guardrail events emit as `kind: 'notice'`, rendered yellow/italic in the TUI and
 
 ## Related
 
-- [[concepts/session-management]] — Session lifecycle and guardrail reset semantics
-- [[flows/tool-call-loop]] — Where guardrails hook into the loop
-- [[entities/Session]] — `DroneConversationEvent` including the `notice` kind
-- [[entities/DroneAgentConfig]] — `session.guardrail` config section
-- [[decisions/116-safety-trim-estimate-drop-mismatch]] — Stuck detector / safety-trim context
-- [[decisions/142-compaction-turn-granularity-fix]] — Turn model the guardrails operate within
-- [[decisions/166-parallel-duplicate-tool-call-dedup]] — Parallel duplicate tool-call dedup guardrail (same `session.guardrail` config)
+- session-management — Session lifecycle and guardrail reset semantics
+- tool-call-loop — Where guardrails hook into the loop
+- [Session](../../drone-core/src/session-types.ts) — `DroneConversationEvent` including the `notice` kind
+- [DroneAgentConfig](../../drone-core/src/config-types.ts) — `session.guardrail` config section
+- [116-safety-trim-estimate-drop-mismatch](116-safety-trim-estimate-drop-mismatch.md) — Stuck detector / safety-trim context
+- [142-compaction-turn-granularity-fix](142-compaction-turn-granularity-fix.md) — Turn model the guardrails operate within
+- [166-parallel-duplicate-tool-call-dedup](166-parallel-duplicate-tool-call-dedup.md) — Parallel duplicate tool-call dedup guardrail (same `session.guardrail` config)

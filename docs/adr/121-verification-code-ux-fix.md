@@ -5,11 +5,11 @@ related: [concepts/beacon-verification.md, modules/drone-beacon.md, modules/dron
 
 # 121. Restore bidirectional verification-code UX (MITM protection)
 
-**Summary**: The verification-code UX from [[decisions/120-bidirectional-verification-ux]] was shipped inverted — the agent surfaced the beacon's **own** code and pre-filled `/trust-coordinator <code>`, so the beacon compared the code against **itself** and always matched, silently defeating the MITM protection. Additionally, the coordinator only persisted `verification_code` on a beacon's first registration, so existing beacons never showed a code in the web UI. This fix restores the display-only / compare-only split and makes the code persist on re-registration.
+**Summary**: The verification-code UX from [120-bidirectional-verification-ux](120-bidirectional-verification-ux.md) was shipped inverted — the agent surfaced the beacon's **own** code and pre-filled `/trust-coordinator <code>`, so the beacon compared the code against **itself** and always matched, silently defeating the MITM protection. Additionally, the coordinator only persisted `verification_code` on a beacon's first registration, so existing beacons never showed a code in the web UI. This fix restores the display-only / compare-only split and makes the code persist on re-registration.
 
 ## Context
 
-[[decisions/120-bidirectional-verification-ux]] established the intended design: the coordinator web UI displays the verification code (display-only), and the user transcribes it into the agent's `/trust-coordinator <code>` so the beacon compares the transcribed code against its own in-memory copy (compare-only). Two bugs broke this:
+[120-bidirectional-verification-ux](120-bidirectional-verification-ux.md) established the intended design: the coordinator web UI displays the verification code (display-only), and the user transcribes it into the agent's `/trust-coordinator <code>` so the beacon compares the transcribed code against its own in-memory copy (compare-only). Two bugs broke this:
 
 1. **MITM protection inverted.** `surfacePendingCoordinatorTrust()` in the agent's swarm plugin printed the beacon's own verification code and pre-filled it into the suggested `/trust-coordinator <code>` command. If the user followed the suggestion, the beacon compared the code to its own stored value — which always matches — so a real comparison against the web UI's code never happened. The protection effectively didn't exist.
 
@@ -45,11 +45,11 @@ Restore the security property and fix persistence, following the display-only / 
 
 ## Related
 
-- [[concepts/beacon-verification]] — The MitM verification code concept
-- [[decisions/120-bidirectional-verification-ux]] — The design this fix corrects
-- [[decisions/119-bidirectional-verification-code]] — The 3-input bidirectional code
-- [[decisions/117-tofu-fingerprint-pinning]] — Provides the coordinator fingerprint
-- [[modules/drone-beacon]] — Beacon holds the compare-only in-memory copy
-- [[modules/drone-coordinator]] — Coordinator persists/serves the display-only copy
-- [[modules/drone-coordinator-ui]] — Web UI shows the code in detail page + approve dialog
-- [[modules/drone-agent-plugins]] — `/trust-coordinator <code>` command (no pre-fill)
+- beacon-verification — The MitM verification code concept
+- [120-bidirectional-verification-ux](120-bidirectional-verification-ux.md) — The design this fix corrects
+- [119-bidirectional-verification-code](119-bidirectional-verification-code.md) — The 3-input bidirectional code
+- [117-tofu-fingerprint-pinning](117-tofu-fingerprint-pinning.md) — Provides the coordinator fingerprint
+- [drone-beacon](../../drone-beacon/) — Beacon holds the compare-only in-memory copy
+- [drone-coordinator](../../drone-coordinator/) — Coordinator persists/serves the display-only copy
+- [drone-coordinator-ui](../../drone-coordinator-ui/) — Web UI shows the code in detail page + approve dialog
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — `/trust-coordinator <code>` command (no pre-fill)

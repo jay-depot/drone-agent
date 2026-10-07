@@ -83,7 +83,7 @@ The `code_action` referenceId branch now resolves the runtime/document/diagnosti
 
 ## Related
 
-- [[concepts/lsp-symbolic-resolution]] — The concept page for LSP symbolic resolution
-- [[decisions/136-lsp-symbolic-resolution]] — The original implementation this round fixes
-- [[modules/drone-core]] — Position types live in drone-core
-- [[modules/drone-agent-plugins]] — LSP plugin
+- lsp-symbolic-resolution — The concept page for LSP symbolic resolution
+- [136-lsp-symbolic-resolution](136-lsp-symbolic-resolution.md) — The original implementation this round fixes
+- [drone-core](../../drone-core/) — Position types live in drone-core
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — LSP plugin

@@ -89,7 +89,7 @@ Updated existing tests in `file.test.ts` to import `formatDiffResult` from the n
 
 ## Related
 
-- [[046-tui-tail-region-refactor]] — The tail region that hosts these render components
-- [[055-tui-tail-scrollback-formatting-preservation]] — How `GitDiffBlock` (and other components) now render in scrollback via the carried `node`; `diff-format.ts` deletion
-- [[modules/drone-agent-tui]] — TUI module documentation
-- [[entities/Session]] — `ToolRenderState` and `DroneConversationEvent` types
+- [046-tui-tail-region-refactor](046-tui-tail-region-refactor.md) — The tail region that hosts these render components
+- [055-tui-tail-scrollback-formatting-preservation](055-tui-tail-scrollback-formatting-preservation.md) — How `GitDiffBlock` (and other components) now render in scrollback via the carried `node`; `diff-format.ts` deletion
+- [drone-agent-tui](../../drone-agent/src/tui/) — TUI module documentation
+- [Session](../../drone-core/src/session-types.ts) — `ToolRenderState` and `DroneConversationEvent` types

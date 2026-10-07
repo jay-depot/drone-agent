@@ -9,7 +9,7 @@ related: [drone-agent-mcp-client.md, drone-core.md, 064-mcp-deferred-tool-loadin
 
 ## Context
 
-Three issues were identified after the initial deferred list/mount tool loading implementation ([[decisions/064-mcp-deferred-tool-loading]]):
+Three issues were identified after the initial deferred list/mount tool loading implementation ([064-mcp-deferred-tool-loading](064-mcp-deferred-tool-loading.md)):
 
 ### 1. Multi-server MCP tool clobbering (bug)
 
@@ -148,7 +148,7 @@ The `mountedName` returned by `__mount_tool` in its JSON response includes the `
 
 ## Related
 
-- [[drone-agent-mcp-client]] — The MCP client module (updated for ToolMountingCache)
-- [[drone-core]] — Shared types (now includes ToolMountingCache)
-- [[decisions/064-mcp-deferred-tool-loading]] — Prior deferred list/mount tool loading decision
-- [[decisions/061-mcp-notifications-tools-list-changed]] — Prior `list_changed` handling
+- [drone-agent-mcp-client](../../drone-agent/src/plugins/mcp/) — The MCP client module (updated for ToolMountingCache)
+- [drone-core](../../drone-core/) — Shared types (now includes ToolMountingCache)
+- [064-mcp-deferred-tool-loading](064-mcp-deferred-tool-loading.md) — Prior deferred list/mount tool loading decision
+- [061-mcp-notifications-tools-list-changed](061-mcp-notifications-tools-list-changed.md) — Prior `list_changed` handling

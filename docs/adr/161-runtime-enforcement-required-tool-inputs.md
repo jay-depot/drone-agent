@@ -13,7 +13,7 @@ A user-visible crash exposed a systemic gap: calling `self-improvement__insight`
 
 Root cause is architectural: `engine.executeTool()` (`drone-agent/src/runtime/plugin-engine.ts`) dispatches **straight to `tool.execute()`** with no JSON-schema validation layer anywhere in the dispatch path. Every tool's `inputSchema.required` array — and every enum/type constraint — is purely an LLM-facing hint. The conversation service wraps execution in `executeToolSafely`, but that only converts *thrown* errors into `{kind:'error'}` results; it never validates inputs. So any tool that casts-then-calls-methods on an unenforced field (`(input.x as string).trim()`) crashes opaquely whenever a caller omits or mistypes it.
 
-Why tests missed it for so long: existing "rejects empty targetId" cases passed `targetId: ''` — an empty *string*, which survives `.trim()` and reaches the downstream guard. The crash comes from the **omitted** variant (`undefined`), which no test exercised. Empty-string-passes-through vs. omitted-crashes-before-guard is now a standing test-design distinction (see [[decisions/145-guardrail-reliability-features]] for the sibling lesson about guardrail counters).
+Why tests missed it for so long: existing "rejects empty targetId" cases passed `targetId: ''` — an empty *string*, which survives `.trim()` and reaches the downstream guard. The crash comes from the **omitted** variant (`undefined`), which no test exercised. Empty-string-passes-through vs. omitted-crashes-before-guard is now a standing test-design distinction (see [145-guardrail-reliability-features](145-guardrail-reliability-features.md) for the sibling lesson about guardrail counters).
 
 ## Decision
 
@@ -48,7 +48,7 @@ Conventions preserved per family: memory/subagent **throw** (executeToolSafely n
 
 ## Related
 
-- [[flows/tool-call-loop]] — `executeToolSafely` normalizes thrown validation errors into `{kind:'error'}` results the LLM can learn from
-- [[modules/drone-agent-plugins]] — per-plugin notes on which surfaces gained guards
-- [[decisions/071-tool-consolidation-batch-2]] — earlier consolidation of these same plugin surfaces
-- [[decisions/105-runtime-level-list-mount]] — the list-mount discovery layer whose descriptions carry the (advisory) schemas
+- tool-call-loop — `executeToolSafely` normalizes thrown validation errors into `{kind:'error'}` results the LLM can learn from
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — per-plugin notes on which surfaces gained guards
+- [071-tool-consolidation-batch-2](071-tool-consolidation-batch-2.md) — earlier consolidation of these same plugin surfaces
+- [105-runtime-level-list-mount](105-runtime-level-list-mount.md) — the list-mount discovery layer whose descriptions carry the (advisory) schemas

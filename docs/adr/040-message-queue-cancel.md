@@ -71,7 +71,7 @@ The `DroneSlashCommandContext.conversation` type was extended with optional `enq
 
 ## Related
 
-- [[flows/tool-call-loop]] — Loop order with drain and cancel steps
-- [[session-management]] — Session lifecycle
-- [[entities/Session]] — Session types
-- [[decisions/023-conversation-event-push-through]] — Event push-through design
+- tool-call-loop — Loop order with drain and cancel steps
+- session-management — Session lifecycle
+- [Session](../../drone-core/src/session-types.ts) — Session types
+- [023-conversation-event-push-through](023-conversation-event-push-through.md) — Event push-through design

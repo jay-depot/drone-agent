@@ -47,7 +47,7 @@ Tool descriptions for `call_hierarchy` and `symbols` were updated to match.
 
 ## Related
 
-- [[concepts/lsp-symbolic-resolution]] — The symbolic resolution layer
-- [[decisions/069-lsp-ergonomics]] — Prior LSP ergonomics (text/symbol resolution)
-- [[decisions/136-lsp-symbolic-resolution]] — `AmbiguousPositionError`, reference ID handshake, auto-expansion
-- [[modules/drone-agent-plugins]] — The LSP plugin tool surface
+- lsp-symbolic-resolution — The symbolic resolution layer
+- [069-lsp-ergonomics](069-lsp-ergonomics.md) — Prior LSP ergonomics (text/symbol resolution)
+- [136-lsp-symbolic-resolution](136-lsp-symbolic-resolution.md) — `AmbiguousPositionError`, reference ID handshake, auto-expansion
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — The LSP plugin tool surface

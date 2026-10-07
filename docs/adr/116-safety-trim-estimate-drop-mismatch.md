@@ -23,7 +23,7 @@ So the estimate could say "drop 3 turns" while the actual drop only removed fewe
 
 Extract the "drop oldest non-summary turns, stop at first summary turn" rule into a **single shared pure helper** used by BOTH the estimate and the actual drop, so they can never diverge again.
 
-> **Note (2026-08-16):** This helper was later renamed to `getOldestNonSummaryTurns` and its semantics changed from "stop at the first summary turn" to "skip summary turns and continue past them" when the compaction fix consolidated all three paths (compaction, safety-trim estimate, and the actual drop) onto it. See [[decisions/133-compaction-oldest-turns-helper-consolidation]].
+> **Note (2026-08-16):** This helper was later renamed to `getOldestNonSummaryTurns` and its semantics changed from "stop at the first summary turn" to "skip summary turns and continue past them" when the compaction fix consolidated all three paths (compaction, safety-trim estimate, and the actual drop) onto it. See [133-compaction-oldest-turns-helper-consolidation](133-compaction-oldest-turns-helper-consolidation.md).
 
 ### New shared helper: `getDroppableTurnPrefix` (now `getOldestNonSummaryTurns`)
 
@@ -65,7 +65,7 @@ Pure and non-mutating — it returns the longest leading prefix of non-summary t
 ## Consequences
 
 - The estimate and the actual drop now share the exact same drop semantics, so `ensureSafeBudget` converges: when the oldest turns are summaries, the estimate correctly reports `null` (or a count that `dropOldestNonSummaryTurns` can actually satisfy) instead of overcounting.
-- The compaction plugin benefits automatically — it also calls `dropOldestNonSummaryTurns` (see [[decisions/053-compaction-latch-fix]]), and now shares the same helper.
+- The compaction plugin benefits automatically — it also calls `dropOldestNonSummaryTurns` (see [053-compaction-latch-fix](053-compaction-latch-fix.md)), and now shares the same helper.
 - No behavior change to `dropOldestNonSummaryTurns` itself — the refactor is behavior-preserving for the actual drop.
 
 ## Tests
@@ -81,8 +81,8 @@ Pure and non-mutating — it returns the longest leading prefix of non-summary t
 
 ## Related
 
-- [[concepts/session-management]] — Context budgeting and safety trim
-- [[modules/drone-agent]] — `context-budget-service.ts` and `session-manager.ts`
-- [[flows/tool-call-loop]] — The `ensureSafeBudget` loop that consumes the estimate
-- [[entities/Session]] — `DroneSessionTurn` with the `kind?: 'summary'` field
-- [[decisions/053-compaction-latch-fix]] — Compaction, which shares `dropOldestNonSummaryTurns`
+- session-management — Context budgeting and safety trim
+- [drone-agent](../../drone-agent/) — `context-budget-service.ts` and `session-manager.ts`
+- tool-call-loop — The `ensureSafeBudget` loop that consumes the estimate
+- [Session](../../drone-core/src/session-types.ts) — `DroneSessionTurn` with the `kind?: 'summary'` field
+- [053-compaction-latch-fix](053-compaction-latch-fix.md) — Compaction, which shares `dropOldestNonSummaryTurns`

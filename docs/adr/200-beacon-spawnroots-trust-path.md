@@ -40,6 +40,6 @@ The bug also exposed a design fragility: `db.registerBeacon` is a blind `INSERT 
 
 ## Related
 
-- [[decisions/197-beacon-cwd-roots]] — introduced `spawnRoots` advertise-and-enforce; its route test covered only the legacy registration branch
-- [[drone-coordinator]] — the coordinator module (routes + db)
-- [[decisions/198-coordinator-ui-launch-interact]] — the launch panel that surfaced the symptom
+- [197-beacon-cwd-roots](197-beacon-cwd-roots.md) — introduced `spawnRoots` advertise-and-enforce; its route test covered only the legacy registration branch
+- [drone-coordinator](../../drone-coordinator/) — the coordinator module (routes + db)
+- [198-coordinator-ui-launch-interact](198-coordinator-ui-launch-interact.md) — the launch panel that surfaced the symptom

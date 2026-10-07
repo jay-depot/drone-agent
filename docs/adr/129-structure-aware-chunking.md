@@ -56,13 +56,13 @@ Chunks stay pure code text so search-result snippets are unchanged in shape.
 
 ## Result
 
-Files are now chunked at semantic (AST) boundaries instead of whole-file. A query matching several chunks from the same file now returns that file multiple times — which led to the file-level dedup work in [[decisions/130-dedupe-search-results-by-file]].
+Files are now chunked at semantic (AST) boundaries instead of whole-file. A query matching several chunks from the same file now returns that file multiple times — which led to the file-level dedup work in [130-dedupe-search-results-by-file](130-dedupe-search-results-by-file.md).
 
 ## Related
 
-- [[decisions/127-semantic-search-beacon]] — semantic search moved to the beacon
-- [[decisions/130-dedupe-search-results-by-file]] — dedupe results after structure-aware chunking
-- [[decisions/131-sqlite-vec-semantic-search]] — vector search moved to sqlite-vec
-- [[concepts/semantic-search]] — the semantic search concept
-- [[modules/drone-beacon]] — beacon module
-- [[modules/drone-swarm-common]] — prose chunkers
+- [127-semantic-search-beacon](127-semantic-search-beacon.md) — semantic search moved to the beacon
+- [130-dedupe-search-results-by-file](130-dedupe-search-results-by-file.md) — dedupe results after structure-aware chunking
+- [131-sqlite-vec-semantic-search](131-sqlite-vec-semantic-search.md) — vector search moved to sqlite-vec
+- semantic-search — the semantic search concept
+- [drone-beacon](../../drone-beacon/) — beacon module
+- [drone-swarm-common](../../drone-swarm-common/) — prose chunkers

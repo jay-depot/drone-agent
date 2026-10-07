@@ -5,18 +5,18 @@ related: [concepts/broker-provider.md, concepts/identity-assets.md, entities/Ski
 
 # 227 — Persona-owned skill targets in the skills-creation wizard
 
-**Status**: Implemented · **Branch**: `feat/swarm-persona-owned-skills` · **Plan**: project-memory `plan-skills-wizard-persona-owned-targets` · **Companion**: [[decisions/226-persona-owned-skills-swarm-scope]]
+**Status**: Implemented · **Branch**: `feat/swarm-persona-owned-skills` · **Plan**: project-memory `plan-skills-wizard-persona-owned-targets` · **Companion**: [226-persona-owned-skills-swarm-scope](226-persona-owned-skills-swarm-scope.md)
 
 **Summary**: The skills-creation wizard (`skills__create`, shared by the `skills__create` tool, `/skills create`, and
 `--workflow skills.create`) can now author **persona-owned** skills, not just global ones. A parallel
 `DroneOwnedSkillWriter` registry (a writer per scope that takes the *owner* as an argument) lets the wizard bind
 an owner to a writer at runtime; the picker is **owner-first** with `No owner (global skill)` as the default
-row; when an owner is chosen the storage scope is **derived from the owner** ([[decisions/226-persona-owned-skills-swarm-scope]]
+row; when an owner is chosen the storage scope is **derived from the owner** ([226-persona-owned-skills-swarm-scope](226-persona-owned-skills-swarm-scope.md)
 D4) and never asked.
 
 ## Why
 
-[[decisions/226-persona-owned-skills-swarm-scope]] delivered persona-owned skills at every scope plus full
+[226-persona-owned-skills-swarm-scope](226-persona-owned-skills-swarm-scope.md) delivered persona-owned skills at every scope plus full
 coordinator-UI CRUD, but explicitly **deferred the agent-side authoring path** (its decision D5). The wizard
 could only target global skills: it picked a `DroneSkillWriter` from `skillsCap.getWriters()` and asked for a
 storage scope, and no persona-owned writer existed, so there was no way to author a skill owned by a persona
@@ -99,7 +99,7 @@ that target the **same** file race and can corrupt it (one truncated `skills/ind
 
 ## Related
 
-- [[decisions/226-persona-owned-skills-swarm-scope]] — the ownership/isolation/composite-keying groundwork this builds on
-- [[concepts/broker-provider]] — the writer registry this extends
-- [[entities/Skill]] — skill creation surfaces
-- [[concepts/identity-assets]] — persona/skill ownership model
+- [226-persona-owned-skills-swarm-scope](226-persona-owned-skills-swarm-scope.md) — the ownership/isolation/composite-keying groundwork this builds on
+- broker-provider — the writer registry this extends
+- [Skill](../../drone-core/src/domain-types.ts) — skill creation surfaces
+- identity-assets — persona/skill ownership model

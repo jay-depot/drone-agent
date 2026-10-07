@@ -63,7 +63,7 @@ Resolution order:
 
 ## Related
 
-- [[concepts/subagent]] — Subagent spawning
-- [[modules/drone-core]] — Shared utilities
-- [[modules/drone-gateway]] — LocalSpawnBackend
-- [[modules/drone-beacon]] — Spawner configuration
+- subagent — Subagent spawning
+- [drone-core](../../drone-core/) — Shared utilities
+- [drone-gateway](../../drone-gateway/) — LocalSpawnBackend
+- [drone-beacon](../../drone-beacon/) — Spawner configuration

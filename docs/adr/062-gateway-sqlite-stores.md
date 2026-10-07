@@ -84,7 +84,7 @@ The plan originally proposed serializing `Room`/`User` objects via `.toJSON()`/`
 
 ## Related
 
-- [[modules/drone-gateway]] — Gateway module overview
-- [[decisions/059-matrix-adapter]] — Matrix adapter design
-- [[decisions/058-gateway-config-model]] — Config model refactor
-- [[matrix-gateway-raspberry-pi-gaps]] — Gap #1 (persistent E2EE store) closed by this ADR
+- [drone-gateway](../../drone-gateway/) — Gateway module overview
+- [059-matrix-adapter](059-matrix-adapter.md) — Matrix adapter design
+- [058-gateway-config-model](058-gateway-config-model.md) — Config model refactor
+- matrix-gateway-raspberry-pi-gaps — Gap #1 (persistent E2EE store) closed by this ADR

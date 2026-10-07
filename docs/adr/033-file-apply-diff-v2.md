@@ -5,7 +5,7 @@ related: [drone-agent-plugins.md, 028-tool-name-separator.md, 038-file-apply-dif
 
 # 033: Content-Anchor-Based Patch Format for `file__apply_diff`
 
-**Status**: Superseded by [[038-file-apply-diff-unified-diff]] (2026-07-01)
+**Status**: Superseded by [038-file-apply-diff-unified-diff](038-file-apply-diff-unified-diff.md) (2026-07-01)
 
 **Note**: This ADR is superseded. The nested JSON hunk format was replaced with a flat unified diff string in ADR 038 because LLMs produced malformed nested JSON more often than valid unified diff strings. The content-anchor matching engine (`patch-applier.ts`) and the 3-level fuzzy matching cascade were preserved — only the input format changed.
 
@@ -63,6 +63,6 @@ Five issues were resolved shortly after implementation:
 
 ## Related
 
-- [[drone-agent-plugins]] — File plugin
-- [[028-tool-name-separator]] — Tool name format (double underscore)
-- [[038-file-apply-diff-unified-diff]] — Superseding ADR (unified diff format)
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — File plugin
+- [028-tool-name-separator](028-tool-name-separator.md) — Tool name format (double underscore)
+- [038-file-apply-diff-unified-diff](038-file-apply-diff-unified-diff.md) — Superseding ADR (unified diff format)

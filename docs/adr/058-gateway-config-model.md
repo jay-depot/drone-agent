@@ -11,7 +11,7 @@ related: [modules/drone-gateway.md, decisions/059-matrix-adapter.md, decisions/2
 
 ## Context
 
-The initial gateway config model (ADR 001 / [[decisions/235-gateway-architecture-standalone-service]]) used a flat `config.json` with `serviceAdapters[].controlSurfaces[]` where each control surface specified a `conversationId`. This worked for simple cases but broke down when we needed per-peer DM routing (e.g., "you → swarm console, friends → mention router, everyone else → PR persona or discard"). The flat model couldn't express:
+The initial gateway config model (ADR 001 / [235-gateway-architecture-standalone-service](235-gateway-architecture-standalone-service.md)) used a flat `config.json` with `serviceAdapters[].controlSurfaces[]` where each control surface specified a `conversationId`. This worked for simple cases but broke down when we needed per-peer DM routing (e.g., "you → swarm console, friends → mention router, everyone else → PR persona or discard"). The flat model couldn't express:
 
 - A per-adapter wildcard catch-all for unmatched conversations
 - Per-conversation dedicated control surface instances (each DM peer needs its own surface state)
@@ -110,6 +110,6 @@ The initial gateway config model (ADR 001 / [[decisions/235-gateway-architecture
 
 ## Related
 
-- [[modules/drone-gateway]] — The gateway package
-- [[decisions/059-matrix-adapter]] — Matrix adapter (first adapter to use this config model)
-- [[decisions/235-gateway-architecture-standalone-service]] — Original gateway architecture ADR
+- [drone-gateway](../../drone-gateway/) — The gateway package
+- [059-matrix-adapter](059-matrix-adapter.md) — Matrix adapter (first adapter to use this config model)
+- [235-gateway-architecture-standalone-service](235-gateway-architecture-standalone-service.md) — Original gateway architecture ADR

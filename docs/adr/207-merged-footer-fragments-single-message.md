@@ -5,7 +5,7 @@ related: [modules/drone-agent.md, concepts/session-management.md, flows/tool-cal
 
 # Merged footer fragments: single trailing system message (amends the phase-aware footer rendering)
 
-**Summary**: Fixes a GLM-5.3-flash regression introduced by the phase-aware footer rendering (PR #99, `ce7aab2`): moving six stateful fragments to the conversation footer turned the request tail from ONE trailing `role:'system'` message (the proven-safe pre-#99 nudge shape) into a RUN of 2–6 consecutive system messages — an untrained template shape that made the model intermittently end rounds with narration and no tool call (plus elevated reasoning-only guardrail events). All footer fragments now merge into a single trailing system message joined by blank lines in both `buildFooterMessages` paths; topic delineation is preserved by each fragment's mandated top-level `# Heading`, and the header stays untouched so PR #99's prompt-cache win is preserved. Recorded as one ADR covering the parent feature (previously un-ingested), the regression diagnosis, and the fix, per [[meta/decision-bug-fixes-go-in-decisions]].
+**Summary**: Fixes a GLM-5.3-flash regression introduced by the phase-aware footer rendering (PR #99, `ce7aab2`): moving six stateful fragments to the conversation footer turned the request tail from ONE trailing `role:'system'` message (the proven-safe pre-#99 nudge shape) into a RUN of 2–6 consecutive system messages — an untrained template shape that made the model intermittently end rounds with narration and no tool call (plus elevated reasoning-only guardrail events). All footer fragments now merge into a single trailing system message joined by blank lines in both `buildFooterMessages` paths; topic delineation is preserved by each fragment's mandated top-level `# Heading`, and the header stays untouched so PR #99's prompt-cache win is preserved. Recorded as one ADR covering the parent feature (previously un-ingested), the regression diagnosis, and the fix, per decision-bug-fixes-go-in-decisions.
 
 ## Context
 
@@ -51,8 +51,8 @@ related: [modules/drone-agent.md, concepts/session-management.md, flows/tool-cal
 
 ## Related
 
-- [[decisions/153-pre-compaction-nudge]] — the SystemReminderQueue whose single trailing system message is the proven-safe shape this fix restores
-- [[decisions/173-swarm-prompt-fragments]] — the swarm fragment delivery that feeds one of the footer fragments
-- [[concepts/session-management]] — the broken-response/reasoning-only guardrails whose event rate tracked this regression
-- [[flows/tool-call-loop]] — the request-assembly seam where footer messages are appended
-- [[meta/decision-bug-fixes-go-in-decisions]] — why this fix is an ADR amending its parent feature rather than a concept page
+- [153-pre-compaction-nudge](153-pre-compaction-nudge.md) — the SystemReminderQueue whose single trailing system message is the proven-safe shape this fix restores
+- [173-swarm-prompt-fragments](173-swarm-prompt-fragments.md) — the swarm fragment delivery that feeds one of the footer fragments
+- session-management — the broken-response/reasoning-only guardrails whose event rate tracked this regression
+- tool-call-loop — the request-assembly seam where footer messages are appended
+- decision-bug-fixes-go-in-decisions — why this fix is an ADR amending its parent feature rather than a concept page

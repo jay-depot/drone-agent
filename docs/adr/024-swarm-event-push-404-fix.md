@@ -53,7 +53,7 @@ Both calls are wrapped in try-catch to silently ignore cleanup failures.
 
 ## Related
 
-- [[023-conversation-event-push-through]] — The hook that generates the events being pushed
-- [[flows/swarm-connection]] — Connection and shutdown flow
-- [[modules/drone-beacon]] — Beacon sync routes
-- [[modules/drone-coordinator]] — Coordinator swarm routes
+- [023-conversation-event-push-through](023-conversation-event-push-through.md) — The hook that generates the events being pushed
+- swarm-connection — Connection and shutdown flow
+- [drone-beacon](../../drone-beacon/) — Beacon sync routes
+- [drone-coordinator](../../drone-coordinator/) — Coordinator swarm routes

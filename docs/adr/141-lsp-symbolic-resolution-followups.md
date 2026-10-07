@@ -71,9 +71,9 @@ A strict per-referenceId lock is **not** used: `storeReferences`' FIFO eviction 
 
 ## Related
 
-- [[concepts/lsp-symbolic-resolution]] — The concept page for LSP symbolic resolution
-- [[decisions/136-lsp-symbolic-resolution]] — The original implementation
-- [[decisions/138-lsp-symbolic-resolution-round-2]] — Round-2 fixes (dense blocks, exact-match, cache hardening)
-- [[decisions/139-lsp-symbolic-resolution-round-3]] — Round-3 fixes (referenceId precedence, cache concurrency guard)
-- [[decisions/140-lsp-symbolic-resolution-round-4]] — Round-4 fixes (query.filePath, ref.range, minimal suggestedContext block)
-- [[modules/drone-agent-plugins]] — LSP plugin
+- lsp-symbolic-resolution — The concept page for LSP symbolic resolution
+- [136-lsp-symbolic-resolution](136-lsp-symbolic-resolution.md) — The original implementation
+- [138-lsp-symbolic-resolution-round-2](138-lsp-symbolic-resolution-round-2.md) — Round-2 fixes (dense blocks, exact-match, cache hardening)
+- [139-lsp-symbolic-resolution-round-3](139-lsp-symbolic-resolution-round-3.md) — Round-3 fixes (referenceId precedence, cache concurrency guard)
+- [140-lsp-symbolic-resolution-round-4](140-lsp-symbolic-resolution-round-4.md) — Round-4 fixes (query.filePath, ref.range, minimal suggestedContext block)
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — LSP plugin

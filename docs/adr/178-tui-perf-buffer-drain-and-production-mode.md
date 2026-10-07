@@ -93,10 +93,10 @@ New suite `drone-agent/test/use-performance-drain.test.tsx` (2 tests, `ink-testi
 
 ## Related
 
-- [[decisions/001-use-ink]] — why the agent is an Ink/React app at all (the user-timing surface)
-- [[decisions/036-ink-6-react-19]] — the Ink 6 + React 19 architecture whose reconciler this selects
-- [[decisions/154-bin-shims-replace-entry-gates]] — the bin-shim pattern that hosts the unset-only default
-- [[decisions/172-tui-long-line-padding-fix]] — sibling long-session TUI robustness work
-- [[decisions/171-codeql-reenable-in-source-dismissal]] — CI hardening in the same window (action v4, Node24, SARIF name fix — commit `cb2942b` cleared the 14 dependabot advisories)
-- [[modules/drone-agent-tui]] — where the hook lives
-- [[modules/drone-agent]] — bin shims + Dockerfiles
+- [001-use-ink](001-use-ink.md) — why the agent is an Ink/React app at all (the user-timing surface)
+- [036-ink-6-react-19](036-ink-6-react-19.md) — the Ink 6 + React 19 architecture whose reconciler this selects
+- [154-bin-shims-replace-entry-gates](154-bin-shims-replace-entry-gates.md) — the bin-shim pattern that hosts the unset-only default
+- [172-tui-long-line-padding-fix](172-tui-long-line-padding-fix.md) — sibling long-session TUI robustness work
+- [171-codeql-reenable-in-source-dismissal](171-codeql-reenable-in-source-dismissal.md) — CI hardening in the same window (action v4, Node24, SARIF name fix — commit `cb2942b` cleared the 14 dependabot advisories)
+- [drone-agent-tui](../../drone-agent/src/tui/) — where the hook lives
+- [drone-agent](../../drone-agent/) — bin shims + Dockerfiles

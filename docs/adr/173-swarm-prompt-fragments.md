@@ -122,7 +122,7 @@ before release in `docs/agents/swarm-plugin.md`.
 
 ## Related
 
-- [[concepts/swarm-prompt-fragments]] — the concept page
-- [[modules/drone-beacon]] — beacon REST/WS server
-- [[architecture/swarm-architecture]] — swarm connection flow
-- [[concepts/session-management]] — where prompt fragments render per round
+- swarm-prompt-fragments — the concept page
+- [drone-beacon](../../drone-beacon/) — beacon REST/WS server
+- swarm-architecture — swarm connection flow
+- session-management — where prompt fragments render per round

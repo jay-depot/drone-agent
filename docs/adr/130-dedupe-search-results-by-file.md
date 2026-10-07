@@ -9,7 +9,7 @@ related: [concepts/semantic-search.md, modules/drone-beacon.md, modules/drone-sw
 
 ## Context
 
-After structure-aware chunking ([[decisions/129-structure-aware-chunking]]), a single file now produces many chunks, so a query matching several chunks from the same file returned that file multiple times (once per matching chunk). The fix is file-level dedup keeping the best chunk's score, combining the matching chunks' text, with a gap marker when chunks are non-consecutive.
+After structure-aware chunking ([129-structure-aware-chunking](129-structure-aware-chunking.md)), a single file now produces many chunks, so a query matching several chunks from the same file returned that file multiple times (once per matching chunk). The fix is file-level dedup keeping the best chunk's score, combining the matching chunks' text, with a gap marker when chunks are non-consecutive.
 
 ## Decision
 
@@ -33,8 +33,8 @@ Each file appears at most once in results, with the best chunk's score and the c
 
 ## Related
 
-- [[decisions/129-structure-aware-chunking]] — structure-aware chunking that created the multi-chunk-per-file problem
-- [[decisions/131-sqlite-vec-semantic-search]] — vector search moved to sqlite-vec
-- [[concepts/semantic-search]] — the semantic search concept
-- [[modules/drone-beacon]] — beacon module
-- [[modules/drone-swarm-common]] — shared dedup helper
+- [129-structure-aware-chunking](129-structure-aware-chunking.md) — structure-aware chunking that created the multi-chunk-per-file problem
+- [131-sqlite-vec-semantic-search](131-sqlite-vec-semantic-search.md) — vector search moved to sqlite-vec
+- semantic-search — the semantic search concept
+- [drone-beacon](../../drone-beacon/) — beacon module
+- [drone-swarm-common](../../drone-swarm-common/) — shared dedup helper

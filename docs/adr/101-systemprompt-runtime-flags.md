@@ -9,7 +9,7 @@ related: [decisions/100-list-mount-improvements.md, modules/drone-agent.md, modu
 
 ## Context
 
-The runtime flags system ([[decisions/100-list-mount-improvements]]) injects a `# Runtime Flags` block into the system prompt via `context-budget-service.ts`'s `buildSystemMessages()`. This block includes:
+The runtime flags system ([100-list-mount-improvements](100-list-mount-improvements.md)) injects a `# Runtime Flags` block into the system prompt via `context-budget-service.ts`'s `buildSystemMessages()`. This block includes:
 
 - A `## List/Mount Pattern` explainer teaching the LLM how to use `__list_tools`/`__mount_tool`/`__unmount_tool`
 - `Active list-mount plugins: file, lsp, git, mcp, swarm`

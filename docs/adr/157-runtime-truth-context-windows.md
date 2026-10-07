@@ -133,7 +133,7 @@ user.
 
 ## Related
 
-- [[decisions/156-broker-context-windows-migration-persistence]] — parent chain this completes
-- [[decisions/155-provider-model-config]] — the refactor whose discovery/metadata plumbing this fills in
-- [[provider-model-selection]] — the metadata chain reference
-- [[session-management]] — consumers of the corrected denominator
+- [156-broker-context-windows-migration-persistence](156-broker-context-windows-migration-persistence.md) — parent chain this completes
+- [155-provider-model-config](155-provider-model-config.md) — the refactor whose discovery/metadata plumbing this fills in
+- provider-model-selection — the metadata chain reference
+- session-management — consumers of the corrected denominator

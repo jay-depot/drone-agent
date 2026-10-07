@@ -62,12 +62,12 @@ The beacon opens an **outbound** WebSocket to the coordinator's `/ws/beacon` end
 
 ## Related
 
-- [[concepts/mtls-and-reverse-channel]] — The mTLS + reverse channel concept page
-- [[swarm-architecture]] — Swarm mode security section
-- [[modules/drone-beacon]] — Beacon module (updated)
-- [[modules/drone-coordinator]] — Coordinator module (updated)
-- [[flows/swarm-connection]] — Connection flow (updated)
-- [[decisions/117-tofu-fingerprint-pinning]] — TOFU fingerprint pinning (beacon → coordinator)
-- [[decisions/122-tofu-fingerprint-pin-socket-secureconnect]] — Socket secureConnect fix
-- [[decisions/025-coordinator-web-ui-http-port]] — Dual-port architecture
-- [[decisions/043-inter-beacon-spawn-routing]] — Inter-beacon spawn routing (now via WS)
+- mtls-and-reverse-channel — The mTLS + reverse channel concept page
+- swarm-architecture — Swarm mode security section
+- [drone-beacon](../../drone-beacon/) — Beacon module (updated)
+- [drone-coordinator](../../drone-coordinator/) — Coordinator module (updated)
+- swarm-connection — Connection flow (updated)
+- [117-tofu-fingerprint-pinning](117-tofu-fingerprint-pinning.md) — TOFU fingerprint pinning (beacon → coordinator)
+- [122-tofu-fingerprint-pin-socket-secureconnect](122-tofu-fingerprint-pin-socket-secureconnect.md) — Socket secureConnect fix
+- [025-coordinator-web-ui-http-port](025-coordinator-web-ui-http-port.md) — Dual-port architecture
+- [043-inter-beacon-spawn-routing](043-inter-beacon-spawn-routing.md) — Inter-beacon spawn routing (now via WS)

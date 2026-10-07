@@ -19,7 +19,7 @@ The console exists to **exercise the gateway end-to-end** (spawn / terminate / i
 2. **Grammar = dot-notation, required `swarm.` root.** No `!` / `/` aliases. The prefix requirement enables composition: `[swarm-console, persona-assignment]` handles console commands and lets everything else fall through to the persona.
 3. **Parser/dispatch is gateway-side**, factored as a standalone `ConsoleCommandRegistry` (name → handler) over an abstract `SwarmApi` interface, so a future coordinator-side "command bus" promotion is a move, not a rewrite. v1 is **coordinator-backend-only**; local mode returns a clear error.
 4. **v1 command set = endpoint-backed only + `swarm.help`.** Commands with no backing endpoint are omitted entirely (not stubbed).
-5. **Authorization = optional `allowedSenders: string[]` at the conversation level**, enforced by the **engine** at dispatch time (never inside a surface), matching on `senderId` only. A disallowed sender is not a match for that conversation, so dispatch **falls through to the wildcard** (where a `discard` surface makes the refusal observable). Unset = every sender allowed. Authorization is orthogonal to surface behavior (per [[decisions/058-gateway-config-model]] surfaces only read `text` + sender "decorations").
+5. **Authorization = optional `allowedSenders: string[]` at the conversation level**, enforced by the **engine** at dispatch time (never inside a surface), matching on `senderId` only. A disallowed sender is not a match for that conversation, so dispatch **falls through to the wildcard** (where a `discard` surface makes the refusal observable). Unset = every sender allowed. Authorization is orthogonal to surface behavior (per [058-gateway-config-model](058-gateway-config-model.md) surfaces only read `text` + sender "decorations").
 6. **Output = compact markdown-list default + a global `--json` flag** returning the raw coordinator payload. Formatters are pure `(payload) => string`. List commands pass `--limit`/`--offset` through and append an explicit `… N more (use --limit/--offset)` tail when truncated.
 7. **`swarm.agent.terminate` kills the process** via `DELETE /api/spawn/:beaconId/:spawnId` (the only command that does). Endpoint errors are surfaced verbatim; `DELETE`'s own `running`/`spawning` guard is the single source of truth for "cannot kill". Ending only the session record (what the coordinator UI does today) leaves the process alive and burning tokens.
 8. **Enablement = per-conversation spec** `{ "type": "swarm-console" }` in `controlSurfaces`, with optional `allowedSenders` as a top-level field on the same conversation file. No console-specific `spec.config` keys in v1.
@@ -81,7 +81,7 @@ The console made two latent defects visible by doing the same operations correct
 
 ## Related
 
-- [[concepts/swarm-console-command-spec]] — the v1 command specification (this ADR ships its endpoint-backed subset).
-- [[modules/drone-gateway]] — the gateway module page (surfaces, config model, key files).
-- [[decisions/058-gateway-config-model]] — folder-hierarchy config + per-conversation dedicated surface instances (the model extended here).
-- [[decisions/124-executable-resolution-refactor]] — shared helpers the gateway already leans on.
+- swarm-console-command-spec — the v1 command specification (this ADR ships its endpoint-backed subset).
+- [drone-gateway](../../drone-gateway/) — the gateway module page (surfaces, config model, key files).
+- [058-gateway-config-model](058-gateway-config-model.md) — folder-hierarchy config + per-conversation dedicated surface instances (the model extended here).
+- [124-executable-resolution-refactor](124-executable-resolution-refactor.md) — shared helpers the gateway already leans on.

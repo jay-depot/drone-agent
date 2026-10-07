@@ -76,8 +76,8 @@ Validation: LSP clean on all touched files, `pnpm -r run build`, `pnpm typecheck
 ## Related
 
 - `plan-swarm-remote-spawn-lifecycle` — the remote-spawn lifecycle plan (project memory) that locked decision 8
-- [[drone-beacon]] — the beacon module
-- [[drone-coordinator]] — the coordinator module
-- [[decisions/200-beacon-spawnroots-trust-path]] — follow-up: the trust-path registration branch dropped the roots fields this ADR added; fixed with merge-on-omit re-registration
-- [[drone-swarm-common]] — the shared config-file loader
-- [[concepts/spawn-backend]] — spawn backend concept
+- [drone-beacon](../../drone-beacon/) — the beacon module
+- [drone-coordinator](../../drone-coordinator/) — the coordinator module
+- [200-beacon-spawnroots-trust-path](200-beacon-spawnroots-trust-path.md) — follow-up: the trust-path registration branch dropped the roots fields this ADR added; fixed with merge-on-omit re-registration
+- [drone-swarm-common](../../drone-swarm-common/) — the shared config-file loader
+- spawn-backend — spawn backend concept

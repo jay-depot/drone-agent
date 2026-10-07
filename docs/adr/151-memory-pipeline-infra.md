@@ -23,7 +23,7 @@ Four primitives, shaped deliberately to not block future proactive RAG:
 3. **`drone-swarm` CLI** — standalone REST client replacing curl+jq in pipelines. `--beacon`/`--coordinator` mutually exclusive (+ `DRONE_BEACON_URL`/`DRONE_COORDINATOR_URL`, default local coordinator :3456); the target picks address **and route dialect** (coordinator `/api/*`, beacon flat `/*`). Commands: `session list|log|process|processed`, `wiki read|write|search`. JSON on stdout, errors on stderr exit 1. `main(argv, fetchImpl?)` exported with an entry guard for testability. Notably, the TLS-tolerant `createCoordinatorFetch` was **not** extracted to drone-swarm-common (contrary to the original plan): the CLI targets plain HTTP REST and only beacon↔coordinator traffic is self-signed.
 4. **Beacon durable outbox** — SQLite `outbox` table (with `lastAttemptAt`) queues the 12 fire-and-forget coordinator writes; request-response paths stay synchronous fail-fast (spawn drops with an error by design — queuing deferred spawns was judged too surprising). Flusher drains oldest-first (50/batch) on `min(syncIntervalMinutes×60s, 60s)`; retries back off `1s × 2^(attempts-1)`; first attempts are due immediately; 404 counts as delivered because every queued route is idempotent under replay; entries drop after 10 attempts with an error log. Survives beacon restarts.
 
-The opinionated default (`bootstrap__swarm-memory` workflow + the `coordinator-wiki-librarian` persona) remains the recommended path — see [[concepts/memory-pipeline]] for the full reference.
+The opinionated default (`bootstrap__swarm-memory` workflow + the `coordinator-wiki-librarian` persona) remains the recommended path — see memory-pipeline for the full reference.
 
 ## Consequences
 
@@ -34,5 +34,5 @@ The opinionated default (`bootstrap__swarm-memory` workflow + the `coordinator-w
 
 ## Related
 
-- [[concepts/memory-pipeline]] · [[concepts/session-processing-pipeline]]
-- [[decisions/031-session-processing-pipeline]] · [[decisions/093-session-status-mismatch-fix]] · [[decisions/007-beacon-config-underlay]]
+- memory-pipeline · session-processing-pipeline
+- [031-session-processing-pipeline](031-session-processing-pipeline.md) · [093-session-status-mismatch-fix](093-session-status-mismatch-fix.md) · [007-beacon-config-underlay](007-beacon-config-underlay.md)

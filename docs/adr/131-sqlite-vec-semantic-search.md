@@ -45,9 +45,9 @@ The beacon's semantic search is now SIMD-accelerated in C inside SQLite, scaling
 
 ## Related
 
-- [[decisions/127-semantic-search-beacon]] — semantic search moved to the beacon
-- [[decisions/129-structure-aware-chunking]] — structure-aware chunking
-- [[decisions/130-dedupe-search-results-by-file]] — file-level dedup
-- [[concepts/semantic-search]] — the semantic search concept
-- [[modules/drone-beacon]] — beacon module
-- [[modules/drone-swarm-common]] — shared dedup helper (kept)
+- [127-semantic-search-beacon](127-semantic-search-beacon.md) — semantic search moved to the beacon
+- [129-structure-aware-chunking](129-structure-aware-chunking.md) — structure-aware chunking
+- [130-dedupe-search-results-by-file](130-dedupe-search-results-by-file.md) — file-level dedup
+- semantic-search — the semantic search concept
+- [drone-beacon](../../drone-beacon/) — beacon module
+- [drone-swarm-common](../../drone-swarm-common/) — shared dedup helper (kept)

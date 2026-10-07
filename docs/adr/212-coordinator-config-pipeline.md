@@ -11,7 +11,7 @@ related: [concepts/beacon-config-override-spec.md, architecture/config-cascade.m
 
 ## Context
 
-Plan A ([[decisions/211-beacon-coordinator-trust-hardening]]) was the prerequisite: pushing real LLM API keys through the coordinator is only safe once a pending (unapproved) beacon is blocked **server-side**. With that closed, Plan B could proceed.
+Plan A ([211-beacon-coordinator-trust-hardening](211-beacon-coordinator-trust-hardening.md)) was the prerequisite: pushing real LLM API keys through the coordinator is only safe once a pending (unapproved) beacon is blocked **server-side**. With that closed, Plan B could proceed.
 
 The pre-implementation review found the config-push infrastructure was largely non-functional:
 
@@ -27,7 +27,7 @@ The pre-implementation review found the config-push infrastructure was largely n
 ## Decision
 
 1. **Surface (Q5): a global, allowlisted key/value store.** Not per-beacon, not a raw JSON blob. Keys are dot-notation and validated against a curated allowlist.
-2. **Tokens (Q6): plaintext-at-rest + masked-on-read + write-only editing.** `GET` returns `••••` + last-4 for secret keys; the edit dialog uses a "leave empty to keep current" sentinel; `${VAR}` templates are stored and returned **as-is** (receiver-side interpolation — see [[decisions/213-swarm-config-underlay-resolution]]). **Encryption-at-rest was explicitly deferred** as a follow-up.
+2. **Tokens (Q6): plaintext-at-rest + masked-on-read + write-only editing.** `GET` returns `••••` + last-4 for secret keys; the edit dialog uses a "leave empty to keep current" sentinel; `${VAR}` templates are stored and returned **as-is** (receiver-side interpolation — see [213-swarm-config-underlay-resolution](213-swarm-config-underlay-resolution.md)). **Encryption-at-rest was explicitly deferred** as a follow-up.
 3. **Allowlist (Q7): move `KNOWN_CONFIG_KEYS` into `drone-core` as the canonical shared list.** Narrow MVP: `providers.<id>` as whole-entry units, `llm.active`, `llm.reasoningLevel`, `compaction.*`, `session.guardrail.*`. This required a **second** list, `UNDERLAY_ALLOWLIST` — see the deviation below.
 4. **Delivery (Q8): coordinator is the source of truth; the beacon PULLS.** Direction is strictly coordinator → beacon → agent. The beacon pulls on its existing 5-minute `triggerCoordinatorSync` and stores non-secret entries as `beacon_config scope='swarm'`; agents fetch the merged beacon `/config` where **beacon-local wins** for the same key. Near-real-time push was explicitly out of scope.
 5. **Apply timing (Q9): at agent session start**, via the now-wired `rebuild()`. No live mid-session re-apply (deferred).
@@ -58,9 +58,9 @@ The pre-implementation review found the config-push infrastructure was largely n
 
 ## Consequences
 
-- The config cascade documented since [[decisions/005-config-cascade]] and [[decisions/007-beacon-config-underlay]] is now **real in code**, with exactly one coordinator-level underlay (the merged beacon view at precedence 75) rather than a separate coordinator injector.
+- The config cascade documented since [005-config-cascade](005-config-cascade.md) and [007-beacon-config-underlay](007-beacon-config-underlay.md) is now **real in code**, with exactly one coordinator-level underlay (the merged beacon view at precedence 75) rather than a separate coordinator injector.
 - Coordinator-pushed LLM provider entries (with API keys) reach agent sessions without a disk config edit — the first feature that actually required Plan A's server-side trust gate.
-- `${VAR}` templates ride end-to-end as literal strings until the receiver interpolates them ([[decisions/213-swarm-config-underlay-resolution]]).
+- `${VAR}` templates ride end-to-end as literal strings until the receiver interpolates them ([213-swarm-config-underlay-resolution](213-swarm-config-underlay-resolution.md)).
 - Plaintext-at-rest on the coordinator is a **deliberate, documented posture**; encryption-at-rest remains an open follow-up.
 - Propagation latency is up to 5 minutes, and changes only take effect at the next session start.
 
@@ -72,8 +72,8 @@ Build/typecheck/lint exit 0; fast suite 208 files / 2951 tests; UI 32 files / 23
 
 ## Related
 
-- [[concepts/beacon-config-override-spec]] — the underlay spec this makes real (and corrects)
-- [[architecture/config-cascade]] — the cascade layer
-- [[decisions/211-beacon-coordinator-trust-hardening]] — the prerequisite
-- [[decisions/209-stored-secrets-config-split]] — phase 2, which replaced this ADR's secret-row model
-- [[decisions/213-swarm-config-underlay-resolution]] — the `${VAR}` interpolation + rebuild fix on the agent side
+- beacon-config-override-spec — the underlay spec this makes real (and corrects)
+- [config-cascade](005-config-cascade.md) — the cascade layer
+- [211-beacon-coordinator-trust-hardening](211-beacon-coordinator-trust-hardening.md) — the prerequisite
+- [209-stored-secrets-config-split](209-stored-secrets-config-split.md) — phase 2, which replaced this ADR's secret-row model
+- [213-swarm-config-underlay-resolution](213-swarm-config-underlay-resolution.md) — the `${VAR}` interpolation + rebuild fix on the agent side

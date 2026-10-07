@@ -52,8 +52,8 @@ Args truncated to ~80 chars, message content to ~120 chars.
 
 ## Related
 
-- [[078-pretty-tool-output]] — Phase 1: 7 core tools
-- [[079-pretty-tool-output-phase-2]] — Phase 2: 12 more tools
-- [[081-meta-tool-pretty-output]] — Reusable list/mount/unmount meta-tool components
-- [[concepts/subagent]] — Subagent system documentation
-- [[modules/drone-agent-tui]] — TUI module documentation
+- [078-pretty-tool-output](078-pretty-tool-output.md) — Phase 1: 7 core tools
+- [079-pretty-tool-output-phase-2](079-pretty-tool-output-phase-2.md) — Phase 2: 12 more tools
+- [081-meta-tool-pretty-output](081-meta-tool-pretty-output.md) — Reusable list/mount/unmount meta-tool components
+- subagent — Subagent system documentation
+- [drone-agent-tui](../../drone-agent/src/tui/) — TUI module documentation

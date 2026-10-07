@@ -9,7 +9,7 @@ related: [entities/Persona.md, entities/DronePlugin.md, architecture/plugin-syst
 
 ## Context
 
-Under the runtime-level list-mount pattern ([[105-runtime-level-list-mount]]), all tools start unmounted. The LLM must discover tools via `runtime__list_tools` and mount them via `runtime__mount_tool` before they appear in the tool list. While this keeps the default surface minimal, certain personas conceptually want a **predictable, pre-wired toolset** — e.g. a "coder" persona that always wants `file__read`, `file__list`, `file__apply_diff`, `git__commit` available without the LLM having to mount them first.
+Under the runtime-level list-mount pattern ([105-runtime-level-list-mount](105-runtime-level-list-mount.md)), all tools start unmounted. The LLM must discover tools via `runtime__list_tools` and mount them via `runtime__mount_tool` before they appear in the tool list. While this keeps the default surface minimal, certain personas conceptually want a **predictable, pre-wired toolset** — e.g. a "coder" persona that always wants `file__read`, `file__list`, `file__apply_diff`, `git__commit` available without the LLM having to mount them first.
 
 There was no way to express "this persona always has these tools mounted" in the persona definition. The only mechanism was `allowedTools`, which controls **visibility** (filtering) of tools but does not **mount** them — a persona with `allowedTools` could still not see a tool unless it was mounted, and there was no persona-driven way to mount tools automatically.
 
@@ -85,7 +85,7 @@ A tool-level `autoMount` flag on `DroneToolDefinition` is **intentionally NOT in
 
 ## Related
 
-- [[entities/Persona]] — Persona definition now includes `premountedTools`
-- [[entities/DronePlugin]] — `DronePluginRegistration` now includes `listMountedTools`
-- [[decisions/105-runtime-level-list-mount]] — The runtime list-mount foundation this builds on
-- [[concepts/default-hidden-tools]] — `defaultHidden` + `allowedTools` interplay with premounting
+- [Persona](../../drone-core/src/domain-types.ts) — Persona definition now includes `premountedTools`
+- [DronePlugin](../../drone-core/src/plugin-system.ts) — `DronePluginRegistration` now includes `listMountedTools`
+- [105-runtime-level-list-mount](105-runtime-level-list-mount.md) — The runtime list-mount foundation this builds on
+- default-hidden-tools — `defaultHidden` + `allowedTools` interplay with premounting

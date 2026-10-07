@@ -35,7 +35,7 @@ Use WebSocket for real-time delivery with REST fallback for offline agents. Mess
 
 ## Cross-Beacon Extension
 
-Cross-beacon messaging was later added via coordinator relay (see [[decisions/009-cross-beacon-messaging]]).
+Cross-beacon messaging was later added via coordinator relay (see [009-cross-beacon-messaging](009-cross-beacon-messaging.md)).
 
 ## Consequences
 
@@ -46,5 +46,5 @@ Cross-beacon messaging was later added via coordinator relay (see [[decisions/00
 
 ## Related
 
-- [[decisions/009-cross-beacon-messaging]] — Cross-beacon extension
-- [[drone-beacon]] — Beacon implementation
+- [009-cross-beacon-messaging](009-cross-beacon-messaging.md) — Cross-beacon extension
+- [drone-beacon](../../drone-beacon/) — Beacon implementation

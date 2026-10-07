@@ -98,7 +98,7 @@ export type DroneTuiConfig = {
 
 ## Related
 
-- [[drone-agent-tui]] — TUI architecture
-- [[DroneAgentConfig]] — Config schema (now includes `tui` section)
-- [[001-use-ink]] — Why Ink was chosen
-- [[046-tui-tail-region-refactor]] — Tail region architecture
+- [drone-agent-tui](../../drone-agent/src/tui/) — TUI architecture
+- [DroneAgentConfig](../../drone-core/src/config-types.ts) — Config schema (now includes `tui` section)
+- [001-use-ink](001-use-ink.md) — Why Ink was chosen
+- [046-tui-tail-region-refactor](046-tui-tail-region-refactor.md) — Tail region architecture

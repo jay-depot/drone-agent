@@ -46,7 +46,7 @@ Add a fast unit suite + a slow integration suite following the monorepo vitest c
 - Framing: `Content-Length` parser (one/multiple/split/invalid/missing); line-delimited parser (one-per-line, split lines, blank lines skipped, invalid JSON → closed).
 - `initialize` sent once with `protocolVersion: '2024-11-05'` + capabilities; `notifications/initialized` after.
 - `listTools` → `tools/list`, normalizes `McpToolMeta`, honors `nextCursor`/`cursor`, `maxListPages`/`maxListItems` caps, `toolsListTruncated`/`discoveredToolCount` (current code sets `discoveredToolCount` to the truncated count — flagged for later fix).
-- `callTool` → `tools/call` with `{name, arguments}`, returns the raw result (does NOT inspect `isError` — that's fixed in [[050-mcp-client-session-id-iserror]]).
+- `callTool` → `tools/call` with `{name, arguments}`, returns the raw result (does NOT inspect `isError` — that's fixed in [050-mcp-client-session-id-iserror](050-mcp-client-session-id-iserror.md)).
 - `readResource`/`listResources`/`listPrompts`/`getPrompt` normalize metas.
 - Retry: `requestWithRetry` retries idempotent methods up to `retryCount+1`, increments `retryAttemptCount`, does NOT retry non-idempotent.
 - Error classification: `classifyErrorCategory` buckets timeout/transport/protocol/payload/unknown.
@@ -67,12 +67,12 @@ Add a fast unit suite + a slow integration suite following the monorepo vitest c
 - The suite is the regression net the later fix-phases (session-id, isError, protocol negotiation, resource templates) update as the code is fixed.
 
 **Negative / deferred**:
-- Phase 1 encodes current (sometimes defective) behavior; those tests must be flipped as fixes land (e.g. the isError test was flipped in [[050-mcp-client-session-id-iserror]]).
+- Phase 1 encodes current (sometimes defective) behavior; those tests must be flipped as fixes land (e.g. the isError test was flipped in [050-mcp-client-session-id-iserror](050-mcp-client-session-id-iserror.md)).
 - `discoveredToolCount` truncation semantics are known-stale and await a later fix-phase.
 
 ## Related
 
-- [[modules/drone-agent-mcp-client]] — The client under test; Testing Harness section
-- [[050-mcp-client-session-id-iserror]] — The fix phase that updated these tests (isError + session-id)
-- [[concepts/test-infrastructure]] — Monorepo test patterns
-- [[modules/drone-agent-plugins]] — The `mcp` plugin that mounts servers
+- [drone-agent-mcp-client](../../drone-agent/src/plugins/mcp/) — The client under test; Testing Harness section
+- [050-mcp-client-session-id-iserror](050-mcp-client-session-id-iserror.md) — The fix phase that updated these tests (isError + session-id)
+- test-infrastructure — Monorepo test patterns
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — The `mcp` plugin that mounts servers

@@ -34,4 +34,4 @@ The swarm is designed for a single human user. All agents in the swarm work for 
 
 ## Related
 
-- [[swarm-architecture]] — Swarm mode
+- swarm-architecture — Swarm mode

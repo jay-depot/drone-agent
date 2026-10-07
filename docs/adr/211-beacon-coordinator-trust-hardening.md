@@ -53,8 +53,8 @@ Four coupled changes, all required together:
 
 - A **pending beacon can no longer read coordinator data**, even with a valid pinned certificate — the gate is server-side, not client-side, so a hostile client cannot bypass it by skipping its own checks.
 - The self-approve-by-claiming-localhost spoof is closed: locality is a socket fact.
-- Approval now requires the full human handshake on both sides, which is what made [[decisions/212-coordinator-config-pipeline]] (pushing real API keys through the coordinator) safe to build next.
-- Unattended swarms would be locked out by design, which is why [[decisions/177-reverse-channel-session-end-trigger]] added the paired `autoApproveBeacons` + `BEACON_AUTO_CONFIRM_COORDINATOR_FINGERPRINT` opt-ins.
+- Approval now requires the full human handshake on both sides, which is what made [212-coordinator-config-pipeline](212-coordinator-config-pipeline.md) (pushing real API keys through the coordinator) safe to build next.
+- Unattended swarms would be locked out by design, which is why [177-reverse-channel-session-end-trigger](177-reverse-channel-session-end-trigger.md) added the paired `autoApproveBeacons` + `BEACON_AUTO_CONFIRM_COORDINATOR_FINGERPRINT` opt-ins.
 
 ## Validation
 
@@ -64,8 +64,8 @@ LSP clean; typecheck/build/lint exit 0; fast suite 2905 pass / 14 skip; coordina
 
 ## Related
 
-- [[concepts/mtls-and-reverse-channel]] — the trust transport this hardens
-- [[concepts/beacon-verification]] — the verification code the announce is bound to
-- [[decisions/212-coordinator-config-pipeline]] — the next plan, unblocked by this one
-- [[decisions/118-tofu-interactive-confirmation]] · [[decisions/120-bidirectional-verification-ux]] — the human handshake this makes mandatory
-- [[decisions/177-reverse-channel-session-end-trigger]] — the unattended-swarm opt-ins that bypass the handshake deliberately
+- mtls-and-reverse-channel — the trust transport this hardens
+- beacon-verification — the verification code the announce is bound to
+- [212-coordinator-config-pipeline](212-coordinator-config-pipeline.md) — the next plan, unblocked by this one
+- [118-tofu-interactive-confirmation](118-tofu-interactive-confirmation.md) · [120-bidirectional-verification-ux](120-bidirectional-verification-ux.md) — the human handshake this makes mandatory
+- [177-reverse-channel-session-end-trigger](177-reverse-channel-session-end-trigger.md) — the unattended-swarm opt-ins that bypass the handshake deliberately

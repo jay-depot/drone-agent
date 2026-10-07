@@ -41,5 +41,5 @@ Beacon config operates as an **underlay** — it provides defaults that the agen
 
 ## Related
 
-- [[config-cascade]] — Config layering
-- [[beacon-config-override-spec]] — Original spec
+- [config-cascade](005-config-cascade.md) — Config layering
+- beacon-config-override-spec — Original spec

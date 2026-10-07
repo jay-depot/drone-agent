@@ -9,7 +9,7 @@ related: [decisions/098-lsp-file-list-mount-conversion.md, decisions/100-list-mo
 
 ## Context
 
-After converting the LSP and File plugins to the list/mount pattern ([[decisions/098-lsp-file-list-mount-conversion]]) and adding ergonomic improvements ([[decisions/069-lsp-ergonomics]]), the LSP plugin only knew about TypeScript. Users could configure other servers manually via `lsp.servers`, but there was no auto-detection, auto-install support, or UI for other popular languages.
+After converting the LSP and File plugins to the list/mount pattern ([098-lsp-file-list-mount-conversion](098-lsp-file-list-mount-conversion.md)) and adding ergonomic improvements ([069-lsp-ergonomics](069-lsp-ergonomics.md)), the LSP plugin only knew about TypeScript. Users could configure other servers manually via `lsp.servers`, but there was no auto-detection, auto-install support, or UI for other popular languages.
 
 ## Decision
 
@@ -65,7 +65,7 @@ Added to `drone-agent/src/plugins/lsp/known-servers.ts`:
 | `svelte-language-server` | Svelte | npm | `svelte.config.js` | No |
 | `intelephense` | PHP | npm | `composer.json` | No |
 
-**Integrity hashes**: TypeScript has a real pinned hash. All other servers had placeholder zeros — these were replaced with real sha512 values in [[decisions/103-lsp-hash-fix]].
+**Integrity hashes**: TypeScript has a real pinned hash. All other servers had placeholder zeros — these were replaced with real sha512 values in [103-lsp-hash-fix](103-lsp-hash-fix.md).
 
 ### 4. Ambient Language Detection
 
@@ -116,8 +116,8 @@ Clean. No errors or warnings detected.
 
 ### Negative
 
-- ~~**Placeholder integrity hashes** — 13 of 14 servers have `sha512-000...` hashes. Auto-install for those will fail until real values are pinned.~~ **Resolved** in [[decisions/103-lsp-hash-fix]] — all 13 servers now have real sha512 hashes.
-- ~~**github-release URLs are platform-specific** — `rust-analyzer` and `lua-language-server` have hard-coded `x86_64-unknown-linux-gnu`/`linux-x64` tarball URLs. Multi-platform support requires either `platformMappings` in the spec or per-platform entries.~~ **Resolved** in [[decisions/103-lsp-hash-fix]] — both servers now have `platforms` entries for linux-x64, linux-arm64, darwin-x64, darwin-arm64.
+- ~~**Placeholder integrity hashes** — 13 of 14 servers have `sha512-000...` hashes. Auto-install for those will fail until real values are pinned.~~ **Resolved** in [103-lsp-hash-fix](103-lsp-hash-fix.md) — all 13 servers now have real sha512 hashes.
+- ~~**github-release URLs are platform-specific** — `rust-analyzer` and `lua-language-server` have hard-coded `x86_64-unknown-linux-gnu`/`linux-x64` tarball URLs. Multi-platform support requires either `platformMappings` in the spec or per-platform entries.~~ **Resolved** in [103-lsp-hash-fix](103-lsp-hash-fix.md) — both servers now have `platforms` entries for linux-x64, linux-arm64, darwin-x64, darwin-arm64.
 - **`startServerForFile` not hooked** — the on-demand startup method exists but isn't wired into any lifecycle hook yet. The LLM can't trigger it directly.
 
 ## Implementation

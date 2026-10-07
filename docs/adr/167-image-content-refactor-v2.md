@@ -13,7 +13,7 @@ Before V2, `file__read_image` returned `JSON.stringify({ path, mimeType, data(ba
 
 - The blob was double-counted in token estimates (text in content + flat `256`/image).
 - Every model — vision-capable or not — received the redundant base64 text on the wire, even when the image was also attached via `images[]`.
-- A non-vision model next to a description (V1, [[decisions/165-image-describer-role]]) still got megabytes of base64 it can't use.
+- A non-vision model next to a description (V1, [165-image-describer-role](165-image-describer-role.md)) still got megabytes of base64 it can't use.
 - Images were derived from content via a **JSON-scan heuristic** (`extractImageFromToolResult`/`findDataUri`) that only recognized two shapes: the file-tool shape (`{mimeType, data}` top-level) and nested `data:image/...;base64,...` URIs. Raw MCP image content blocks (separate `data`/`mimeType` fields, MCP protocol standard) were **not** recognized — they landed as inert base64 text.
 
 V1 (ADR 165) had loosened this with a per-tool image-extractor registry at the append seam (`file__read_image` got a structured extractor; the content heuristic became the default fallback for unregistered tools, MCP stayed on it) plus presentation-only base64 stripping on the wire. V2 resolves the underlying problem: **make the structured `images[]` channel the source of truth** so base64 stops riding in content at all.
@@ -109,11 +109,11 @@ Full fast suite green (2357 passed, 9 skipped), `pnpm -r run build` + `pnpm type
 
 ## Related
 
-- [[decisions/165-image-describer-role]] — V1: the `image_describer` role + per-tool extractor registry that V2 supersedes the extraction-half of
-- [[concepts/vision-support]] — image input handling across providers
-- [[modules/drone-core]] — `DroneToolResult`, `toToolResultContent`, `session.maxImagesPerMessage`
-- [[modules/drone-agent]] — conversation-service seam changes
-- [[modules/drone-agent-plugins]] — `file__read_image` + MCP structured results
-- [[modules/drone-agent-mcp-client]] — `splitToolResultBlocks` + image blocks
-- [[flows/tool-call-loop]] — the tool-result append/cap/describe flow
-- [[decisions/050-mcp-client-session-id-iserror]] — MCP `callTool` throws on `isError`
+- [165-image-describer-role](165-image-describer-role.md) — V1: the `image_describer` role + per-tool extractor registry that V2 supersedes the extraction-half of
+- vision-support — image input handling across providers
+- [drone-core](../../drone-core/) — `DroneToolResult`, `toToolResultContent`, `session.maxImagesPerMessage`
+- [drone-agent](../../drone-agent/) — conversation-service seam changes
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — `file__read_image` + MCP structured results
+- [drone-agent-mcp-client](../../drone-agent/src/plugins/mcp/) — `splitToolResultBlocks` + image blocks
+- tool-call-loop — the tool-result append/cap/describe flow
+- [050-mcp-client-session-id-iserror](050-mcp-client-session-id-iserror.md) — MCP `callTool` throws on `isError`

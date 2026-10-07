@@ -10,9 +10,9 @@ related: [modules/drone-coordinator.md, modules/drone-coordinator-ui.md, modules
 ## Context
 
 The coordinator session-processing pipeline
-([[concepts/session-processing-pipeline]],
-[[decisions/031-session-processing-pipeline]],
-[[decisions/093-session-status-mismatch-fix]]) routes sessions
+(session-processing-pipeline,
+[031-session-processing-pipeline](031-session-processing-pipeline.md),
+[093-session-status-mismatch-fix](093-session-status-mismatch-fix.md)) routes sessions
 `active → stale → ended → processing → processed`. Once a session reaches
 `processed` it had effectively nowhere to go: it sat in the default sessions
 list forever, cluttering the UI and any `drone-swarm session list` output that

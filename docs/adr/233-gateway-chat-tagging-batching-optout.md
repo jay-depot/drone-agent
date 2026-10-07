@@ -64,10 +64,10 @@ LSP clean; `pnpm -r run build` (8 packages) exit 0; `pnpm typecheck` exit 0; `pn
 
 ## Related
 
-- [[modules/drone-gateway]] — the gateway module page (config model, key files, types, surfaces, tests).
-- [[modules/drone-agent]] — `InputEvent.systemReminder` + `engine.queueSystemReminder`.
-- [[concepts/spawn-backend]] — the `sendMessage` widening (`opts`, nullable reply).
-- [[decisions/232-gateway-surface-lifecycle-and-working-dir]] — the prior gateway slice (idle re-spawn made the missing tag worse).
-- [[decisions/224-gateway-spawn-targeting]] — the sibling per-surface config pattern.
-- [[decisions/217-steer-and-btw-commands]] — the agent-side `/steer` buffer, the analogous "mid-round absorption" shape.
-- [[concepts/json-listen-mode]] — the `chat` event the `systemReminder` rides.
+- [drone-gateway](../../drone-gateway/) — the gateway module page (config model, key files, types, surfaces, tests).
+- [drone-agent](../../drone-agent/) — `InputEvent.systemReminder` + `engine.queueSystemReminder`.
+- spawn-backend — the `sendMessage` widening (`opts`, nullable reply).
+- [232-gateway-surface-lifecycle-and-working-dir](232-gateway-surface-lifecycle-and-working-dir.md) — the prior gateway slice (idle re-spawn made the missing tag worse).
+- [224-gateway-spawn-targeting](224-gateway-spawn-targeting.md) — the sibling per-surface config pattern.
+- [217-steer-and-btw-commands](217-steer-and-btw-commands.md) — the agent-side `/steer` buffer, the analogous "mid-round absorption" shape.
+- json-listen-mode — the `chat` event the `systemReminder` rides.

@@ -69,7 +69,7 @@ Each plugin registered its `renderComponent` on the relevant tool definitions:
 
 ## Related
 
-- [[078-pretty-tool-output]] — Phase 1: 7 core tools
-- [[080-subagent-dispatch-pretty-output]] — Subagent dispatch TUI rendering
-- [[081-meta-tool-pretty-output]] — Reusable list/mount/unmount meta-tool components
-- [[modules/drone-agent-tui]] — TUI module documentation
+- [078-pretty-tool-output](078-pretty-tool-output.md) — Phase 1: 7 core tools
+- [080-subagent-dispatch-pretty-output](080-subagent-dispatch-pretty-output.md) — Subagent dispatch TUI rendering
+- [081-meta-tool-pretty-output](081-meta-tool-pretty-output.md) — Reusable list/mount/unmount meta-tool components
+- [drone-agent-tui](../../drone-agent/src/tui/) — TUI module documentation

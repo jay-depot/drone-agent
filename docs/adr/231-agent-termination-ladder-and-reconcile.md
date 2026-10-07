@@ -21,7 +21,7 @@ coordinator DELETE /api/spawn/:beaconId/:spawnId
 
 The `spawns` table had **no pid column**; the process handle lived only in memory. If the beacon restarted since the spawn, `activeSpawns` was empty, `terminateAgent` returned false, and the beacon replied **400**. The spawn **record** still said `running`, nothing reconciled it, and the agent process kept running (burning tokens) — with no reaping under a fresh beacon process.
 
-Every client that terminates agents inherited this boundary: the gateway swarm-console's `swarm.agent.terminate` ([[decisions/223-gateway-swarm-console-control-surface]]) and the coordinator UI's "Terminate" button (which today only ends the session record — `DELETE /beacons/:id/sessions/:agentId` + `POST /sessions/:id/end` — and never kills the process at all).
+Every client that terminates agents inherited this boundary: the gateway swarm-console's `swarm.agent.terminate` ([223-gateway-swarm-console-control-surface](223-gateway-swarm-console-control-surface.md)) and the coordinator UI's "Terminate" button (which today only ends the session record — `DELETE /beacons/:id/sessions/:agentId` + `POST /sessions/:id/end` — and never kills the process at all).
 
 ## Decision
 
@@ -77,7 +77,7 @@ The agent's beacon WebSocket now **retries forever** with backoff capped at 15 m
 
 - **Gateway `terminateSession` targeted the wrong id** (`7a7742b1`). `CoordinatorSpawnBackend.spawnSession` stored `processId = agentId || spawnId`, and `terminateSession` passed `processId` into the terminate endpoint's **spawnId** slot, so `DELETE /api/spawn/<beacon>/<agentId>` 404'd at the beacon and the ladder never ran — a silent no-op (the warning was swallowed and the local session deleted). Fix: `SpawnSession` gained an optional `spawnId` (set from `spawnResult.spawnId`); `processId` stays the agentId (used by `sendMessage`); `terminateSession` calls `terminateSpawn(targetBeaconId, spawnId)` and warns + skips when no spawnId was recorded, instead of sending a wrong id. *(The console handler already resolved correctly; this was a distinct path.)*
 - **Coordinator terminate timeout widened to 30 s** (`7630812a`). The ladder runs **synchronously inside the reverse-channel RPC**, bounded at ~5 s + 2 s (`ps`) + 5 s + polling ≈ 12 s, against `sendBeaconCommand`'s 15 s default (`drone-coordinator/src/beacon-ws.ts`). Too little headroom: a slow host could time the command out while the beacon still completed the kill, returning `503 BEACON_UNAVAILABLE` **for a successful terminate**, after which a retry hits `400 ... status is terminated`. New `TERMINATE_COMMAND_TIMEOUT_MS = 30000` at the route (`drone-coordinator/src/routes/spawn.ts`); other commands keep the 15 s default.
-- **CodeQL `js/polynomial-redos` on the ps parser** (`b702ab1e`). The parse regex `/^\s*(\d+)\s+(.+)$/` overlaps: `\s` ⊆ `.`, so the separator `\s+` and the unanchored tail `.+` can split a run of spaces ambiguously (witness: `"9 "` + many spaces). Fixed for free by anchoring the command's first char to non-whitespace (`/^\s*(\d+)\s+(\S.*)$/`), which removes the overlap; `ps` pads the column and `argv[0]` is never whitespace-led, so real output is unchanged (the one delta — a pid-only line is now skipped instead of yielding an empty argv — is more correct). No suppression comment: the project reserves `// codeql[...]` for genuine dismissals (cf. `7ea4582f` for the same rule on `persona-metadata.ts`, [[decisions/228-persona-metadata-derivation]]).
+- **CodeQL `js/polynomial-redos` on the ps parser** (`b702ab1e`). The parse regex `/^\s*(\d+)\s+(.+)$/` overlaps: `\s` ⊆ `.`, so the separator `\s+` and the unanchored tail `.+` can split a run of spaces ambiguously (witness: `"9 "` + many spaces). Fixed for free by anchoring the command's first char to non-whitespace (`/^\s*(\d+)\s+(\S.*)$/`), which removes the overlap; `ps` pads the column and `argv[0]` is never whitespace-led, so real output is unchanged (the one delta — a pid-only line is now skipped instead of yielding an empty argv — is more correct). No suppression comment: the project reserves `// codeql[...]` for genuine dismissals (cf. `7ea4582f` for the same rule on `persona-metadata.ts`, [228-persona-metadata-derivation](228-persona-metadata-derivation.md)).
 
 ## Consequences
 
@@ -96,13 +96,13 @@ Plan `plan-swarm-spawn-terminate-ladder` (completed; **deleted from project memo
 
 ## Related
 
-- [[modules/drone-beacon]] — the ladder, reconcile, and spawn handlers
-- [[modules/drone-swarm-common]] — `process-lookup.ts`, the spawner
-- [[modules/drone-agent]] — the in-process shutdown seam
-- [[modules/drone-gateway]] — `terminateSession` spawnId fix
-- [[modules/drone-coordinator]] — the terminate command timeout
-- [[concepts/mtls-and-reverse-channel]] — the reverse channel the terminate command rides
-- [[decisions/197-beacon-cwd-roots]] — the other spawn-time beacon concern (working-dir whitelisting)
-- [[decisions/198-coordinator-ui-launch-interact]] — the spawn lifecycle this terminate closes
-- [[decisions/223-gateway-swarm-console-control-surface]] — `swarm.agent.terminate`
-- [[decisions/224-gateway-spawn-targeting]] — the session's recorded beacon
+- [drone-beacon](../../drone-beacon/) — the ladder, reconcile, and spawn handlers
+- [drone-swarm-common](../../drone-swarm-common/) — `process-lookup.ts`, the spawner
+- [drone-agent](../../drone-agent/) — the in-process shutdown seam
+- [drone-gateway](../../drone-gateway/) — `terminateSession` spawnId fix
+- [drone-coordinator](../../drone-coordinator/) — the terminate command timeout
+- mtls-and-reverse-channel — the reverse channel the terminate command rides
+- [197-beacon-cwd-roots](197-beacon-cwd-roots.md) — the other spawn-time beacon concern (working-dir whitelisting)
+- [198-coordinator-ui-launch-interact](198-coordinator-ui-launch-interact.md) — the spawn lifecycle this terminate closes
+- [223-gateway-swarm-console-control-surface](223-gateway-swarm-console-control-surface.md) — `swarm.agent.terminate`
+- [224-gateway-spawn-targeting](224-gateway-spawn-targeting.md) — the session's recorded beacon

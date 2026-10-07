@@ -92,8 +92,8 @@ All other hooks still rethrow. This is a **single-point defense** at the shared 
 
 ## Related
 
-- [[modules/drone-agent-plugins]] — The LSP plugin row
-- [[architecture/plugin-system]] — Hook ordering and lifecycle semantics
-- [[flows/plugin-lifecycle]] — The `onBeforePrompt` / `onAfterToolCall` hook flow
-- [[decisions/069-lsp-ergonomics]] — Earlier LSP ergonomics work
-- [[decisions/098-lsp-file-list-mount-conversion]] / [[decisions/102-multi-language-lsp-support]] — LSP plugin architecture context
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — The LSP plugin row
+- [plugin-system](002-plugin-system.md) — Hook ordering and lifecycle semantics
+- plugin-lifecycle — The `onBeforePrompt` / `onAfterToolCall` hook flow
+- [069-lsp-ergonomics](069-lsp-ergonomics.md) — Earlier LSP ergonomics work
+- [098-lsp-file-list-mount-conversion](098-lsp-file-list-mount-conversion.md) / [102-multi-language-lsp-support](102-multi-language-lsp-support.md) — LSP plugin architecture context

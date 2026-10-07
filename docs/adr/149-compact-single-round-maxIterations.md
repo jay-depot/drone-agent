@@ -9,7 +9,7 @@ related: [concepts/session-management.md, modules/drone-agent-plugins.md, decisi
 
 ## Context
 
-After commit `2abaaf34` ("fix(compaction): /compact now forces compaction below the soft threshold", decision [[decisions/148-compact-manual-force-skips-threshold]]), `maybeCompact`'s early-bail changed from `if (metrics.usagePercent <= softThreshold) break;` to `if (!input.options.force && metrics.usagePercent <= softThreshold) break;`.
+After commit `2abaaf34` ("fix(compaction): /compact now forces compaction below the soft threshold", decision [148-compact-manual-force-skips-threshold](148-compact-manual-force-skips-threshold.md)), `maybeCompact`'s early-bail changed from `if (metrics.usagePercent <= softThreshold) break;` to `if (!input.options.force && metrics.usagePercent <= softThreshold) break;`.
 
 That `force` fix was correct, but it had an unintended side effect: because `force` now bypasses the threshold bail, **both** manual paths (`/compact` → `forceEvaluate`, `/compact --all` → `forceEvaluateAll`) began running the **full convergence loop** (`MAX_COMPACTION_ITERATIONS = 5`), slicing-and-summarizing until every non-summary turn was consumed.
 
@@ -56,8 +56,8 @@ If the single allowed iteration lands on the **self-purge branch** (summary regi
 
 ## Related
 
-- [[concepts/session-management]] — Turn model + compaction triggering + manual `/compact`
-- [[modules/drone-agent-plugins]] — The `compaction` plugin row
-- [[decisions/148-compact-manual-force-skips-threshold]] — The prior fix that made `force` skip the threshold gate and, unintentionally, run the full convergence loop
-- [[decisions/135-compaction-slash-command]] — The `/compact` command + `CompactionCapability`
-- [[decisions/134-compaction-correctness-fix]] — Convergence loop + `sliceSize`
+- session-management — Turn model + compaction triggering + manual `/compact`
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — The `compaction` plugin row
+- [148-compact-manual-force-skips-threshold](148-compact-manual-force-skips-threshold.md) — The prior fix that made `force` skip the threshold gate and, unintentionally, run the full convergence loop
+- [135-compaction-slash-command](135-compaction-slash-command.md) — The `/compact` command + `CompactionCapability`
+- [134-compaction-correctness-fix](134-compaction-correctness-fix.md) — Convergence loop + `sliceSize`

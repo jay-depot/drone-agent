@@ -5,11 +5,11 @@ related: [concepts/beacon-verification.md, modules/drone-beacon.md, modules/dron
 
 # 122. Fix beacon TOFU coordinator fingerprint pin via socket `secureConnect`
 
-**Summary**: The TOFU fingerprint pinning from [[decisions/117-tofu-fingerprint-pinning]] was **dead code** — Node never calls `checkServerIdentity` when `rejectUnauthorized: false`, so the beacon never observed/pinned the coordinator's TLS fingerprint. The bidirectional verification code never matched between the beacon and coordinator (the beacon hashed with an *empty* coordinator fingerprint while the coordinator used its real one). This fix observes and enforces the fingerprint from the socket's `secureConnect` event instead, restoring the pin and converging the codes.
+**Summary**: The TOFU fingerprint pinning from [117-tofu-fingerprint-pinning](117-tofu-fingerprint-pinning.md) was **dead code** — Node never calls `checkServerIdentity` when `rejectUnauthorized: false`, so the beacon never observed/pinned the coordinator's TLS fingerprint. The bidirectional verification code never matched between the beacon and coordinator (the beacon hashed with an *empty* coordinator fingerprint while the coordinator used its real one). This fix observes and enforces the fingerprint from the socket's `secureConnect` event instead, restoring the pin and converging the codes.
 
 ## Context
 
-[[decisions/117-tofu-fingerprint-pinning]] wired TOFU observation/enforcement through a `checkServerIdentity` override (`buildCheckServerIdentity`) on every HTTPS request to the coordinator, alongside `rejectUnauthorized: false` (self-signed cert compat). But there is a Node TLS trap: when `rejectUnauthorized` is `false`, Node **skips server-identity verification entirely**, so `checkServerIdentity` — and thus `onFirstFingerprint` — is **never invoked**. The beacon therefore computed `generateVerificationCode(pubkey, beaconTlsFp, '')` with an empty coordinator fingerprint, while the coordinator computed the same code with its real fingerprint. The two 4-word codes never matched, so the bidirectional handshake (see [[decisions/119-bidirectional-verification-code]]) could never complete.
+[117-tofu-fingerprint-pinning](117-tofu-fingerprint-pinning.md) wired TOFU observation/enforcement through a `checkServerIdentity` override (`buildCheckServerIdentity`) on every HTTPS request to the coordinator, alongside `rejectUnauthorized: false` (self-signed cert compat). But there is a Node TLS trap: when `rejectUnauthorized` is `false`, Node **skips server-identity verification entirely**, so `checkServerIdentity` — and thus `onFirstFingerprint` — is **never invoked**. The beacon therefore computed `generateVerificationCode(pubkey, beaconTlsFp, '')` with an empty coordinator fingerprint, while the coordinator computed the same code with its real fingerprint. The two 4-word codes never matched, so the bidirectional handshake (see [119-bidirectional-verification-code](119-bidirectional-verification-code.md)) could never complete.
 
 **Live data proof (before fix):**
 - Beacon in-memory code (`GET /coordinator/trust`): `raven-hound-vixen-savor` (empty fingerprint input)
@@ -58,9 +58,9 @@ The code fix is committed, but the live beacon has NOT yet been restarted. To co
 
 ## Related
 
-- [[concepts/beacon-verification]] — The MitM verification code concept
-- [[decisions/117-tofu-fingerprint-pinning]] — The flawed TOFU mechanism this corrects (dead `checkServerIdentity` path)
-- [[decisions/118-tofu-interactive-confirmation]] — The interactive confirmation flow that depends on the observed fingerprint
-- [[decisions/119-bidirectional-verification-code]] — The bidirectional code that needs both real fingerprints
-- [[decisions/121-verification-code-ux-fix]] — The UX split this fix makes function end-to-end
-- [[modules/drone-beacon]] — Beacon module (hosts the coordinator client)
+- beacon-verification — The MitM verification code concept
+- [117-tofu-fingerprint-pinning](117-tofu-fingerprint-pinning.md) — The flawed TOFU mechanism this corrects (dead `checkServerIdentity` path)
+- [118-tofu-interactive-confirmation](118-tofu-interactive-confirmation.md) — The interactive confirmation flow that depends on the observed fingerprint
+- [119-bidirectional-verification-code](119-bidirectional-verification-code.md) — The bidirectional code that needs both real fingerprints
+- [121-verification-code-ux-fix](121-verification-code-ux-fix.md) — The UX split this fix makes function end-to-end
+- [drone-beacon](../../drone-beacon/) — Beacon module (hosts the coordinator client)

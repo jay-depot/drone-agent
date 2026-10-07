@@ -63,6 +63,6 @@ No slash command; `KNOWN_CONFIG_KEYS`/`config.set` does not support dynamic `llm
 
 ## Related
 
-- [[decisions/155-provider-model-config]] — the provider/model config refactor that established `<providerId>/<modelLocalId>` and the broker
-- [[decisions/160-unified-llm-error-retry-semantics]] — the retry policy role-bound calls ride
-- [[concepts/provider-model-selection]] — selection identity + resolution chains
+- [155-provider-model-config](155-provider-model-config.md) — the provider/model config refactor that established `<providerId>/<modelLocalId>` and the broker
+- [160-unified-llm-error-retry-semantics](160-unified-llm-error-retry-semantics.md) — the retry policy role-bound calls ride
+- provider-model-selection — selection identity + resolution chains

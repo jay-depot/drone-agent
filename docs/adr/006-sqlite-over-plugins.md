@@ -35,5 +35,5 @@ Use SQLite at the beacon level, SQLite or Postgres at the coordinator level. No 
 
 ## Related
 
-- [[drone-beacon]] — Beacon implementation
-- [[drone-coordinator]] — Coordinator implementation
+- [drone-beacon](../../drone-beacon/) — Beacon implementation
+- [drone-coordinator](../../drone-coordinator/) — Coordinator implementation

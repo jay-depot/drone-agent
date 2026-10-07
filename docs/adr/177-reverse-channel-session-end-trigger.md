@@ -44,8 +44,8 @@ Separately, the integration test infrastructure required unattended beacon enrol
 
 ## Related
 
-- [[decisions/123-rate-limit-mtls-ws-reverse-channel]] — the original reverse-channel design
-- [[concepts/mtls-and-reverse-channel]] — mechanism reference (updated: session-end trigger is reverse-channel-first)
-- [[concepts/memory-pipeline]] — config-file keys (updated with `autoApproveBeacons`) and outbox flusher mTLS
-- [[flows/swarm-connection]] — connection flow (updated)
+- [123-rate-limit-mtls-ws-reverse-channel](123-rate-limit-mtls-ws-reverse-channel.md) — the original reverse-channel design
+- mtls-and-reverse-channel — mechanism reference (updated: session-end trigger is reverse-channel-first)
+- memory-pipeline — config-file keys (updated with `autoApproveBeacons`) and outbox flusher mTLS
+- swarm-connection — connection flow (updated)
 - Project memory `pre-existing-integration-failures` — the remaining integration debt

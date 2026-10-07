@@ -113,5 +113,5 @@ plugins/git/
 
 ## Related
 
-- [[047-plugin-customizable-tool-render]] — The `renderComponent` field that enabled custom TUI components per tool
-- [[modules/drone-agent-plugins]] — Updated to reflect the new folder structure and tool set
+- [047-plugin-customizable-tool-render](047-plugin-customizable-tool-render.md) — The `renderComponent` field that enabled custom TUI components per tool
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — Updated to reflect the new folder structure and tool set

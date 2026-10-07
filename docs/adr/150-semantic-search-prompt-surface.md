@@ -54,7 +54,7 @@ Rewrite the prompt surface only — no runtime behavior changes. Two reinforcing
 
 ## Related
 
-- [[concepts/semantic-search]] — the full semantic-search architecture this prompt surface advertises
-- [[modules/drone-agent-plugins]] — the `search` plugin row
-- [[decisions/127-semantic-search-beacon]] — semantic search moved to the beacon
-- [[decisions/143-lsp-tool-reliability]] — introduced the `lsp-usage` fragment, the model for decision-rule fragments
+- semantic-search — the full semantic-search architecture this prompt surface advertises
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — the `search` plugin row
+- [127-semantic-search-beacon](127-semantic-search-beacon.md) — semantic search moved to the beacon
+- [143-lsp-tool-reliability](143-lsp-tool-reliability.md) — introduced the `lsp-usage` fragment, the model for decision-rule fragments

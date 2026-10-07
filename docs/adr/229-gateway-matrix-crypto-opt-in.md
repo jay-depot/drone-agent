@@ -33,7 +33,7 @@ A **real-SDK** regression test (`test/matrix-adapter-real-sdk.test.ts`, no mock)
 
 ## Related
 
-- [[modules/drone-gateway]] — the Matrix adapter section.
-- [[decisions/059-matrix-adapter]] — the adapter's original design.
-- [[decisions/062-gateway-sqlite-stores]] — the SQLite store work whose crypto half this corrects.
-- [[decisions/230-gateway-sync-store-accumulation-and-replay-guard]] — the follow-on sync-store fixes.
+- [drone-gateway](../../drone-gateway/) — the Matrix adapter section.
+- [059-matrix-adapter](059-matrix-adapter.md) — the adapter's original design.
+- [062-gateway-sqlite-stores](062-gateway-sqlite-stores.md) — the SQLite store work whose crypto half this corrects.
+- [230-gateway-sync-store-accumulation-and-replay-guard](230-gateway-sync-store-accumulation-and-replay-guard.md) — the follow-on sync-store fixes.

@@ -47,7 +47,7 @@ The try/catch `log(\`Error: ${msg}\`, 'error')` for hook-thrown errors is **pres
 
 - TUI: final assistant reply appears exactly once in the scrollback (was twice).
 - Error rendering unchanged: in-stream `error` event + try/catch hook-error log both still fire once.
-- No new regression test was added (covered by dogfooding; see [[meta/decision-bug-fixes-go-in-decisions]] convention — this is a bug fix, documented here).
+- No new regression test was added (covered by dogfooding; see decision-bug-fixes-go-in-decisions convention — this is a bug fix, documented here).
 
 ## Implementation note / gap
 

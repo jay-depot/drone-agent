@@ -107,6 +107,6 @@ Fixed 13 pre-existing typecheck errors across 7 test files:
 
 ## Related
 
-- [[modules/drone-beacon]] — Beacon module with route tests
-- [[modules/drone-coordinator]] — Coordinator module with route tests
-- [[concepts/test-infrastructure]] — Test patterns and infrastructure
+- [drone-beacon](../../drone-beacon/) — Beacon module with route tests
+- [drone-coordinator](../../drone-coordinator/) — Coordinator module with route tests
+- test-infrastructure — Test patterns and infrastructure

@@ -21,7 +21,7 @@ related: [decisions/206-wiki-delete-coordinator-scope.md, modules/drone-beacon.m
 
 The beacon-scope branch already surfaced the real message (`catch → 400 { error: err.message }`); **only the proxy path masked it**. The reject-on-write pitch validation is intentional (keep new entries compliant, truncate only on the read side for pre-existing entries), so the defect is purely one of error propagation.
 
-ADR [[decisions/206-wiki-delete-coordinator-scope]] had recorded "the proxy still collapses coordinator 5xx to `null`" as an *accepted limitation* for the delete path. Because `proxyCall` is shared by wiki, insights, and principles, the limitation was never scoped to that one route — it reappeared as a fresh, hard-to-diagnose bug on the wiki write path. This ADR reverses that acceptance for the wiki paths.
+ADR [206-wiki-delete-coordinator-scope](206-wiki-delete-coordinator-scope.md) had recorded "the proxy still collapses coordinator 5xx to `null`" as an *accepted limitation* for the delete path. Because `proxyCall` is shared by wiki, insights, and principles, the limitation was never scoped to that one route — it reappeared as a fresh, hard-to-diagnose bug on the wiki write path. This ADR reverses that acceptance for the wiki paths.
 
 ## Decision
 
@@ -58,5 +58,5 @@ ADR [[decisions/206-wiki-delete-coordinator-scope]] had recorded "the proxy stil
 
 ## Related
 
-- [[decisions/206-wiki-delete-coordinator-scope]] — the delete-path fix whose proxy-collapse limitation this supersedes
-- [[modules/drone-beacon]] — the proxy helper and the wiki routes
+- [206-wiki-delete-coordinator-scope](206-wiki-delete-coordinator-scope.md) — the delete-path fix whose proxy-collapse limitation this supersedes
+- [drone-beacon](../../drone-beacon/) — the proxy helper and the wiki routes

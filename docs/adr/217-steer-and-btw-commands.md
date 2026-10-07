@@ -7,11 +7,11 @@ related: [decisions/215-slash-commands-during-work.md, decisions/040-message-que
 
 **Status**: Implemented (2026-09-19) · **Branch**: `feat/btw-and-steer-commands` · **Plan**: project-memory `plan-steer-and-btw-slash-commands` — *deleted from project memory after ingest*
 
-**Summary**: Two new built-in slash commands, both `busyBehavior: true`. **`/steer <message>`** injects a message as a user turn into the **currently in-flight** round at the next tool-loop boundary — the opt-in restoration of the mid-round absorption that [[decisions/215-slash-commands-during-work]] deliberately removed for plain text. (Because the new queue always turns mid-turn text into its *own later round*, live steering needs its own explicit command.) When no turn is in flight it degrades to an ordinary round. **`/btw <question>`** asks an **ephemeral side question**: it re-assembles the current context into a throwaway copy, sends it to the LLM with **no tools**, displays the answer, and discards the copy — session history is never touched. It surfaces as one new `aside` conversation event that renders in the TUI and is recorded in the coordinator's readable transcript.
+**Summary**: Two new built-in slash commands, both `busyBehavior: true`. **`/steer <message>`** injects a message as a user turn into the **currently in-flight** round at the next tool-loop boundary — the opt-in restoration of the mid-round absorption that [215-slash-commands-during-work](215-slash-commands-during-work.md) deliberately removed for plain text. (Because the new queue always turns mid-turn text into its *own later round*, live steering needs its own explicit command.) When no turn is in flight it degrades to an ordinary round. **`/btw <question>`** asks an **ephemeral side question**: it re-assembles the current context into a throwaway copy, sends it to the LLM with **no tools**, displays the answer, and discards the copy — session history is never touched. It surfaces as one new `aside` conversation event that renders in the TUI and is recorded in the coordinator's readable transcript.
 
 ## Context
 
-[[decisions/215-slash-commands-during-work]] unified all deferred user intent into one ordered `pendingEntries` queue drained at exactly two round boundaries, and **deleted mid-round absorption** (the ADR 040 boundary-2). That made queued text correct and predictable, but it removed any way to influence a round *while it runs*: a message typed mid-turn now becomes its own later round, never reaching the in-flight model.
+[215-slash-commands-during-work](215-slash-commands-during-work.md) unified all deferred user intent into one ordered `pendingEntries` queue drained at exactly two round boundaries, and **deleted mid-round absorption** (the ADR 040 boundary-2). That made queued text correct and predictable, but it removed any way to influence a round *while it runs*: a message typed mid-turn now becomes its own later round, never reaching the in-flight model.
 
 The project's own vocabulary never dropped steering, though. `drone-agent/CONTEXT.md` still defines a **Round** as containing "zero or more user steering message turns," and the swarm memory pipeline's `ConversationWindowTracker` still classifies a late `userMessage` in the same round as a `steering[]` turn. The mechanism was gone; the language remained. There was also no way to ask a question *about* the current context without it becoming part of the conversation.
 
@@ -81,12 +81,12 @@ The locked decisions (17, from a grilling session), in the user's terms:
 
 ## Related
 
-- [[decisions/215-slash-commands-during-work]] — the queue that removed mid-round absorption and made `/steer` necessary as an explicit opt-in
-- [[decisions/040-message-queue-cancel]] — the original queue/soft-cancel design whose mid-round absorption `/steer` restores
-- [[decisions/198-coordinator-ui-launch-interact]] — the remote `submitUserMessage`/steering path that shares this chokepoint
-- [[decisions/208-beancounter-usage-cost-widget]] — the other `busyBehavior`-true, event-driven built-in of the same vintage
-- [[concepts/session-management]] — queue, drain, steering, and guard semantics
-- [[flows/tool-call-loop]] — where the steering absorption sits in the loop
-- [[modules/drone-core]] — the `aside` event + slash-context surface
-- [[modules/drone-coordinator]] — the transcript rendering
-- [[modules/drone-agent-tui]] — the `aside` scrollback entry
+- [215-slash-commands-during-work](215-slash-commands-during-work.md) — the queue that removed mid-round absorption and made `/steer` necessary as an explicit opt-in
+- [040-message-queue-cancel](040-message-queue-cancel.md) — the original queue/soft-cancel design whose mid-round absorption `/steer` restores
+- [198-coordinator-ui-launch-interact](198-coordinator-ui-launch-interact.md) — the remote `submitUserMessage`/steering path that shares this chokepoint
+- [208-beancounter-usage-cost-widget](208-beancounter-usage-cost-widget.md) — the other `busyBehavior`-true, event-driven built-in of the same vintage
+- session-management — queue, drain, steering, and guard semantics
+- tool-call-loop — where the steering absorption sits in the loop
+- [drone-core](../../drone-core/) — the `aside` event + slash-context surface
+- [drone-coordinator](../../drone-coordinator/) — the transcript rendering
+- [drone-agent-tui](../../drone-agent/src/tui/) — the `aside` scrollback entry

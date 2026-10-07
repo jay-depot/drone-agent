@@ -99,8 +99,8 @@ Stray `// NEW:` scaffold comments (5 across `cli.ts`, `plugins/index.ts`, `plugi
 
 ## Related
 
-- [[decisions/169-wakelock-plugin]] — The ADR whose `--debug wakelock` mechanism this fix corrects
-- [[modules/drone-agent]] — `_runtime` capability now carries `debugFlags`; conversation service
-- [[modules/drone-core]] — `DebugFlagRegistry` / `RuntimeFlagRegistry` distinction
-- [[modules/drone-agent-plugins]] — wakelock row
-- [[decisions/110-debug-tools-flag]] — the shared `DebugFlagRegistry` origin
+- [169-wakelock-plugin](169-wakelock-plugin.md) — The ADR whose `--debug wakelock` mechanism this fix corrects
+- [drone-agent](../../drone-agent/) — `_runtime` capability now carries `debugFlags`; conversation service
+- [drone-core](../../drone-core/) — `DebugFlagRegistry` / `RuntimeFlagRegistry` distinction
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — wakelock row
+- [110-debug-tools-flag](110-debug-tools-flag.md) — the shared `DebugFlagRegistry` origin

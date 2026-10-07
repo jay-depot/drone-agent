@@ -9,7 +9,7 @@ related: [048-large-file-splitting.md, drone-swarm-common.md]
 
 ## Context
 
-`drone-swarm-common/src/db-helpers.ts` holds the shared CRUD helpers (`getRow`, `listRows`, `createRow`, `updateRow`, `deleteRow`) used by the beacon and coordinator entity modules after the large-file-splitting refactor ([[048-large-file-splitting]]). The `db` parameter is a thunk `() => Database` so callers can pass `getDatabase` without worrying about initialization order.
+`drone-swarm-common/src/db-helpers.ts` holds the shared CRUD helpers (`getRow`, `listRows`, `createRow`, `updateRow`, `deleteRow`) used by the beacon and coordinator entity modules after the large-file-splitting refactor ([048-large-file-splitting](048-large-file-splitting.md)). The `db` parameter is a thunk `() => Database` so callers can pass `getDatabase` without worrying about initialization order.
 
 Originally the helpers used `any` for the database/statement parameter, which triggered `@typescript-eslint/no-explicit-any` lint errors in strict mode.
 

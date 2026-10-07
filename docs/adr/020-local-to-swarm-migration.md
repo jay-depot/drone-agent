@@ -102,6 +102,6 @@ The migration logic lives in `drone-agent/src/runtime/migration-service.ts` as a
 
 ## Related
 
-- [[concepts/local-to-swarm-migration]] — Concept page with usage examples
-- [[architecture/swarm-architecture]] — Swarm architecture overview
-- [[entities/DroneAgentConfig]] — Config schema with beaconHost/beaconPort
+- local-to-swarm-migration — Concept page with usage examples
+- swarm-architecture — Swarm architecture overview
+- [DroneAgentConfig](../../drone-core/src/config-types.ts) — Config schema with beaconHost/beaconPort

@@ -5,11 +5,11 @@ related: [decisions/211-beacon-coordinator-trust-hardening.md, decisions/191-top
 
 # 220 — `/trust-coordinator` approve gate: deliver `fingerprintConfirmed` to the UI + live trust refresh
 
-**Summary**: After `/trust-coordinator <code>` matched, the beacon confirmed the coordinator fingerprint and announced it, and the coordinator recorded it — yet the UI **Approve** button stayed disabled forever. Root cause: the two endpoints the UI reads (`GET /beacons`, `GET /beacons/:id`) never included `fingerprintConfirmed` while the UI gated on it — an oversight from [[decisions/211-beacon-coordinator-trust-hardening]] (PR #105) whose UI tests mock the field, so the suite stayed green. Fix: one canonical `buildBeaconView` serializer used by all three beacon-view sites, a `beacon.fingerprintConfirmed` live event with debounced server-truth refetch, and a gated beacon-side re-announce so a repeat command recovers a failed announce.
+**Summary**: After `/trust-coordinator <code>` matched, the beacon confirmed the coordinator fingerprint and announced it, and the coordinator recorded it — yet the UI **Approve** button stayed disabled forever. Root cause: the two endpoints the UI reads (`GET /beacons`, `GET /beacons/:id`) never included `fingerprintConfirmed` while the UI gated on it — an oversight from [211-beacon-coordinator-trust-hardening](211-beacon-coordinator-trust-hardening.md) (PR #105) whose UI tests mock the field, so the suite stayed green. Fix: one canonical `buildBeaconView` serializer used by all three beacon-view sites, a `beacon.fingerprintConfirmed` live event with debounced server-truth refetch, and a gated beacon-side re-announce so a repeat command recovers a failed announce.
 
 ## Context
 
-The trust handshake ([[decisions/211-beacon-coordinator-trust-hardening]]) gates beacon approval on the beacon having confirmed the coordinator's TLS fingerprint:
+The trust handshake ([211-beacon-coordinator-trust-hardening](211-beacon-coordinator-trust-hardening.md)) gates beacon approval on the beacon having confirmed the coordinator's TLS fingerprint:
 
 1. agent `/trust-coordinator <code>` → beacon `POST /coordinator/trust` (compares the transcribed code against its in-memory copy), calls `confirmCoordinatorFingerprint(fp)`, then announces via `CoordinatorClient.confirmFingerprint()`.
 2. coordinator `POST /api/beacons/trust/:id/confirm-fingerprint` verifies an Ed25519 signature and calls `db.confirmBeaconFingerprint` → sets `beacon_trust.fingerprint_confirmed_at`.
@@ -59,13 +59,13 @@ Previously the route announced only when `getPendingCoordinatorFingerprint()` wa
 - LSP clean on all touched files; `pnpm -r run build` exit 0.
 - `pnpm -r run test` (fast): drone-core 152, drone-coordinator-ui 317, drone-gateway 160, drone-swarm-common 107 all pass; drone-coordinator 450 pass / 1 fail — the single failure (`test/wiki-routes.test.ts > GET /api/wiki/graph…`) is **pre-existing** (reproduced identically on a stashed clean tree).
 - Reproduction closed: new coordinator tests prove `fingerprintConfirmed` is `false` before and `true` after a confirmed announce on both `GET /beacons` and `GET /beacons/:id`, and that `confirm-fingerprint` publishes `beacon.fingerprintConfirmed`; UI tests prove the event-driven refetch.
-- Note: `pnpm -r run lint` does not exist in this repo (no package declares a `lint` script); the project lint entrypoint is the **root** `pnpm lint` (`eslint --fix` + `prettier --write .`), which passes. Running it reformats the whole repo, so the prettier churn was committed separately (see [[meta/decision-bug-fixes-go-in-decisions]] note below).
+- Note: `pnpm -r run lint` does not exist in this repo (no package declares a `lint` script); the project lint entrypoint is the **root** `pnpm lint` (`eslint --fix` + `prettier --write .`), which passes. Running it reformats the whole repo, so the prettier churn was committed separately (see decision-bug-fixes-go-in-decisions note below).
 
 ## Related
 
-- [[decisions/211-beacon-coordinator-trust-hardening]] — the announce-gated approval this completes (the missing-field oversight)
-- [[decisions/191-topology-live-ws-status]] — the same server-truth-vs-heartbeat lesson for beacon status
-- [[concepts/beacon-verification]] — the bidirectional verification-code handshake
-- [[modules/drone-coordinator]] — `beacon-view.ts`, `routes/beacons.ts`, `index.ts`
-- [[modules/drone-beacon]] — `fingerprint-announce.ts` + the three call sites
-- [[modules/drone-coordinator-ui]] — topology + beacon-detail live refresh
+- [211-beacon-coordinator-trust-hardening](211-beacon-coordinator-trust-hardening.md) — the announce-gated approval this completes (the missing-field oversight)
+- [191-topology-live-ws-status](191-topology-live-ws-status.md) — the same server-truth-vs-heartbeat lesson for beacon status
+- beacon-verification — the bidirectional verification-code handshake
+- [drone-coordinator](../../drone-coordinator/) — `beacon-view.ts`, `routes/beacons.ts`, `index.ts`
+- [drone-beacon](../../drone-beacon/) — `fingerprint-announce.ts` + the three call sites
+- [drone-coordinator-ui](../../drone-coordinator-ui/) — topology + beacon-detail live refresh

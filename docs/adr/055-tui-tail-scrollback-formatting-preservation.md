@@ -67,6 +67,6 @@ Tool-result scrollback entries now render the **live component** (`ToolCallProgr
 
 ## Related
 
-- [[046-tui-tail-region-refactor]] — The tail region this builds on (atomic commit of live components).
-- [[047-plugin-customizable-tool-render]] — Custom tool render components (`GitDiffBlock`) now also render in scrollback via the carried `node`.
-- [[modules/drone-agent-tui]] — TUI module page (updated for `node` + `format.ts`).
+- [046-tui-tail-region-refactor](046-tui-tail-region-refactor.md) — The tail region this builds on (atomic commit of live components).
+- [047-plugin-customizable-tool-render](047-plugin-customizable-tool-render.md) — Custom tool render components (`GitDiffBlock`) now also render in scrollback via the carried `node`.
+- [drone-agent-tui](../../drone-agent/src/tui/) — TUI module page (updated for `node` + `format.ts`).

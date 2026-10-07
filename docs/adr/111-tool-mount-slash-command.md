@@ -9,9 +9,9 @@ related: [decisions/105-runtime-level-list-mount.md, decisions/109-persona-level
 
 ## Context
 
-Under the runtime-level list-mount pattern ([[105-runtime-level-list-mount]]), all tools start unmounted. Only the LLM can discover and mount them via the `runtime__*` meta-tools. When a human user knew the next request would need a specific tool (e.g. `file__read`), there was **no way for the human to pre-mount it themselves** — they'd have to phrase the request to make the LLM mount the tool first, wasting a round-trip and cluttering the tool surface.
+Under the runtime-level list-mount pattern ([105-runtime-level-list-mount](105-runtime-level-list-mount.md)), all tools start unmounted. Only the LLM can discover and mount them via the `runtime__*` meta-tools. When a human user knew the next request would need a specific tool (e.g. `file__read`), there was **no way for the human to pre-mount it themselves** — they'd have to phrase the request to make the LLM mount the tool first, wasting a round-trip and cluttering the tool surface.
 
-The `mountTool`/`unmountTool`/`listMountedTools` primitives existed only on the per-plugin `DronePluginRegistration` (used by the persona plugin's premount, see [[109-persona-level-tool-premounting]]). The slash-command engine subset (`DroneSlashCommandContext.engine`) did **not** expose them, so a slash command handler had no direct, type-safe way to mount/unmount.
+The `mountTool`/`unmountTool`/`listMountedTools` primitives existed only on the per-plugin `DronePluginRegistration` (used by the persona plugin's premount, see [109-persona-level-tool-premounting](109-persona-level-tool-premounting.md)). The slash-command engine subset (`DroneSlashCommandContext.engine`) did **not** expose them, so a slash command handler had no direct, type-safe way to mount/unmount.
 
 ## Decision
 
@@ -72,8 +72,8 @@ The handler calls `ctx.engine.mountTool(...)` directly rather than round-trippin
 
 ## Related
 
-- [[decisions/105-runtime-level-list-mount]] — The runtime `ToolRegistry` + `runtime__*` meta-tools this builds on
-- [[decisions/109-persona-level-tool-premounting]] — Where `listMountedTools` originated as a registration primitive; `unmount --all` mirrors `applyToolPremount()`
-- [[decisions/110-debug-tools-flag]] — Tool-surface mutations are now traceable via `--debug tools`
-- [[modules/drone-agent]] — Engine + slash command wiring
-- [[modules/drone-core]] — `DroneSlashCommandContext.engine` type additions
+- [105-runtime-level-list-mount](105-runtime-level-list-mount.md) — The runtime `ToolRegistry` + `runtime__*` meta-tools this builds on
+- [109-persona-level-tool-premounting](109-persona-level-tool-premounting.md) — Where `listMountedTools` originated as a registration primitive; `unmount --all` mirrors `applyToolPremount()`
+- [110-debug-tools-flag](110-debug-tools-flag.md) — Tool-surface mutations are now traceable via `--debug tools`
+- [drone-agent](../../drone-agent/) — Engine + slash command wiring
+- [drone-core](../../drone-core/) — `DroneSlashCommandContext.engine` type additions

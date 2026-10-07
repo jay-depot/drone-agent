@@ -120,7 +120,7 @@ Existing test in `conversation-service.test.ts` updated to check for `toolCallBa
 
 ## Related
 
-- [[023-conversation-event-push-through]] — Original conversation event system
-- [[036-ink-6-react-19]] — Ink 6 upgrade (tail components use `<Text wrap="wrap">`)
-- [[037-incremental-rendering-removal]] — Tail region uses standard full-redraw mode
-- [[045-macro-event-streaming-unified-hooks]] — Unified event hook system (tail region listens via `onConversationEvent`)
+- [023-conversation-event-push-through](023-conversation-event-push-through.md) — Original conversation event system
+- [036-ink-6-react-19](036-ink-6-react-19.md) — Ink 6 upgrade (tail components use `<Text wrap="wrap">`)
+- [037-incremental-rendering-removal](037-incremental-rendering-removal.md) — Tail region uses standard full-redraw mode
+- [045-macro-event-streaming-unified-hooks](045-macro-event-streaming-unified-hooks.md) — Unified event hook system (tail region listens via `onConversationEvent`)

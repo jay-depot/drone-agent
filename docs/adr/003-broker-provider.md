@@ -34,6 +34,6 @@ Use a two-layer architecture: **broker plugin** manages the list of providers, *
 
 ## Related
 
-- [[broker-provider]] — Pattern details
-- [[identity-assets]] — Personas and skills
-- [[decisions/029-dynamic-writer-registration]] — Writer registration extension
+- broker-provider — Pattern details
+- identity-assets — Personas and skills
+- [029-dynamic-writer-registration](029-dynamic-writer-registration.md) — Writer registration extension

@@ -70,7 +70,7 @@ Use the live WebSocket state as the status signal and wire it end to end.
 
 ## Related
 
-- [[concepts/mtls-and-reverse-channel]] — the reverse channel this monitors
-- [[decisions/089-coordinator-live-events-api-paths]] — the `/ws` event channel
-- [[decisions/093-session-status-mismatch-fix]] — precedent for replacing a
+- mtls-and-reverse-channel — the reverse channel this monitors
+- [089-coordinator-live-events-api-paths](089-coordinator-live-events-api-paths.md) — the `/ws` event channel
+- [093-session-status-mismatch-fix](093-session-status-mismatch-fix.md) — precedent for replacing a
   heuristic with explicit state

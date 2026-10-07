@@ -7,7 +7,7 @@ related: [concepts/beacon-config-override-spec.md, architecture/config-cascade.m
 
 **Status**: Implemented (2026-09-12) · **Branch**: `feat/coordinator-config-ui-and-secure-storage` (`feb18d2`, `fcf246a1`) · **Plans**: project-memory `fix-swarm-config-underlay-rebuild` + `plan-receiver-side-env-var-interpolation` — *both deleted from project memory after ingest*; the seeding memory `seed-receiver-side-env-var-interpolation` is **CONSUMED**
 
-**Summary**: Two coupled defects made the coordinator→beacon→agent underlay from [[decisions/212-coordinator-config-pipeline]] unsafe to use. First, `rebuild()` recomputed config from defaults + injectors **only**, then mutated the shared engine config **in place** — so after the swarm `onSessionStart` hook ran, `providers` was `{}` and `llm.active`/`modelRoles` were lost. Second, the beacon injector returned **flat dotted keys** (`providers.x`) which `deepMerge` has no semantics for, and the coordinator's `maskSecretValue` **corrupted `${VAR}` templates** (`'${OPENROUTER_API_KEY}'` → `'••••KEY}'`). Separately, the underlay path never performed the env-template interpolation the disk-config path already did, so a pushed `"apiKey": "${OPENROUTER_API_KEY}"` arrived as a literal string. This ADR covers the three fixes plus the receiver-side interpolation feature.
+**Summary**: Two coupled defects made the coordinator→beacon→agent underlay from [212-coordinator-config-pipeline](212-coordinator-config-pipeline.md) unsafe to use. First, `rebuild()` recomputed config from defaults + injectors **only**, then mutated the shared engine config **in place** — so after the swarm `onSessionStart` hook ran, `providers` was `{}` and `llm.active`/`modelRoles` were lost. Second, the beacon injector returned **flat dotted keys** (`providers.x`) which `deepMerge` has no semantics for, and the coordinator's `maskSecretValue` **corrupted `${VAR}` templates** (`'${OPENROUTER_API_KEY}'` → `'••••KEY}'`). Separately, the underlay path never performed the env-template interpolation the disk-config path already did, so a pushed `"apiKey": "${OPENROUTER_API_KEY}"` arrived as a literal string. This ADR covers the three fixes plus the receiver-side interpolation feature.
 
 ## Context
 
@@ -37,7 +37,7 @@ A fourth gap: the disk-file path interpolates `${VAR}` templates from the agent 
 - `drone-agent/src/plugins/swarm/config.ts` — exported `normalizeFlatUnderlay(flat)` and `resolveEnvTemplates(key, value)`; the injector's row loop is now JSON.parse → `isUnderlayAllowed` silent skip → `resolveEnvTemplates` → on failure a once-per-key `Dropping underlay entry "<key>": <reason>` warning + `continue` → `flat[key] = resolved`. A new `warnedUnresolvedKeys` Set sits beside `warnedUnparseableKeys`.
 - `drone-agent/src/plugins/config/index.ts` — `rebuild()` precedence corrected (disk layers last).
 - `drone-coordinator/src/routes/config.ts` — `maskScalar` whole-value template pass-through.
-- `drone-coordinator/src/mask.ts` — `maskScalar`/`maskSecretValue` extraction (later reused by the phase-2 secrets store in [[decisions/209-stored-secrets-config-split]]).
+- `drone-coordinator/src/mask.ts` — `maskScalar`/`maskSecretValue` extraction (later reused by the phase-2 secrets store in [209-stored-secrets-config-split](209-stored-secrets-config-split.md)).
 - `drone-agent/src/plugins/swarm/hooks.ts` — `onSessionStart` comment corrected (no phantom injector-at-100).
 - `drone-core/src/capabilities.ts` — `DroneConfigInjector.inject` JSDoc now documents the nested-shape contract and that template resolution is each injector's own concern (`applyAgentConfigLayer` does no interpolation).
 - `docs/agents/swarm-plugin.md` — masking-preserves-templates semantics stated; the receiver-side interpolation section rewritten to current-state both-paths behavior (row-drop, once-warn, timing, the two gaps, spawn-env asymmetry); a pre-existing garbled sentence repaired.
@@ -57,7 +57,7 @@ A fourth gap: the disk-file path interpolates `${VAR}` templates from the agent 
 - A coordinator-pushed provider entry with `"apiKey": "${OPENROUTER_API_KEY}"` **actually authenticates** — secrets never transit the swarm in plaintext, and **no server ever holds the real value**.
 - Templates survive masking end-to-end (coordinator store → beacon persist → agent apply), closing the corruption path.
 - A row referencing an unset variable is **dropped with a one-time warning** rather than silently becoming a literal string.
-- This "no server holds a real secret" posture was later **deliberately extended** by [[decisions/209-stored-secrets-config-split]], which added a coordinator-side secrets store so real API keys could be managed in the UI at all.
+- This "no server holds a real secret" posture was later **deliberately extended** by [209-stored-secrets-config-split](209-stored-secrets-config-split.md), which added a coordinator-side secrets store so real API keys could be managed in the UI at all.
 
 ## Validation
 
@@ -71,8 +71,8 @@ Test files: `drone-agent/test/swarm/config-injector.test.ts` (new — 5 fix test
 
 ## Related
 
-- [[decisions/212-coordinator-config-pipeline]] — the pipeline this repairs
-- [[concepts/beacon-config-override-spec]] — the underlay spec (also corrected by this work)
-- [[architecture/config-cascade]] — the cascade the precedence fix upholds
-- [[decisions/095-config-deep-merge-refactor]] — the merge semantics that made flat dotted keys wrong
-- [[decisions/209-stored-secrets-config-split]] — the later secrets model that supersedes the template-only posture
+- [212-coordinator-config-pipeline](212-coordinator-config-pipeline.md) — the pipeline this repairs
+- beacon-config-override-spec — the underlay spec (also corrected by this work)
+- [config-cascade](005-config-cascade.md) — the cascade the precedence fix upholds
+- [095-config-deep-merge-refactor](095-config-deep-merge-refactor.md) — the merge semantics that made flat dotted keys wrong
+- [209-stored-secrets-config-split](209-stored-secrets-config-split.md) — the later secrets model that supersedes the template-only posture

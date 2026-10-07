@@ -76,7 +76,7 @@ Raw ANSI across Ink soft line wraps; native `FileReadBlock` `SyntaxTheme` migrat
 
 ## Related
 
-- [[decisions/077-tui-syntax-highlighting-ansi-escape-codes]] — the v2 raw-ANSI pipeline this fix hardens
-- [[decisions/046-tui-tail-region-refactor]] — tail region rendering context
-- [[decisions/055-tui-tail-scrollback-formatting-preservation]] — why Markdown renders identically in tail and scrollback
-- [[modules/drone-agent-tui]] — module overview and the v1 → v2 → v3 pipeline history
+- [077-tui-syntax-highlighting-ansi-escape-codes](077-tui-syntax-highlighting-ansi-escape-codes.md) — the v2 raw-ANSI pipeline this fix hardens
+- [046-tui-tail-region-refactor](046-tui-tail-region-refactor.md) — tail region rendering context
+- [055-tui-tail-scrollback-formatting-preservation](055-tui-tail-scrollback-formatting-preservation.md) — why Markdown renders identically in tail and scrollback
+- [drone-agent-tui](../../drone-agent/src/tui/) — module overview and the v1 → v2 → v3 pipeline history

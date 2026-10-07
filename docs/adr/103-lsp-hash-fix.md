@@ -9,7 +9,7 @@ related: [decisions/102-multi-language-lsp-support.md, modules/drone-core.md, mo
 
 ## Context
 
-The multi-language LSP support ([[decisions/102-multi-language-lsp-support]]) added 13 new server specs beyond TypeScript, but all had placeholder integrity hashes (`sha512-000...`). This meant auto-install failed integrity checks for every non-TypeScript server. Additionally:
+The multi-language LSP support ([102-multi-language-lsp-support](102-multi-language-lsp-support.md)) added 13 new server specs beyond TypeScript, but all had placeholder integrity hashes (`sha512-000...`). This meant auto-install failed integrity checks for every non-TypeScript server. Additionally:
 
 - **rust-analyzer** and **lua-language-server** have platform-specific binary tarballs — the single `tarballUrl`/`integrity` fields couldn't express different binaries for different platforms (e.g., linux-x64 vs linux-arm64 for Raspberry Pi)
 - **gopls** used a `.tar.gz` URL but the Go module proxy only serves `.zip` files, and the extracted source needs a `go build` step

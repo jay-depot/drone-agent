@@ -57,10 +57,10 @@ LSP clean; `pnpm -r run build` (8 packages) exit 0; `pnpm typecheck` exit 0; `pn
 
 ## Related
 
-- [[modules/drone-gateway]] — the gateway module page (config model, key files, types, surfaces).
-- [[concepts/spawn-backend]] — the `SpawnBackend` interface (the `workingDir` option + in-flight dedup).
-- [[modules/drone-agent]] — `applyWorkingDir` + `--working-dir` now consumed.
-- [[decisions/224-gateway-spawn-targeting]] — the sibling per-surface config pattern (`targetBeaconId`) this ADR extends.
-- [[decisions/223-gateway-swarm-console-control-surface]] — the engine `SurfaceRegistry` the new `dispose()` hook hangs off.
-- [[decisions/197-beacon-cwd-roots]] — the beacon `spawnRoots` whitelist that enforces coordinator-scope `workingDir`.
-- [[decisions/231-agent-termination-ladder-and-reconcile]] — the terminate ladder the idle/dispose paths drive.
+- [drone-gateway](../../drone-gateway/) — the gateway module page (config model, key files, types, surfaces).
+- spawn-backend — the `SpawnBackend` interface (the `workingDir` option + in-flight dedup).
+- [drone-agent](../../drone-agent/) — `applyWorkingDir` + `--working-dir` now consumed.
+- [224-gateway-spawn-targeting](224-gateway-spawn-targeting.md) — the sibling per-surface config pattern (`targetBeaconId`) this ADR extends.
+- [223-gateway-swarm-console-control-surface](223-gateway-swarm-console-control-surface.md) — the engine `SurfaceRegistry` the new `dispose()` hook hangs off.
+- [197-beacon-cwd-roots](197-beacon-cwd-roots.md) — the beacon `spawnRoots` whitelist that enforces coordinator-scope `workingDir`.
+- [231-agent-termination-ladder-and-reconcile](231-agent-termination-ladder-and-reconcile.md) — the terminate ladder the idle/dispose paths drive.

@@ -71,14 +71,14 @@ Per AGENTS.md's "emit events for background work" rule, new event kinds normally
 - `roundComplete` is a silent control signal — no TUI/theme rendering.
 - Validation: `pnpm -r run build`, `pnpm lint`, `pnpm typecheck`, and the fast suite (2321 passed / 9 skipped) all pass; 11 new unit tests.
 
-> **CORRECTED by [[decisions/170-wakelock-debug-flag-lint-reenable]] (2026-08-28):** the original `--debug wakelock` mechanism described here — via `_runtime.flags` (`DebugFlagRegistry`) — was **broken at runtime**. `_runtime.flags` is a `RuntimeFlagRegistry` (key/value system-prompt state) with no `isEnabled` method; `runtime.flags.isEnabled('wakelock')` threw a swallowed `TypeError` on every acquire/release, so `--debug wakelock` silently did nothing. ADR 170 exposes the real shared `DebugFlagRegistry` as a new additive `debugFlags` field on `_runtime`, and the plugin reads `runtime.debugFlags.isEnabled('wakelock')` (a real-engine regression test added). After the fix the fast suite is 2325 passed / 9 skipped.
+> **CORRECTED by [170-wakelock-debug-flag-lint-reenable](170-wakelock-debug-flag-lint-reenable.md) (2026-08-28):** the original `--debug wakelock` mechanism described here — via `_runtime.flags` (`DebugFlagRegistry`) — was **broken at runtime**. `_runtime.flags` is a `RuntimeFlagRegistry` (key/value system-prompt state) with no `isEnabled` method; `runtime.flags.isEnabled('wakelock')` threw a swallowed `TypeError` on every acquire/release, so `--debug wakelock` silently did nothing. ADR 170 exposes the real shared `DebugFlagRegistry` as a new additive `debugFlags` field on `_runtime`, and the plugin reads `runtime.debugFlags.isEnabled('wakelock')` (a real-engine regression test added). After the fix the fast suite is 2325 passed / 9 skipped.
 
 ## Related
 
-- [[modules/drone-agent-plugins]] — Where the wakelock plugin lives (session & memory category)
-- [[entities/Session]] — `DroneConversationEvent` (the new `roundComplete` kind)
-- [[flows/tool-call-loop]] — Where `roundComplete` is emitted in the `sendUserMessage` loop
-- [[concepts/session-management]] — Round vs turn lifecycle
-- [[decisions/160-unified-llm-error-retry-semantics]] — The `error`/`notice` event conventions around the loop
-- [[decisions/115-subagent-mode-and-return-tool]] — Subagent spawning and `_runtime.isSubagent`
-- [[decisions/170-wakelock-debug-flag-lint-reenable]] — Corrects the `--debug wakelock` mechanism + the project-wide lint re-enablement
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — Where the wakelock plugin lives (session & memory category)
+- [Session](../../drone-core/src/session-types.ts) — `DroneConversationEvent` (the new `roundComplete` kind)
+- tool-call-loop — Where `roundComplete` is emitted in the `sendUserMessage` loop
+- session-management — Round vs turn lifecycle
+- [160-unified-llm-error-retry-semantics](160-unified-llm-error-retry-semantics.md) — The `error`/`notice` event conventions around the loop
+- [115-subagent-mode-and-return-tool](115-subagent-mode-and-return-tool.md) — Subagent spawning and `_runtime.isSubagent`
+- [170-wakelock-debug-flag-lint-reenable](170-wakelock-debug-flag-lint-reenable.md) — Corrects the `--debug wakelock` mechanism + the project-wide lint re-enablement

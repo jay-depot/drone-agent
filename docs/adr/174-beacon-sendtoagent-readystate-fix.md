@@ -57,6 +57,6 @@ The source comment records why: a representation mismatch must never silently dr
 
 ## Related
 
-- [[decisions/175-beacon-islocalconnection-rfc1918]] — the other WS-delivery blocker fixed in the same investigation
-- [[concepts/swarm-prompt-fragments]] — the feature that surfaced this
-- [[decisions/173-swarm-prompt-fragments]] — the fragment delivery design (WS push + resync)
+- [175-beacon-islocalconnection-rfc1918](175-beacon-islocalconnection-rfc1918.md) — the other WS-delivery blocker fixed in the same investigation
+- swarm-prompt-fragments — the feature that surfaced this
+- [173-swarm-prompt-fragments](173-swarm-prompt-fragments.md) — the fragment delivery design (WS push + resync)

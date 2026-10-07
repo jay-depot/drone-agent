@@ -42,5 +42,5 @@ Route cross-beacon messages through the coordinator as a relay hub. The coordina
 
 ## Related
 
-- [[decisions/008-inter-agent-messaging]] — Local messaging
-- [[drone-coordinator]] — Coordinator implementation
+- [008-inter-agent-messaging](008-inter-agent-messaging.md) — Local messaging
+- [drone-coordinator](../../drone-coordinator/) — Coordinator implementation

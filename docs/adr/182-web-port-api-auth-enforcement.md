@@ -44,5 +44,5 @@ Six grilled decisions (Q1–Q6), minimal-scope per user direction:
 
 ## Related
 
-- [[decisions/180-swarm-memory-bootstrap-workflow]] · [[concepts/coordinator-web-auth]] · [[concepts/memory-pipeline]]
-- [[modules/drone-swarm]] · [[modules/drone-coordinator]] · [[modules/drone-coordinator-ui]]
+- [180-swarm-memory-bootstrap-workflow](180-swarm-memory-bootstrap-workflow.md) · coordinator-web-auth · memory-pipeline
+- [drone-swarm](../../drone-swarm/) · [drone-coordinator](../../drone-coordinator/) · [drone-coordinator-ui](../../drone-coordinator-ui/)

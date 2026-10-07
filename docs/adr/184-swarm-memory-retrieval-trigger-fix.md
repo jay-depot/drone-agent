@@ -9,7 +9,7 @@ related: [decisions/179-swarm-memory-rag-retrieval.md, concepts/memory-pipeline.
 
 ## Context
 
-[[decisions/179-swarm-memory-rag-retrieval]] described the proactive READ side of
+[179-swarm-memory-rag-retrieval](179-swarm-memory-rag-retrieval.md) described the proactive READ side of
 swarm memory: a `ConversationWindowTracker` maintains the tight query window from
 `onConversationEvent` events, and the refresh was fired from the `onBeforePrompt`
 hook. That design was defective: `onBeforePrompt` fires **before**
@@ -102,6 +102,6 @@ cohesion, both now live):
 - The current user message now drives retrieval: correct topicality, no
   one-turn lag, and first-message retrieval works.
 - READ-side behavior of swarm memory now matches the intent stated in
-  [[decisions/179-swarm-memory-rag-retrieval]].
+  [179-swarm-memory-rag-retrieval](179-swarm-memory-rag-retrieval.md).
 - The `# Swarm Memory (wiki)` fragment provides human-visible notice lines and
   correct recall instructions.

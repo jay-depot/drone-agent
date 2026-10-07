@@ -49,8 +49,8 @@ Unify all conversation event streaming through the engine's conversation event h
 
 ## Related
 
-- [[decisions/023-conversation-event-push-through]] — Original `onConversationEvent` hook design
-- [[decisions/040-message-queue-cancel]] — The refactor that caused the regression
-- [[flows/tool-call-loop]] — Hook ordering in the conversation loop
-- [[modules/drone-agent-tui]] — TUI event handling
-- [[decisions/168-macro-duplicate-render-fix]] — Re-affirms + extends this design (console host now gets a global listener too)
+- [023-conversation-event-push-through](023-conversation-event-push-through.md) — Original `onConversationEvent` hook design
+- [040-message-queue-cancel](040-message-queue-cancel.md) — The refactor that caused the regression
+- tool-call-loop — Hook ordering in the conversation loop
+- [drone-agent-tui](../../drone-agent/src/tui/) — TUI event handling
+- [168-macro-duplicate-render-fix](168-macro-duplicate-render-fix.md) — Re-affirms + extends this design (console host now gets a global listener too)

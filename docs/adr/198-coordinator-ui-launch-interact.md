@@ -21,7 +21,7 @@ Four gaps blocked the plan's interaction model B (listen-mode synthetic turns):
 3. **No inbound WS message type** — the swarm plugin's `websocket.ts` handled `message`/`fragment`/`fragmentSync`/`ack`/`error` only.
 4. **No session interactivity marker** — the coordinator's `swarm_sessions` table had no way to record that a session accepts user turns.
 
-The prerequisite (beacon-advertised `spawnRoots` + `defaultSpawnRoot` on `GET /api/beacons`) landed as [[decisions/197-beacon-cwd-roots]].
+The prerequisite (beacon-advertised `spawnRoots` + `defaultSpawnRoot` on `GET /api/beacons`) landed as [197-beacon-cwd-roots](197-beacon-cwd-roots.md).
 
 ## Decision
 
@@ -104,9 +104,9 @@ Validation: LSP clean, `pnpm typecheck`, `pnpm -r run build`, `pnpm lint` (eslin
 ## Related
 
 - `plan-coordinator-ui-launch-interact` — the completed plan (project memory) this ADR ingests
-- [[decisions/197-beacon-cwd-roots]] — the spawnRoots prerequisite this UI consumes
-- [[decisions/012-agent-spawn]] — beacon agent spawn
-- [[decisions/190-coordinator-session-archive]] — session statuses the detail page gates on
-- [[concepts/json-listen-mode]] — the NDJSON protocol this listen-mode streams
-- [[concepts/session-processing-pipeline]] — session lifecycle (`active` gates the chat input)
-- [[drone-agent]] · [[drone-beacon]] · [[drone-coordinator]] · [[drone-coordinator-ui]] — the four modules touched
+- [197-beacon-cwd-roots](197-beacon-cwd-roots.md) — the spawnRoots prerequisite this UI consumes
+- [012-agent-spawn](012-agent-spawn.md) — beacon agent spawn
+- [190-coordinator-session-archive](190-coordinator-session-archive.md) — session statuses the detail page gates on
+- json-listen-mode — the NDJSON protocol this listen-mode streams
+- session-processing-pipeline — session lifecycle (`active` gates the chat input)
+- [drone-agent](../../drone-agent/) · [drone-beacon](../../drone-beacon/) · [drone-coordinator](../../drone-coordinator/) · [drone-coordinator-ui](../../drone-coordinator-ui/) — the four modules touched

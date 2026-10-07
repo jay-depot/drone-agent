@@ -9,7 +9,7 @@ related: [concepts/memory-pipeline.md, concepts/semantic-search.md, modules/dron
 
 ## Context
 
-The memory pipeline ([[decisions/151-memory-pipeline-infra]]) covers the WRITE
+The memory pipeline ([151-memory-pipeline-infra](151-memory-pipeline-infra.md)) covers the WRITE
 side of swarm memory: ended sessions are distilled by the wiki-librarian into
 wiki pages on the coordinator (and beacon-local pages). The READ side did not
 exist — wiki content reached an agent only when the agent explicitly called
@@ -43,7 +43,7 @@ sweep is the backstop; `POST /wiki/reindex` is the manual entry point.
 The agent tracks conversation events (`onConversationEvent`) to maintain the
 tight window — [previous round's user query + steering + previous round's
 final assistant response + current round's query]. **Updated 2026-09-03
-([[decisions/184-swarm-memory-retrieval-trigger-fix]]): the refresh trigger
+([184-swarm-memory-retrieval-trigger-fix](184-swarm-memory-retrieval-trigger-fix.md)): the refresh trigger
 moved from `onBeforePrompt` to the `userMessage` branch of `onConversationEvent`**
 — `onBeforePrompt` fired before `sendUserMessage` (the call that emits the
 `userMessage` event), so the current query was never present at refresh time
@@ -87,7 +87,7 @@ count, entry count) and failures. `/swarm-memory` gives `status`, `refresh`
 suppression without config edits. **Updated 2026-09-03**: each real retrieval
 also emits a `[swarm.memory: found N matches]` chat-log notice via
 `_runtime.emitEvent({kind:'notice'})` for human oversight (see
-[[decisions/184-swarm-memory-retrieval-trigger-fix]]). No mid-panel widget
+[184-swarm-memory-retrieval-trigger-fix](184-swarm-memory-retrieval-trigger-fix.md)). No mid-panel widget
 (declined for v1).
 
 **8. Security posture.** Wiki pages are LLM-authored from session logs, so
@@ -100,7 +100,7 @@ in v1. A cross-project provenance filter is a future extension (trivial via
 the origin column).
 
 **9. Distiller seam designed, not built.** An LLM preprocessing step
-(`llm.modelRoles.distiller` per [[decisions/164-model-role-bindings]]) is an
+(`llm.modelRoles.distiller` per [164-model-role-bindings](164-model-role-bindings.md)) is an
 explicit future extension point in the pipeline
 (WindowFilter → QueryBuilder → embed/merge). Default off; measure first
 (granite-3b-class). v1 ships deterministic two-channel behavior: current
@@ -140,7 +140,7 @@ AND zero network calls.
 - Retrieval is fire-and-forget and asynchronous, so the first LLM call of a
   turn may still show the prior cache; the current message drives the refresh
   and entries converge to the current topic as it resolves (see
-  [[decisions/184-swarm-memory-retrieval-trigger-fix]] for the trigger fix
+  [184-swarm-memory-retrieval-trigger-fix](184-swarm-memory-retrieval-trigger-fix.md) for the trigger fix
   that made the current message the primary query).
 - `drone-agent` gains a `drone-swarm-common` dependency (chunk primitives).
 - Beacon `routes/wiki.ts` moved off `drone-swarm-common/wiki-storage` static

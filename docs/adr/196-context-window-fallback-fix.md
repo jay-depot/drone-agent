@@ -102,7 +102,7 @@ against pre-fix code (via `git stash` of the source) and pass with the fix:
 
 ## Related
 
-- [[decisions/157-runtime-truth-context-windows]] — the chain this extends (and whose Anthropic gap it closes)
-- [[decisions/156-broker-context-windows-migration-persistence]] — the broker-side chain this completes
-- [[decisions/155-provider-model-config]] — the provider/protocol/model refactor
-- [[provider-model-selection]] — the metadata resolution chain reference
+- [157-runtime-truth-context-windows](157-runtime-truth-context-windows.md) — the chain this extends (and whose Anthropic gap it closes)
+- [156-broker-context-windows-migration-persistence](156-broker-context-windows-migration-persistence.md) — the broker-side chain this completes
+- [155-provider-model-config](155-provider-model-config.md) — the provider/protocol/model refactor
+- provider-model-selection — the metadata resolution chain reference

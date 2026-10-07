@@ -37,6 +37,6 @@ ADR 198 delivered the launch panel + interactive chat. First real-world use on a
 
 ## Related
 
-- [[decisions/198-coordinator-ui-launch-interact]] — the launch/interact feature whose UI this makes usable from plain-HTTP remote origins
-- [[modules/drone-coordinator-ui]] — the page (`session-detail.tsx`) and its test file
+- [198-coordinator-ui-launch-interact](198-coordinator-ui-launch-interact.md) — the launch/interact feature whose UI this makes usable from plain-HTTP remote origins
+- [drone-coordinator-ui](../../drone-coordinator-ui/) — the page (`session-detail.tsx`) and its test file
 - `followup-coordinator-ws-event-ids` (project memory) — deferred cross-cutting follow-up: server-provided event ids in `publishEvent`, enabling key reuse + REST/WS event dedup

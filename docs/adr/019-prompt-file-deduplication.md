@@ -51,5 +51,5 @@ files: layer.promptFile.files
 
 ## Related
 
-- [[config-cascade]] — Config layering
-- [[entities/DroneAgentConfig]] — Config schema
+- [config-cascade](005-config-cascade.md) — Config layering
+- [DroneAgentConfig](../../drone-core/src/config-types.ts) — Config schema

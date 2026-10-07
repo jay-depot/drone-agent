@@ -9,7 +9,7 @@ related: [concepts/beacon-verification.md, modules/drone-beacon.md, modules/dron
 
 ## Context
 
-The original MitM verification code ([[decisions/091-beacon-mitm-verification]]) was `sha256(beaconPublicKey + beaconTlsFingerprint)`. It only proved the **beacon's** identity to the coordinator's operator — the coordinator's identity was not part of the code, so the beacon's operator could not independently verify they were talking to the right coordinator.
+The original MitM verification code ([091-beacon-mitm-verification](091-beacon-mitm-verification.md)) was `sha256(beaconPublicKey + beaconTlsFingerprint)`. It only proved the **beacon's** identity to the coordinator's operator — the coordinator's identity was not part of the code, so the beacon's operator could not independently verify they were talking to the right coordinator.
 
 ## Decision
 
@@ -50,10 +50,10 @@ generateVerificationCode(identity.publicKey, tlsFingerprint, getObservedCoordina
 
 ## Related
 
-- [[concepts/beacon-verification]] — The MitM verification code concept
-- [[modules/drone-swarm-common]] — Hosts `generateVerificationCode`
-- [[modules/drone-beacon]] — Beacon computes the code with the observed coordinator fingerprint
-- [[modules/drone-coordinator]] — Coordinator computes the code with its own fingerprint
-- [[decisions/091-beacon-mitm-verification]] — Original MitM verification code ADR
-- [[decisions/117-tofu-fingerprint-pinning]] — Provides the coordinator fingerprint to the beacon
-- [[decisions/118-tofu-interactive-confirmation]] — The confirmation flow this strengthens
+- beacon-verification — The MitM verification code concept
+- [drone-swarm-common](../../drone-swarm-common/) — Hosts `generateVerificationCode`
+- [drone-beacon](../../drone-beacon/) — Beacon computes the code with the observed coordinator fingerprint
+- [drone-coordinator](../../drone-coordinator/) — Coordinator computes the code with its own fingerprint
+- [091-beacon-mitm-verification](091-beacon-mitm-verification.md) — Original MitM verification code ADR
+- [117-tofu-fingerprint-pinning](117-tofu-fingerprint-pinning.md) — Provides the coordinator fingerprint to the beacon
+- [118-tofu-interactive-confirmation](118-tofu-interactive-confirmation.md) — The confirmation flow this strengthens

@@ -9,9 +9,9 @@ related: [concepts/session-management.md, modules/drone-agent.md, modules/drone-
 
 ## Context
 
-Compaction's slice-and-summarize logic in `plugins/compaction/index.ts` used `nonSummaryTurns.slice(-sliceSizeCapped)` — slicing the **tail** of the array. Because `appendUserMessage` pushes to the tail (newest last) while `prependSystemTurn` unshifts summaries to the head, the array was `[S_newest…S_oldest, normal_oldest…normal_newest]`. Slicing the tail therefore grabbed the **newest** normal turns, not the oldest. This regression was introduced in commit `c29bd93a` (the [[decisions/125-compaction-summary-eviction]] fix, which switched from `slice(0, sliceSize)` to `slice(-sliceSizeCapped)`). *(Layout note: since [[decisions/158-compaction-chronological-summary-block]] the array is `[S1…Sn chronological, normal_oldest…normal_newest]` — the tail-slicing bug analysis below remains historically accurate.)*
+Compaction's slice-and-summarize logic in `plugins/compaction/index.ts` used `nonSummaryTurns.slice(-sliceSizeCapped)` — slicing the **tail** of the array. Because `appendUserMessage` pushes to the tail (newest last) while `prependSystemTurn` unshifts summaries to the head, the array was `[S_newest…S_oldest, normal_oldest…normal_newest]`. Slicing the tail therefore grabbed the **newest** normal turns, not the oldest. This regression was introduced in commit `c29bd93a` (the [125-compaction-summary-eviction](125-compaction-summary-eviction.md) fix, which switched from `slice(0, sliceSize)` to `slice(-sliceSizeCapped)`). *(Layout note: since [158-compaction-chronological-summary-block](158-compaction-chronological-summary-block.md) the array is `[S1…Sn chronological, normal_oldest…normal_newest]` — the tail-slicing bug analysis below remains historically accurate.)*
 
-Separately, the safety-trim helper `getDroppableTurnPrefix` (introduced in [[decisions/116-safety-trim-estimate-drop-mismatch]]) had "stop at first summary turn" semantics that diverged from compaction's "skip summaries" intent. The two paths wanted the same thing — "oldest non-summary turns, skipping summaries" — but implemented it differently.
+Separately, the safety-trim helper `getDroppableTurnPrefix` (introduced in [116-safety-trim-estimate-drop-mismatch](116-safety-trim-estimate-drop-mismatch.md)) had "stop at first summary turn" semantics that diverged from compaction's "skip summaries" intent. The two paths wanted the same thing — "oldest non-summary turns, skipping summaries" — but implemented it differently.
 
 ## Decision
 
@@ -49,7 +49,7 @@ export function getOldestNonSummaryTurns(
 
 ### 3. `evaluateSafetyTrim` uses the helper + filter-by-id
 
-`context-budget-service.ts` — the leading-prefix loop now computes `droppable = getOldestNonSummaryTurns(input.turns, dropCount)` per drop count, breaks when `droppable.length < dropCount` (no more non-summary turns), and estimates the budget on `input.turns.filter(t => !droppableIds.has(t.id))` instead of `input.turns.slice(droppable.length)`. This keeps the predicted drop count aligned with what `dropOldestNonSummaryTurns` actually drops, guarding the non-convergence class from [[decisions/116-safety-trim-estimate-drop-mismatch]].
+`context-budget-service.ts` — the leading-prefix loop now computes `droppable = getOldestNonSummaryTurns(input.turns, dropCount)` per drop count, breaks when `droppable.length < dropCount` (no more non-summary turns), and estimates the budget on `input.turns.filter(t => !droppableIds.has(t.id))` instead of `input.turns.slice(droppable.length)`. This keeps the predicted drop count aligned with what `dropOldestNonSummaryTurns` actually drops, guarding the non-convergence class from [116-safety-trim-estimate-drop-mismatch](116-safety-trim-estimate-drop-mismatch.md).
 
 ### 4. Compaction uses the helper
 
@@ -77,10 +77,10 @@ export function getOldestNonSummaryTurns(
 
 ## Related
 
-- [[concepts/session-management]] — Context budgeting, safety trim, and compaction
-- [[modules/drone-agent]] — `turn-utils.ts`, `session-manager.ts`, `context-budget-service.ts`
-- [[modules/drone-agent-plugins]] — The `compaction` plugin row
-- [[flows/tool-call-loop]] — The `ensureSafeBudget` loop that consumes the estimate
-- [[decisions/116-safety-trim-estimate-drop-mismatch]] — Prior safety-trim estimate vs. actual drop fix (introduced the helper this decision renames)
-- [[decisions/125-compaction-summary-eviction]] — Prior compaction fix (introduced the `slice(-sliceSizeCapped)` regression this decision fixes)
-- [[decisions/053-compaction-latch-fix]] — Prior compaction latch fix
+- session-management — Context budgeting, safety trim, and compaction
+- [drone-agent](../../drone-agent/) — `turn-utils.ts`, `session-manager.ts`, `context-budget-service.ts`
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — The `compaction` plugin row
+- tool-call-loop — The `ensureSafeBudget` loop that consumes the estimate
+- [116-safety-trim-estimate-drop-mismatch](116-safety-trim-estimate-drop-mismatch.md) — Prior safety-trim estimate vs. actual drop fix (introduced the helper this decision renames)
+- [125-compaction-summary-eviction](125-compaction-summary-eviction.md) — Prior compaction fix (introduced the `slice(-sliceSizeCapped)` regression this decision fixes)
+- [053-compaction-latch-fix](053-compaction-latch-fix.md) — Prior compaction latch fix

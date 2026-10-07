@@ -9,7 +9,7 @@ related: [decisions/132-codeql-fix-jam.md, modules/drone-coordinator.md, modules
 
 ## Context
 
-CodeQL scanning had been disabled on the repository. The prior CodeQL work ([[decisions/132-codeql-fix-jam]]) fixed a batch of alerts and added inline `// codeql[rule-id]` suppression comments, but the workflow itself was not running — the default GitHub CodeQL setup had been turned off, and the alerts were no longer being surfaced.
+CodeQL scanning had been disabled on the repository. The prior CodeQL work ([132-codeql-fix-jam](132-codeql-fix-jam.md)) fixed a batch of alerts and added inline `// codeql[rule-id]` suppression comments, but the workflow itself was not running — the default GitHub CodeQL setup had been turned off, and the alerts were no longer being surfaced.
 
 The re-enable was extracted from PR #55 (which is being reworked) to land the CI infrastructure independently. It introduces only the custom CodeQL workflow config that includes **in-source suppression-comment support** (`dismiss-alerts`), so future alerts can be dismissed in source rather than through the GitHub UI (which is not durable/source-controlled — the same rationale recorded in ADR 132).
 
@@ -37,6 +37,6 @@ Two source suppressions were added in the same commit to keep the workflow green
 
 ## Related
 
-- [[decisions/132-codeql-fix-jam]] — the prior CodeQL alert-fixing batch and the suppression-comment syntax lessons
-- [[modules/drone-coordinator]] — `routes/personas.ts` XSS suppression
-- [[modules/drone-swarm-common]] — `spawner.ts` path-injection suppression
+- [132-codeql-fix-jam](132-codeql-fix-jam.md) — the prior CodeQL alert-fixing batch and the suppression-comment syntax lessons
+- [drone-coordinator](../../drone-coordinator/) — `routes/personas.ts` XSS suppression
+- [drone-swarm-common](../../drone-swarm-common/) — `spawner.ts` path-injection suppression

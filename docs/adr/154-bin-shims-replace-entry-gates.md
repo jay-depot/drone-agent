@@ -76,5 +76,5 @@ structurally: entry modules must stay side-effect-free at import time.
 
 ## Related
 
-- [[modules/drone-swarm]] — the package whose linked invocation was broken
-- [[concepts/memory-pipeline]] — primary consumer workflow for the CLI
+- [drone-swarm](../../drone-swarm/) — the package whose linked invocation was broken
+- memory-pipeline — primary consumer workflow for the CLI

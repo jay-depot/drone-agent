@@ -38,4 +38,4 @@ Replace the existing `persona-principles` fragment with a new combined `principl
 
 ## Related
 
-- [[self-improvement]] — Self-improvement system
+- self-improvement — Self-improvement system

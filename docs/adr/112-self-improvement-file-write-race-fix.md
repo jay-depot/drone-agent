@@ -91,6 +91,6 @@ This matters because `.drone-agent` is **not always checked into VCS** — there
 
 ## Related
 
-- [[concepts/self-improvement]] — The insight/principle system this hardens
-- [[modules/drone-agent-plugins]] — The self-improvement plugin
-- [[flows/tool-call-loop]] — Where tool calls run in parallel via `Promise.all`
+- self-improvement — The insight/principle system this hardens
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — The self-improvement plugin
+- tool-call-loop — Where tool calls run in parallel via `Promise.all`

@@ -73,5 +73,5 @@ Also removed the associated SQL tables from the schema in `db.ts`:
 
 ## Related
 
-- [[decisions/062-gateway-sqlite-stores]] — The SQLite stores that needed the v38 fixes
-- [[modules/drone-gateway]] — Gateway module overview
+- [062-gateway-sqlite-stores](062-gateway-sqlite-stores.md) — The SQLite stores that needed the v38 fixes
+- [drone-gateway](../../drone-gateway/) — Gateway module overview

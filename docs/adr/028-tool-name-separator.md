@@ -56,5 +56,5 @@ The change touched 37 files across the monorepo:
 
 ## Related
 
-- [[modules/drone-core]] — Contains the `getCanonicalToolName` function
-- [[modules/drone-agent-plugins]] — All plugins affected by the change
+- [drone-core](../../drone-core/) — Contains the `getCanonicalToolName` function
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — All plugins affected by the change

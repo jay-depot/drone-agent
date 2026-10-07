@@ -9,7 +9,7 @@ related: [modules/drone-coordinator-ui.md, decisions/194-wiki-graph-view.md, dec
 
 ## Context
 
-[[decisions/194-wiki-graph-view]] shipped a working force graph, but exploration
+[194-wiki-graph-view](194-wiki-graph-view.md) shipped a working force graph, but exploration
 quality needed a lot of tuning: labels were all-or-nothing, node sizes didn't
 encode importance, the layout didn't organize by topic, focus was a filter not
 a spotlight, and live updates blinked nodes into existence. This ADR records
@@ -147,6 +147,6 @@ passes (frame-post accessors, color/geometry per kind), and theme flips.
 
 ## Related
 
-- [[decisions/194-wiki-graph-view]] — the base graph this polishes
-- [[decisions/193-wiki-pitch-field]] — pitch shown in panels
-- [[modules/drone-coordinator-ui]] — the component/hook/util inventory
+- [194-wiki-graph-view](194-wiki-graph-view.md) — the base graph this polishes
+- [193-wiki-pitch-field](193-wiki-pitch-field.md) — pitch shown in panels
+- [drone-coordinator-ui](../../drone-coordinator-ui/) — the component/hook/util inventory

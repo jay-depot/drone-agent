@@ -9,7 +9,7 @@ related: [modules/drone-agent-plugins.md, decisions/068-tool-reduction-followup.
 
 ## Context
 
-After the first tool reduction ([[decisions/068-tool-reduction-followup]]) which converted git and swarm to list/mount pattern and consolidated utils, there were still 28 tools across 7 plugins that could be consolidated using action-based parameter patterns. Additionally, the MCP plugin's per-server resource/prompt tools (5 per server) could be consolidated to 2, and the subagent plugin had a pokemon naming bug (`subagent__subagent__dispatch`).
+After the first tool reduction ([068-tool-reduction-followup](068-tool-reduction-followup.md)) which converted git and swarm to list/mount pattern and consolidated utils, there were still 28 tools across 7 plugins that could be consolidated using action-based parameter patterns. Additionally, the MCP plugin's per-server resource/prompt tools (5 per server) could be consolidated to 2, and the subagent plugin had a pokemon naming bug (`subagent__subagent__dispatch`).
 
 ## Decision
 

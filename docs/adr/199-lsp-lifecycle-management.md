@@ -101,9 +101,9 @@ Demand start was reactive only: an ambient server first spawned when an LSP *too
 
 ## Related
 
-- [[concepts/lsp-symbolic-resolution]] — position-resolution layer (its helpers now live in `server/position.ts` / `server/reference-cache.ts`)
-- [[modules/drone-agent-plugins]] — the lsp plugin row
-- [[architecture/large-file-splitting]] — `lsp/server.ts` is now fully under the 1000-line ceiling
-- [[decisions/102-multi-language-lsp-support]] — original known-specs + on-demand startup (now actually wired)
-- [[decisions/114-lsp-eacces-scan-and-onbeforeprompt]] — earlier scan hardening (`collectWorkspaceFiles` still used for document sync)
-- [[decisions/143-lsp-tool-reliability]] — tool reliability round that established the tool-facing error message reused by the chokepoint
+- lsp-symbolic-resolution — position-resolution layer (its helpers now live in `server/position.ts` / `server/reference-cache.ts`)
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — the lsp plugin row
+- [large-file-splitting](048-large-file-splitting.md) — `lsp/server.ts` is now fully under the 1000-line ceiling
+- [102-multi-language-lsp-support](102-multi-language-lsp-support.md) — original known-specs + on-demand startup (now actually wired)
+- [114-lsp-eacces-scan-and-onbeforeprompt](114-lsp-eacces-scan-and-onbeforeprompt.md) — earlier scan hardening (`collectWorkspaceFiles` still used for document sync)
+- [143-lsp-tool-reliability](143-lsp-tool-reliability.md) — tool reliability round that established the tool-facing error message reused by the chokepoint

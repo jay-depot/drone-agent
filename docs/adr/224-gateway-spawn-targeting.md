@@ -11,7 +11,7 @@ related: [modules/drone-gateway.md, concepts/spawn-backend.md, decisions/058-gat
 
 ## Why
 
-The defect was **latent**. The only surface that spawned through the default path was `persona-assignment`; the `swarm-console` surface passes a beacon id explicitly per command (`swarm.beacon.spawn <beaconId>`), and `swarm.agent.terminate` resolves the beacon by scanning. But persona routing over chat is the entire point of the gateway, and the missing wiring was the exact trap the next phase would walk into. It is the fix for one of the two pre-existing gateway defects surfaced by [[decisions/223-gateway-swarm-console-control-surface]] (the other — the relay `{fromBeaconId, …}` mismatch — remains open).
+The defect was **latent**. The only surface that spawned through the default path was `persona-assignment`; the `swarm-console` surface passes a beacon id explicitly per command (`swarm.beacon.spawn <beaconId>`), and `swarm.agent.terminate` resolves the beacon by scanning. But persona routing over chat is the entire point of the gateway, and the missing wiring was the exact trap the next phase would walk into. It is the fix for one of the two pre-existing gateway defects surfaced by [223-gateway-swarm-console-control-surface](223-gateway-swarm-console-control-surface.md) (the other — the relay `{fromBeaconId, …}` mismatch — remains open).
 
 ## Locked design decisions (6)
 
@@ -51,8 +51,8 @@ LSP clean; `pnpm -r run build` exit 0; `pnpm lint` exit 0; `pnpm test` **3338 pa
 
 ## Related
 
-- [[modules/drone-gateway]] — the gateway module page (config model, key files, types, surfaces).
-- [[concepts/spawn-backend]] — the `SpawnBackend` interface (the `spawnSession` widening).
-- [[decisions/058-gateway-config-model]] — the folder-hierarchy config model extended here.
-- [[decisions/223-gateway-swarm-console-control-surface]] — surfaced the `'default'` defect; this ADR fixes it (and the surface registry's `SurfaceContext` is where the resolved beacon now rides).
-- [[decisions/043-inter-beacon-spawn-routing]] — the coordinator `POST /spawn` contract (`targetBeaconId` required).
+- [drone-gateway](../../drone-gateway/) — the gateway module page (config model, key files, types, surfaces).
+- spawn-backend — the `SpawnBackend` interface (the `spawnSession` widening).
+- [058-gateway-config-model](058-gateway-config-model.md) — the folder-hierarchy config model extended here.
+- [223-gateway-swarm-console-control-surface](223-gateway-swarm-console-control-surface.md) — surfaced the `'default'` defect; this ADR fixes it (and the surface registry's `SurfaceContext` is where the resolved beacon now rides).
+- [043-inter-beacon-spawn-routing](043-inter-beacon-spawn-routing.md) — the coordinator `POST /spawn` contract (`targetBeaconId` required).

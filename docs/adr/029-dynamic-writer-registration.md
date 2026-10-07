@@ -70,7 +70,7 @@ Both wizards now:
 
 ## Related
 
-- [[broker-provider]] — The broker + provider pattern that this extends
-- [[identity-assets]] — Personas and skills as identity assets
-- [[entities/Persona]] — Persona definition and creation
-- [[entities/Skill]] — Skill definition and creation
+- broker-provider — The broker + provider pattern that this extends
+- identity-assets — Personas and skills as identity assets
+- [Persona](../../drone-core/src/domain-types.ts) — Persona definition and creation
+- [Skill](../../drone-core/src/domain-types.ts) — Skill definition and creation

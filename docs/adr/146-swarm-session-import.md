@@ -113,11 +113,11 @@ The slash-command context's `sessionManager` subset only exposed `appendUserMess
 
 ## Related
 
-- [[concepts/session-management]] — Turn model the import operates within (per-turn safety-trim)
-- [[concepts/session-processing-pipeline]] — Swarm session lifecycle (the import consumes ended/processed sessions)
-- [[modules/drone-coordinator]] — Transcript endpoint
-- [[modules/drone-agent]] — TUI wiring + session import
-- [[modules/drone-core]] — `swarm.sessionImport` config + `appendAssistantMessage` subset
-- [[modules/drone-agent-plugins]] — swarm plugin `/swarm-session` command
-- [[decisions/135-compaction-slash-command]] — The `/compact` command / CompactionCapability model this resembles
-- [[decisions/142-compaction-turn-granularity-fix]] — Why per-turn granularity matters for safety-trim/compaction
+- session-management — Turn model the import operates within (per-turn safety-trim)
+- session-processing-pipeline — Swarm session lifecycle (the import consumes ended/processed sessions)
+- [drone-coordinator](../../drone-coordinator/) — Transcript endpoint
+- [drone-agent](../../drone-agent/) — TUI wiring + session import
+- [drone-core](../../drone-core/) — `swarm.sessionImport` config + `appendAssistantMessage` subset
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — swarm plugin `/swarm-session` command
+- [135-compaction-slash-command](135-compaction-slash-command.md) — The `/compact` command / CompactionCapability model this resembles
+- [142-compaction-turn-granularity-fix](142-compaction-turn-granularity-fix.md) — Why per-turn granularity matters for safety-trim/compaction

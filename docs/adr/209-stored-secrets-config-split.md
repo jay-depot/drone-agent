@@ -58,7 +58,7 @@ Two bugs plus one feature request landed on the coordinator Config page; the rep
 
 ## Related
 
-- [[concepts/beacon-config-override-spec]] — the coordinator config underlay this extends
-- [[modules/drone-coordinator]] — secrets store + distribution route + reverse-channel broadcast
-- [[modules/drone-beacon]] — memory-only overlay, sync split, `configChanged` case
-- [[modules/drone-coordinator-ui]] — config dialog rework, completions, secrets modal
+- beacon-config-override-spec — the coordinator config underlay this extends
+- [drone-coordinator](../../drone-coordinator/) — secrets store + distribution route + reverse-channel broadcast
+- [drone-beacon](../../drone-beacon/) — memory-only overlay, sync split, `configChanged` case
+- [drone-coordinator-ui](../../drone-coordinator-ui/) — config dialog rework, completions, secrets modal

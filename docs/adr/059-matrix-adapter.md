@@ -57,6 +57,6 @@ Crypto initialization is attempted in a try/catch. If it fails (e.g., native cry
 
 ## Related
 
-- [[modules/drone-gateway]] — The gateway package
-- [[decisions/058-gateway-config-model]] — Config model refactor (delivered alongside)
-- [[decisions/235-gateway-architecture-standalone-service]] — Original gateway architecture ADR
+- [drone-gateway](../../drone-gateway/) — The gateway package
+- [058-gateway-config-model](058-gateway-config-model.md) — Config model refactor (delivered alongside)
+- [235-gateway-architecture-standalone-service](235-gateway-architecture-standalone-service.md) — Original gateway architecture ADR

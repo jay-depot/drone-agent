@@ -13,7 +13,7 @@ Launching drone-agent from `$HOME` crashed at startup with a provider-scope viol
 
 - The user layer loads from `~/.drone-agent/config.json`.
 - `findProjectConfigPath()` walked ancestor directories from the start directory checking each level for `.drone-agent/config.json`, with **no boundary concept at all** — so a launch from `$HOME` (or any subdirectory whose ancestors contain only the user's own `.drone-agent/`) rediscovered the user config and loaded it a second time tagged as **project** scope.
-- `enforceProviderScopePolicy` ([[decisions/155-provider-model-config]]) then saw a project-scope layer containing `providers` — banned at project scope — and threw, exiting the agent.
+- `enforceProviderScopePolicy` ([155-provider-model-config](155-provider-model-config.md)) then saw a project-scope layer containing `providers` — banned at project scope — and threw, exiting the agent.
 
 Discovery never considered that the walked-to file might *be* the user config. Worse, the buggy primitive had **three call sites**, not one:
 
@@ -47,7 +47,7 @@ A first-class "no-project mode" across all subsystems (memory, skills/personas p
 
 ## Related
 
-- [[decisions/155-provider-model-config]] — the provider scope ban that turns the phantom project layer into a fatal
-- [[architecture/config-cascade]] — layer precedence and discovery
-- [[concepts/scope-hierarchy]] — what "project" means across local/swarm scopes
-- [[modules/drone-agent-plugins]] — the config plugin's get/set surfaces
+- [155-provider-model-config](155-provider-model-config.md) — the provider scope ban that turns the phantom project layer into a fatal
+- [config-cascade](005-config-cascade.md) — layer precedence and discovery
+- scope-hierarchy — what "project" means across local/swarm scopes
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — the config plugin's get/set surfaces

@@ -11,7 +11,7 @@ related: [concepts/session-management.md, entities/Session.md, decisions/125-com
 
 Compaction summaries appeared in the LLM context **newest-first**, backwards relative to the live conversation (which runs oldest→newest). Root cause: `prependSystemTurn()` (`drone-agent/src/runtime/session-manager.ts`) inserted every new summary turn with `turns.unshift()` — so each summary landed *in front of* all previous ones. Storage order flowed untouched into `getMessages()`, which is exactly what the conversation service sends to the LLM, so after N compactions the model read `[S_N … S_2, S_1, live turns…]`.
 
-Nothing ever chose this ordering. No ADR specified it, no consumer deliberately relied on it, and nothing re-sorted at presentation time. It was an emergent artifact of "prepend" naming that later got **enshrined**: [[decisions/125-compaction-summary-eviction]] set the self-purge drop target to `getSummaryTurns().at(-1)` (correct only because storage was reversed), test comments asserted "`getSummaryTurns()` is newest-first", and [[decisions/133-compaction-oldest-turns-helper-consolidation]] documented the resulting `[S_newest…S_oldest, normal_oldest…]` layout as fact. The same reversed order leaked into the log plugin's JSON session snapshots.
+Nothing ever chose this ordering. No ADR specified it, no consumer deliberately relied on it, and nothing re-sorted at presentation time. It was an emergent artifact of "prepend" naming that later got **enshrined**: [125-compaction-summary-eviction](125-compaction-summary-eviction.md) set the self-purge drop target to `getSummaryTurns().at(-1)` (correct only because storage was reversed), test comments asserted "`getSummaryTurns()` is newest-first", and [133-compaction-oldest-turns-helper-consolidation](133-compaction-oldest-turns-helper-consolidation.md) documented the resulting `[S_newest…S_oldest, normal_oldest…]` layout as fact. The same reversed order leaked into the log plugin's JSON session snapshots.
 
 ## Decision
 
@@ -23,7 +23,7 @@ Keep the API name and signature `prependSystemTurn(content, opts?)`; redefine on
 
 ### 2. Forced consequence: self-purge flips head-ward
 
-With chronological storage, the compaction self-purge's drop target flips from `summaryTurns.at(-1)!.id` back to `summaryTurns[0]!.id` — but now `[0]` genuinely *is* the oldest summary, restoring [[decisions/125-compaction-summary-eviction]]'s intent with simpler indexing.
+With chronological storage, the compaction self-purge's drop target flips from `summaryTurns.at(-1)!.id` back to `summaryTurns[0]!.id` — but now `[0]` genuinely *is* the oldest summary, restoring [125-compaction-summary-eviction](125-compaction-summary-eviction.md)'s intent with simpler indexing.
 
 ### 3. Forced consequence: `dropOldestSummaries` slice direction
 
@@ -44,7 +44,7 @@ The `/compact drop N` capability computed ids via `getSummaryTurns().slice(-coun
 
 ## Related
 
-- [[decisions/125-compaction-summary-eviction]] — Original eviction fix; its `.at(-1)` mechanic is superseded (intent preserved)
-- [[decisions/133-compaction-oldest-turns-helper-consolidation]] — Documented the old reversed layout; helper semantics unchanged
-- [[concepts/session-management]] — Compaction triggering, self-purge, and summary-block invariant
-- [[entities/Session]] — `DroneSessionTurn` shape and turn ordering guarantees
+- [125-compaction-summary-eviction](125-compaction-summary-eviction.md) — Original eviction fix; its `.at(-1)` mechanic is superseded (intent preserved)
+- [133-compaction-oldest-turns-helper-consolidation](133-compaction-oldest-turns-helper-consolidation.md) — Documented the old reversed layout; helper semantics unchanged
+- session-management — Compaction triggering, self-purge, and summary-block invariant
+- [Session](../../drone-core/src/session-types.ts) — `DroneSessionTurn` shape and turn ordering guarantees

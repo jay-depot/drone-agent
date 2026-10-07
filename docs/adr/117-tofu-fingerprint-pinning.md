@@ -7,7 +7,7 @@ related: [concepts/beacon-verification.md, modules/drone-beacon.md, modules/dron
 
 **Summary**: Added Trust-On-First-Use (TOFU) certificate fingerprint pinning to the beacon's coordinator HTTPS connections, closing the gap where the coordinator's certificate was never verified after the initial connection.
 
-> **CORRECTED by [[decisions/122-tofu-fingerprint-pin-socket-secureconnect]]**: The `checkServerIdentity` mechanism described here was **dead code** — Node never calls `checkServerIdentity` when `rejectUnauthorized` is `false`, so `onFirstFingerprint` never fired. This decision is retained for historical context; the working implementation observes/enforces the fingerprint from the socket `secureConnect` event (ADR 122).
+> **CORRECTED by [122-tofu-fingerprint-pin-socket-secureconnect](122-tofu-fingerprint-pin-socket-secureconnect.md)**: The `checkServerIdentity` mechanism described here was **dead code** — Node never calls `checkServerIdentity` when `rejectUnauthorized` is `false`, so `onFirstFingerprint` never fired. This decision is retained for historical context; the working implementation observes/enforces the fingerprint from the socket `secureConnect` event (ADR 122).
 
 ## Context
 
@@ -35,7 +35,7 @@ Added `coordinatorTlsFingerprint?` and `onFirstCoordinatorFingerprint?` so calle
 ## Consequences
 
 - All post-registration HTTPS traffic to the coordinator is now verified against a pinned fingerprint.
-- The TOFU first-connection window is unguarded (addressed by [[decisions/118-tofu-interactive-confirmation]]).
+- The TOFU first-connection window is unguarded (addressed by [118-tofu-interactive-confirmation](118-tofu-interactive-confirmation.md)).
 - Coordinator cert rotation causes a fingerprint mismatch (documented in `docs/agents/swarm-plugin.md`).
 
 ## Tests
@@ -50,9 +50,9 @@ Added `coordinatorTlsFingerprint?` and `onFirstCoordinatorFingerprint?` so calle
 
 ## Related
 
-- [[concepts/beacon-verification]] — The MitM verification code concept
-- [[modules/drone-beacon]] — Beacon module (hosts the coordinator client)
-- [[decisions/091-beacon-mitm-verification]] — Original MitM verification code ADR
-- [[decisions/118-tofu-interactive-confirmation]] — Closes the unguarded TOFU window
-- [[decisions/119-bidirectional-verification-code]] — Makes the verification code bidirectional
-- [[decisions/122-tofu-fingerprint-pin-socket-secureconnect]] — Corrects the dead `checkServerIdentity` mechanism
+- beacon-verification — The MitM verification code concept
+- [drone-beacon](../../drone-beacon/) — Beacon module (hosts the coordinator client)
+- [091-beacon-mitm-verification](091-beacon-mitm-verification.md) — Original MitM verification code ADR
+- [118-tofu-interactive-confirmation](118-tofu-interactive-confirmation.md) — Closes the unguarded TOFU window
+- [119-bidirectional-verification-code](119-bidirectional-verification-code.md) — Makes the verification code bidirectional
+- [122-tofu-fingerprint-pin-socket-secureconnect](122-tofu-fingerprint-pin-socket-secureconnect.md) — Corrects the dead `checkServerIdentity` mechanism

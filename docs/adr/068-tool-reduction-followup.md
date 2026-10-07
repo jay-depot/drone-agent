@@ -9,9 +9,9 @@ related: [modules/drone-agent-plugins.md, decisions/064-mcp-deferred-tool-loadin
 
 ## Context
 
-After the MCP plugin was converted to the deferred list/mount pattern ([[decisions/064-mcp-deferred-tool-loading]]), the session still exposed ~89 tools to the LLM. The git plugin (11 tools) and swarm plugin (13 tools) were eagerly registered, and the utils plugin had 7 separate tools. This consumed significant context window space and made tool selection harder for the LLM.
+After the MCP plugin was converted to the deferred list/mount pattern ([064-mcp-deferred-tool-loading](064-mcp-deferred-tool-loading.md)), the session still exposed ~89 tools to the LLM. The git plugin (11 tools) and swarm plugin (13 tools) were eagerly registered, and the utils plugin had 7 separate tools. This consumed significant context window space and made tool selection harder for the LLM.
 
-The `ToolMountingCache` class ([[decisions/065-mcp-tool-mounting-cache-and-server-descriptions]]) was already available in `drone-core` and proven by the MCP plugin. The persona filtering pattern for `__list_tools` was also established.
+The `ToolMountingCache` class ([065-mcp-tool-mounting-cache-and-server-descriptions](065-mcp-tool-mounting-cache-and-server-descriptions.md)) was already available in `drone-core` and proven by the MCP plugin. The persona filtering pattern for `__list_tools` was also established.
 
 ## Decision
 
@@ -65,6 +65,6 @@ The swarm plugin was converted from 13 eagerly-registered tools to 3 meta-tools 
 
 ## Related
 
-- [[decisions/064-mcp-deferred-tool-loading]] — Original MCP list/mount pattern
-- [[decisions/065-mcp-tool-mounting-cache-and-server-descriptions]] — ToolMountingCache class
-- [[modules/drone-agent-plugins]] — Updated plugin descriptions
+- [064-mcp-deferred-tool-loading](064-mcp-deferred-tool-loading.md) — Original MCP list/mount pattern
+- [065-mcp-tool-mounting-cache-and-server-descriptions](065-mcp-tool-mounting-cache-and-server-descriptions.md) — ToolMountingCache class
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — Updated plugin descriptions

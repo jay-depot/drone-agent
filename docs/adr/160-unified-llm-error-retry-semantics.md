@@ -83,10 +83,10 @@ The llm broker's `getActiveProvider().chat()` wrapper catches `DroneLlmError`, s
 
 ## Related
 
-- [[decisions/145-guardrail-reliability-features]] — the earlier built-in guardrails (degenerate-response retry, identical-call streak), distinct from HTTP error retry
-- [[decisions/155-provider-model-config]] — provider/protocol/model refactor the drivers sit within
-- [[decisions/157-runtime-truth-context-windows]] — context-window resolution (the overflow-fail-fast detection interacts with it)
-- [[concepts/session-management]] — session and guardrail semantics
-- [[concepts/provider-model-selection]] — provider selection, drivers
-- [[flows/tool-call-loop]] — where the retry wrapper hooks into the loop
-- [[entities/DroneAgentConfig]] — `session.retry` config
+- [145-guardrail-reliability-features](145-guardrail-reliability-features.md) — the earlier built-in guardrails (degenerate-response retry, identical-call streak), distinct from HTTP error retry
+- [155-provider-model-config](155-provider-model-config.md) — provider/protocol/model refactor the drivers sit within
+- [157-runtime-truth-context-windows](157-runtime-truth-context-windows.md) — context-window resolution (the overflow-fail-fast detection interacts with it)
+- session-management — session and guardrail semantics
+- provider-model-selection — provider selection, drivers
+- tool-call-loop — where the retry wrapper hooks into the loop
+- [DroneAgentConfig](../../drone-core/src/config-types.ts) — `session.retry` config

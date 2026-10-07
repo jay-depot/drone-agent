@@ -57,8 +57,8 @@ Added to `drone-agent/test/compaction.test.ts` (in the `/compact slash command` 
 
 ## Related
 
-- [[concepts/session-management]] — Turn model + compaction triggering
-- [[modules/drone-agent-plugins]] — compaction plugin row
-- [[decisions/135-compaction-slash-command]] — The `/compact` command + CompactionCapability
-- [[decisions/134-compaction-correctness-fix]] — Convergence loop + sliceSize
-- [[decisions/144-compaction-fragment-integration]] — Prior compaction fixes
+- session-management — Turn model + compaction triggering
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — compaction plugin row
+- [135-compaction-slash-command](135-compaction-slash-command.md) — The `/compact` command + CompactionCapability
+- [134-compaction-correctness-fix](134-compaction-correctness-fix.md) — Convergence loop + sliceSize
+- [144-compaction-fragment-integration](144-compaction-fragment-integration.md) — Prior compaction fixes

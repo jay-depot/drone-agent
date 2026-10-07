@@ -19,7 +19,7 @@ The parser is a hand-rolled state machine with two "array modes": a flat one (`f
 const kvMatch = line.match(/^(\s*)(\w+):\s*(.*)$/);
 ```
 
-`\w` is `[A-Za-z0-9_]` — **it does not include `-`**, so `self-improvement:` never matched. A sibling session's bug report flagged this and traced it to the `reflect` persona. A prior tool-premounting change is [[decisions/107-persona-tool-premounting]]; the hidden-by-default concept is [[concepts/default-hidden-tools]].
+`\w` is `[A-Za-z0-9_]` — **it does not include `-`**, so `self-improvement:` never matched. A sibling session's bug report flagged this and traced it to the `reflect` persona. A prior tool-premounting change is 107-persona-tool-premounting; the hidden-by-default concept is default-hidden-tools.
 
 ## The failure mode (verified, and corrected from the report)
 
@@ -89,7 +89,7 @@ lsp -> [ get_diagnostics, inspect, go_to, find_references, symbols, code_action,
 
 ## Related
 
-- [[decisions/218-reference-expansion-and-tab-completion]] — the feature whose verification surfaced this bug
-- [[decisions/107-persona-tool-premounting]] — the `premountedTools` mechanism this fixes the parser for
-- [[concepts/default-hidden-tools]] — why losing a premount silently removes a tool
-- [[modules/drone-agent-plugins]] — the persona loader
+- [218-reference-expansion-and-tab-completion](218-reference-expansion-and-tab-completion.md) — the feature whose verification surfaced this bug
+- 107-persona-tool-premounting — the `premountedTools` mechanism this fixes the parser for
+- default-hidden-tools — why losing a premount silently removes a tool
+- [drone-agent-plugins](../../drone-agent/src/plugins/) — the persona loader

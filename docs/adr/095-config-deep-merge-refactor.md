@@ -89,6 +89,6 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
 
 ## Related
 
-- [[config-cascade]] — How config layers work
-- [[entities/DroneAgentConfig]] — Full config schema
-- [[modules/drone-core]] — The drone-core package
+- [config-cascade](005-config-cascade.md) — How config layers work
+- [DroneAgentConfig](../../drone-core/src/config-types.ts) — Full config schema
+- [drone-core](../../drone-core/) — The drone-core package

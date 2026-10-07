@@ -9,7 +9,7 @@ related: [modules/drone-coordinator.md, modules/drone-coordinator-ui.md, modules
 
 ## Context
 
-[[decisions/187-coordinator-ui-wiki-browser-improvements]] added a virtual tag
+[187-coordinator-ui-wiki-browser-improvements](187-coordinator-ui-wiki-browser-improvements.md) added a virtual tag
 page (`WikiTagPage` at `/wiki/tag/:tag`) that filtered the *full* page list
 client-side by `tags.includes(tag)`. That approach works while the page list is
 small, but it will not scale to the thousands of memory-wiki pages the

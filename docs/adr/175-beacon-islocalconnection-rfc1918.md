@@ -52,7 +52,7 @@ The source comment records the rationale (a comment on the range boundary, not a
 
 ## Related
 
-- [[decisions/174-beacon-sendtoagent-readystate-fix]] — the other WS-delivery blocker found in the same investigation
-- [[decisions/137-integration-test-isolation]] — the isolated Docker swarm whose bridge network exposed this
-- [[concepts/test-infrastructure]] — integration provisioning and why test-runners connect from private ranges
-- [[modules/drone-beacon]] — ws-server and its local-only WS gate
+- [174-beacon-sendtoagent-readystate-fix](174-beacon-sendtoagent-readystate-fix.md) — the other WS-delivery blocker found in the same investigation
+- [137-integration-test-isolation](137-integration-test-isolation.md) — the isolated Docker swarm whose bridge network exposed this
+- test-infrastructure — integration provisioning and why test-runners connect from private ranges
+- [drone-beacon](../../drone-beacon/) — ws-server and its local-only WS gate

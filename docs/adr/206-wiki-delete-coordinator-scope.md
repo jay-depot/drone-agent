@@ -52,7 +52,7 @@ related: [drone-beacon.md, drone-swarm-common.md, drone-agent-plugins.md, decisi
 
 ## Related
 
-- [[decisions/179-swarm-memory-rag-retrieval]] — the origin-tagged merged wiki reads whose no-scope semantics the delete now mirrors; the deletion-tight reindex reconcile that absorbs the accepted 5xx-collapse limitation
-- [[decisions/177-reverse-channel-session-end-trigger]] — where the outbox flusher first hit and documented `FST_ERR_CTP_EMPTY_JSON_BODY`
-- [[decisions/190-coordinator-session-archive]] — beacon proxy forwarding conventions this delete proxy follows
-- [[decisions/173-swarm-prompt-fragments]] — the fragments route explicitly NOT affected (local-only DELETE)
+- [179-swarm-memory-rag-retrieval](179-swarm-memory-rag-retrieval.md) — the origin-tagged merged wiki reads whose no-scope semantics the delete now mirrors; the deletion-tight reindex reconcile that absorbs the accepted 5xx-collapse limitation
+- [177-reverse-channel-session-end-trigger](177-reverse-channel-session-end-trigger.md) — where the outbox flusher first hit and documented `FST_ERR_CTP_EMPTY_JSON_BODY`
+- [190-coordinator-session-archive](190-coordinator-session-archive.md) — beacon proxy forwarding conventions this delete proxy follows
+- [173-swarm-prompt-fragments](173-swarm-prompt-fragments.md) — the fragments route explicitly NOT affected (local-only DELETE)

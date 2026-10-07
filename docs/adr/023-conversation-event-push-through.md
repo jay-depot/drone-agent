@@ -35,6 +35,6 @@ Add a new `onConversationEvent` hook to the plugin system that carries a typed e
 
 ## Related
 
-- [[024-swarm-event-push-404-fix]] — The beacon proxy routes that receive these events
-- [[flows/tool-call-loop]] — Hook ordering in the conversation loop
-- [[entities/DronePlugin]] — Plugin hook interface
+- [024-swarm-event-push-404-fix](024-swarm-event-push-404-fix.md) — The beacon proxy routes that receive these events
+- tool-call-loop — Hook ordering in the conversation loop
+- [DronePlugin](../../drone-core/src/plugin-system.ts) — Plugin hook interface

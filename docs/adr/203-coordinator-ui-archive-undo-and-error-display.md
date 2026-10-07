@@ -30,7 +30,7 @@ Commit `ec64922` (the C1 "no confirmation dialogs" item of the memory-wiki-brows
 **New error-display primitives (hand-rolled, zero new dependencies).**
 
 - `src/hooks/use-toast.tsx` — `ToastProvider` + `useToast()` (throws outside the provider, matching the `useAuth` convention). API is error-only for now: `error(message)`. Toasts auto-dismiss after `TOAST_DURATION_MS` (5000), the visible stack caps at `MAX_TOASTS` (4, oldest dropped), and the provider renders a fixed bottom-right viewport (`aria-live="assertive"`, each toast `role="alert"`, destructive palette `border-destructive/40 bg-destructive/10 text-destructive`, manual dismiss button). Mounted in `App.tsx` as the **outermost** provider (no dependency on auth/WS/router). `TOAST_DURATION_MS`/`MAX_TOASTS` exported for tests.
-- `src/components/error-banner.tsx` — `<ErrorBanner message className>` renders the legacy copy-pasted destructive banner classes (`mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm`) with `role="alert"`, returns `null` for a falsy message, and accepts `string | null | undefined` so pages can pass their error state directly. The sessions page's inline banner JSX was swapped for it; the remaining duplicated banner sites were swept in [[decisions/204-coordinator-ui-error-display-sweep-and-ws-initial-fix]].
+- `src/components/error-banner.tsx` — `<ErrorBanner message className>` renders the legacy copy-pasted destructive banner classes (`mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm`) with `role="alert"`, returns `null` for a falsy message, and accepts `string | null | undefined` so pages can pass their error state directly. The sessions page's inline banner JSX was swapped for it; the remaining duplicated banner sites were swept in [204-coordinator-ui-error-display-sweep-and-ws-initial-fix](204-coordinator-ui-error-display-sweep-and-ws-initial-fix.md).
 
 **Division of labor**: banners for load failures (persistent page furniture), toasts for action failures (transient).
 
@@ -47,19 +47,19 @@ Validation: LSP clean on all touched files, root `pnpm lint` clean, `pnpm -r run
 - **Keep the single-phantom model and patch it** (record row index, render at index, expire old phantom on new archive) — rejected: index bookkeeping plus a replacement policy for the displaced undo window; the in-place flag eliminates all three symptoms structurally and handles multi-archive gracefully.
 - **Adopt `sonner`/react-hot-toast** — rejected: the UI kit deliberately ships no toast dependency; a ~70-line context hook matches the project's self-reliant style.
 - **ErrorBanner-only (no toasts)** — rejected: pinning a banner at the top of the page for a transient row-action failure is clunky.
-- **Fold the remaining silent-failure sweep into this change** — deferred, then executed as [[decisions/204-coordinator-ui-error-display-sweep-and-ws-initial-fix]].
+- **Fold the remaining silent-failure sweep into this change** — deferred, then executed as [204-coordinator-ui-error-display-sweep-and-ws-initial-fix](204-coordinator-ui-error-display-sweep-and-ws-initial-fix.md).
 
 ## Consequences
 
 - Archive undo is position-stable, multi-window, and slot-backfilling; the "Showing X–Y of N" count is briefly stale only between archive and the expiry/undo refetch (accepted).
 - All sessions-page action failures now surface as toasts; a failed archive no longer fakes success.
 - The UI has reusable error-display primitives for the pending sweep (delete handlers, topology trust actions, session-detail events load, wiki search, plus swapping the remaining duplicated banners).
-- The WS `initial` blind-prepend noted here as deferred was subsequently fixed in [[decisions/204-coordinator-ui-error-display-sweep-and-ws-initial-fix]].
+- The WS `initial` blind-prepend noted here as deferred was subsequently fixed in [204-coordinator-ui-error-display-sweep-and-ws-initial-fix](204-coordinator-ui-error-display-sweep-and-ws-initial-fix.md).
 
 ## Related
 
-- [[decisions/190-coordinator-session-archive]] — the archive/restore backend routes and UI this reworks
-- [[decisions/198-coordinator-ui-launch-interact]] — the session-detail interactive chat this UI family shares
-- [[decisions/201-session-detail-live-chat-resilience]] — prior coordinator-UI resilience fix
-- [[decisions/202-session-chat-view-blob-delivery]] — session chat view (latest UI work on the sessions family)
-- [[modules/drone-coordinator-ui]] — module overview
+- [190-coordinator-session-archive](190-coordinator-session-archive.md) — the archive/restore backend routes and UI this reworks
+- [198-coordinator-ui-launch-interact](198-coordinator-ui-launch-interact.md) — the session-detail interactive chat this UI family shares
+- [201-session-detail-live-chat-resilience](201-session-detail-live-chat-resilience.md) — prior coordinator-UI resilience fix
+- [202-session-chat-view-blob-delivery](202-session-chat-view-blob-delivery.md) — session chat view (latest UI work on the sessions family)
+- [drone-coordinator-ui](../../drone-coordinator-ui/) — module overview

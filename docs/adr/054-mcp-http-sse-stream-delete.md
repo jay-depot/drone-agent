@@ -80,7 +80,7 @@ After `initialize` succeeds (HTTP transport only), the client opens a **server�
 
 ## Related
 
-- [[modules/drone-agent-mcp-client]] — The client module page (updated for the GET SSE + DELETE behavior).
-- [[decisions/050-mcp-client-session-id-iserror]] — Earlier fix establishing the HTTP baseline (session-id capture + isError throwing).
-- [[decisions/051-mcp-client-test-suite]] — The two-layer test harness this change extends.
-- [[architecture/config-cascade]] — `mcp` config section (server definitions).
+- [drone-agent-mcp-client](../../drone-agent/src/plugins/mcp/) — The client module page (updated for the GET SSE + DELETE behavior).
+- [050-mcp-client-session-id-iserror](050-mcp-client-session-id-iserror.md) — Earlier fix establishing the HTTP baseline (session-id capture + isError throwing).
+- [051-mcp-client-test-suite](051-mcp-client-test-suite.md) — The two-layer test harness this change extends.
+- [config-cascade](005-config-cascade.md) — `mcp` config section (server definitions).
