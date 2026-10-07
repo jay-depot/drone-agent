@@ -35,10 +35,12 @@ pnpm start
 | `--port`                  | 3457                         | Port to listen on                                |
 | `--host`                  | 127.0.0.1                    | Host to bind to                                  |
 | `--config-dir`            | ~/.drone-beacon              | Configuration directory                          |
+| `--config-file`           | -                            | Load settings from a JSON config file (flags override file values) |
 | `--db`                    | <config-dir>/drone-beacon.db | Path to SQLite database                          |
 | `--coordinator-host`      | -                            | Coordinator host to connect to                   |
 | `--coordinator-port`      | 3458                         | Coordinator port (defaults to beacon port + 1)   |
 | `--coordinator-https`     | false                        | Use HTTPS for coordinator connection             |
+| `--confirm-coordinator-fingerprint` | -                  | Confirm the coordinator's TLS fingerprint (TOFU) and exit |
 | `--https`                 | false                        | Enable HTTPS server (or set BEACON_HTTPS env)    |
 | `--no-https`              | -                            | Disable HTTPS server (default)                   |
 | `--id`                    | auto-generated               | Beacon ID                                        |
@@ -143,7 +145,31 @@ pnpm start
 - `PUT /wiki/:pageId` - Create or update a wiki page (query: ?scope=coordinator to proxy)
 - `DELETE /wiki/:pageId` - Delete a wiki page (query: ?scope=coordinator to proxy)
 - `GET /wiki/search?q=...` - Search wiki pages
+- `GET /wiki/semantic-search?q=...` - Semantic (vector) search over the merged beacon + coordinator wiki corpus
 - `POST /wiki/lint` - Trigger a lint pass (health-check the wiki)
+- `POST /wiki/reindex` - Rebuild the vector index for the merged wiki
+
+### Fragments
+
+- `POST /fragments` - Upsert a stored prompt fragment (header/footer, targeted or broadcast)
+- `GET /fragments` - List fragments (query: target)
+- `DELETE /fragments/:id` - Delete a fragment
+
+### Sessions
+
+- `GET /sessions` - List swarm sessions (proxied to the coordinator; query forwards `exclude`)
+- `GET /sessions/:id/transcript` - Readable transcript of a session (proxied to the coordinator)
+
+### Coordinator Proxy
+
+Read-through proxy routes to the coordinator, so agents can reach coordinator data without a second connection:
+
+- `GET /coordinator/beacons` - List registered beacons
+- `GET /coordinator/personas` · `GET /coordinator/skills` - Swarm-scoped personas and skills
+- `GET /coordinator/personas/:id/skills` · `POST /coordinator/personas/:id/skills` - Persona-owned skills
+- `GET /coordinator/trust` - Beacon trust entries
+- `GET /coordinator/agents/location` - Agent location registry
+- `POST /coordinator/spawn` - Spawn an agent via the coordinator
 
 ### WebSocket
 
@@ -184,8 +210,13 @@ Upon connection, agents should send a registration message:
 ## Dependencies
 
 - **fastify** - HTTP server
+- **@fastify/rate-limit** - Per-IP rate limiting
 - **@fastify/websocket** - WebSocket support
+- **ws** - WebSocket client for the coordinator reverse channel
 - **better-sqlite3** - SQLite database
+- **sqlite-vec** - Vector (KNN) extension for semantic search
+- **web-tree-sitter** + **tree-sitter-&lt;lang&gt;** - Structure-aware chunking for the search index
+- **minimatch** - Glob matching for search-path excludes
 - **pino** - Logging
 - **drone-core** - Shared core types
 - **drone-swarm-common** - Shared TLS and wiki storage utilities

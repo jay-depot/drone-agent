@@ -23,6 +23,7 @@ By default, drone-agent runs with a minimal built-in set so it can bootstrap a s
 The following built-in plugins are available. Most are opt-in and must be enabled in configuration:
 
 - `bootstrap` - Session bootstrapping and initialization
+- `beancounter` - Provider-reported token usage and cost (mid-panel widget)
 - `compaction` - Context management and compaction
 - `config` - Configuration management
 - `echo` - Echo tool for testing
@@ -33,6 +34,7 @@ The following built-in plugins are available. Most are opt-in and must be enable
 - `git` - Git operations
 - `lightpanda` - Browser automation
 - `llm` - Generic LLM provider interface
+- `log` - Session logging
 - `lsp` - Language server protocol support
 - `macros` - Macro expansion
 - `mcp` - Model Context Protocol client
@@ -57,6 +59,7 @@ The following built-in plugins are available. Most are opt-in and must be enable
 - `terminal` - Terminal emulator
 - `todo` - Todo list management
 - `utils` - Utility tools (arithmetic, text metrics)
+- `wakelock` - Sleep inhibition (prevents idle suspend while a session is active)
 
 ## Installation
 
@@ -93,23 +96,17 @@ The `lsp` plugin is opt-in. It is intended to make `drone-agent` behave more lik
 LSP tools available:
 
 - `lsp__get_diagnostics` - Returns current diagnostics for the workspace or a specific file
-- `lsp__hover` - Returns hover information for a symbol
-- `lsp__go_to_definition` - Resolves definition location(s) for a symbol
+- `lsp__inspect` - Returns hover information (type, documentation) and signature help for a symbol
+- `lsp__go_to` - Resolves a definition, type definition, or implementation location for a symbol
 - `lsp__find_references` - Finds references for a symbol
-- `lsp__document_symbols` - Lists symbols defined in a file
-- `lsp__workspace_symbol` - Searches for symbols across the workspace
-- `lsp__signature_help` - Returns signature help for function calls
+- `lsp__symbols` - Lists symbols in a file, or searches for symbols across the workspace
 - `lsp__completion` - Returns completion suggestions
 - `lsp__code_action` - Returns code actions (quick fixes, refactorings)
 - `lsp__rename` - Renames a symbol across the workspace
-- `lsp__implementation` - Returns locations that implement an interface
-- `lsp__type_definition` - Returns type-definition locations
-- `lsp__call_hierarchy_incoming` - Returns callers of a symbol
-- `lsp__call_hierarchy_outgoing` - Returns callees of a symbol
 - `lsp__formatting` - Returns whole-file formatting edits
-- `lsp__server_status` - Shows server connection status
+- `lsp__call_hierarchy` - Returns callers (incoming) or callees (outgoing) of a symbol
 
-Current phase-1 support is TypeScript/JavaScript first. The plugin architecture is generic, but only TypeScript/JavaScript has a built-in auto-spawn path right now.
+The plugin ships specs for 14 language servers (TypeScript/JavaScript, Python, Rust, Go, Lua, Shell, YAML, JSON, Dockerfile, TOML, CSS, HTML, Svelte, PHP). Servers start lazily: servers you configure explicitly start when a root marker matches, and the built-in ambient specs start on demand when a matching file is touched.
 
 If drone-agent spawns a language server itself, that server exits when drone-agent exits. If drone-agent connects to an externally managed server, it leaves that server running.
 
@@ -140,7 +137,7 @@ Disable auto-install globally or per-server:
 }
 ```
 
-If auto-install is disabled and the server isn't on `PATH`, the runtime degrades to `status: "error"` with a clear `lastError`, identical to the pre–auto-install behavior. The `lsp.server_status` tool reports `installSource: "path" | "cache"` and `installStatus: "unused" | "cached" | "downloaded" | "failed"` so you can see what happened.
+If auto-install is disabled and the server isn't on `PATH`, the runtime degrades to `status: "error"` with a clear `lastError`, identical to the pre–auto-install behavior. The server's resolution outcome (`installSource: "path" | "cache"` and `installStatus: "unused" | "cached" | "downloaded" | "failed"`) is recorded in the status log line so you can see what happened.
 
 Example project config:
 
@@ -196,7 +193,7 @@ The `mcp` plugin mounts capabilities from configured MCP servers directly into t
 Mounted tool naming:
 
 - MCP tools: `mcp__<serverId>__<toolName>`
-- MCP helpers: `mcp__<serverId>__list_resources`, `mcp__<serverId>__read_resource`, `mcp__<serverId>__list_prompts`, `mcp__<serverId>__get_prompt`
+- MCP helpers: `mcp__<serverId>__list` (lists resources, resource templates, or prompts) and `mcp__<serverId>__get` (reads a resource or fetches a prompt)
 - Global status: `mcp__server_status`
 
 MVP transport support:
