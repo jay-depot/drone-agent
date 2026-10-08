@@ -1,20 +1,14 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-// Mock CoordinatorClient at module level since CoordinatorSpawnBackend
-// creates its own instance internally
 const mockSpawnAgent = vi.fn();
 const mockSendSessionMessage = vi.fn();
 const mockTerminateSpawn = vi.fn();
 
-vi.mock('../src/coordinator-client.js', () => ({
-  CoordinatorClient: vi.fn().mockImplementation(function () {
-    return {
-      spawnAgent: mockSpawnAgent,
-      sendSessionMessage: mockSendSessionMessage,
-      terminateSpawn: mockTerminateSpawn,
-    };
-  }),
-}));
+const mockClient = {
+  spawnAgent: mockSpawnAgent,
+  sendSessionMessage: mockSendSessionMessage,
+  terminateSpawn: mockTerminateSpawn,
+} as unknown as import('../src/coordinator-client.js').CoordinatorClient;
 
 const { CoordinatorSpawnBackend } =
   await import('../src/coordinator-spawn-backend.js');
@@ -24,7 +18,7 @@ describe('CoordinatorSpawnBackend', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    backend = new CoordinatorSpawnBackend('http://localhost:8080', 'my-token');
+    backend = new CoordinatorSpawnBackend(mockClient);
   });
 
   describe('spawnSession', () => {

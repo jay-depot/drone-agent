@@ -84,11 +84,11 @@ describe('createSwarmConsoleSurface', () => {
     });
   });
 
-  it('requires the coordinator backend in local mode', async () => {
+  it('requires a configured coordinatorUrl when swarm is absent', async () => {
     const surface = makeSurface({ swarm: undefined });
     const result = await surface.handleMessage(msg('swarm.beacon.list'));
     expect(result.handled).toBe(true);
-    expect(result.response).toContain('requires the coordinator spawn backend');
+    expect(result.response).toContain('requires a configured coordinatorUrl');
   });
 
   it('hints at swarm.help for an unknown command', async () => {

@@ -104,15 +104,16 @@ export interface ControlApiConfig {
   token?: string;
 }
 
+/**
+ * Gateway configuration.
+ *
+ * The spawn backend is chosen per control surface and inferred: a surface that
+ * sets `controlSurfaces[].config.targetBeaconId` spawns via the coordinator on
+ * that beacon; any other spawning surface spawns locally.
+ */
 export interface GatewayConfig {
   coordinatorUrl: string;
   coordinatorToken?: string;
-  spawnBackend: SpawnBackendType;
-  /**
-   * Gateway-wide default beacon for coordinator-mode spawns. Required when
-   * `spawnBackend` is "coordinator"; inert (and warned about) in local mode.
-   */
-  targetBeaconId?: string;
   /**
    * Gateway-wide default idle timeout (ms) for spawning control surfaces.
    * A surface-level `config.lifecycle.idleTimeoutMs` overrides it; `0` disables.

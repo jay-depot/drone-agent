@@ -27,11 +27,9 @@ function makeMockProcess(pid: number, stdoutData: string[]): ChildProcess {
       cb();
     },
   });
-  const stderr = new Writable({
-    write(_chunk: Buffer, _enc: string, cb: () => void) {
-      cb();
-    },
-  });
+  // A readable stderr so the backend's readline drain can attach (it calls
+  // input.resume()). Tests push lines via `emitStderrLine`.
+  const stderr = new Readable({ read() {} });
   const proc = new EventEmitter() as ChildProcess;
   Object.assign(proc, {
     pid,
@@ -42,6 +40,10 @@ function makeMockProcess(pid: number, stdoutData: string[]): ChildProcess {
     killed: false,
   });
   return proc as ChildProcess;
+}
+
+function emitStderrLine(proc: ChildProcess, line: string): void {
+  (proc.stderr as Readable).push(line + '\n');
 }
 
 describe('LocalSpawnBackend', () => {
@@ -226,7 +228,24 @@ describe('LocalSpawnBackend', () => {
       const session = await backend.spawnSession('conv-1', 'coder');
       const response = await backend.sendMessage(session, 'Hi');
 
-      expect(response).toBe('');
+      // No turnComplete => the child died/closed stdout before replying.
+      expect(response).toContain('Error: agent exited before replying');
+    });
+
+    it('includes the child stderr tail in the early-exit error', async () => {
+      const mockProc = makeMockProcess(12345, []);
+      mockSpawn.mockReturnValue(mockProc);
+
+      const session = await backend.spawnSession('conv-1', 'coder');
+      emitStderrLine(mockProc, 'persona "ghost" not found');
+      emitStderrLine(mockProc, 'enable the "swarm" plugin');
+      await new Promise(resolve => setImmediate(resolve));
+
+      const response = await backend.sendMessage(session, 'Hi');
+
+      expect(response).toContain('Error: agent exited before replying');
+      expect(response).toContain('persona "ghost" not found');
+      expect(response).toContain('enable the "swarm" plugin');
     });
 
     it('handles error events from agent gracefully', async () => {

@@ -1,5 +1,4 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { GatewayConfig } from '../src/types.js';
 
 // Mock the config loader so we don't need filesystem access
 const mockLoadGatewayConfig = vi.fn();
@@ -58,7 +57,7 @@ vi.mock('../src/control-api/server.js', () => ({
   }),
 }));
 
-const { parseArgs, loadConfig, createSpawnBackend, main } =
+const { parseArgs, loadConfig, createSpawnBackends, main } =
   await import('../src/index.js');
 
 describe('parseArgs', () => {
@@ -113,84 +112,37 @@ describe('loadConfig', () => {
   it('loads and parses a valid config via folder loader', async () => {
     mockLoadGatewayConfig.mockResolvedValue({
       coordinatorUrl: 'http://localhost:8080',
-      spawnBackend: 'local',
       serviceAdapters: [],
     });
 
     const config = await loadConfig('/path/to/config.json');
     expect(config.coordinatorUrl).toBe('http://localhost:8080');
     expect(config.serviceAdapters).toEqual([]);
-    expect(config.spawnBackend).toBe('local');
-  });
-
-  it('applies default spawnBackend when not set', async () => {
-    mockLoadGatewayConfig.mockResolvedValue({
-      coordinatorUrl: 'http://localhost:8080',
-      serviceAdapters: [],
-    });
-
-    const config = await loadConfig('/path/to/config.json');
-    expect(config.spawnBackend).toBe('local');
-  });
-
-  it('preserves spawnBackend when set', async () => {
-    mockLoadGatewayConfig.mockResolvedValue({
-      coordinatorUrl: 'http://localhost:8080',
-      spawnBackend: 'coordinator',
-      serviceAdapters: [],
-    });
-
-    const config = await loadConfig('/path/to/config.json');
-    expect(config.spawnBackend).toBe('coordinator');
   });
 });
 
-describe('createSpawnBackend', () => {
+describe('createSpawnBackends', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('returns LocalSpawnBackend for local type', () => {
+  it('registers only the local backend when no coordinator client is given', () => {
     const config = {
-      coordinatorUrl: 'http://localhost:8080',
-      spawnBackend: 'local' as const,
+      coordinatorUrl: '',
       serviceAdapters: [],
     };
-    const backend = createSpawnBackend(config);
-    expect(backend.type).toBe('local');
+    const registry = createSpawnBackends(config);
+    expect(registry.types()).toEqual(['local']);
   });
 
-  it('constructs CoordinatorSpawnBackend with url and token only', async () => {
+  it('registers both backends when a coordinator client is given', () => {
     const config = {
       coordinatorUrl: 'http://localhost:8080',
-      coordinatorToken: 'secret-token',
-      spawnBackend: 'coordinator' as const,
-      targetBeaconId: 'beacon-1',
       serviceAdapters: [],
     };
-    const backend = createSpawnBackend(config);
-    expect(backend.type).toBe('coordinator');
-    const { CoordinatorSpawnBackend } =
-      await import('../src/coordinator-spawn-backend.js');
-    const coordinatorCtor = CoordinatorSpawnBackend as unknown as ReturnType<
-      typeof vi.fn
-    >;
-    expect(coordinatorCtor).toHaveBeenCalledWith(
-      'http://localhost:8080',
-      'secret-token'
-    );
-  });
-
-  it('exits with error for unknown type', () => {
-    const config = {
-      coordinatorUrl: 'http://localhost:8080',
-      spawnBackend: 'unknown',
-      serviceAdapters: [],
-      // This ugly cast is necessary because 'unknown' is not a valid spawnBackend type, and
-      // we're testing that this thing errors at runtime when the provided value is invalid.
-    } as unknown as GatewayConfig;
-    createSpawnBackend(config);
-    expect(mockExit).toHaveBeenCalledWith(1);
+    const client = { spawnAgent: vi.fn() } as never;
+    const registry = createSpawnBackends(config, client);
+    expect(registry.types()).toEqual(['coordinator', 'local']);
   });
 });
 
@@ -202,7 +154,6 @@ describe('main', () => {
     process.argv = ['node', 'drone-gateway'];
     mockLoadGatewayConfig.mockResolvedValue({
       coordinatorUrl: 'http://localhost:8080',
-      spawnBackend: 'local' as const,
       serviceAdapters: [],
     });
   });
@@ -224,7 +175,6 @@ describe('main', () => {
     mockEngineStart.mockResolvedValue(undefined);
     mockLoadGatewayConfig.mockResolvedValue({
       coordinatorUrl: 'http://localhost:8080',
-      spawnBackend: 'local' as const,
       serviceAdapters: [],
       controlApi: { enabled: true, host: '127.0.0.1', port: 8090 },
     });

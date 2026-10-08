@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { logger } from './logger.js';
-import { CoordinatorClient } from './coordinator-client.js';
+import type { CoordinatorClient } from './coordinator-client.js';
 import type { SpawnBackend } from './spawn-backend.js';
 import type { SpawnSession, SpawnSessionOptions } from './types.js';
 
@@ -19,11 +19,8 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
   private sessions: Map<string, SpawnSession> = new Map();
   private pending: Map<string, Promise<SpawnSession>> = new Map();
 
-  constructor(coordinatorUrl: string, coordinatorToken: string | undefined) {
-    this.coordinatorClient = new CoordinatorClient(
-      coordinatorUrl,
-      coordinatorToken
-    );
+  constructor(coordinatorClient: CoordinatorClient) {
+    this.coordinatorClient = coordinatorClient;
   }
 
   async spawnSession(

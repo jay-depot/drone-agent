@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createDefaultAgentConfig,
   type DronePersonaProvider,
+  type DronePlugin,
 } from 'drone-core';
 import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
 import { personaPlugin } from '../src/plugins/persona/index.js';
@@ -39,6 +40,16 @@ function makeMockProvider(
     reloadPersonas: async () => {},
   };
 }
+
+const swarmStub: DronePlugin = {
+  metadata: {
+    id: 'swarm',
+    name: 'Swarm',
+    version: '0.0.0-test',
+    description: 'stub',
+  },
+  register: async () => {},
+};
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -206,7 +217,7 @@ describe('--persona CLI flag', () => {
     expect(active!.id).toBe('coder');
   });
 
-  it('logs a warning when --persona id is not found', async () => {
+  it('throws when an explicit --persona id is not found', async () => {
     const config = createDefaultAgentConfig();
     config.enabledPlugins = ['persona'];
     const engine = createDronePluginEngine({
@@ -229,10 +240,97 @@ describe('--persona CLI flag', () => {
     );
     await personaCap!.reloadPersonas();
 
-    // Run onSessionStart — should not crash, just log a warning
-    await engine.runHooks('onSessionStart');
+    // An explicit --persona that will not resolve aborts startup.
+    await expect(engine.runHooks('onSessionStart')).rejects.toThrow(
+      /persona "nonexistent" not found/
+    );
 
     const active = personaCap!.getActivePersona();
     expect(active).toBeNull();
+  });
+
+  it('names the swarm-plugin fix when the explicit persona misses and swarm is disabled', async () => {
+    const config = createDefaultAgentConfig();
+    config.enabledPlugins = ['persona'];
+    const engine = createDronePluginEngine({
+      plugins: [personaPlugin],
+      config,
+      runtimeOptions: { persona: 'nonexistent' },
+    });
+    await engine.initialize();
+
+    await expect(engine.runHooks('onSessionStart')).rejects.toThrow(
+      /WITHOUT swarm connectivity/
+    );
+  });
+
+  it('warns (does not throw) for a missing DRONE_PERSONA env persona', async () => {
+    const config = createDefaultAgentConfig();
+    config.enabledPlugins = ['persona'];
+    const previous = process.env.DRONE_PERSONA;
+    process.env.DRONE_PERSONA = 'nonexistent';
+    try {
+      const engine = createDronePluginEngine({
+        plugins: [personaPlugin],
+        config,
+        // No runtimeOptions.persona — the env fallback applies.
+      });
+      await engine.initialize();
+
+      const personaCap = engine.getCapability<{
+        registerProvider: (p: DronePersonaProvider) => void;
+        reloadPersonas: () => Promise<void>;
+        getActivePersona: () => { id: string; name: string } | null;
+      }>('persona');
+      personaCap!.registerProvider(
+        makeMockProvider([{ id: 'coder', name: 'Coder' }])
+      );
+      await personaCap!.reloadPersonas();
+
+      await expect(engine.runHooks('onSessionStart')).resolves.toBeUndefined();
+      expect(personaCap!.getActivePersona()).toBeNull();
+    } finally {
+      if (previous === undefined) delete process.env.DRONE_PERSONA;
+      else process.env.DRONE_PERSONA = previous;
+    }
+  });
+
+  it('warns (does not throw) for a missing config.activePersona', async () => {
+    const config = createDefaultAgentConfig();
+    config.enabledPlugins = ['persona'];
+    config.activePersona = 'nonexistent';
+    const engine = createDronePluginEngine({
+      plugins: [personaPlugin],
+      config,
+    });
+    await engine.initialize();
+
+    const personaCap = engine.getCapability<{
+      registerProvider: (p: DronePersonaProvider) => void;
+      reloadPersonas: () => Promise<void>;
+      getActivePersona: () => { id: string; name: string } | null;
+    }>('persona');
+    personaCap!.registerProvider(
+      makeMockProvider([{ id: 'coder', name: 'Coder' }])
+    );
+    await personaCap!.reloadPersonas();
+
+    await expect(engine.runHooks('onSessionStart')).resolves.toBeUndefined();
+    expect(personaCap!.getActivePersona()).toBeNull();
+  });
+
+  it('uses the swarm-present branch when swarm is enabled', async () => {
+    const config = createDefaultAgentConfig();
+    config.enabledPlugins = ['persona', 'swarm'];
+    const engine = createDronePluginEngine({
+      plugins: [personaPlugin, swarmStub],
+      config,
+      runtimeOptions: { persona: 'nonexistent' },
+    });
+    await engine.initialize();
+
+    await expect(engine.runHooks('onSessionStart')).rejects.toThrow(
+      /Swarm personas are loaded/
+    );
   });
 });

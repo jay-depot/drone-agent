@@ -1,9 +1,16 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
+import { createInterface as createLineInterface } from 'node:readline';
 import { logger } from './logger.js';
 import { resolveDroneExecutable } from 'drone-core';
 import type { SendMessageOptions, SpawnBackend } from './spawn-backend.js';
 import type { SpawnSession, SpawnSessionOptions } from './types.js';
+
+/** Max stderr lines retained per child for early-exit diagnostics. */
+const MAX_STDERR_LINES = 20;
+
+/** Max stderr lines included in an early-exit error string. */
+const STDERR_TAIL_LINES = 10;
 
 /**
  * LocalSpawnBackend spawns `drone-agent` processes on the host.
@@ -91,9 +98,26 @@ export class LocalSpawnBackend implements SpawnBackend {
     const managed: ManagedAgentSession = {
       session,
       process: childProcess,
+      stderrTail: [],
     };
 
     this.sessions.set(conversationId, managed);
+
+    // Drain the child's stderr so agent logs are visible in the gateway log
+    // (and so the pipe cannot fill and stall the child). The last lines are
+    // retained for an early-exit diagnostic.
+    if (childProcess.stderr) {
+      const stderrRl = createLineInterface({ input: childProcess.stderr });
+      stderrRl.on('line', line => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        logger.info({ conversationId }, `[agent] ${trimmed}`);
+        managed.stderrTail.push(trimmed);
+        if (managed.stderrTail.length > MAX_STDERR_LINES) {
+          managed.stderrTail.shift();
+        }
+      });
+    }
 
     // Handle process exit
     childProcess.on('exit', (code, signal) => {
@@ -145,6 +169,7 @@ export class LocalSpawnBackend implements SpawnBackend {
     // Read NDJSON events from stdout until we get turnComplete
     const rl = createInterface({ input: childProcess.stdout });
     let lastAssistantMessage = '';
+    let sawTurnComplete = false;
 
     try {
       for await (const line of rl) {
@@ -160,6 +185,7 @@ export class LocalSpawnBackend implements SpawnBackend {
               break;
             case 'turnComplete':
               // Turn is done, return the last assistant message
+              sawTurnComplete = true;
               return lastAssistantMessage;
             case 'error':
               logger.error(`Agent error: ${event.message}`);
@@ -174,7 +200,18 @@ export class LocalSpawnBackend implements SpawnBackend {
       rl.close();
     }
 
-    // If we exhaust stdout without a turnComplete, return what we have
+    if (!sawTurnComplete) {
+      // The child closed stdout (or died) before completing the turn. Surface
+      // the last stderr lines so the operator sees WHY, instead of posting an
+      // empty reply.
+      const tail = managed.stderrTail
+        .slice(-STDERR_TAIL_LINES)
+        .join('\n')
+        .trim()
+        .slice(-800);
+      return `Error: agent exited before replying${tail ? `: ${tail}` : ''}`;
+    }
+
     return lastAssistantMessage;
   }
 
@@ -207,4 +244,6 @@ export class LocalSpawnBackend implements SpawnBackend {
 interface ManagedAgentSession {
   session: SpawnSession;
   process: ChildProcess;
+  /** Ring buffer of the child's most recent stderr lines (newest last). */
+  stderrTail: string[];
 }

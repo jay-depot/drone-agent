@@ -8,9 +8,14 @@ import type {
   ControlSurfaceSpec,
 } from './types.js';
 import type { SpawnBackend } from './spawn-backend.js';
+import { SpawnBackendRegistry } from './spawn-backend-registry.js';
 import type { SwarmApi } from './console/swarm-api.js';
 import { SurfaceRegistry } from './surfaces/registry.js';
 import { registerBuiltInSurfaces } from './surfaces/builtins.js';
+import {
+  SPAWNING_SURFACES,
+  resolveSurfaceSpawnMode,
+} from './surfaces/requirements.js';
 import type { SurfaceContext } from './surfaces/types.js';
 import { MessageBatcher } from './batcher.js';
 import {
@@ -88,17 +93,17 @@ export class GatewayEngine {
   private adapters: Map<string, DroneServiceAdapter> = new Map();
   private controlSurfaces: Map<string, AdapterSurfaces> = new Map();
   private config: GatewayConfig;
-  private spawnBackend: SpawnBackend;
+  private backends: SpawnBackendRegistry;
   private swarm: SwarmApi | undefined;
   private surfaceRegistry = new SurfaceRegistry();
 
   constructor(
     config: GatewayConfig,
-    spawnBackend: SpawnBackend,
+    backends: SpawnBackendRegistry,
     swarm?: SwarmApi
   ) {
     this.config = config;
-    this.spawnBackend = spawnBackend;
+    this.backends = backends;
     this.swarm = swarm;
     registerBuiltInSurfaces(this.surfaceRegistry);
   }
@@ -106,7 +111,7 @@ export class GatewayEngine {
   async start(): Promise<void> {
     logger.info(
       `Starting gateway with ${this.config.serviceAdapters.length} adapter(s) ` +
-        `(spawn backend: ${this.spawnBackend.type})`
+        `(spawn backends: ${this.backends.types().join(', ') || 'none'})`
     );
 
     for (const adapterConfig of this.config.serviceAdapters) {
@@ -119,6 +124,12 @@ export class GatewayEngine {
 
       const byConv: AdapterSurfaces = new Map();
       for (const [convId, conv] of adapterConfig.conversations) {
+        logger.info(
+          { adapterId: adapterConfig.id, conversationId: convId },
+          `Conversation "${convId}" surfaces: ${conv.surfaces
+            .map(s => this.describeSurface(s))
+            .join(', ')}`
+        );
         const surfaces = conv.surfaces.map(spec =>
           this.createControlSurface(spec, convId)
         );
@@ -351,22 +362,47 @@ export class GatewayEngine {
   }
 
   /**
-   * The beacon a conversation's spawns target: the surface override when
-   * present, otherwise the gateway-wide default. Always undefined in local
-   * mode, where there is no beacon.
+   * The beacon a conversation's spawns target, taken from the surface's
+   * `config.targetBeaconId`. Present means coordinator mode; absent means
+   * local mode (no beacon).
    */
   private resolveTargetBeaconId(spec: ControlSurfaceSpec): string | undefined {
-    if (this.spawnBackend.type !== 'coordinator') return undefined;
     const override = spec.config?.targetBeaconId;
     if (typeof override === 'string' && override.trim() !== '') return override;
-    return this.config.targetBeaconId;
+    return undefined;
+  }
+
+  /** One-line description of a surface's resolved spawn mode for startup logs. */
+  private describeSurface(spec: ControlSurfaceSpec): string {
+    if (!SPAWNING_SURFACES.has(spec.type)) return spec.type;
+    const mode = resolveSurfaceSpawnMode(spec);
+    const beacon = this.resolveTargetBeaconId(spec);
+    return mode === 'coordinator'
+      ? `${spec.type}(coordinator:${beacon})`
+      : `${spec.type}(local)`;
+  }
+
+  /**
+   * The spawn backend a surface uses, inferred from its mode. Throws when the
+   * required backend is not registered (the loader guarantees it normally is).
+   */
+  private resolveSpawnBackend(spec: ControlSurfaceSpec): SpawnBackend {
+    const mode = resolveSurfaceSpawnMode(spec);
+    const backend = this.backends.get(mode);
+    if (!backend) {
+      throw new Error(
+        `No "${mode}" spawn backend is registered, but a "${spec.type}" ` +
+          `surface requires it.`
+      );
+    }
+    return backend;
   }
 
   private surfaceContext(spec: ControlSurfaceSpec): SurfaceContext {
     const cfg = spec.config ?? {};
     const lifecycle = cfg.lifecycle as { idleTimeoutMs?: number } | undefined;
     return {
-      spawnBackend: this.spawnBackend,
+      spawnBackend: this.resolveSpawnBackend(spec),
       swarm: this.swarm,
       targetBeaconId: this.resolveTargetBeaconId(spec),
       workingDir: cfg.workingDir as string | undefined,

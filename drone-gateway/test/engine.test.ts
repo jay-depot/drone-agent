@@ -6,6 +6,7 @@ import type {
   ControlSurfaceSpec,
 } from '../src/types.js';
 import type { SpawnBackend } from '../src/spawn-backend.js';
+import { SpawnBackendRegistry } from '../src/spawn-backend-registry.js';
 import { ROOM_INSTRUCTION } from '../src/chat-format.js';
 import {
   UnknownAdapterError,
@@ -39,6 +40,22 @@ vi.mock('../src/adapters/matrix.js', () => ({
 
 const { GatewayEngine } = await import('../src/engine.js');
 
+/**
+ * Build a GatewayEngine with a registry holding the given backend(s). The
+ * backend's own `type` selects the registry key, so a test can register one
+ * local or coordinator backend (or both).
+ */
+function makeEngine(
+  config: GatewayConfig,
+  ...backends: SpawnBackend[]
+): InstanceType<typeof GatewayEngine> {
+  const registry = new SpawnBackendRegistry();
+  for (const backend of backends) {
+    if (!registry.get(backend.type)) registry.register(backend.type, backend);
+  }
+  return new GatewayEngine(config, registry);
+}
+
 function makeMockSpawnBackend(): SpawnBackend {
   return {
     type: 'local' as const,
@@ -69,7 +86,6 @@ function makeMinimalConfig(
 ): GatewayConfig {
   return {
     coordinatorUrl: 'http://localhost:8080',
-    spawnBackend: 'local',
     serviceAdapters: [],
     ...overrides,
   };
@@ -115,7 +131,7 @@ async function startAndDrive(
   }
 ): Promise<SentMessage[]> {
   const sent: SentMessage[] = [];
-  const engine = new GatewayEngine(config, spawnBackend);
+  const engine = makeEngine(config, spawnBackend);
   await engine.start();
   const matrix = (await import('../src/adapters/matrix.js'))
     .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
@@ -150,14 +166,14 @@ describe('GatewayEngine', () => {
 
   describe('constructor', () => {
     it('creates an engine instance', () => {
-      const engine = new GatewayEngine(makeMinimalConfig(), mockSpawnBackend);
+      const engine = makeEngine(makeMinimalConfig(), mockSpawnBackend);
       expect(engine).toBeDefined();
     });
   });
 
   describe('start', () => {
     it('starts successfully with no adapters', async () => {
-      const engine = new GatewayEngine(makeMinimalConfig(), mockSpawnBackend);
+      const engine = makeEngine(makeMinimalConfig(), mockSpawnBackend);
       await expect(engine.start()).resolves.toBeUndefined();
     });
 
@@ -172,7 +188,7 @@ describe('GatewayEngine', () => {
           }),
         ],
       });
-      const engine = new GatewayEngine(config, mockSpawnBackend);
+      const engine = makeEngine(config, mockSpawnBackend);
       await expect(engine.start()).resolves.toBeUndefined();
     });
 
@@ -187,7 +203,7 @@ describe('GatewayEngine', () => {
           },
         ],
       });
-      const engine = new GatewayEngine(config, mockSpawnBackend);
+      const engine = makeEngine(config, mockSpawnBackend);
 
       await expect(engine.start()).rejects.toThrow(
         'No adapter implementation available for type "slack"'
@@ -206,7 +222,7 @@ describe('GatewayEngine', () => {
           }),
         ],
       });
-      const engine = new GatewayEngine(config, mockSpawnBackend);
+      const engine = makeEngine(config, mockSpawnBackend);
       await engine.start();
       expect(true).toBe(true);
     });
@@ -222,7 +238,7 @@ describe('GatewayEngine', () => {
           }),
         ],
       });
-      const engine = new GatewayEngine(config, mockSpawnBackend);
+      const engine = makeEngine(config, mockSpawnBackend);
 
       await expect(engine.start()).rejects.toThrow(
         'No control surface implementation available for type "mystery-surface". ' +
@@ -233,13 +249,13 @@ describe('GatewayEngine', () => {
 
   describe('stop', () => {
     it('stops cleanly after starting with no adapters', async () => {
-      const engine = new GatewayEngine(makeMinimalConfig(), mockSpawnBackend);
+      const engine = makeEngine(makeMinimalConfig(), mockSpawnBackend);
       await engine.start();
       await expect(engine.stop()).resolves.toBeUndefined();
     });
 
     it('stops cleanly without starting first', async () => {
-      const engine = new GatewayEngine(makeMinimalConfig(), mockSpawnBackend);
+      const engine = makeEngine(makeMinimalConfig(), mockSpawnBackend);
       await expect(engine.stop()).resolves.toBeUndefined();
     });
   });
@@ -260,7 +276,7 @@ describe('GatewayEngine', () => {
         conversationId: 'dm:@me:server',
         text: 'swarm.beacon.list',
       });
-      expect(sent[0].text).toContain('requires the coordinator spawn backend');
+      expect(sent[0].text).toContain('requires a configured coordinatorUrl');
     });
   });
 
@@ -308,7 +324,7 @@ describe('GatewayEngine', () => {
           senderId: '@intruder:server',
         }
       );
-      expect(sent[0].text).toContain('requires the coordinator spawn backend');
+      expect(sent[0].text).toContain('requires a configured coordinatorUrl');
     });
 
     it('allows every sender when allowedSenders is unset', async () => {
@@ -335,49 +351,11 @@ describe('GatewayEngine', () => {
     });
   });
 
-  describe('spawn target beacon resolution', () => {
-    function beaconConfig(
-      spawnBackend: 'local' | 'coordinator',
-      overrides: Partial<GatewayConfig> = {}
+  describe('spawn mode inference and beacon resolution', () => {
+    function personaConfig(
+      surfaceConfig: Record<string, unknown> | undefined
     ): GatewayConfig {
       return makeMinimalConfig({
-        spawnBackend,
-        targetBeaconId: 'beacon-default',
-        serviceAdapters: [
-          makeAdapter({
-            id: 'matrix-1',
-            conversations: new Map([
-              [
-                'dm:@me:server',
-                conv([makeConvSpec('persona-assignment', { personaId: 'me' })]),
-              ],
-            ]),
-          }),
-        ],
-        ...overrides,
-      });
-    }
-
-    function spawnedBeacon(backend: SpawnBackend): unknown {
-      const spy = backend.spawnSession as unknown as ReturnType<typeof vi.fn>;
-      return spy.mock.calls[0][2];
-    }
-
-    it('uses the gateway default when the conversation sets no override', async () => {
-      const backend = makeRespondingSpawnBackend('coordinator');
-      await startAndDrive(beaconConfig('coordinator'), backend, {
-        conversationId: 'dm:@me:server',
-        text: 'hello',
-      });
-      expect(spawnedBeacon(backend)).toEqual({
-        targetBeaconId: 'beacon-default',
-        workingDir: undefined,
-      });
-    });
-
-    it('prefers the per-conversation override', async () => {
-      const backend = makeRespondingSpawnBackend('coordinator');
-      const config = beaconConfig('coordinator', {
         serviceAdapters: [
           makeAdapter({
             id: 'matrix-1',
@@ -387,7 +365,7 @@ describe('GatewayEngine', () => {
                 conv([
                   makeConvSpec('persona-assignment', {
                     personaId: 'me',
-                    config: { targetBeaconId: 'beacon-override' },
+                    ...(surfaceConfig ? { config: surfaceConfig } : {}),
                   }),
                 ]),
               ],
@@ -395,23 +373,36 @@ describe('GatewayEngine', () => {
           }),
         ],
       });
-      await startAndDrive(config, backend, {
-        conversationId: 'dm:@me:server',
-        text: 'hello',
-      });
-      expect(spawnedBeacon(backend)).toEqual({
+    }
+
+    function spawnedOptions(backend: SpawnBackend): unknown {
+      const spy = backend.spawnSession as unknown as ReturnType<typeof vi.fn>;
+      return spy.mock.calls[0][2];
+    }
+
+    it('infers coordinator mode and targets the named beacon', async () => {
+      const backend = makeRespondingSpawnBackend('coordinator');
+      await startAndDrive(
+        personaConfig({ targetBeaconId: 'beacon-override' }),
+        backend,
+        {
+          conversationId: 'dm:@me:server',
+          text: 'hello',
+        }
+      );
+      expect(spawnedOptions(backend)).toEqual({
         targetBeaconId: 'beacon-override',
         workingDir: undefined,
       });
     });
 
-    it('resolves to undefined in local mode', async () => {
+    it('infers local mode when no beacon is named', async () => {
       const backend = makeRespondingSpawnBackend('local');
-      await startAndDrive(beaconConfig('local'), backend, {
+      await startAndDrive(personaConfig(undefined), backend, {
         conversationId: 'dm:@me:server',
         text: 'hello',
       });
-      expect(spawnedBeacon(backend)).toEqual({
+      expect(spawnedOptions(backend)).toEqual({
         targetBeaconId: undefined,
         workingDir: undefined,
       });
@@ -419,32 +410,29 @@ describe('GatewayEngine', () => {
 
     it('forwards the surface workingDir to spawnSession', async () => {
       const backend = makeRespondingSpawnBackend('local');
-      const config = beaconConfig('local', {
-        serviceAdapters: [
-          makeAdapter({
-            id: 'matrix-1',
-            conversations: new Map([
-              [
-                'dm:@me:server',
-                conv([
-                  makeConvSpec('persona-assignment', {
-                    personaId: 'me',
-                    config: { workingDir: '/srv/bots/me' },
-                  }),
-                ]),
-              ],
-            ]),
-          }),
-        ],
-      });
-      await startAndDrive(config, backend, {
-        conversationId: 'dm:@me:server',
-        text: 'hello',
-      });
-      expect(spawnedBeacon(backend)).toEqual({
+      await startAndDrive(
+        personaConfig({ workingDir: '/srv/bots/me' }),
+        backend,
+        {
+          conversationId: 'dm:@me:server',
+          text: 'hello',
+        }
+      );
+      expect(spawnedOptions(backend)).toEqual({
         targetBeaconId: undefined,
         workingDir: '/srv/bots/me',
       });
+    });
+
+    it('throws when a coordinator-mode surface has no registered backend', async () => {
+      const backend = makeRespondingSpawnBackend('local');
+      const engine = makeEngine(
+        personaConfig({ targetBeaconId: 'beacon-override' }),
+        backend
+      );
+      await expect(engine.start()).rejects.toThrow(
+        'No "coordinator" spawn backend'
+      );
     });
   });
 
@@ -475,7 +463,7 @@ describe('GatewayEngine', () => {
           }),
         ],
       });
-      const engine = new GatewayEngine(config, backend);
+      const engine = makeEngine(config, backend);
       await engine.start();
       const matrix = (await import('../src/adapters/matrix.js'))
         .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
@@ -532,7 +520,7 @@ describe('GatewayEngine', () => {
           }),
         ],
       });
-      const engine = new GatewayEngine(config, backend);
+      const engine = makeEngine(config, backend);
       await engine.start();
       const matrix = (await import('../src/adapters/matrix.js'))
         .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
@@ -590,7 +578,7 @@ describe('GatewayEngine', () => {
           }),
         ],
       });
-      const engine = new GatewayEngine(config, backend);
+      const engine = makeEngine(config, backend);
       await engine.start();
       const matrix = (await import('../src/adapters/matrix.js'))
         .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
@@ -643,7 +631,7 @@ describe('GatewayEngine', () => {
           }),
         ],
       });
-      const engine = new GatewayEngine(config, backend);
+      const engine = makeEngine(config, backend);
       await engine.start();
       const matrix = (await import('../src/adapters/matrix.js'))
         .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
@@ -693,7 +681,7 @@ describe('GatewayEngine', () => {
           }),
         ],
       });
-      const engine = new GatewayEngine(config, backend);
+      const engine = makeEngine(config, backend);
       await engine.start();
       const matrix = (await import('../src/adapters/matrix.js'))
         .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
@@ -733,7 +721,7 @@ describe('GatewayEngine', () => {
           }),
         ],
       });
-      const engine = new GatewayEngine(config, backend);
+      const engine = makeEngine(config, backend);
       await engine.start();
       const matrix = (await import('../src/adapters/matrix.js'))
         .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
@@ -778,7 +766,7 @@ describe('GatewayEngine', () => {
       sent: SentMessage[];
     }> {
       const sent: SentMessage[] = [];
-      const engine = new GatewayEngine(injectionConfig(), mockSpawnBackend);
+      const engine = makeEngine(injectionConfig(), mockSpawnBackend);
       await engine.start();
       const matrix = (await import('../src/adapters/matrix.js'))
         .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;

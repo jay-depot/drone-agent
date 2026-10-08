@@ -265,7 +265,6 @@ export function parseCliArgs(argv: string[]): CliInvocation {
   }
 
   options.subagentId ??= process.env.DRONE_SUBAGENT_ID;
-  options.persona ??= process.env.DRONE_PERSONA;
   options.sessionId ??= process.env.DRONE_SESSION_ID;
 
   return { kind: 'default', options };

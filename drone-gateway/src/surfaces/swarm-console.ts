@@ -21,8 +21,7 @@ export const createSwarmConsoleSurface: SurfaceFactory = (
 
       if (!ctx.swarm) {
         return {
-          response:
-            'Swarm console requires the coordinator spawn backend (set spawnBackend: "coordinator").',
+          response: 'Swarm console requires a configured coordinatorUrl.',
           handled: true,
         };
       }

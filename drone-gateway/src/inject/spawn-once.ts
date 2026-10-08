@@ -4,6 +4,9 @@ import { resolveDroneExecutable } from 'drone-core';
 
 const KILL_GRACE_MS = 5_000;
 
+/** Max stderr lines retained for a failure diagnostic. */
+const MAX_STDERR_LINES = 20;
+
 export interface SpawnOnceOptions {
   task: string;
   personaId?: string;
@@ -33,7 +36,8 @@ export class SpawnOnceFailureError extends Error {
  * Uses `drone-agent --once --output-json` (runJsonMode): the kickoff event is
  * written to the child's stdin, which is then closed (runJsonMode reads stdin
  * until EOF); NDJSON events stream to stdout. The final chat message is the
- * LAST `assistantMessage` emitted. Agent logs go to stderr and are ignored.
+ * LAST `assistantMessage` emitted. Agent stderr is buffered for failure
+ * diagnostics.
  */
 export async function spawnOnce(opts: SpawnOnceOptions): Promise<string> {
   const executable = await resolveDroneExecutable({
@@ -58,6 +62,17 @@ export async function spawnOnce(opts: SpawnOnceOptions): Promise<string> {
 
   let finalMessage = '';
   let lastError: string | undefined;
+  const stderrTail: string[] = [];
+
+  if (child.stderr) {
+    const stderrRl = createInterface({ input: child.stderr });
+    stderrRl.on('line', line => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      stderrTail.push(trimmed);
+      if (stderrTail.length > MAX_STDERR_LINES) stderrTail.shift();
+    });
+  }
 
   const rl = createInterface({ input: child.stdout });
   rl.on('line', line => {
@@ -81,7 +96,6 @@ export async function spawnOnce(opts: SpawnOnceOptions): Promise<string> {
       // Ignore non-JSON lines (stray logs).
     }
   });
-  child.stderr.resume();
 
   let timedOut = false;
   const timer = setTimeout(() => {
@@ -103,8 +117,10 @@ export async function spawnOnce(opts: SpawnOnceOptions): Promise<string> {
     );
   }
   if (exitCode !== 0) {
+    const tail = stderrTail.join('\n').trim().slice(-800);
     throw new SpawnOnceFailureError(
-      lastError ?? `Agent exited with code ${exitCode}`
+      lastError ??
+        `Agent exited with code ${exitCode}${tail ? `: ${tail}` : ''}`
     );
   }
   return finalMessage;

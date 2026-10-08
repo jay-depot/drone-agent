@@ -37,15 +37,15 @@ Each inbound turn is tagged with the speaker's name (see **Chat Tag**). In a mul
 _Avoid_: Persona router, persona mapper, persona binding
 
 **Swarm Console**:
-A control surface that exposes coordinator commands as chat-accessible dot-notation commands of the form `swarm.<namespace>.<command> [args] [--flags]`. It parses the line itself and calls coordinator REST endpoints directly (no LLM, no agent), and requires the `coordinator` spawn backend. v1 commands: `swarm.help`, `swarm.broadcast`, `swarm.persona.{list,create,update,delete}`, `swarm.skill.{list,create,update,delete}`, `swarm.session.{list,get}`, `swarm.beacon.{list,status,spawn}`, `swarm.agent.{status,terminate,inject,persona}`. A command that needs a coordinator endpoint that does not yet exist (`swarm.agent.focus`, `swarm.agent.interrupt`, `swarm.beacon.policy`, `swarm.session.search`, `swarm.session.delete`) is not in the grammar.
+A control surface that exposes coordinator commands as chat-accessible dot-notation commands of the form `swarm.<namespace>.<command> [args] [--flags]`. It parses the line itself and calls coordinator REST endpoints directly (no LLM, no agent), and requires a configured `coordinatorUrl`. v1 commands: `swarm.help`, `swarm.broadcast`, `swarm.persona.{list,create,update,delete}`, `swarm.skill.{list,create,update,delete}`, `swarm.session.{list,get}`, `swarm.beacon.{list,status,spawn}`, `swarm.agent.{status,terminate,inject,persona}`. A command that needs a coordinator endpoint that does not yet exist (`swarm.agent.focus`, `swarm.agent.interrupt`, `swarm.beacon.policy`, `swarm.session.search`, `swarm.session.delete`) is not in the grammar.
 _Avoid_: Admin console, swarm shell, command surface
 
 **Surface Registry**:
-The engine's lookup table from a control surface `type` to the factory that builds per-conversation surface instances. Factories receive `(spec, conversationId, ctx)` where `ctx` is a `SurfaceContext` (`spawnBackend` + optional `swarm` API + engine-resolved `targetBeaconId`, `workingDir`, `idleTimeoutMs`, `debounceMs`). Replaced the earlier hardcoded `switch` in the engine.
+The engine's lookup table from a control surface `type` to the factory that builds per-conversation surface instances. Factories receive `(spec, conversationId, ctx)` where `ctx` is a `SurfaceContext` (`spawnBackend` + optional `swarm` API + engine-resolved `targetBeaconId`, `workingDir`, `idleTimeoutMs`, `debounceMs`). Replaced the earlier hardcoded `switch` in the engine. The engine also holds a **Spawn Backend Registry** — the same register/get/types shape, keyed by `SpawnBackendType`, from which each surface's backend is resolved.
 _Avoid_: Surface table, factory map
 
 **Spawn Target Beacon**:
-The beacon a conversation's agents spawn on. The engine resolves it per conversation as `controlSurfaces[].config.targetBeaconId ?? config.targetBeaconId` (the per-conversation override wins over the gateway-wide default) and injects the resolved value into that conversation's `SurfaceContext`. It is `undefined` in local spawn-backend mode, where there is no beacon. The gateway-wide default is required when `spawnBackend` is `"coordinator"` and merely warned about when it is `"local"`. `CoordinatorSpawnBackend` holds no ambient beacon: it records the beacon on the session it returns, and termination targets that recorded beacon.
+The beacon a conversation's agents spawn on, taken per surface as `controlSurfaces[].config.targetBeaconId` and injected into that conversation's `SurfaceContext`. **Its presence selects the spawn mode**: present ⇒ coordinator mode (spawn on that beacon); absent ⇒ local mode (no beacon). There is **no** gateway-wide beacon default, so a coordinator surface always names its beacon inline. Only a **spawning** surface may carry it — a `targetBeaconId` on any other surface is warned about and dropped, and an invalid one (not a non-empty string) on a spawning surface is a load error. `CoordinatorSpawnBackend` holds no ambient beacon: it records the beacon on the session it returns, and termination targets that recorded beacon.
 _Avoid_: Spawn host, target host, agent location
 
 **Working Directory**:
@@ -121,12 +121,10 @@ _Avoid_: poster, message sender
 ```
 ~/.drone-gateway/
   config.json                         # Gateway-level settings
-    coordinatorUrl: string            # Required for coordinator mode; optional for local
+    coordinatorUrl: string            # Optional; required iff a loaded surface needs
+                                      # the coordinator (a coordinator-mode spawner
+                                      # or a swarm-console surface)
     coordinatorToken?: string
-    spawnBackend: "local"|"coordinator"
-    targetBeaconId?: string           # Gateway-wide default spawn beacon;
-                                      # required when spawnBackend is "coordinator";
-                                      # inert (and warned) in local mode
     idleTimeoutMs?: number            # Gateway-wide default idle timeout (ms)
                                       # for spawning surfaces; 0 disables.
                                       # Overridden per-surface (see below).
@@ -166,7 +164,10 @@ _Avoid_: poster, message sender
           controlSurfaces: [
             { type: "persona-assignment", personaId: "...",
               config: {
-                targetBeaconId: "other-beacon",  # optional beacon override
+                targetBeaconId: "other-beacon",  # optional; ITS PRESENCE SELECTS
+                                                  # coordinator mode. Absent = local
+                                                  # mode. Only a spawning surface
+                                                  # may set it.
                 workingDir: "/srv/bots/me",       # optional; local: any path,
                                                   # coordinator: must be a
                                                   # beacon spawnRoot. Absent =

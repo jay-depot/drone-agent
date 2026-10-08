@@ -74,7 +74,7 @@ describe('validateConversationId', () => {
   });
 });
 
-describe('loadGatewayConfig coordinatorUrl validation', () => {
+describe('loadGatewayConfig spawn-backend config validation', () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -91,115 +91,146 @@ describe('loadGatewayConfig coordinatorUrl validation', () => {
     return configPath;
   }
 
-  it('throws when coordinatorUrl is missing and spawnBackend is coordinator', async () => {
-    const configPath = await writeConfig({
-      spawnBackend: 'coordinator',
-    });
+  it('throws when the removed spawnBackend key is present', async () => {
+    const configPath = await writeConfig({ spawnBackend: 'coordinator' });
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    await expect(loadGatewayConfig(configPath)).rejects.toThrow('spawnBackend');
+  });
 
+  it('throws when the removed gateway-level targetBeaconId key is present', async () => {
+    const configPath = await writeConfig({ targetBeaconId: 'beacon-1' });
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    await expect(loadGatewayConfig(configPath)).rejects.toThrow(
+      'targetBeaconId'
+    );
+  });
+
+  it('loads a local-only gateway with no coordinatorUrl', async () => {
+    const configPath = await writeConfig({});
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    const config = await loadGatewayConfig(configPath);
+    expect(config.coordinatorUrl).toBe('');
+  });
+
+  it('accepts coordinatorUrl when present', async () => {
+    const configPath = await writeConfig({
+      coordinatorUrl: 'http://coordinator:8080',
+    });
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    const config = await loadGatewayConfig(configPath);
+    expect(config.coordinatorUrl).toBe('http://coordinator:8080');
+  });
+
+  it('throws when a coordinator-mode spawner has no coordinatorUrl', async () => {
+    const configPath = await writeConfig({});
+    const convDir = path.join(tmpDir, 'adapters', 'matrix', 'conversations');
+    mkdirSync(convDir, { recursive: true });
+    writeFileSync(
+      path.join(tmpDir, 'adapters', 'matrix', 'adapter.json'),
+      JSON.stringify({ type: 'matrix' })
+    );
+    writeFileSync(
+      path.join(convDir, 'room.json'),
+      JSON.stringify({
+        conversationId: '!room:server',
+        controlSurfaces: [
+          {
+            type: 'persona-assignment',
+            personaId: 'me',
+            config: { targetBeaconId: 'beacon-9' },
+          },
+        ],
+      })
+    );
     const { loadGatewayConfig } = await import('../src/config/load.js');
     await expect(loadGatewayConfig(configPath)).rejects.toThrow(
       'coordinatorUrl'
     );
   });
 
-  it('does not throw when coordinatorUrl is missing and spawnBackend is local', async () => {
-    const configPath = await writeConfig({
-      spawnBackend: 'local',
-    });
-
-    const { loadGatewayConfig } = await import('../src/config/load.js');
-    const config = await loadGatewayConfig(configPath);
-    expect(config.coordinatorUrl).toBe('');
-    expect(config.spawnBackend).toBe('local');
-  });
-
-  it('does not throw when coordinatorUrl is missing and spawnBackend defaults to local', async () => {
+  it('throws when a swarm-console surface has no coordinatorUrl', async () => {
     const configPath = await writeConfig({});
-
+    const convDir = path.join(tmpDir, 'adapters', 'matrix', 'conversations');
+    mkdirSync(convDir, { recursive: true });
+    writeFileSync(
+      path.join(tmpDir, 'adapters', 'matrix', 'adapter.json'),
+      JSON.stringify({ type: 'matrix' })
+    );
+    writeFileSync(
+      path.join(convDir, 'console.json'),
+      JSON.stringify({
+        conversationId: '!console:server',
+        controlSurfaces: [{ type: 'swarm-console' }],
+      })
+    );
     const { loadGatewayConfig } = await import('../src/config/load.js');
-    const config = await loadGatewayConfig(configPath);
-    expect(config.coordinatorUrl).toBe('');
-    expect(config.spawnBackend).toBe('local');
+    await expect(loadGatewayConfig(configPath)).rejects.toThrow(
+      'coordinatorUrl'
+    );
   });
 
-  it('accepts coordinatorUrl when present', async () => {
+  it('accepts a coordinatorUrl with no requiring surface (silent)', async () => {
     const configPath = await writeConfig({
       coordinatorUrl: 'http://coordinator:8080',
-      spawnBackend: 'coordinator',
-      targetBeaconId: 'beacon-1',
     });
-
     const { loadGatewayConfig } = await import('../src/config/load.js');
     const config = await loadGatewayConfig(configPath);
     expect(config.coordinatorUrl).toBe('http://coordinator:8080');
-    expect(config.targetBeaconId).toBe('beacon-1');
-  });
-});
-
-describe('loadGatewayConfig targetBeaconId validation', () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = mkdtempSync(path.join(os.tmpdir(), 'gateway-beacon-test-'));
   });
 
-  afterEach(async () => {
-    await rm(tmpDir, { recursive: true, force: true });
-  });
-
-  async function writeConfig(config: Record<string, unknown>): Promise<string> {
-    const configPath = path.join(tmpDir, 'config.json');
-    writeFileSync(configPath, JSON.stringify(config));
-    return configPath;
-  }
-
-  it('throws when targetBeaconId is missing in coordinator mode', async () => {
+  it('throws when a spawning surface has an invalid targetBeaconId', async () => {
     const configPath = await writeConfig({
       coordinatorUrl: 'http://coordinator:8080',
-      spawnBackend: 'coordinator',
     });
-
+    const convDir = path.join(tmpDir, 'adapters', 'matrix', 'conversations');
+    mkdirSync(convDir, { recursive: true });
+    writeFileSync(
+      path.join(tmpDir, 'adapters', 'matrix', 'adapter.json'),
+      JSON.stringify({ type: 'matrix' })
+    );
+    writeFileSync(
+      path.join(convDir, 'bad-beacon.json'),
+      JSON.stringify({
+        conversationId: '!bad-beacon:server',
+        controlSurfaces: [
+          {
+            type: 'persona-assignment',
+            personaId: 'me',
+            config: { targetBeaconId: 42 },
+          },
+        ],
+      })
+    );
     const { loadGatewayConfig } = await import('../src/config/load.js');
     await expect(loadGatewayConfig(configPath)).rejects.toThrow(
       'targetBeaconId'
     );
   });
 
-  it('accepts a targetBeaconId in coordinator mode', async () => {
+  it('drops a targetBeaconId on a non-spawning surface', async () => {
     const configPath = await writeConfig({
       coordinatorUrl: 'http://coordinator:8080',
-      spawnBackend: 'coordinator',
-      targetBeaconId: 'beacon-9',
     });
-
-    const { loadGatewayConfig } = await import('../src/config/load.js');
-    const config = await loadGatewayConfig(configPath);
-    expect(config.targetBeaconId).toBe('beacon-9');
-  });
-
-  it('throws when targetBeaconId is not a string in coordinator mode', async () => {
-    const configPath = await writeConfig({
-      coordinatorUrl: 'http://coordinator:8080',
-      spawnBackend: 'coordinator',
-      targetBeaconId: 42,
-    });
-
-    const { loadGatewayConfig } = await import('../src/config/load.js');
-    await expect(loadGatewayConfig(configPath)).rejects.toThrow(
-      'targetBeaconId'
+    const convDir = path.join(tmpDir, 'adapters', 'matrix', 'conversations');
+    mkdirSync(convDir, { recursive: true });
+    writeFileSync(
+      path.join(tmpDir, 'adapters', 'matrix', 'adapter.json'),
+      JSON.stringify({ type: 'matrix' })
     );
-  });
-
-  it('warns but loads when targetBeaconId is set in local mode', async () => {
-    const configPath = await writeConfig({
-      spawnBackend: 'local',
-      targetBeaconId: 'beacon-9',
-    });
-
+    writeFileSync(
+      path.join(convDir, 'console.json'),
+      JSON.stringify({
+        conversationId: '!console:server',
+        controlSurfaces: [
+          { type: 'swarm-console', config: { targetBeaconId: 'beacon-9' } },
+        ],
+      })
+    );
     const { loadGatewayConfig } = await import('../src/config/load.js');
     const config = await loadGatewayConfig(configPath);
-    expect(config.targetBeaconId).toBe('beacon-9');
-    expect(config.spawnBackend).toBe('local');
+    const surfaces =
+      config.serviceAdapters[0].conversations.get('!console:server')?.surfaces;
+    expect(surfaces?.[0].config).not.toHaveProperty('targetBeaconId');
   });
 });
 
@@ -226,7 +257,10 @@ describe('loadGatewayConfig conversation parsing', () => {
 
   async function load(): Promise<GatewayConfig> {
     const configPath = path.join(tmpDir, 'config.json');
-    writeFileSync(configPath, JSON.stringify({ spawnBackend: 'local' }));
+    writeFileSync(
+      configPath,
+      JSON.stringify({ coordinatorUrl: 'http://coordinator:8080' })
+    );
     writeFileSync(
       path.join(tmpDir, 'adapters', 'matrix', 'adapter.json'),
       JSON.stringify({ type: 'matrix' })
@@ -450,7 +484,7 @@ describe('loadGatewayConfig idleTimeoutMs validation', () => {
 
   it('keeps a valid top-level idleTimeoutMs (including 0)', async () => {
     const configPath = await writeConfig({
-      spawnBackend: 'local',
+      coordinatorUrl: 'http://coordinator:8080',
       idleTimeoutMs: 0,
     });
     const { loadGatewayConfig } = await import('../src/config/load.js');
@@ -460,7 +494,7 @@ describe('loadGatewayConfig idleTimeoutMs validation', () => {
 
   it('omits an invalid top-level idleTimeoutMs', async () => {
     const configPath = await writeConfig({
-      spawnBackend: 'local',
+      coordinatorUrl: 'http://coordinator:8080',
       idleTimeoutMs: 'soon',
     });
     const { loadGatewayConfig } = await import('../src/config/load.js');
@@ -488,7 +522,7 @@ describe('loadGatewayConfig controlApi parsing', () => {
   }
 
   it('defaults controlApi when absent', async () => {
-    const config = await load({ spawnBackend: 'local' });
+    const config = await load({ coordinatorUrl: 'http://coordinator:8080' });
     expect(config.controlApi).toEqual({
       enabled: false,
       host: '127.0.0.1',
@@ -498,7 +532,7 @@ describe('loadGatewayConfig controlApi parsing', () => {
 
   it('parses a valid controlApi block', async () => {
     const config = await load({
-      spawnBackend: 'local',
+      coordinatorUrl: 'http://coordinator:8080',
       controlApi: { enabled: true, host: 'localhost', port: 9000, token: 't' },
     });
     expect(config.controlApi).toEqual({
@@ -510,7 +544,10 @@ describe('loadGatewayConfig controlApi parsing', () => {
   });
 
   it('warns and defaults on a non-object controlApi', async () => {
-    const config = await load({ spawnBackend: 'local', controlApi: 42 });
+    const config = await load({
+      coordinatorUrl: 'http://coordinator:8080',
+      controlApi: 42,
+    });
     expect(config.controlApi).toEqual({
       enabled: false,
       host: '127.0.0.1',
@@ -520,7 +557,7 @@ describe('loadGatewayConfig controlApi parsing', () => {
 
   it('ignores a non-boolean enabled', async () => {
     const config = await load({
-      spawnBackend: 'local',
+      coordinatorUrl: 'http://coordinator:8080',
       controlApi: { enabled: 'yes' },
     });
     expect(config.controlApi?.enabled).toBe(false);
@@ -528,7 +565,7 @@ describe('loadGatewayConfig controlApi parsing', () => {
 
   it('uses the default host for an empty host', async () => {
     const config = await load({
-      spawnBackend: 'local',
+      coordinatorUrl: 'http://coordinator:8080',
       controlApi: { host: '  ' },
     });
     expect(config.controlApi?.host).toBe('127.0.0.1');
@@ -536,7 +573,7 @@ describe('loadGatewayConfig controlApi parsing', () => {
 
   it('uses the default port for an out-of-range port', async () => {
     const config = await load({
-      spawnBackend: 'local',
+      coordinatorUrl: 'http://coordinator:8080',
       controlApi: { port: 99999 },
     });
     expect(config.controlApi?.port).toBe(8090);
@@ -544,7 +581,7 @@ describe('loadGatewayConfig controlApi parsing', () => {
 
   it('ignores a non-string token', async () => {
     const config = await load({
-      spawnBackend: 'local',
+      coordinatorUrl: 'http://coordinator:8080',
       controlApi: { token: 5 },
     });
     expect(config.controlApi?.token).toBeUndefined();
@@ -552,7 +589,7 @@ describe('loadGatewayConfig controlApi parsing', () => {
 
   it('accepts a non-loopback host but warns', async () => {
     const config = await load({
-      spawnBackend: 'local',
+      coordinatorUrl: 'http://coordinator:8080',
       controlApi: { enabled: true, host: '0.0.0.0' },
     });
     expect(config.controlApi?.host).toBe('0.0.0.0');
@@ -582,7 +619,10 @@ describe('loadGatewayConfig injection parsing', () => {
 
   async function load(): Promise<GatewayConfig> {
     const configPath = path.join(tmpDir, 'config.json');
-    writeFileSync(configPath, JSON.stringify({ spawnBackend: 'local' }));
+    writeFileSync(
+      configPath,
+      JSON.stringify({ coordinatorUrl: 'http://coordinator:8080' })
+    );
     writeFileSync(
       path.join(tmpDir, 'adapters', 'matrix', 'adapter.json'),
       JSON.stringify({ type: 'matrix' })

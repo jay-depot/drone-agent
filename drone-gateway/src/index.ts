@@ -10,8 +10,8 @@ import { CoordinatorClient } from './coordinator-client.js';
 import { loadGatewayConfig } from './config/load.js';
 import { cleanupAdapter } from './cleanup.js';
 import { ControlApiServer } from './control-api/server.js';
-import type { GatewayConfig, SpawnBackendType } from './types.js';
-import type { SpawnBackend } from './spawn-backend.js';
+import type { GatewayConfig } from './types.js';
+import { SpawnBackendRegistry } from './spawn-backend-registry.js';
 
 const DEFAULT_CONFIG_DIR = path.join(os.homedir(), '.drone-gateway');
 const DEFAULT_CONFIG_FILE = 'config.json';
@@ -73,33 +73,33 @@ export async function loadConfig(configPath: string): Promise<GatewayConfig> {
 
   const config = await loadGatewayConfig(configPath);
 
-  // Apply defaults
-  if (!config.spawnBackend) {
-    config.spawnBackend = 'local' as SpawnBackendType;
-  }
-
   return config;
 }
 
-export function createSpawnBackend(config: GatewayConfig): SpawnBackend {
-  switch (config.spawnBackend) {
-    case 'local':
-      logger.info(
-        `Using local spawn backend (agentPath: ${config.agentPath || 'drone-agent (from PATH)'})`
-      );
-      return new LocalSpawnBackend(config.agentPath);
-    case 'coordinator':
-      logger.info(
-        `Using coordinator spawn backend (default beacon: ${config.targetBeaconId ?? '(none)'})`
-      );
-      return new CoordinatorSpawnBackend(
-        config.coordinatorUrl,
-        config.coordinatorToken
-      );
-    default:
-      logger.error(`Unknown spawn backend type: ${config.spawnBackend}`);
-      process.exit(1);
+/**
+ * Build the spawn-backend registry: a local backend always, and a coordinator
+ * backend whenever a coordinator client is available. The engine picks the
+ * backend per control surface.
+ */
+export function createSpawnBackends(
+  config: GatewayConfig,
+  coordinatorClient?: CoordinatorClient
+): SpawnBackendRegistry {
+  const registry = new SpawnBackendRegistry();
+  registry.register('local', new LocalSpawnBackend(config.agentPath));
+  logger.info(
+    `Registered local spawn backend (agentPath: ${config.agentPath || 'drone-agent (from PATH)'})`
+  );
+  if (coordinatorClient) {
+    registry.register(
+      'coordinator',
+      new CoordinatorSpawnBackend(coordinatorClient)
+    );
+    logger.info(
+      `Registered coordinator spawn backend (${config.coordinatorUrl})`
+    );
   }
+  return registry;
 }
 
 async function readGatewayVersion(): Promise<string> {
@@ -135,12 +135,11 @@ export async function main(): Promise<void> {
   logger.info(`Loading config from: ${cliConfig.configPath}`);
   const config = await loadConfig(cliConfig.configPath);
 
-  const spawnBackend = createSpawnBackend(config);
-  const swarm =
-    config.spawnBackend === 'coordinator'
-      ? new CoordinatorClient(config.coordinatorUrl, config.coordinatorToken)
-      : undefined;
-  const engine = new GatewayEngine(config, spawnBackend, swarm);
+  const coordinatorClient = config.coordinatorUrl
+    ? new CoordinatorClient(config.coordinatorUrl, config.coordinatorToken)
+    : undefined;
+  const backends = createSpawnBackends(config, coordinatorClient);
+  const engine = new GatewayEngine(config, backends, coordinatorClient);
 
   let controlApi: ControlApiServer | undefined;
 
