@@ -37,8 +37,11 @@ nothing unless those are present.
 
 - **State** — `working` when a turn starts (the `userMessage` event), `idle`
   when it completes (the `roundComplete` event), plus an initial `idle` on
-  load. Reports carry a strictly increasing `--seq` and are coalesced to one
-  in-flight call (only the latest state is sent). `--source` is fixed to
+  load. Reports carry a `--seq` that increases across process restarts (a
+  wall-clock value), and are coalesced to one in-flight call (only the latest
+  state is sent). Herdr ignores a report whose seq is not higher than the last
+  one it accepted, so a value that only counted up within one process would be
+  silently dropped after a crash or pane restore. `--source` is fixed to
   `drone-agent`.
 - **Resume command** — attached to the first state report (which holds the
   pane, satisfying Herdr's `resume_not_accepted` rule):

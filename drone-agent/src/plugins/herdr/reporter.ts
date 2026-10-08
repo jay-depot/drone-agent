@@ -5,8 +5,10 @@
  * Every call is best-effort: failures are swallowed (optionally logged under
  * `--debug herdr`) so a missing or misbehaving Herdr never slows the agent.
  * Reports are coalesced to a single in-flight call, keeping only the latest
- * desired state, and carry a strictly increasing `--seq` so out-of-order
- * deliveries cannot regress Herdr's view.
+ * desired state, and carry a `--seq` that increases across process restarts
+ * (a wall-clock value), so a restarted process cannot be silently dropped as
+ * "not newer than" a previous run — and out-of-order deliveries cannot regress
+ * Herdr's view.
  */
 
 import { execFileAsync } from '../../shared/exec-async.js';
@@ -47,7 +49,13 @@ function withResumeArgv(argv: string[], resumeArgv?: string[]): string[] {
 
 export function createReporter(options: HerdrReporterOptions): HerdrReporter {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  // Herdr requires `--seq` to increase across process restarts, not just within
+  // one process (see https://herdr.dev/docs/add-herdr-support/). A wall-clock
+  // value guarantees a fresh process starts above any prior process's watermark;
+  // Math.max(..., seq + 1) keeps it strictly increasing for same-millisecond
+  // reports.
   let seq = 0;
+  const nextSeq = (): number => (seq = Math.max(Date.now(), seq + 1));
   let inFlight = false;
   let desired: { argv: string[] } | null = null;
   let lastSent: string | null = null;
@@ -95,7 +103,7 @@ export function createReporter(options: HerdrReporterOptions): HerdrReporter {
       '--state',
       state,
       '--seq',
-      String(seq++),
+      String(nextSeq()),
       '--agent-session-id',
       options.sessionId,
     ];
@@ -119,7 +127,7 @@ export function createReporter(options: HerdrReporterOptions): HerdrReporter {
       '--agent',
       options.agentLabel,
       '--seq',
-      String(seq++),
+      String(nextSeq()),
     ];
     await run(argv);
   };
