@@ -11,12 +11,8 @@ import type {
 import { CONFIG_DIR, INSIGHTS_SUBDIR, PRINCIPLES_SUBDIR } from './constants.js';
 import { resolveBaseDir } from './validation.js';
 import { resolveInsightPaths, resolvePrinciplePaths } from './paths.js';
-import {
-  readJsonArray,
-  scanJsonDir,
-  withFileLock,
-  writeJsonArrayAtomic,
-} from './io.js';
+import { readJsonArray, scanJsonDir, writeJsonArrayAtomic } from './io.js';
+import { withFileLock } from '../../shared/file-lock.js';
 
 /**
  * Create a file-based insight storage engine. This is the default for
