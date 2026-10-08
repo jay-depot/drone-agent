@@ -461,3 +461,20 @@ All of the following must pass, **zero errors**:
    - A gateway-local child whose agent exits at startup ⇒ the surface posts `Error: agent exited before replying: …` (not silence).
 
 **Done when:** all eight criteria are satisfied.
+
+---
+
+## 6. Execution summary (2026-10-08) — COMPLETE
+
+**Branch:** `feat/gateway-per-surface-spawn-backend`. **Commits:** `4f47a5ae` (plan + planning insights), `d78251a5` (feature).
+
+All 20 phases executed. **Gates:** LSP clean; `pnpm -r run build` 0; `pnpm typecheck` 0; `pnpm run lint` 0; `pnpm run test` **3694 passed / 14 skipped / 0 failed** (gateway suite **461**).
+
+**Deviations / notes:**
+- Step 1.3 (`types.ts`) and several edit sites were mangled by fuzzy `apply_diff` anchors; repaired by rewriting the affected span or re-anchoring. `types.ts` was rewritten whole.
+- `LocalSpawnBackend` tests: the mock's stderr was a `Writable`; the readline drain calls `input.resume()`, so the mock's stderr was switched to a `Readable` (+ an `emitStderrLine` helper).
+- Phase 4 (`persona-cli-flag.test.ts`) needed a minimal `swarm` `DronePlugin` stub so `enabledPlugins: ['persona','swarm']` passes engine validation (the swarm plugin is not otherwise in that test's plugin list).
+- `pnpm run lint` reflowed files repo-wide (the ADR-232 gotcha). Unrelated churn (all other ADRs, `pnpm-lock.yaml`, `.drone-agent/insights/*`, `drone-{beacon,coordinator}/README.md`, the other planning-seed memories) was reverted with `git checkout HEAD -- …` before committing; only session-relevant changes were kept.
+- The plan's "Q10 hard error" is enforced with the extra `SPAWNING_SURFACES` constant, as planned.
+
+**Deferred (not done, as planned):** agent-side chat surfacing of the persona failure (Q16 "C"); beacon-side persona pre-validation before spawn (Q24 "B").
