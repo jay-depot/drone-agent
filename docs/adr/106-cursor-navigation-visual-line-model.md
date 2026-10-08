@@ -1,6 +1,7 @@
 ---
 tags: [decision, tui, input, cursor]
-related: [drone-agent-tui.md, 099-tui-paste-handling.md, 107-tui-input-bug-fixes.md]
+related:
+  [drone-agent-tui.md, 099-tui-paste-handling.md, 107-tui-input-bug-fixes.md]
 ---
 
 # ADR 106: Enhanced Cursor Navigation with Visual Line Model
@@ -52,16 +53,16 @@ The `FreeformInput` component in `ElicitationPrompt.tsx` was removed entirely an
 
 ### 5. New keybindings
 
-| Key | Action |
-|---|---|
-| Up arrow | Move cursor up one visual line (preferred column tracking) |
+| Key        | Action                                                       |
+| ---------- | ------------------------------------------------------------ |
+| Up arrow   | Move cursor up one visual line (preferred column tracking)   |
 | Down arrow | Move cursor down one visual line (preferred column tracking) |
-| Home | Move cursor to start of logical line |
-| End | Move cursor to end of logical line |
-| Ctrl+Left | Move cursor to start of previous word |
-| Ctrl+Right | Move cursor to start of next word |
-| Ctrl+U | Delete from cursor to start of logical line |
-| Ctrl+K | Delete from cursor to end of logical line |
+| Home       | Move cursor to start of logical line                         |
+| End        | Move cursor to end of logical line                           |
+| Ctrl+Left  | Move cursor to start of previous word                        |
+| Ctrl+Right | Move cursor to start of next word                            |
+| Ctrl+U     | Delete from cursor to start of logical line                  |
+| Ctrl+K     | Delete from cursor to end of logical line                    |
 
 ## Consequences
 
@@ -91,17 +92,17 @@ The `FreeformInput` component in `ElicitationPrompt.tsx` was removed entirely an
 
 ## Files Changed
 
-| File | Change |
-|------|--------|
-| `src/tui/shared/visual-text-model.ts` | **New** — pure visual line computation module |
-| `src/tui/hooks/useSgrMouse.ts` | **New** — SGR mouse mode hook (later de-wired from the app) |
+| File                                        | Change                                                                                                                                             |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/tui/shared/visual-text-model.ts`       | **New** — pure visual line computation module                                                                                                      |
+| `src/tui/hooks/useSgrMouse.ts`              | **New** — SGR mouse mode hook (later de-wired from the app)                                                                                        |
 | `src/tui/components/MultilineTextInput.tsx` | Modified — added all new keybindings, preferred column tracking; later removed mouse click handling and added SGR sequence filtering in `useInput` |
-| `src/tui/components/InputLine.tsx` | Modified — threads `columns` prop, computes effective text width; later removed `mouseClick` prop |
-| `src/tui/components/ElicitationPrompt.tsx` | Modified — replaced `FreeformInput` with `MultilineTextInput`; later removed `mouseClick` prop |
-| `src/tui/app.tsx` | Modified — wired `useSgrMouse` and `useDebouncedWindowSize` columns; later removed `useSgrMouse` |
-| `test/visual-text-model.test.ts` | **New** — 34 tests |
-| `test/useSgrMouse.test.tsx` | **New** — 6 tests |
-| `test/multiline-text-input.test.tsx` | Modified — new tests |
+| `src/tui/components/InputLine.tsx`          | Modified — threads `columns` prop, computes effective text width; later removed `mouseClick` prop                                                  |
+| `src/tui/components/ElicitationPrompt.tsx`  | Modified — replaced `FreeformInput` with `MultilineTextInput`; later removed `mouseClick` prop                                                     |
+| `src/tui/app.tsx`                           | Modified — wired `useSgrMouse` and `useDebouncedWindowSize` columns; later removed `useSgrMouse`                                                   |
+| `test/visual-text-model.test.ts`            | **New** — 34 tests                                                                                                                                 |
+| `test/useSgrMouse.test.tsx`                 | **New** — 6 tests                                                                                                                                  |
+| `test/multiline-text-input.test.tsx`        | Modified — new tests                                                                                                                               |
 
 ## Related
 

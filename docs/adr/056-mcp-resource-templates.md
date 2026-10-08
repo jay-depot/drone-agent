@@ -1,15 +1,20 @@
 ---
 tags: [decision, mcp]
-related: [modules/drone-agent-mcp-client.md, decisions/050-mcp-client-session-id-iserror.md, decisions/054-mcp-http-sse-stream-delete.md]
+related:
+  [
+    modules/drone-agent-mcp-client.md,
+    decisions/050-mcp-client-session-id-iserror.md,
+    decisions/054-mcp-http-sse-stream-delete.md,
+  ]
 ---
 
 # ADR 056: MCP Resource Template Support (gap item 5)
 
-**Summary**: The MCP client could only discover and read *enumerated* (concrete) resources. Servers that front large or dynamic namespaces (filesystems, databases, git, API gateways) advertise a **URI template** (RFC 6570) via `resources/templates/list` instead of (or in addition to) a finite resource list. This ADR adds template discovery and surfaces it to the LLM as a per-server tool, closing an "Important (capability)" gap and improving spec compliance.
+**Summary**: The MCP client could only discover and read _enumerated_ (concrete) resources. Servers that front large or dynamic namespaces (filesystems, databases, git, API gateways) advertise a **URI template** (RFC 6570) via `resources/templates/list` instead of (or in addition to) a finite resource list. This ADR adds template discovery and surfaces it to the LLM as a per-server tool, closing an "Important (capability)" gap and improving spec compliance.
 
 ## Context
 
-The MCP gap analysis (`mcp-client-gaps`, item 5) identified that `DroneMcpResourceMeta` only models concrete resources (`{ uri, name?, description?, mimeType? }`). The client had no concept of a resource template — a parameterized URI pattern like `file:///{path}` or `db://users/{userId}`. Without templates, the agent has no way to know these things are *readable at all*: the current `read_resource` tool would only work if the LLM already magically knew a valid URI, which it can't because `list_resources` never surfaced the pattern.
+The MCP gap analysis (`mcp-client-gaps`, item 5) identified that `DroneMcpResourceMeta` only models concrete resources (`{ uri, name?, description?, mimeType? }`). The client had no concept of a resource template — a parameterized URI pattern like `file:///{path}` or `db://users/{userId}`. Without templates, the agent has no way to know these things are _readable at all_: the current `read_resource` tool would only work if the LLM already magically knew a valid URI, which it can't because `list_resources` never surfaced the pattern.
 
 ## Decision
 
@@ -29,11 +34,11 @@ A new type in `drone-core/src/mcp-types.ts`:
 
 ```ts
 export type DroneMcpResourceTemplateMeta = {
-  uriTemplate: string;       // RFC 6570 URI template
+  uriTemplate: string; // RFC 6570 URI template
   name?: string;
   description?: string;
   mimeType?: string;
-  arguments?: DroneMcpPromptArgument[];  // Reuses existing argument type
+  arguments?: DroneMcpPromptArgument[]; // Reuses existing argument type
 };
 ```
 
@@ -46,6 +51,7 @@ The `arguments` field reuses the existing `DroneMcpPromptArgument` type (`{ name
 ### Client implementation
 
 `client.ts` adds:
+
 - `normalizeResourceTemplateArguments(value)` — normalizes the `arguments` array from the server response
 - `normalizeResourceTemplates(result)` — reads `result.resourceTemplates`, maps each to `DroneMcpResourceTemplateMeta`
 - `listResourceTemplates()` on `McpClientConnection` — calls `resources/templates/list` via the existing `paginateList` helper, sets `state.resourceTemplatesListTruncated`
@@ -57,6 +63,7 @@ The `arguments` field reuses the existing `DroneMcpPromptArgument` type (`{ name
 ### Test doubles
 
 Both test harnesses serve `resources/templates/list`:
+
 - **HTTP mock** (`mcp-fake-server.ts`): `DEFAULT_RESOURCE_TEMPLATES` with two entries (`file:///{path}`, `db://users/{userId}`), cursor-paginated handler, injectable via `options.resourceTemplates`
 - **Stdio child** (`mcp-fake-server.mjs`): `RESOURCE_TEMPLATES` with one entry (`file:///{path}`), simple handler
 

@@ -1,6 +1,12 @@
 ---
 tags: [decision, tui, syntax-highlighting, markdown]
-related: [drone-agent-tui.md, DroneAgentConfig.md, 001-use-ink.md, 046-tui-tail-region-refactor.md]
+related:
+  [
+    drone-agent-tui.md,
+    DroneAgentConfig.md,
+    001-use-ink.md,
+    046-tui-tail-region-refactor.md,
+  ]
 ---
 
 # 077: TUI Syntax Highlighting — ANSI Escape Codes + Configurable Colors
@@ -31,8 +37,15 @@ Replace the nested `<Text color={...}>` approach with a single `<Text>` per line
 
 ```typescript
 const ANSI_COLORS: Record<string, string> = {
-  black: '30', red: '31', green: '32', yellow: '33',
-  blue: '34', magenta: '35', cyan: '36', white: '37', gray: '90',
+  black: '30',
+  red: '31',
+  green: '32',
+  yellow: '33',
+  blue: '34',
+  magenta: '35',
+  cyan: '36',
+  white: '37',
+  gray: '90',
 };
 ```
 
@@ -61,8 +74,8 @@ Add a new `DroneTuiConfig` type to `drone-core/src/config-types.ts`:
 ```typescript
 export type DroneTuiConfig = {
   syntaxHighlighting: {
-    colors: Record<string, string>;  // e.g. { "keyword": "red", "string": "green" }
-    codeBackground: string;          // e.g. "black" or "#333"
+    colors: Record<string, string>; // e.g. { "keyword": "red", "string": "green" }
+    codeBackground: string; // e.g. "black" or "#333"
   };
 };
 ```
@@ -87,14 +100,14 @@ export type DroneTuiConfig = {
 
 ## Files Changed
 
-| File | Change |
-|------|--------|
-| `drone-core/src/config-types.ts` | Added `DroneTuiConfig` type, `tui` field to `DroneAgentConfig`/`PartialDroneAgentConfig`, defaults in `createDefaultAgentConfig()`, merge logic in `applyAgentConfigLayer()` |
-| `drone-agent/src/tui/components/Markdown.tsx` | Added `ANSI_COLORS` mapping, `extractTokenText()` helper, `getTokenColor()` helper, `syntaxColors` prop, ANSI escape code rendering, flat AST → split on `\n`, background width padding |
-| `drone-agent/src/tui/components/AssistantMessageBlock.tsx` | Added `syntaxColors` and `codeBackground` props, passed to `<Markdown>` |
-| `drone-agent/src/tui/components/ChatLog.tsx` | Added `syntaxColors` and `codeBackground` props, passed to `renderEntry()` → `<Markdown>` |
-| `drone-agent/src/tui/app.tsx` | Reads `tui` config, creates refs, passes to `<ChatLog>` and `<AssistantMessageBlock>` |
-| `drone-agent/test/Markdown.test.tsx` | 8 new test cases for syntax highlighting, background padding, custom colors |
+| File                                                       | Change                                                                                                                                                                                  |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `drone-core/src/config-types.ts`                           | Added `DroneTuiConfig` type, `tui` field to `DroneAgentConfig`/`PartialDroneAgentConfig`, defaults in `createDefaultAgentConfig()`, merge logic in `applyAgentConfigLayer()`            |
+| `drone-agent/src/tui/components/Markdown.tsx`              | Added `ANSI_COLORS` mapping, `extractTokenText()` helper, `getTokenColor()` helper, `syntaxColors` prop, ANSI escape code rendering, flat AST → split on `\n`, background width padding |
+| `drone-agent/src/tui/components/AssistantMessageBlock.tsx` | Added `syntaxColors` and `codeBackground` props, passed to `<Markdown>`                                                                                                                 |
+| `drone-agent/src/tui/components/ChatLog.tsx`               | Added `syntaxColors` and `codeBackground` props, passed to `renderEntry()` → `<Markdown>`                                                                                               |
+| `drone-agent/src/tui/app.tsx`                              | Reads `tui` config, creates refs, passes to `<ChatLog>` and `<AssistantMessageBlock>`                                                                                                   |
+| `drone-agent/test/Markdown.test.tsx`                       | 8 new test cases for syntax highlighting, background padding, custom colors                                                                                                             |
 
 ## Related
 

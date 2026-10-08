@@ -1,13 +1,19 @@
 ---
 tags: [decision, gateway, matrix, sync, persistence, drone-gateway, adr]
-related: [modules/drone-gateway.md, decisions/229-gateway-matrix-crypto-opt-in.md, decisions/059-matrix-adapter.md, decisions/062-gateway-sqlite-stores.md]
+related:
+  [
+    modules/drone-gateway.md,
+    decisions/229-gateway-matrix-crypto-opt-in.md,
+    decisions/059-matrix-adapter.md,
+    decisions/062-gateway-sqlite-stores.md,
+  ]
 ---
 
 # 230 — Gateway sync store accumulates state; the adapter ignores replayed cached-sync events
 
 **Status**: Implemented (2026-10-05) · **Branch**: `feat/gateway-swarm-console` · **Commits**: `ef285a94`, `3706080d` · **Reports**: DRONE-GW-BUG-002 (+ follow-on)
 
-**Summary**: Two coupled fixes to the gateway's persistent Matrix sync store. (1) `SqliteSyncStore.setSyncData()` persisted each `/sync` response with `INSERT OR REPLACE` against one row — but a `/sync` response is a **delta**, so the stored blob became a bare delta with a valid token and no `rooms`, and a restarted client resumed an incremental sync with an empty room list and could not reply. The store now folds every response into a **`SyncAccumulator`** and persists the *accumulated* state. (2) With a persisted token, the SDK **replays the cached `/sync`** on restart and re-emits each cached timeline event as `RoomEvent.Timeline` — and the adapter, filtering only on `toStartOfTimeline`, re-dispatched historical commands as if they were new input. The handler now drops anything that is not a live event (`removed || !data?.liveEvent`).
+**Summary**: Two coupled fixes to the gateway's persistent Matrix sync store. (1) `SqliteSyncStore.setSyncData()` persisted each `/sync` response with `INSERT OR REPLACE` against one row — but a `/sync` response is a **delta**, so the stored blob became a bare delta with a valid token and no `rooms`, and a restarted client resumed an incremental sync with an empty room list and could not reply. The store now folds every response into a **`SyncAccumulator`** and persists the _accumulated_ state. (2) With a persisted token, the SDK **replays the cached `/sync`** on restart and re-emits each cached timeline event as `RoomEvent.Timeline` — and the adapter, filtering only on `toStartOfTimeline`, re-dispatched historical commands as if they were new input. The handler now drops anything that is not a live event (`removed || !data?.liveEvent`).
 
 ## Why (1) — the clobber
 

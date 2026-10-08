@@ -1,6 +1,15 @@
 ---
 tags: [decision, skills, persona, wizard, authoring, adr]
-related: [concepts/broker-provider.md, concepts/identity-assets.md, entities/Skill.md, modules/drone-core.md, modules/drone-agent-plugins.md, modules/drone-beacon.md, decisions/226-persona-owned-skills-swarm-scope.md]
+related:
+  [
+    concepts/broker-provider.md,
+    concepts/identity-assets.md,
+    entities/Skill.md,
+    modules/drone-core.md,
+    modules/drone-agent-plugins.md,
+    modules/drone-beacon.md,
+    decisions/226-persona-owned-skills-swarm-scope.md,
+  ]
 ---
 
 # 227 — Persona-owned skill targets in the skills-creation wizard
@@ -9,7 +18,7 @@ related: [concepts/broker-provider.md, concepts/identity-assets.md, entities/Ski
 
 **Summary**: The skills-creation wizard (`skills__create`, shared by the `skills__create` tool, `/skills create`, and
 `--workflow skills.create`) can now author **persona-owned** skills, not just global ones. A parallel
-`DroneOwnedSkillWriter` registry (a writer per scope that takes the *owner* as an argument) lets the wizard bind
+`DroneOwnedSkillWriter` registry (a writer per scope that takes the _owner_ as an argument) lets the wizard bind
 an owner to a writer at runtime; the picker is **owner-first** with `No owner (global skill)` as the default
 row; when an owner is chosen the storage scope is **derived from the owner** ([226-persona-owned-skills-swarm-scope](226-persona-owned-skills-swarm-scope.md)
 D4) and never asked.
@@ -20,9 +29,9 @@ D4) and never asked.
 coordinator-UI CRUD, but explicitly **deferred the agent-side authoring path** (its decision D5). The wizard
 could only target global skills: it picked a `DroneSkillWriter` from `skillsCap.getWriters()` and asked for a
 storage scope, and no persona-owned writer existed, so there was no way to author a skill owned by a persona
-from the agent. This ADR closes that gap for the *create* flow.
+from the agent. This ADR closes that gap for the _create_ flow.
 
-A follow-up seed (`planning-seed-skills-management-tools`, in project memory) captures the deferred *management*
+A follow-up seed (`planning-seed-skills-management-tools`, in project memory) captures the deferred _management_
 surface (`update`/`delete`/`move`/`rename`) and the eventual **unified authoring-target registry** refactor,
 which both features are expected to converge on.
 
@@ -34,8 +43,8 @@ which both features are expected to converge on.
    registered once per scope via new `registerOwnedWriter`/`unregisterOwnedWriter`/`getOwnedWriters` on
    `DroneSkillsCapability`. `getWriters()` is **untouched**, so the existing wizard path and its tests are
    unaffected. This survives persona reloads without re-registration churn and lets the wizard bind a
-   `(personaId, writer)` pair back to a plain `DroneSkillWriter` at runtime. The *unified authoring-target
-   registry* (where the broker composes writers + personas into resolved targets) is the acknowledged eventual
+   `(personaId, writer)` pair back to a plain `DroneSkillWriter` at runtime. The _unified authoring-target
+   registry_ (where the broker composes writers + personas into resolved targets) is the acknowledged eventual
    direction, deliberately deferred.
 3. **Owner-first picker.** Question 1 = each eligible persona plus `No owner (global skill)`, with **no-owner as
    the default and first row**. No owner → the existing storage-scope question over the global writers

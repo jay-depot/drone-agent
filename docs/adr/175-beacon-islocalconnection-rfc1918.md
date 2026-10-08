@@ -1,6 +1,12 @@
 ---
 tags: [decision, beacon, websocket, network, security, bug-fix]
-related: [decisions/174-beacon-sendtoagent-readystate-fix.md, modules/drone-beacon.md, concepts/test-infrastructure.md, decisions/137-integration-test-isolation.md]
+related:
+  [
+    decisions/174-beacon-sendtoagent-readystate-fix.md,
+    modules/drone-beacon.md,
+    concepts/test-infrastructure.md,
+    decisions/137-integration-test-isolation.md,
+  ]
 ---
 
 # 175: Beacon `isLocalConnection` full RFC1918 172.16/12
@@ -16,7 +22,7 @@ related: [decisions/174-beacon-sendtoagent-readystate-fix.md, modules/drone-beac
 
 The truncated-range variant bit immediately in practice: the new swarm-fragments integration suite (ADR 173) opens a WS from the `test-runner` container, and the beacon logged the request but never logged `connected via WebSocket` — the connection was rejected as non-local. (ADR 174 had to be fixed first before this second blocker became visible.)
 
-Note that a 2026-08-19-era change *narrowed* the check toward "loopback + own interfaces only" per a remote-beacon security posture; at some point private-LAN acceptance was restored in code (the wiki's module page had drifted — it claimed the ranges were removed while the code kept them). This ADR does **not** widen policy beyond RFC1918 semantics; it fixes the *implementation* of the range the code already intended to allow.
+Note that a 2026-08-19-era change _narrowed_ the check toward "loopback + own interfaces only" per a remote-beacon security posture; at some point private-LAN acceptance was restored in code (the wiki's module page had drifted — it claimed the ranges were removed while the code kept them). This ADR does **not** widen policy beyond RFC1918 semantics; it fixes the _implementation_ of the range the code already intended to allow.
 
 ## Decision
 

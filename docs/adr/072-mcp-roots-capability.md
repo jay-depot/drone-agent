@@ -1,6 +1,11 @@
 ---
 tags: [decision, mcp, roots]
-related: [modules/drone-agent-mcp-client.md, entities/DroneAgentConfig.md, decisions/070-mcp-logging-capability.md]
+related:
+  [
+    modules/drone-agent-mcp-client.md,
+    entities/DroneAgentConfig.md,
+    decisions/070-mcp-logging-capability.md,
+  ]
 ---
 
 # 072: MCP Roots Capability (Item 10)
@@ -18,22 +23,26 @@ The `roots/list` method is a **server→client request** (the server sends a JSO
 ### 1. Transport layer: `onRequest` callback
 
 Add an `onRequest?: (method: string, params: unknown) => Promise<unknown>` callback to all three transport functions:
+
 - `createContentLengthJsonRpcClient` (stdio, content-length framing)
 - `createLineDelimitedJsonRpcClient` (stdio, line-delimited framing)
 - `createStreamableHttpJsonRpcClient` (HTTP/SSE)
 
 Message classification in `parseBuffer`:
+
 - **Server→Client request**: has both `id` AND `method` → call `onRequest`, send response back
 - **Response to our pending request**: has `id` but NO `method` → resolve/reject pending
 - **Notification**: has `method` but NO `id` → call `onNotification`
 
 Response sending:
+
 - **stdio**: use existing `sendMessage({ id, result })` or `sendMessage({ id, error })` via a `handleServerRequest` helper
 - **HTTP**: POST the JSON-RPC response back to the same server URL via a `postJsonResponse` helper
 
 ### 2. Roots handler
 
 Add a `roots?: DroneMcpRoot[]` parameter to `createMcpClientConnection`. Wire a `handleServerRequest` function that:
+
 - Returns `{ roots: options.roots ?? [] }` for `roots/list`
 - Rejects with "Unsupported server request" for any other method
 
@@ -42,6 +51,7 @@ The `onRequest` callback is wired to all three transport creation sites: the mai
 ### 3. Default roots
 
 Computed at runtime in `index.ts` `onPluginsLoaded`:
+
 - `file://<cwd>` with name `"Project Root"`
 - `file://<home>` with name `"Home Directory"`
 

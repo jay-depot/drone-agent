@@ -1,6 +1,15 @@
 ---
-tags: [decision, lsp, lifecycle, process-management, lazy-load, reliability, hooks]
-related: [modules/drone-agent-plugins.md, concepts/lsp-symbolic-resolution.md, architecture/large-file-splitting.md, decisions/102-multi-language-lsp-support.md, decisions/114-lsp-eacces-scan-and-onbeforeprompt.md, modules/drone-core.md]
+tags:
+  [decision, lsp, lifecycle, process-management, lazy-load, reliability, hooks]
+related:
+  [
+    modules/drone-agent-plugins.md,
+    concepts/lsp-symbolic-resolution.md,
+    architecture/large-file-splitting.md,
+    decisions/102-multi-language-lsp-support.md,
+    decisions/114-lsp-eacces-scan-and-onbeforeprompt.md,
+    modules/drone-core.md,
+  ]
 ---
 
 # ADR 199: LSP Process Lifecycle Management + Lazy Load
@@ -39,7 +48,7 @@ The plugin's "no LSP servers connected" startup warning now only fires when noth
 
 **Correction (61c579d)**: the "five duplicated find+throw sites" claim above was aspirational — the `code_action` implementation had actually kept its `findRuntimeForFile` + throw, leaving it the one position tool outside the chokepoint (undetected because its error message was byte-identical and its test doubles already implemented `requireRuntimeForFile`). `code_action` now genuinely routes through `requireRuntimeForFile`; because `startDedup` joins in-flight starts, a `code_action` call racing a warm-up start waits for the connection instead of failing during the warm-up window. Error message unchanged for unservable files.
 
-`startServerForFile` dispatches **configured-server-first** (`findConfiguredServerForExtension` over `lspConfig.servers`), then known-spec ambient — so a crashed *configured* server restarts as itself rather than silently switching to the spec default. Both paths converge on a shared `startCandidate` (below).
+`startServerForFile` dispatches **configured-server-first** (`findConfiguredServerForExtension` over `lspConfig.servers`), then known-spec ambient — so a crashed _configured_ server restarts as itself rather than silently switching to the spec default. Both paths converge on a shared `startCandidate` (below).
 
 ### 4. State/runtime separation (restartable servers)
 
@@ -63,12 +72,13 @@ One new drone-core config key: `lsp.preinstall: boolean` (default **false**, opt
 
 ### 8. Follow-up: `onAfterToolCall` payload + file-tool warm-up (61c579d)
 
-Demand start was reactive only: an ambient server first spawned when an LSP *tool* asked, so passive diagnostics never warmed up from ordinary file work. The natural first contact — the agent reading or writing a file — carried no signal.
+Demand start was reactive only: an ambient server first spawned when an LSP _tool_ asked, so passive diagnostics never warmed up from ordinary file work. The natural first contact — the agent reading or writing a file — carried no signal.
 
 - **Payload contract**: `DroneAfterToolCallPayload` (`drone-core`) — `{ calls: [{ name, arguments }] }` listing every tool call in the round (parallel batch from one LLM response; single entry for `/tool` and `/exec`). `DronePluginHooks.onAfterToolCall` callbacks take it as an **optional** parameter (zero-arg consumers stay assignable), and `runHooks` gains an overload `('onAfterToolCall', payload)` — the engine implementation takes `(hookName, payload?)` so other hook names stay payload-less. AGENTS.md's Hook Ordering section documents this.
 - **LSP consumption**: the plugin matches path-bearing file tools (`read`/`write`/`apply_diff`, canonical `file__read` + bare `read` forms via `filePathFromToolCall`), resolves the path, skips when a runtime is already connected (`findRuntimeForFile` fast path), and fires `void startServerForFile(...)` — **fire-and-forget**: startup latency never blocks the tool round, and `startDedup` collapses concurrent attempts (join semantics give racers the shared promise). Failures are logged/state-recorded by the manager.
 - **Tests**: `test/lsp-plugin-warmup.test.ts` (8 tests; `vi.waitFor` polling, no fixed sleeps) — path extraction unit cases, a real-manager warm-up attempt observed via the failure warning, no-op cases (non-file tools, `lsp.enabled: false`), and the `code_action` chokepoint regression (tool-facing error unchanged + `lsp demand start failed` proves the demand path ran).
 - En-route: `pnpm lint` is root-level (not `-r`); vitest must run from the repo root (workspace config), not the package dir.
+
 ## Consequences
 
 ### Positive
@@ -82,14 +92,14 @@ Demand start was reactive only: an ambient server first spawned when an LSP *too
 ### Negative / tradeoffs
 
 - Ambient languages cost one demand-start round-trip (install resolve + spawn + initialize) on first touch instead of being pre-spawned.
-- The preinstall warm-up is install-only; it does not pre-warm server *state* (initialize happens on demand).
+- The preinstall warm-up is install-only; it does not pre-warm server _state_ (initialize happens on demand).
 - Four test config literals needed `preinstall: false` added (new required key).
 
 ## En-route lessons
 
 - The fake LSP server's `READY` barrier originally went to **stdout**, corrupting Content-Length framing when the transport attached to the same pipe ("message without Content-Length") — control channels must stay off a protocol stream; moved to stderr.
-- Tests must kill the *manager's* spawned child (`findRuntimeForFile().childProcess`), not the harness's own instance, or demand-restart tests fail confusingly.
-- The first `startServerForFile` rewrite dispatched purely by known-spec extension match, silently hijacking crashed *configured* servers to spec defaults — configured-first dispatch preserves restart identity.
+- Tests must kill the _manager's_ spawned child (`findRuntimeForFile().childProcess`), not the harness's own instance, or demand-restart tests fail confusingly.
+- The first `startServerForFile` rewrite dispatched purely by known-spec extension match, silently hijacking crashed _configured_ servers to spec defaults — configured-first dispatch preserves restart identity.
 
 ## Implementation
 

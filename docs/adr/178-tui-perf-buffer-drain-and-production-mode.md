@@ -1,6 +1,14 @@
 ---
 tags: [decision, tui, performance, react, node-env, docker, memory-leak]
-related: [modules/drone-agent-tui.md, modules/drone-agent.md, decisions/001-use-ink.md, decisions/036-ink-6-react-19.md, decisions/154-bin-shims-replace-entry-gates.md, decisions/171-codeql-reenable-in-source-dismissal.md]
+related:
+  [
+    modules/drone-agent-tui.md,
+    modules/drone-agent.md,
+    decisions/001-use-ink.md,
+    decisions/036-ink-6-react-19.md,
+    decisions/154-bin-shims-replace-entry-gates.md,
+    decisions/171-codeql-reenable-in-source-dismissal.md,
+  ]
 ---
 
 # 178: TUI User Timing perf-buffer drain + `NODE_ENV=production` defaults
@@ -12,8 +20,8 @@ related: [modules/drone-agent-tui.md, modules/drone-agent.md, decisions/001-use-
 Long-lived TUI sessions trigger Node's
 `MaxPerformanceEntryBufferExceededWarning` and accumulate unreclaimable memory.
 Root cause: **react-reconciler's development build** (loaded whenever
-`NODE_ENV !== 'production'`) records a `performance.measure` entry for *every
-component render/commit and never clears them*. Node's global User Timing
+`NODE_ENV !== 'production'`) records a `performance.measure` entry for _every
+component render/commit and never clears them_. Node's global User Timing
 buffer caps at **1,000,000 entries**; a long-lived Ink TUI session — which
 re-renders on every streamed chunk — reaches that cap through ordinary
 streaming re-renders. No code recursion is involved; the growth is purely the
@@ -71,7 +79,7 @@ hook bounds the buffer in every one of those environments.
 - Dev-mode sessions (explicit `NODE_ENV=development`) keep all React/vitest
   dev warnings, with `usePerformanceDrain` bounding their growth at 100k
   entries.
-- The drain clears the *entire* measure buffer by design; nothing in the
+- The drain clears the _entire_ measure buffer by design; nothing in the
   codebase consumes reconciler measures.
 
 ## Key Points

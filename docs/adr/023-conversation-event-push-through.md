@@ -1,6 +1,12 @@
 ---
 tags: [decision, swarm, events]
-related: [022-swarm-websocket-shutdown-guard.md, 024-swarm-event-push-404-fix.md, flows/tool-call-loop.md, entities/DronePlugin.md]
+related:
+  [
+    022-swarm-websocket-shutdown-guard.md,
+    024-swarm-event-push-404-fix.md,
+    flows/tool-call-loop.md,
+    entities/DronePlugin.md,
+  ]
 ---
 
 # 023 — Conversation Event Push-Through

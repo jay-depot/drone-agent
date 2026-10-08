@@ -1,6 +1,14 @@
 ---
 tags: [decision, bug-fix, context-budget, safety-trim]
-related: [concepts/session-management.md, modules/drone-agent.md, flows/tool-call-loop.md, entities/Session.md, decisions/053-compaction-latch-fix.md, decisions/133-compaction-oldest-turns-helper-consolidation.md]
+related:
+  [
+    concepts/session-management.md,
+    modules/drone-agent.md,
+    flows/tool-call-loop.md,
+    entities/Session.md,
+    decisions/053-compaction-latch-fix.md,
+    decisions/133-compaction-oldest-turns-helper-consolidation.md,
+  ]
 ---
 
 # 116. Safety-trim estimate vs. actual drop mismatch (review-state #8)

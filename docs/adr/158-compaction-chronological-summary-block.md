@@ -1,6 +1,14 @@
 ---
 tags: [decision, compaction, session-management, ordering]
-related: [concepts/session-management.md, entities/Session.md, decisions/125-compaction-summary-eviction.md, decisions/133-compaction-oldest-turns-helper-consolidation.md, decisions/142-compaction-turn-granularity-fix.md, decisions/153-pre-compaction-nudge.md]
+related:
+  [
+    concepts/session-management.md,
+    entities/Session.md,
+    decisions/125-compaction-summary-eviction.md,
+    decisions/133-compaction-oldest-turns-helper-consolidation.md,
+    decisions/142-compaction-turn-granularity-fix.md,
+    decisions/153-pre-compaction-nudge.md,
+  ]
 ---
 
 # 158: Chronological Compaction Summary Block
@@ -9,7 +17,7 @@ related: [concepts/session-management.md, entities/Session.md, decisions/125-com
 
 ## Context
 
-Compaction summaries appeared in the LLM context **newest-first**, backwards relative to the live conversation (which runs oldest→newest). Root cause: `prependSystemTurn()` (`drone-agent/src/runtime/session-manager.ts`) inserted every new summary turn with `turns.unshift()` — so each summary landed *in front of* all previous ones. Storage order flowed untouched into `getMessages()`, which is exactly what the conversation service sends to the LLM, so after N compactions the model read `[S_N … S_2, S_1, live turns…]`.
+Compaction summaries appeared in the LLM context **newest-first**, backwards relative to the live conversation (which runs oldest→newest). Root cause: `prependSystemTurn()` (`drone-agent/src/runtime/session-manager.ts`) inserted every new summary turn with `turns.unshift()` — so each summary landed _in front of_ all previous ones. Storage order flowed untouched into `getMessages()`, which is exactly what the conversation service sends to the LLM, so after N compactions the model read `[S_N … S_2, S_1, live turns…]`.
 
 Nothing ever chose this ordering. No ADR specified it, no consumer deliberately relied on it, and nothing re-sorted at presentation time. It was an emergent artifact of "prepend" naming that later got **enshrined**: [125-compaction-summary-eviction](125-compaction-summary-eviction.md) set the self-purge drop target to `getSummaryTurns().at(-1)` (correct only because storage was reversed), test comments asserted "`getSummaryTurns()` is newest-first", and [133-compaction-oldest-turns-helper-consolidation](133-compaction-oldest-turns-helper-consolidation.md) documented the resulting `[S_newest…S_oldest, normal_oldest…]` layout as fact. The same reversed order leaked into the log plugin's JSON session snapshots.
 
@@ -23,7 +31,7 @@ Keep the API name and signature `prependSystemTurn(content, opts?)`; redefine on
 
 ### 2. Forced consequence: self-purge flips head-ward
 
-With chronological storage, the compaction self-purge's drop target flips from `summaryTurns.at(-1)!.id` back to `summaryTurns[0]!.id` — but now `[0]` genuinely *is* the oldest summary, restoring [125-compaction-summary-eviction](125-compaction-summary-eviction.md)'s intent with simpler indexing.
+With chronological storage, the compaction self-purge's drop target flips from `summaryTurns.at(-1)!.id` back to `summaryTurns[0]!.id` — but now `[0]` genuinely _is_ the oldest summary, restoring [125-compaction-summary-eviction](125-compaction-summary-eviction.md)'s intent with simpler indexing.
 
 ### 3. Forced consequence: `dropOldestSummaries` slice direction
 

@@ -1,6 +1,17 @@
 ---
 tags: [decision, security, swarm]
-related: [swarm-architecture.md, drone-beacon.md, drone-coordinator.md, concepts/mtls-and-reverse-channel.md, decisions/117-tofu-fingerprint-pinning.md, decisions/122-tofu-fingerprint-pin-socket-secureconnect.md, decisions/025-coordinator-web-ui-http-port.md, decisions/043-inter-beacon-spawn-routing.md, flows/swarm-connection.md]
+related:
+  [
+    swarm-architecture.md,
+    drone-beacon.md,
+    drone-coordinator.md,
+    concepts/mtls-and-reverse-channel.md,
+    decisions/117-tofu-fingerprint-pinning.md,
+    decisions/122-tofu-fingerprint-pin-socket-secureconnect.md,
+    decisions/025-coordinator-web-ui-http-port.md,
+    decisions/043-inter-beacon-spawn-routing.md,
+    flows/swarm-connection.md,
+  ]
 ---
 
 # Rate Limiting + mTLS + WS Reverse Channel

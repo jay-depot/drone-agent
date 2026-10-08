@@ -2,7 +2,13 @@
 id: decisions/154-bin-shims-replace-entry-gates
 title: Bin shims replace entry-point self-detection gates
 tags: [decision, architecture, cli, packaging]
-related: [modules/drone-swarm.md, modules/drone-beacon.md, modules/drone-coordinator.md, modules/drone-gateway.md]
+related:
+  [
+    modules/drone-swarm.md,
+    modules/drone-beacon.md,
+    modules/drone-coordinator.md,
+    modules/drone-gateway.md,
+  ]
 date: 2026-08-22
 status: accepted
 ---
@@ -59,7 +65,7 @@ already has (or now has) a shim, so detection logic is pure liability.
 
 Entry modules that export `main()` are also imported by tests
 (`drone-swarm/test/cli.test.ts` imports `main` from `../src/index.js`). Calling
-`main()` unconditionally *inside* such a module would execute on every test
+`main()` unconditionally _inside_ such a module would execute on every test
 import — hitting the network and `process.exit()`-ing the vitest fork under
 the single-fork pool. Moving invocation into the shim satisfies this
 structurally: entry modules must stay side-effect-free at import time.

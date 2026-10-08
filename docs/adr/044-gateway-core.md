@@ -1,6 +1,13 @@
 ---
 tags: [decision, gateway, architecture]
-related: [modules/drone-gateway.md, concepts/spawn-backend.md, concepts/json-listen-mode.md, modules/drone-swarm-common.md, decisions/235-gateway-architecture-standalone-service.md]
+related:
+  [
+    modules/drone-gateway.md,
+    concepts/spawn-backend.md,
+    concepts/json-listen-mode.md,
+    modules/drone-swarm-common.md,
+    decisions/235-gateway-architecture-standalone-service.md,
+  ]
 ---
 
 # 044: Gateway Core — Standalone Service + Pluggable Spawn Backends
@@ -36,6 +43,7 @@ The spawn logic from `drone-beacon/src/spawner.ts` was extracted into `drone-swa
 ### 6. Pluggable Spawn Backend
 
 The gateway has a `SpawnBackend` interface with two implementations:
+
 - `LocalSpawnBackend` — spawns `drone-agent` processes on the host (standalone mode)
 - `CoordinatorSpawnBackend` — delegates to the coordinator's web port (swarm mode)
 

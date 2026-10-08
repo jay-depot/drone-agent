@@ -12,6 +12,7 @@ related: [modules/drone-agent-plugins.md, decisions/048-large-file-splitting.md]
 The LSP plugin's tools required the LLM to know exact 1-based line/column numbers for every cursor-position operation (hover, go-to-definition, find-references, etc.). This forced the LLM to either remember positions from a recent file read or manually count characters — a significant ergonomic friction point.
 
 Additionally, several other pain points existed:
+
 - **No "find by text content" flow** — The LLM couldn't say "find `function foo` and hover over it" in one step
 - **No didChange for unsaved buffers** — If the LLM wrote to a file via `file__write`, the LSP server still saw the old content
 - **rename returned edits instead of applying** — The LLM had to parse workspace edits and make individual file writes
@@ -72,16 +73,16 @@ All modified tools' descriptions updated to mention the new capabilities.
 
 ## Files Modified
 
-| File | Changes |
-|------|---------|
-| `drone-core/src/lsp-types.ts` | JSDoc comments for 0-based vs 1-based |
-| `drone-agent/src/plugins/lsp/server.ts` | Added `resolveTextPosition`, `resolveSymbolPosition`, `syncFileIfNeeded`; made `parsePositionInput` async with text/symbol support |
-| `drone-agent/src/plugins/lsp/tools/navigation.ts` | Added text/symbol params to 5 tools |
-| `drone-agent/src/plugins/lsp/tools/editing.ts` | Added text/symbol to code_action + rename; added `apply` to rename; auto-apply formatting |
-| `drone-agent/src/plugins/lsp/tools/completion.ts` | Added text/symbol params to 2 tools |
-| `drone-agent/src/plugins/lsp/tools/hierarchy.ts` | Added text/symbol params to 2 tools |
-| `drone-agent/src/plugins/lsp/tools/diagnostics.ts` | Added text/symbol params |
-| `drone-agent/test/lsp-ergonomics.test.ts` | 21 new tests |
+| File                                               | Changes                                                                                                                            |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `drone-core/src/lsp-types.ts`                      | JSDoc comments for 0-based vs 1-based                                                                                              |
+| `drone-agent/src/plugins/lsp/server.ts`            | Added `resolveTextPosition`, `resolveSymbolPosition`, `syncFileIfNeeded`; made `parsePositionInput` async with text/symbol support |
+| `drone-agent/src/plugins/lsp/tools/navigation.ts`  | Added text/symbol params to 5 tools                                                                                                |
+| `drone-agent/src/plugins/lsp/tools/editing.ts`     | Added text/symbol to code_action + rename; added `apply` to rename; auto-apply formatting                                          |
+| `drone-agent/src/plugins/lsp/tools/completion.ts`  | Added text/symbol params to 2 tools                                                                                                |
+| `drone-agent/src/plugins/lsp/tools/hierarchy.ts`   | Added text/symbol params to 2 tools                                                                                                |
+| `drone-agent/src/plugins/lsp/tools/diagnostics.ts` | Added text/symbol params                                                                                                           |
+| `drone-agent/test/lsp-ergonomics.test.ts`          | 21 new tests                                                                                                                       |
 
 ## Related
 

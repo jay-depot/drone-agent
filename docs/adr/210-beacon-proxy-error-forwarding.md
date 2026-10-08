@@ -1,6 +1,11 @@
 ---
 tags: [beacon, coordinator, proxy, wiki, error-handling, adr]
-related: [decisions/206-wiki-delete-coordinator-scope.md, modules/drone-beacon.md, concepts/semantic-search.md]
+related:
+  [
+    decisions/206-wiki-delete-coordinator-scope.md,
+    modules/drone-beacon.md,
+    concepts/semantic-search.md,
+  ]
 ---
 
 # Beacon proxy forwards the coordinator's real status + body; 502 reserved for no-response
@@ -11,17 +16,17 @@ related: [decisions/206-wiki-delete-coordinator-scope.md, modules/drone-beacon.m
 
 `swarm__wiki_write` with `scope: "coordinator"` returned `{"success":false,"error":"Failed to proxy to coordinator"}`. Reproduced end to end:
 
-| Layer | Behavior |
-| --- | --- |
+| Layer                                                                        | Behavior                                                                                            |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | `writePage()` → `validatePitch()` (`drone-swarm-common/src/wiki-storage.ts`) | Throws `Pitch is too long. Keep it under 400 characters…` (observed payload pitch = 625, cap = 400) |
-| Coordinator `PUT /api/wiki/:id` | Returns **400** + `{"error":"Pitch is too long…"}` — already correct |
-| Beacon `proxyCall` (`drone-beacon/src/routes/context.ts`) | `if (!res.ok) return null` — **collapsed the 400 and its body to `null`** |
-| Beacon wiki `PUT` coordinator branch | `if (!result)` → **502 `Failed to proxy to coordinator`** — the mask |
-| Agent `wiki_write` (`drone-agent/src/plugins/swarm/tools-wiki.ts`) | Already surfaces `err.error` — would have worked had the real body arrived |
+| Coordinator `PUT /api/wiki/:id`                                              | Returns **400** + `{"error":"Pitch is too long…"}` — already correct                                |
+| Beacon `proxyCall` (`drone-beacon/src/routes/context.ts`)                    | `if (!res.ok) return null` — **collapsed the 400 and its body to `null`**                           |
+| Beacon wiki `PUT` coordinator branch                                         | `if (!result)` → **502 `Failed to proxy to coordinator`** — the mask                                |
+| Agent `wiki_write` (`drone-agent/src/plugins/swarm/tools-wiki.ts`)           | Already surfaces `err.error` — would have worked had the real body arrived                          |
 
 The beacon-scope branch already surfaced the real message (`catch → 400 { error: err.message }`); **only the proxy path masked it**. The reject-on-write pitch validation is intentional (keep new entries compliant, truncate only on the read side for pre-existing entries), so the defect is purely one of error propagation.
 
-ADR [206-wiki-delete-coordinator-scope](206-wiki-delete-coordinator-scope.md) had recorded "the proxy still collapses coordinator 5xx to `null`" as an *accepted limitation* for the delete path. Because `proxyCall` is shared by wiki, insights, and principles, the limitation was never scoped to that one route — it reappeared as a fresh, hard-to-diagnose bug on the wiki write path. This ADR reverses that acceptance for the wiki paths.
+ADR [206-wiki-delete-coordinator-scope](206-wiki-delete-coordinator-scope.md) had recorded "the proxy still collapses coordinator 5xx to `null`" as an _accepted limitation_ for the delete path. Because `proxyCall` is shared by wiki, insights, and principles, the limitation was never scoped to that one route — it reappeared as a fresh, hard-to-diagnose bug on the wiki write path. This ADR reverses that acceptance for the wiki paths.
 
 ## Decision
 

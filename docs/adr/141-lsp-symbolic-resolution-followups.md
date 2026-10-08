@@ -1,6 +1,14 @@
 ---
 tags: [decision, lsp, ergonomics, position-resolution]
-related: [concepts/lsp-symbolic-resolution.md, decisions/136-lsp-symbolic-resolution.md, decisions/138-lsp-symbolic-resolution-round-2.md, decisions/139-lsp-symbolic-resolution-round-3.md, decisions/140-lsp-symbolic-resolution-round-4.md, modules/drone-agent-plugins.md]
+related:
+  [
+    concepts/lsp-symbolic-resolution.md,
+    decisions/136-lsp-symbolic-resolution.md,
+    decisions/138-lsp-symbolic-resolution-round-2.md,
+    decisions/139-lsp-symbolic-resolution-round-3.md,
+    decisions/140-lsp-symbolic-resolution-round-4.md,
+    modules/drone-agent-plugins.md,
+  ]
 ---
 
 # 141: LSP Symbolic Resolution Follow-ups — code_action single-parse, 1-based range at agent boundary, one-snippet-per-file (settled), per-key lock re-scoped
@@ -62,12 +70,12 @@ A strict per-referenceId lock is **not** used: `storeReferences`' FIFO eviction 
 
 ## Files Modified
 
-| File | Changes |
-|------|---------|
-| `drone-agent/src/plugins/lsp/tools/editing.ts` | Deleted the `code_action` ambiguity pre-pass; normalized `query.range` to 1-based |
-| `drone-agent/src/plugins/lsp/server.ts` | `locationToAgentShape` normalizes `range` to 1-based; `resolveReference` reads fingerprint outside the lock; `withCacheLock` comment updated |
-| `drone-agent/src/plugins/lsp/tools/navigation.ts` | `buildAutoExpansion` dedups by file (`seenFiles`) |
-| `drone-agent/test/lsp-ergonomics.test.ts` | 50 tests (was 47): `locationToAgentShape` 1-based range, `code_action` query.range 1-based, `buildAutoExpansion` one-snippet-per-file |
+| File                                              | Changes                                                                                                                                      |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `drone-agent/src/plugins/lsp/tools/editing.ts`    | Deleted the `code_action` ambiguity pre-pass; normalized `query.range` to 1-based                                                            |
+| `drone-agent/src/plugins/lsp/server.ts`           | `locationToAgentShape` normalizes `range` to 1-based; `resolveReference` reads fingerprint outside the lock; `withCacheLock` comment updated |
+| `drone-agent/src/plugins/lsp/tools/navigation.ts` | `buildAutoExpansion` dedups by file (`seenFiles`)                                                                                            |
+| `drone-agent/test/lsp-ergonomics.test.ts`         | 50 tests (was 47): `locationToAgentShape` 1-based range, `code_action` query.range 1-based, `buildAutoExpansion` one-snippet-per-file        |
 
 ## Related
 

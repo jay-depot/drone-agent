@@ -1,11 +1,30 @@
 ---
-tags: [decision, swarm, prompt-fragments, beacon, coordinator, coordinator-ui, identity, adr]
-related: [concepts/swarm-prompt-fragments.md, decisions/173-swarm-prompt-fragments.md, modules/drone-agent-plugins.md, modules/drone-beacon.md, modules/drone-coordinator.md, modules/drone-coordinator-ui.md, modules/drone-swarm-common.md]
+tags:
+  [
+    decision,
+    swarm,
+    prompt-fragments,
+    beacon,
+    coordinator,
+    coordinator-ui,
+    identity,
+    adr,
+  ]
+related:
+  [
+    concepts/swarm-prompt-fragments.md,
+    decisions/173-swarm-prompt-fragments.md,
+    modules/drone-agent-plugins.md,
+    modules/drone-beacon.md,
+    modules/drone-coordinator.md,
+    modules/drone-coordinator-ui.md,
+    modules/drone-swarm-common.md,
+  ]
 ---
 
 # 225 — Swarm Status + Swarm Identity prompt fragments (with coordinator-UI Identity page)
 
-**Status**: Implemented (2026-09-26) · **Branch**: `feat/coordinator-status-prompts` · **Commits**: `7e8c9d4a` (feature) + memory `7e2e8280`, `2bb03c02` · **PR**: #113 · **Plan**: project-memory `plan-swarm-identity-status-fragments` — *deleted from project memory after ingest*
+**Status**: Implemented (2026-09-26) · **Branch**: `feat/coordinator-status-prompts` · **Commits**: `7e8c9d4a` (feature) + memory `7e2e8280`, `2bb03c02` · **PR**: #113 · **Plan**: project-memory `plan-swarm-identity-status-fragments` — _deleted from project memory after ingest_
 
 **Summary**: The `swarm` plugin gains two **header** system-prompt fragments. `# Swarm Status` (`swarm.status`) tells the model which swarm it runs in — the local beacon's name and dialed address, the coordinator host:port, and the roster of registered beacons — from a **cache-only** snapshot (no network in the render path). `# Swarm Identity` (`swarm.identity`) is **user-authored free text** describing the swarm's purpose, stored as a **reserved broadcast fragment** (`swarm-identity`) in the coordinator's `fragments` table and authored from a new coordinator-web-UI **Identity** page. The reserved id rides the existing coordinator→beacon-mirror→WS-`fragmentSync`→agent-store pipeline unchanged; the only new write machinery is a pair of coordinator authoring routes plus a `fragmentsChanged` reverse-channel nudge.
 

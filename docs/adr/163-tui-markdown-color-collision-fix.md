@@ -1,6 +1,12 @@
 ---
 tags: [decision, tui, syntax-highlighting, markdown, bug-fix]
-related: [drone-agent-tui.md, DroneAgentConfig.md, 077-tui-syntax-highlighting-ansi-escape-codes.md, 055-tui-tail-scrollback-formatting-preservation.md]
+related:
+  [
+    drone-agent-tui.md,
+    DroneAgentConfig.md,
+    077-tui-syntax-highlighting-ansi-escape-codes.md,
+    055-tui-tail-scrollback-formatting-preservation.md,
+  ]
 ---
 
 # 163: TUI Markdown Foreground/Background Color Collision Fix
@@ -12,8 +18,8 @@ related: [drone-agent-tui.md, DroneAgentConfig.md, 077-tui-syntax-highlighting-a
 Markdown text in the TUI could become literally invisible because a foreground color equaled — or was promoted onto — the code background color. The failure class was established empirically by probing rendered output with `ink-testing-library` under `FORCE_COLOR=2` and reading raw escape sequences out of Ink frames. Six defects, two visible and four latent:
 
 1. **Inline codespans forced `fg black` on `bg gray`.** `Markdown.tsx` rendered `` `code` `` as `<Text backgroundColor="gray" color="black">`. When nested inside `<Text bold>` prose (e.g. `` **bold claim** `identifierName` ``), the parent leaves SGR 1 active, and terminals with **bold-promotion** render requested fg black (30) as bright black (90) — which is exactly the palette slot of the gray background (100). Emitted frame: `\e[1mbefore \e[100m\e[30midentifierName\e[39m\e[49m` → invisible on xterm.js / VS Code / kitty defaults.
-2. **Every fenced-code comment was invisible everywhere.** `SYNTAX_COLORS.comment = 'gray'` produced fg 90 on bg 100 — the *same* palette slot, no promotion needed.
-3. **The `ANSI_COLORS` map was lossy.** Only the 8 base colors + gray existed; configured hex or 256-color values silently fell back to white ('37'), so users could not tune their way out of a collision. Separately, `SYNTAX_COLORS.strong='bold'` and `.emphasis='italic'` encoded *attributes* inside a color map, so those highlight.js classes lost styling entirely.
+2. **Every fenced-code comment was invisible everywhere.** `SYNTAX_COLORS.comment = 'gray'` produced fg 90 on bg 100 — the _same_ palette slot, no promotion needed.
+3. **The `ANSI_COLORS` map was lossy.** Only the 8 base colors + gray existed; configured hex or 256-color values silently fell back to white ('37'), so users could not tune their way out of a collision. Separately, `SYNTAX_COLORS.strong='bold'` and `.emphasis='italic'` encoded _attributes_ inside a color map, so those highlight.js classes lost styling entirely.
 4. **Codespan background ignored config.** The gray background was hardcoded; `tui.syntaxHighlighting.codeBackground` never applied to inline code.
 5. **Latent crash:** `renderBlockquote` joined `ReactNode[]` into a string (`'[object Object]'` if ever reached; currently shadowed by the `token.text` short-circuit).
 6. **Dead imports** in `Markdown.tsx`: `extractTokenText`, `getTokenColor` (imported, unused).
@@ -27,7 +33,12 @@ Scope agreed up front: `Markdown.tsx` + `syntax-highlight.ts` only. `FileReadBlo
 Token styling moves from string-valued pseudo-colors to a structured style:
 
 ```typescript
-type SyntaxStyle = { color?: string; bold?: boolean; italic?: boolean; underline?: boolean };
+type SyntaxStyle = {
+  color?: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+};
 type SyntaxTheme = Record<string, SyntaxStyle>; // highlight.js class name → style
 ```
 
@@ -55,12 +66,12 @@ The component's default `syntaxColors = SYNTAX_COLORS` prop meant `DEFAULT_SYNTA
 
 ## Alternatives Considered
 
-| Alternative | Verdict |
-|-------------|---------|
-| Keep string-encoded pseudo-colors (`'bold'`/`'italic'`) | Rejected — lossy, blocks hex/256 support, keeps the collision class alive |
-| Force a known-safe fg (e.g. white) on codespans | Rejected — overrides user prose/theme colors; inheritance is strictly safer |
+| Alternative                                                   | Verdict                                                                                    |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Keep string-encoded pseudo-colors (`'bold'`/`'italic'`)       | Rejected — lossy, blocks hex/256 support, keeps the collision class alive                  |
+| Force a known-safe fg (e.g. white) on codespans               | Rejected — overrides user prose/theme colors; inheritance is strictly safer                |
 | White fallback for unparseable config colors (prior behavior) | Rejected — silent misconfiguration; emitting nothing makes bad values visible-but-readable |
-| Migrate `FileReadBlock` to `SyntaxTheme` natively now | Deferred — scope control; it inherits the fixes via the dual-format input |
+| Migrate `FileReadBlock` to `SyntaxTheme` natively now         | Deferred — scope control; it inherits the fixes via the dual-format input                  |
 
 ## Validation
 

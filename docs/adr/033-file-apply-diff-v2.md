@@ -1,6 +1,11 @@
 ---
 tags: [decision]
-related: [drone-agent-plugins.md, 028-tool-name-separator.md, 038-file-apply-diff-unified-diff.md]
+related:
+  [
+    drone-agent-plugins.md,
+    028-tool-name-separator.md,
+    038-file-apply-diff-unified-diff.md,
+  ]
 ---
 
 # 033: Content-Anchor-Based Patch Format for `file__apply_diff`

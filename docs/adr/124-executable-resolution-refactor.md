@@ -1,6 +1,13 @@
 ---
 tags: [decision, executable-resolution, refactor]
-related: [modules/drone-core.md, modules/drone-gateway.md, modules/drone-beacon.md, concepts/subagent.md, decisions/115-subagent-mode-and-return-tool.md]
+related:
+  [
+    modules/drone-core.md,
+    modules/drone-gateway.md,
+    modules/drone-beacon.md,
+    concepts/subagent.md,
+    decisions/115-subagent-mode-and-return-tool.md,
+  ]
 ---
 
 # 124. Executable Resolution Refactor
@@ -36,6 +43,7 @@ export interface ResolveDroneExecutableOptions {
 ```
 
 Resolution order:
+
 1. Accepts an absolute or relative path and validates executability.
 2. Falls back to PATH lookup (with Windows `PATHEXT` support).
 3. Optionally falls back to `argv[1]` when the configured name is not found.

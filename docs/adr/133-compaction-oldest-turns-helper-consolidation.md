@@ -1,6 +1,15 @@
 ---
 tags: [decision, bug-fix, compaction, context-budget, safety-trim]
-related: [concepts/session-management.md, modules/drone-agent.md, modules/drone-agent-plugins.md, flows/tool-call-loop.md, decisions/116-safety-trim-estimate-drop-mismatch.md, decisions/125-compaction-summary-eviction.md, decisions/053-compaction-latch-fix.md]
+related:
+  [
+    concepts/session-management.md,
+    modules/drone-agent.md,
+    modules/drone-agent-plugins.md,
+    flows/tool-call-loop.md,
+    decisions/116-safety-trim-estimate-drop-mismatch.md,
+    decisions/125-compaction-summary-eviction.md,
+    decisions/053-compaction-latch-fix.md,
+  ]
 ---
 
 # 133. Compaction: Summarize Oldest Non-Summary Turns + Consolidate the "Oldest Non-Summary Turns" Helper
@@ -9,7 +18,7 @@ related: [concepts/session-management.md, modules/drone-agent.md, modules/drone-
 
 ## Context
 
-Compaction's slice-and-summarize logic in `plugins/compaction/index.ts` used `nonSummaryTurns.slice(-sliceSizeCapped)` — slicing the **tail** of the array. Because `appendUserMessage` pushes to the tail (newest last) while `prependSystemTurn` unshifts summaries to the head, the array was `[S_newest…S_oldest, normal_oldest…normal_newest]`. Slicing the tail therefore grabbed the **newest** normal turns, not the oldest. This regression was introduced in commit `c29bd93a` (the [125-compaction-summary-eviction](125-compaction-summary-eviction.md) fix, which switched from `slice(0, sliceSize)` to `slice(-sliceSizeCapped)`). *(Layout note: since [158-compaction-chronological-summary-block](158-compaction-chronological-summary-block.md) the array is `[S1…Sn chronological, normal_oldest…normal_newest]` — the tail-slicing bug analysis below remains historically accurate.)*
+Compaction's slice-and-summarize logic in `plugins/compaction/index.ts` used `nonSummaryTurns.slice(-sliceSizeCapped)` — slicing the **tail** of the array. Because `appendUserMessage` pushes to the tail (newest last) while `prependSystemTurn` unshifts summaries to the head, the array was `[S_newest…S_oldest, normal_oldest…normal_newest]`. Slicing the tail therefore grabbed the **newest** normal turns, not the oldest. This regression was introduced in commit `c29bd93a` (the [125-compaction-summary-eviction](125-compaction-summary-eviction.md) fix, which switched from `slice(0, sliceSize)` to `slice(-sliceSizeCapped)`). _(Layout note: since [158-compaction-chronological-summary-block](158-compaction-chronological-summary-block.md) the array is `[S1…Sn chronological, normal_oldest…normal_newest]` — the tail-slicing bug analysis below remains historically accurate.)_
 
 Separately, the safety-trim helper `getDroppableTurnPrefix` (introduced in [116-safety-trim-estimate-drop-mismatch](116-safety-trim-estimate-drop-mismatch.md)) had "stop at first summary turn" semantics that diverged from compaction's "skip summaries" intent. The two paths wanted the same thing — "oldest non-summary turns, skipping summaries" — but implemented it differently.
 

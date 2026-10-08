@@ -1,6 +1,11 @@
 ---
 tags: [decision, gateway, config, architecture]
-related: [modules/drone-gateway.md, decisions/059-matrix-adapter.md, decisions/235-gateway-architecture-standalone-service.md]
+related:
+  [
+    modules/drone-gateway.md,
+    decisions/059-matrix-adapter.md,
+    decisions/235-gateway-architecture-standalone-service.md,
+  ]
 ---
 
 # 058: Gateway Config Model — Folder Hierarchy with Per-Conversation Control Surfaces
@@ -63,7 +68,7 @@ The initial gateway config model (ADR 001 / [235-gateway-architecture-standalone
 
 ### 3. Adapter Owns Conversation Routing
 
-**Decision:** The service adapter is the *only* component that knows whether an incoming message came from a room, a DM, or the wildcard. It translates platform events into `AdapterMessage { adapterId, conversationId, text, senderId?, senderName? }` using its own conversation ID scheme.
+**Decision:** The service adapter is the _only_ component that knows whether an incoming message came from a room, a DM, or the wildcard. It translates platform events into `AdapterMessage { adapterId, conversationId, text, senderId?, senderName? }` using its own conversation ID scheme.
 
 **Rationale:**
 

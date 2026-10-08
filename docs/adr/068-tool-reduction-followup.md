@@ -1,6 +1,11 @@
 ---
 tags: [decision, tool-loading, architecture, git, swarm, utils]
-related: [modules/drone-agent-plugins.md, decisions/064-mcp-deferred-tool-loading.md, decisions/065-mcp-tool-mounting-cache-and-server-descriptions.md]
+related:
+  [
+    modules/drone-agent-plugins.md,
+    decisions/064-mcp-deferred-tool-loading.md,
+    decisions/065-mcp-tool-mounting-cache-and-server-descriptions.md,
+  ]
 ---
 
 # 068 — Tool Reduction Follow-up: Utils Consolidation, Git/Swarm List/Mount

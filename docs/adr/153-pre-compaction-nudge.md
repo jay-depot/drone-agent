@@ -1,6 +1,20 @@
 ---
-tags: [decision, compaction, plugin-engine, conversation-service, prompt-engineering]
-related: [concepts/session-management.md, flows/tool-call-loop.md, modules/drone-agent-plugins.md, decisions/135-compaction-slash-command.md, decisions/145-guardrail-reliability-features.md]
+tags:
+  [
+    decision,
+    compaction,
+    plugin-engine,
+    conversation-service,
+    prompt-engineering,
+  ]
+related:
+  [
+    concepts/session-management.md,
+    flows/tool-call-loop.md,
+    modules/drone-agent-plugins.md,
+    decisions/135-compaction-slash-command.md,
+    decisions/145-guardrail-reliability-features.md,
+  ]
 ---
 
 # 153: Pre-compaction state-preservation nudge via system reminders
@@ -9,7 +23,7 @@ related: [concepts/session-management.md, flows/tool-call-loop.md, modules/drone
 
 ## Context
 
-drone-agent's compaction ([134-compaction-correctness-fix](134-compaction-correctness-fix.md)) summarizes the oldest turn slice into free-form prioritized prose, accumulates multiple discrete summaries at the session head, and evicts the oldest summary wholesale once the summary region exceeds `summaryBudgetPercent` (20%). That makes summaries a *lossy, evictable* place for durable session state — yet nothing tells the model that a compaction deadline is approaching. The model is expected to curate its notepad/todo continuously on its own initiative; there is no signal saying "persist what you need now."
+drone-agent's compaction ([134-compaction-correctness-fix](134-compaction-correctness-fix.md)) summarizes the oldest turn slice into free-form prioritized prose, accumulates multiple discrete summaries at the session head, and evicts the oldest summary wholesale once the summary region exceeds `summaryBudgetPercent` (20%). That makes summaries a _lossy, evictable_ place for durable session state — yet nothing tells the model that a compaction deadline is approaching. The model is expected to curate its notepad/todo continuously on its own initiative; there is no signal saying "persist what you need now."
 
 Peer agents close this gap structurally: Pi's structured summary schema dedicates Goal / Next Steps / Critical Context sections (plus cumulative `<modified-files>` tracking) so critical state survives every compaction by construction; OpenCode V2's checkpoints carry objective/active-work/blockers/next-moves fields. drone-agent's incremental-slice design needs an equivalent guarantee without abandoning model-centric flexibility.
 

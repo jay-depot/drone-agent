@@ -1,13 +1,27 @@
 ---
-tags: [decision, trust, coordinator, beacon, mtls, approval, security, hardening]
-related: [concepts/mtls-and-reverse-channel.md, concepts/beacon-verification.md, modules/drone-coordinator.md, modules/drone-beacon.md, modules/drone-coordinator-ui.md, decisions/117-tofu-fingerprint-pinning.md, decisions/118-tofu-interactive-confirmation.md, decisions/120-bidirectional-verification-ux.md, decisions/122-tofu-fingerprint-pin-socket-secureconnect.md, decisions/123-rate-limit-mtls-ws-reverse-channel.md, decisions/212-coordinator-config-pipeline.md]
+tags:
+  [decision, trust, coordinator, beacon, mtls, approval, security, hardening]
+related:
+  [
+    concepts/mtls-and-reverse-channel.md,
+    concepts/beacon-verification.md,
+    modules/drone-coordinator.md,
+    modules/drone-beacon.md,
+    modules/drone-coordinator-ui.md,
+    decisions/117-tofu-fingerprint-pinning.md,
+    decisions/118-tofu-interactive-confirmation.md,
+    decisions/120-bidirectional-verification-ux.md,
+    decisions/122-tofu-fingerprint-pin-socket-secureconnect.md,
+    decisions/123-rate-limit-mtls-ws-reverse-channel.md,
+    decisions/212-coordinator-config-pipeline.md,
+  ]
 ---
 
 # 211: Beacon↔coordinator trust hardening — announce-gated approval + server-side enforcement
 
-**Status**: Implemented (2026-09-11) · **Branch**: `feat/coordinator-config-ui-and-secure-storage` (`bf3a7ef`) · **Plan**: project-memory `plan-coordinator-trust-hardening` (Plan A) — *deleted from project memory after ingest*
+**Status**: Implemented (2026-09-11) · **Branch**: `feat/coordinator-config-ui-and-secure-storage` (`bf3a7ef`) · **Plan**: project-memory `plan-coordinator-trust-hardening` (Plan A) — _deleted from project memory after ingest_
 
-**Summary**: Three defects in the beacon↔coordinator trust path were found by reading the code rather than the docs: (1) server-side approval status gated almost nothing — mTLS and the reverse-channel WebSocket both accepted any certificate whose fingerprint was already in `beacon_trust`, so a *pending* (unapproved) beacon could pull coordinator data; (2) localhost auto-approve keyed locality off the **body-claimed** `host` field, not the socket, so a remote attacker claiming `host: "localhost"` with a self-signed cert auto-approved; (3) the coordinator UI let an operator approve a beacon that had never confirmed the coordinator's own fingerprint, so the human handshake was advisory. The fix makes approval **announce-gated** (a signed `confirm-fingerprint` POST must land first), derives locality from the **socket**, and **enforces `status='approved'` server-side** on both mTLS and the reverse-channel WS.
+**Summary**: Three defects in the beacon↔coordinator trust path were found by reading the code rather than the docs: (1) server-side approval status gated almost nothing — mTLS and the reverse-channel WebSocket both accepted any certificate whose fingerprint was already in `beacon_trust`, so a _pending_ (unapproved) beacon could pull coordinator data; (2) localhost auto-approve keyed locality off the **body-claimed** `host` field, not the socket, so a remote attacker claiming `host: "localhost"` with a self-signed cert auto-approved; (3) the coordinator UI let an operator approve a beacon that had never confirmed the coordinator's own fingerprint, so the human handshake was advisory. The fix makes approval **announce-gated** (a signed `confirm-fingerprint` POST must land first), derives locality from the **socket**, and **enforces `status='approved'` server-side** on both mTLS and the reverse-channel WS.
 
 ## Context
 
@@ -15,8 +29,8 @@ The trust model is TOFU-based and bidirectional: the beacon pins the coordinator
 
 Four findings from a pre-implementation code review reshaped the request:
 
-1. **The verification code was already bidirectional** (`drone-swarm-common/src/verification.ts`) — a 4-word code derived from `sha256(beaconPublicKey ∥ beaconTlsFingerprint ∥ coordinatorTlsFingerprint)`. It proves *channel integrity*, not *machine ownership*: a rogue beacon registering directly produces a matching code too. No reciprocal back-channel code was needed — the real defense is the human recognizing the machine.
-2. **Approval status gated almost nothing server-side.** `mtls.ts` and `beacon-ws.ts` accepted any cert whose fingerprint was in `beacon_trust`, regardless of `status`. A pending beacon's cert is already in the table (that is how it registers), so it could already pull coordinator data. Only the *beacon's own* client-side `coordinatorTrusted()` gate stopped it — a client-side gate cannot stop a hostile client.
+1. **The verification code was already bidirectional** (`drone-swarm-common/src/verification.ts`) — a 4-word code derived from `sha256(beaconPublicKey ∥ beaconTlsFingerprint ∥ coordinatorTlsFingerprint)`. It proves _channel integrity_, not _machine ownership_: a rogue beacon registering directly produces a matching code too. No reciprocal back-channel code was needed — the real defense is the human recognizing the machine.
+2. **Approval status gated almost nothing server-side.** `mtls.ts` and `beacon-ws.ts` accepted any cert whose fingerprint was in `beacon_trust`, regardless of `status`. A pending beacon's cert is already in the table (that is how it registers), so it could already pull coordinator data. Only the _beacon's own_ client-side `coordinatorTrusted()` gate stopped it — a client-side gate cannot stop a hostile client.
 3. **Localhost auto-approve was spoofable.** `db/beacon-trust.ts` keyed locality off the **body-claimed** `req.host === 'localhost' || '127.0.0.1'`, never the socket. A remote attacker claiming `host: "localhost"` with a self-signed cert auto-approved.
 4. **The UI allowed a premature approve.** The Approve button did not require that the beacon had confirmed the coordinator's fingerprint, so an operator could approve before the human handshake completed.
 
@@ -25,7 +39,7 @@ Four findings from a pre-implementation code review reshaped the request:
 Four coupled changes, all required together:
 
 1. **Announce-gated approve.** The beacon fires a **signed** `confirm-fingerprint` POST (Ed25519 signature over `beaconId:timestamp` via `signBeaconPayload`, ±60s skew window) the moment `/trust-coordinator <code>` matches. The coordinator persists `fingerprint_confirmed_at` on `beacon_trust`; the beacon's existing 30s approval poll carries `fingerprintConfirmed`; the coordinator API returns **409** and the UI disables Approve until it is set.
-2. **"Do not approve unexpected beacons" warning.** A prominent, always-visible UI warning naming the beacon id/name/host and its verification code, plus a step-by-step CTA on the beacon detail page (1. run `/trust-coordinator <code>` on the beacon, 2. return here). This is the *real* rogue-beacon defense — recognize the machine, not just the code.
+2. **"Do not approve unexpected beacons" warning.** A prominent, always-visible UI warning naming the beacon id/name/host and its verification code, plus a step-by-step CTA on the beacon detail page (1. run `/trust-coordinator <code>` on the beacon, 2. return here). This is the _real_ rogue-beacon defense — recognize the machine, not just the code.
 3. **Socket-derived locality.** New `drone-coordinator/src/ip.ts` `isLoopbackIp(ip)` (handles `::ffff:` mapped IPv4 and the whole `127/8` range) replaces the body-claimed host for auto-approve. The body host is kept for **display and connect-back only**. Localhost remains auto-approved — that behavior is intentional.
 4. **Server-side status enforcement.** The mTLS middleware and the reverse-channel WS require `status='approved'` (403 / WS close 4002 otherwise). Open-while-pending exemptions are exactly: `GET /health`, `POST /api/beacons`, `GET /api/beacons/trust/:id`, and `POST /api/beacons/trust/:id/confirm-fingerprint`. Closing a pending WS is safe because the beacon reconnects with exponential backoff after approval.
 

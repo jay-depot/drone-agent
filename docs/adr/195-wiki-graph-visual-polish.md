@@ -1,6 +1,12 @@
 ---
-tags: [decision, drone-coordinator-ui, wiki, graph, force-graph, animation, layout]
-related: [modules/drone-coordinator-ui.md, decisions/194-wiki-graph-view.md, decisions/193-wiki-pitch-field.md]
+tags:
+  [decision, drone-coordinator-ui, wiki, graph, force-graph, animation, layout]
+related:
+  [
+    modules/drone-coordinator-ui.md,
+    decisions/194-wiki-graph-view.md,
+    decisions/193-wiki-pitch-field.md,
+  ]
 ---
 
 # 195: Wiki graph visual polish — sizing, labels, forces, showdown, live updates
@@ -25,6 +31,7 @@ when the Tags toggle hides them (shrunk to 5% via `nodeVal`), clickable to
 focus.
 
 **Force model** (`lib/wiki-graph-utils.ts`, all knobs exported for live tuning):
+
 - **Tag springs are the only structural attraction**:
   `tagSpringStrength(memberCount) = WIKI_TAG_SPRING_STRENGTH (0.1) / max(1, memberCount)`
   at `WIKI_TAG_LINK_DISTANCE = 55` — small distinctive tags bind their pages
@@ -95,7 +102,7 @@ The focused node's label **always draws**, bypassing Showdown.
 
 **Zoom-to-fit toggle** (⤢, `aria-pressed`, on by default): while on, the
 camera refits on engine stop and data pushes; manual zoom (buttons, or wheel —
-captured on the component root in the capture phase so it disarms *before* the
+captured on the component root in the capture phase so it disarms _before_ the
 engine's d3-zoom handler) disarms it; re-arming fits immediately. Focus
 camera wins over reactive fit while a node is focused.
 
@@ -105,20 +112,21 @@ clamped 0.5–150 — the clamp must cover the full `MIN_ZOOM_K 0.05`–
 zoom-out band). Links are engine-screen-space and need no compensation.
 
 **Live-update animation** (consumers of the `wiki.changed`-driven refetch):
-the data push diffs ids against the previous push (snapshot taken *before*
+the data push diffs ids against the previous push (snapshot taken _before_
 `nodesRef` is overwritten) and:
-- *Added* nodes get a random landing spot inside the visible graph-space rect
+
+- _Added_ nodes get a random landing spot inside the visible graph-space rect
   with zero velocity, then are "held" — engine-tick damping at ~3% ramping to
   full over `DRIFT_MS = 2000` (the let-go), radius easing in 30%→100%. When
   the last drift ends: settling flag clears and one deferred zoom-to-fit runs.
-- *Removed* nodes become ghosts for `FADE_MS = 600`: they stay in the pushed
+- _Removed_ nodes become ghosts for `FADE_MS = 600`: they stay in the pushed
   scene, shrink via `nodeVal`, render dimmed, are skipped by the label pass,
   and are excluded from tag repulsion (`setExcluded`) so invisible nodes can't
   push real ones.
 
 ## Key engine facts (force-graph 1.51.4, verified in-bundle)
 
-- **Every prop goes through `accessorFn`** — a *string* prop is a per-item
+- **Every prop goes through `accessorFn`** — a _string_ prop is a per-item
   property-name lookup, not a constant. `nodeCanvasObjectMode('after')`
   silently evaluates `node['after']` (undefined) and disables all custom node
   painting; it must be `() => 'after'`.

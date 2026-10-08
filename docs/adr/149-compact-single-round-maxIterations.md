@@ -1,6 +1,13 @@
 ---
 tags: [decision, compaction, slash-command, bugfix]
-related: [concepts/session-management.md, modules/drone-agent-plugins.md, decisions/134-compaction-correctness-fix.md, decisions/135-compaction-slash-command.md, decisions/148-compact-manual-force-skips-threshold.md]
+related:
+  [
+    concepts/session-management.md,
+    modules/drone-agent-plugins.md,
+    decisions/134-compaction-correctness-fix.md,
+    decisions/135-compaction-slash-command.md,
+    decisions/148-compact-manual-force-skips-threshold.md,
+  ]
 ---
 
 # 149: `/compact` performs exactly one forced round via `maxIterations`

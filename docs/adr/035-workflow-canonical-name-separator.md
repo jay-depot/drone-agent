@@ -25,7 +25,7 @@ Change the workflow canonical name reassembly from dot to double-underscore to m
 
 ## Implementation
 
-- `drone-agent/src/index.tsx` line 307: Changed `\`${pluginId}.${workflowName}\`` to `\`${pluginId}__${workflowName}\``
+- `drone-agent/src/index.tsx` line 307: Changed `\`${pluginId}.${workflowName}\``to`\`${pluginId}__${workflowName}\``
 
 ## Related
 

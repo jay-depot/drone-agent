@@ -1,6 +1,15 @@
 ---
 tags: [decision, lsp, plugin-system, error-handling, robustness]
-related: [modules/drone-agent-plugins.md, architecture/plugin-system.md, flows/plugin-lifecycle.md, modules/drone-agent.md, decisions/069-lsp-ergonomics.md, decisions/098-lsp-file-list-mount-conversion.md, decisions/102-multi-language-lsp-support.md]
+related:
+  [
+    modules/drone-agent-plugins.md,
+    architecture/plugin-system.md,
+    flows/plugin-lifecycle.md,
+    modules/drone-agent.md,
+    decisions/069-lsp-ergonomics.md,
+    decisions/098-lsp-file-list-mount-conversion.md,
+    decisions/102-multi-language-lsp-support.md,
+  ]
 ---
 
 # ADR 114: LSP Workspace Scan EACCES Hardening + Non-Fatal `onBeforePrompt` Hooks
@@ -25,7 +34,7 @@ This aborted the conversation loop. The failure chain:
    - In **TUI mode** (`tui/app.tsx:469`) the hook error is caught and logged, but the turn is aborted — the user's message is silently eaten.
    - In **plain / `--chat` / `--once` / interactive** modes (`interactive.ts:111`, `index.tsx:296`), `runHooks('onBeforePrompt')` is unguarded, so the error threw straight out of the loop and terminated the session.
 
-Notably, the sibling function `hasMatchingFiles` (used for server *detection*) already guarded every `opendir` with `.catch(() => null)` — two identical recursive walkers had inconsistent hardening.
+Notably, the sibling function `hasMatchingFiles` (used for server _detection_) already guarded every `opendir` with `.catch(() => null)` — two identical recursive walkers had inconsistent hardening.
 
 ## Decision
 

@@ -1,6 +1,17 @@
 ---
 tags: [decision, plugin-system, tool-reduction, runtime]
-related: [decisions/064-mcp-deferred-tool-loading.md, decisions/065-mcp-tool-mounting-cache-and-server-descriptions.md, decisions/068-tool-reduction-followup.md, decisions/098-lsp-file-list-mount-conversion.md, decisions/100-list-mount-improvements.md, decisions/101-systemprompt-runtime-flags.md, architecture/plugin-system.md, modules/drone-core.md, modules/drone-agent-mcp-client.md]
+related:
+  [
+    decisions/064-mcp-deferred-tool-loading.md,
+    decisions/065-mcp-tool-mounting-cache-and-server-descriptions.md,
+    decisions/068-tool-reduction-followup.md,
+    decisions/098-lsp-file-list-mount-conversion.md,
+    decisions/100-list-mount-improvements.md,
+    decisions/101-systemprompt-runtime-flags.md,
+    architecture/plugin-system.md,
+    modules/drone-core.md,
+    modules/drone-agent-mcp-client.md,
+  ]
 ---
 
 # Decision 105: Runtime-Level List-Mount for All Tools
@@ -68,6 +79,7 @@ The engine injects `plugins: exec, persona, memory, file, git, lsp, mcp, swarm, 
 **File, git, lsp, swarm:** Removed `ToolMountingCache`, `FILE_TOOL_DESCRIPTIONS`/`GIT_TOOL_DESCRIPTIONS`/`LSP_TOOL_DESCRIPTIONS`/`SWARM_TOOL_DESCRIPTIONS` constants, all three meta-tools, persona filtering in `list_tools`, and `runtime?.flags?.append('list-mount', ...)` calls. Tools are now registered directly with `registration.registerTool()`.
 
 **MCP:** Most complex change. Removed:
+
 - `ToolMountingCache` import and usage (replaced with `Map<string, { definition, mounted }>`)
 - Per-server `list_tools`/`mount_tool`/`unmount_tool` meta-tools (runtime handles this now)
 - `registerMetaTool` function
@@ -75,6 +87,7 @@ The engine injects `plugins: exec, persona, memory, file, git, lsp, mcp, swarm, 
 - `runtime?.flags?.append('list-mount', 'mcp')` call
 
 Changed:
+
 - `mountResourcePromptTools` → `registerResourcePromptTools` — registers `mcp__<server>__list` and `mcp__<server>__get` as regular unmounted tools
 - MCP tools are now registered with the engine (unmounted) via `registration.registerTool(toolDef)` so they appear in `runtime__list_tools`
 - `mcp__server_status` is a regular unmounted tool (no longer auto-mounted)

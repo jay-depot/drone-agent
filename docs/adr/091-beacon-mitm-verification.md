@@ -1,6 +1,13 @@
 ---
 tags: [decision, security, beacon, verification]
-related: [concepts/beacon-verification.md, modules/drone-beacon.md, modules/drone-coordinator.md, modules/drone-swarm-common.md, modules/drone-coordinator-ui.md]
+related:
+  [
+    concepts/beacon-verification.md,
+    modules/drone-beacon.md,
+    modules/drone-coordinator.md,
+    modules/drone-swarm-common.md,
+    modules/drone-coordinator-ui.md,
+  ]
 ---
 
 # ADR 091: Beacon MitM Verification Code

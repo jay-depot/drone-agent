@@ -1,6 +1,12 @@
 ---
 tags: [decision, coordinator, coordinator-ui, live-events, api-paths]
-related: [modules/drone-coordinator.md, modules/drone-coordinator-ui.md, modules/drone-beacon.md, decisions/023-conversation-event-push-through.md]
+related:
+  [
+    modules/drone-coordinator.md,
+    modules/drone-coordinator-ui.md,
+    modules/drone-beacon.md,
+    decisions/023-conversation-event-push-through.md,
+  ]
 ---
 
 # ADR 089: Coordinator Live Event Streaming + /api Prefix

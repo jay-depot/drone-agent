@@ -1,6 +1,12 @@
 ---
 tags: [decision, session-pipeline, coordinator]
-related: [concepts/session-processing-pipeline.md, decisions/031-session-processing-pipeline.md, modules/drone-core.md, modules/drone-coordinator.md]
+related:
+  [
+    concepts/session-processing-pipeline.md,
+    decisions/031-session-processing-pipeline.md,
+    modules/drone-core.md,
+    modules/drone-coordinator.md,
+  ]
 ---
 
 # Decision 093: Session Status Mismatch Fix — Consolidate `finished` → `ended`, Add Auto Stale-Marking

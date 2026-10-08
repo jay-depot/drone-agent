@@ -1,6 +1,11 @@
 ---
 tags: [decision, testing, infrastructure]
-related: [modules/drone-beacon.md, modules/drone-coordinator.md, concepts/test-infrastructure.md]
+related:
+  [
+    modules/drone-beacon.md,
+    modules/drone-coordinator.md,
+    concepts/test-infrastructure.md,
+  ]
 ---
 
 # ADR 041: Beacon & Coordinator Test Suite

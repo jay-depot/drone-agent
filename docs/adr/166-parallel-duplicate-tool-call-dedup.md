@@ -1,6 +1,12 @@
 ---
 tags: [decision, guardrail, reliability, conversation-service]
-related: [concepts/session-management.md, flows/tool-call-loop.md, decisions/145-guardrail-reliability-features.md, decisions/163-tui-markdown-color-collision-fix.md]
+related:
+  [
+    concepts/session-management.md,
+    flows/tool-call-loop.md,
+    decisions/145-guardrail-reliability-features.md,
+    decisions/163-tui-markdown-color-collision-fix.md,
+  ]
 ---
 
 # 166: Parallel Duplicate Tool-Call Dedup Guardrail
@@ -9,7 +15,7 @@ related: [concepts/session-management.md, flows/tool-call-loop.md, decisions/145
 
 ## Context
 
-LLMs occasionally degenerate into a loop that keeps emitting tool-call tokens, producing a single response containing a **massive batch of parallel identical tool calls** (same tool name + same arguments). Without mitigation these duplicate calls all execute, polluting the session and wasting context and runtime. The existing **identical-call streak** guardrail only tracked identical *single* tool calls across *iterations* (`toolCalls.length === 1`); it was blind to a batch of parallel duplicates within one response.
+LLMs occasionally degenerate into a loop that keeps emitting tool-call tokens, producing a single response containing a **massive batch of parallel identical tool calls** (same tool name + same arguments). Without mitigation these duplicate calls all execute, polluting the session and wasting context and runtime. The existing **identical-call streak** guardrail only tracked identical _single_ tool calls across _iterations_ (`toolCalls.length === 1`); it was blind to a batch of parallel duplicates within one response.
 
 ## Decision
 

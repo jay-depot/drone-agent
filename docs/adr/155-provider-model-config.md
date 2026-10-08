@@ -2,7 +2,15 @@
 id: decisions/155-provider-model-config
 title: Provider/protocol/model configuration refactor
 tags: [decision, architecture, llm, config, providers]
-related: [modules/drone-core.md, modules/drone-agent-plugins.md, modules/drone-agent.md, concepts/broker-provider.md, entities/DroneAgentConfig.md, flows/startup.md]
+related:
+  [
+    modules/drone-core.md,
+    modules/drone-agent-plugins.md,
+    modules/drone-agent.md,
+    concepts/broker-provider.md,
+    entities/DroneAgentConfig.md,
+    flows/startup.md,
+  ]
 date: 2026-08-23
 status: accepted
 ---
@@ -18,7 +26,7 @@ Every provider plugin previously invented its own model handling:
 - **Three model-list regimes**: ollama probed live HTTP; openai/openrouter/anthropic read hand-curated `models[]` arrays in their own config sections; echo used env singletons.
 - **Zero sampling parameters** anywhere — no temperature, no `num_ctx`, nothing.
 - **Three copy-pasted reasoning mappers** with divergent `off` semantics (ollama → `think:false`, openai-family → `"none"`).
-- **Cross-wired fallbacks**: the conversation service resolved reasoning as session → `config.llm.reasoningLevel` → `config.ollama.reasoningLevel` → `config.openrouter.reasoningLevel`, consulting sections belonging to *inactive* providers.
+- **Cross-wired fallbacks**: the conversation service resolved reasoning as session → `config.llm.reasoningLevel` → `config.ollama.reasoningLevel` → `config.openrouter.reasoningLevel`, consulting sections belonging to _inactive_ providers.
 - **Asymmetric vision detection**: ollama guessed vision by model-name substrings (a list that always rots); anthropic hardcoded true; openai-family had none.
 - **A dead `--model` CLI flag** parsed but never consumed.
 - The anthropic plugin **borrowed `session.responseReserveTokens`** as its wire `max_tokens`, conflating context budgeting with output limits.
@@ -42,7 +50,7 @@ type LlmProtocolDriver = {
 
 The broker instantiates one `DroneLlmProvider` per matching `config.providers` entry. Plugin IDs are unchanged, so existing `enabledPlugins` keep working; all protocol plugins become default-enabled but **inert without configured providers** — the real gate is the providers map itself.
 
-The driver is delivered through `registerDriver` because the engine's capability model has no reverse direction: `offer()` stores under the *offering* plugin's id and `request()` only resolves declared dependencies, so a broker can never request capabilities from plugins that depend on it. `registerDriver` mirrors the existing `registerProvider` flow exactly.
+The driver is delivered through `registerDriver` because the engine's capability model has no reverse direction: `offer()` stores under the _offering_ plugin's id and `request()` only resolves declared dependencies, so a broker can never request capabilities from plugins that depend on it. `registerDriver` mirrors the existing `registerProvider` flow exactly.
 
 ### Providers in config
 
@@ -55,16 +63,16 @@ The driver is delivered through `registerDriver` because the engine's capability
       "parameters": { "temperature": 0.7 },
       "models": {
         "llama3.1": {},
-        "fast": { "model": "llama3.1", "parameters": { "numCtx": 8192 } }
-      }
+        "fast": { "model": "llama3.1", "parameters": { "numCtx": 8192 } },
+      },
     },
     "cloud": {
       "protocol": "openrouter",
       "apiKey": "${OPENROUTER_API_KEY}",
-      "autoImport": "onSelect"
-    }
+      "autoImport": "onSelect",
+    },
   },
-  "llm": { "active": "local/fast" }
+  "llm": { "active": "local/fast" },
 }
 ```
 
@@ -94,7 +102,7 @@ Session (`/reasoning`) > selected model entry's `reasoningLevel` > `llm.reasonin
 
 ### Migration
 
-On load, if `providers` is empty and legacy sections exist, a self-contained module (`runtime/provider-migration.ts`, deletable when the window closes) synthesizes providers named after each section and seeds `llm.active`. Idempotent, never overwrites an existing `llm.active`, announces a deprecation notice surfaced on `DroneResolvedConfig.migrationNotice`. All built-in writers (bootstrap, first-run, `/model`) emit new format only. Legacy section *reads* outside the migration module are gone.
+On load, if `providers` is empty and legacy sections exist, a self-contained module (`runtime/provider-migration.ts`, deletable when the window closes) synthesizes providers named after each section and seeds `llm.active`. Idempotent, never overwrites an existing `llm.active`, announces a deprecation notice surfaced on `DroneResolvedConfig.migrationNotice`. All built-in writers (bootstrap, first-run, `/model`) emit new format only. Legacy section _reads_ outside the migration module are gone.
 
 ## Consequences
 

@@ -1,6 +1,14 @@
 ---
 tags: [decision, plugin-system, tool-reduction]
-related: [decisions/064-mcp-deferred-tool-loading.md, decisions/065-mcp-tool-mounting-cache-and-server-descriptions.md, decisions/068-tool-reduction-followup.md, decisions/069-lsp-ergonomics.md, modules/drone-agent-plugins.md, architecture/plugin-system.md]
+related:
+  [
+    decisions/064-mcp-deferred-tool-loading.md,
+    decisions/065-mcp-tool-mounting-cache-and-server-descriptions.md,
+    decisions/068-tool-reduction-followup.md,
+    decisions/069-lsp-ergonomics.md,
+    modules/drone-agent-plugins.md,
+    architecture/plugin-system.md,
+  ]
 ---
 
 # Decision 098: LSP and File Plugin List-Mount Conversion

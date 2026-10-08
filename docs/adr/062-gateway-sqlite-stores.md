@@ -1,6 +1,11 @@
 ---
 tags: [decision, gateway, matrix, sqlite]
-related: [modules/drone-gateway.md, decisions/059-matrix-adapter.md, decisions/058-gateway-config-model.md]
+related:
+  [
+    modules/drone-gateway.md,
+    decisions/059-matrix-adapter.md,
+    decisions/058-gateway-config-model.md,
+  ]
 ---
 
 # ADR 062: SQLite-Backed Matrix Stores for Headless E2EE

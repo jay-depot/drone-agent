@@ -1,6 +1,13 @@
 ---
 tags: [decision, tui, rendering]
-related: [047-plugin-customizable-tool-render.md, 079-pretty-tool-output-phase-2.md, 080-subagent-dispatch-pretty-output.md, 081-meta-tool-pretty-output.md, modules/drone-agent-tui.md]
+related:
+  [
+    047-plugin-customizable-tool-render.md,
+    079-pretty-tool-output-phase-2.md,
+    080-subagent-dispatch-pretty-output.md,
+    081-meta-tool-pretty-output.md,
+    modules/drone-agent-tui.md,
+  ]
 ---
 
 # ADR 078: Pretty Tool Output — Phase 1 (Core Tools)
@@ -20,26 +27,28 @@ Create custom Ink render components for the seven core tools, and add genuine st
 ### Infrastructure Changes
 
 **`drone-core`** (`session-types.ts`):
+
 - New `toolProgress` event kind in `DroneConversationEvent`
 - `outputLines?: string[]` field on `ToolRenderState`
 - `onProgress?: (chunk: string) => void` parameter on `DroneToolDefinition.execute`
 
 **Runtime** (`plugin-engine.ts`, `conversation-service.ts`):
+
 - `onProgress` threaded through `executeTool` and conversation service (emits `toolProgress` events)
 - `exec.ts` streams stdout/stderr chunks via `onProgress` while still buffering `stdout`/`stderr` separately for the LLM return value
 - `app.tsx` accumulates `outputLines` per tool call in a `Map<string, {id, lines, args}>` ref, re-renders the custom component on each `toolProgress` event, and passes accumulated lines into the final `ToolRenderState`
 
 ### Render Components (7 new files)
 
-| Component | File | Behavior |
-|-----------|------|----------|
-| `ExecRunBlock` | `tui/components/ExecRunBlock.tsx` | `…/✓/✗ exec__run $ <command>` with streaming output lines |
-| `FileReadBlock` | `tui/components/FileReadBlock.tsx` | Path + line range + up to 5 syntax-highlighted preview lines + `===` |
-| `FileWriteBlock` | `tui/components/FileWriteBlock.tsx` | `✓ Wrote <path>` |
-| `FileApplyDiffBlock` | `tui/components/FileApplyDiffBlock.tsx` | `✓ <path>` + `+N -N across N hunk(s)` |
-| `FileListBlock` | `tui/components/FileListBlock.tsx` | Path header + `📁 dirname/` / `📄 filename` entries |
-| `FileGlobBlock` | `tui/components/FileGlobBlock.tsx` | Pattern + matches + `(N matches)` |
-| `SearchTextBlock` | `tui/components/SearchTextBlock.tsx` | `pattern in path` + `file:line  content` rows + `(N matches) [truncated]` |
+| Component            | File                                    | Behavior                                                                  |
+| -------------------- | --------------------------------------- | ------------------------------------------------------------------------- |
+| `ExecRunBlock`       | `tui/components/ExecRunBlock.tsx`       | `…/✓/✗ exec__run $ <command>` with streaming output lines                 |
+| `FileReadBlock`      | `tui/components/FileReadBlock.tsx`      | Path + line range + up to 5 syntax-highlighted preview lines + `===`      |
+| `FileWriteBlock`     | `tui/components/FileWriteBlock.tsx`     | `✓ Wrote <path>`                                                          |
+| `FileApplyDiffBlock` | `tui/components/FileApplyDiffBlock.tsx` | `✓ <path>` + `+N -N across N hunk(s)`                                     |
+| `FileListBlock`      | `tui/components/FileListBlock.tsx`      | Path header + `📁 dirname/` / `📄 filename` entries                       |
+| `FileGlobBlock`      | `tui/components/FileGlobBlock.tsx`      | Pattern + matches + `(N matches)`                                         |
+| `SearchTextBlock`    | `tui/components/SearchTextBlock.tsx`    | `pattern in path` + `file:line  content` rows + `(N matches) [truncated]` |
 
 ### Shared Extraction
 
@@ -52,12 +61,14 @@ Create custom Ink render components for the seven core tools, and add genuine st
 ## Consequences
 
 ### Positive
+
 - Core tools now show meaningful, human-readable output in the TUI
 - `exec__run` streams output in real-time
 - Syntax highlighting shared between Markdown and file previews
 - Infrastructure (`onProgress`, `outputLines`) reusable by future tools
 
 ### Negative
+
 - Increased TUI component surface area (7 new components)
 - `onProgress` adds complexity to the tool execution pipeline
 

@@ -1,6 +1,10 @@
 ---
 tags: [decision, macros, bug-fix]
-related: [decisions/045-macro-event-streaming-unified-hooks.md, modules/drone-agent-plugins.md]
+related:
+  [
+    decisions/045-macro-event-streaming-unified-hooks.md,
+    modules/drone-agent-plugins.md,
+  ]
 ---
 
 # ADR 086: Macro Argument Re-use Fix

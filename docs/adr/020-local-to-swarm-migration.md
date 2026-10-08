@@ -1,6 +1,11 @@
 ---
 tags: [decision, migration, cli, swarm]
-related: [concepts/local-to-swarm-migration.md, architecture/swarm-architecture.md, entities/DroneAgentConfig.md]
+related:
+  [
+    concepts/local-to-swarm-migration.md,
+    architecture/swarm-architecture.md,
+    entities/DroneAgentConfig.md,
+  ]
 ---
 
 # Decision: Local-to-Swarm Migration Tool
@@ -42,6 +47,7 @@ The migration logic lives in `drone-agent/src/runtime/migration-service.ts` as a
 ### Migration Mechanics
 
 **Local → Swarm (Promotion)**:
+
 1. Read asset from local filesystem (`.drone-agent/` or `~/.drone-agent/`)
 2. If `--backup-to`, write raw file to backup path
 3. POST asset to beacon endpoint (e.g., `POST /personas`)
@@ -49,25 +55,27 @@ The migration logic lives in `drone-agent/src/runtime/migration-service.ts` as a
 5. If `--move`, delete local source file after successful copy
 
 **Swarm → Local (Demotion, `--pull`)**:
+
 1. GET asset from beacon endpoint
 2. Write asset to local filesystem at target scope
 3. If `--move`, DELETE from server via beacon endpoint
 4. If `--backup-to`, write fetched content to backup path before writing to target
 
 **Swarm → Swarm (e.g., beacon → coordinator)**:
+
 1. GET asset from beacon (source scope)
 2. POST to beacon with target scope specified (beacon proxies to coordinator)
 3. If `--move`, DELETE from source scope via beacon
 
 ### Asset Types Supported
 
-| Asset | Local scopes | Swarm scopes | Notes |
-|-------|-------------|--------------|-------|
-| Personas | project, user | beacon, coordinator | .md files with YAML frontmatter |
-| Skills | project, user | beacon, coordinator | .md files with YAML frontmatter |
-| Insights | project, user | beacon, coordinator | JSON arrays |
-| Principles | project, user | beacon, coordinator | JSON arrays |
-| Wiki pages | (n/a) | beacon, coordinator | Server-to-server only |
+| Asset      | Local scopes  | Swarm scopes        | Notes                           |
+| ---------- | ------------- | ------------------- | ------------------------------- |
+| Personas   | project, user | beacon, coordinator | .md files with YAML frontmatter |
+| Skills     | project, user | beacon, coordinator | .md files with YAML frontmatter |
+| Insights   | project, user | beacon, coordinator | JSON arrays                     |
+| Principles | project, user | beacon, coordinator | JSON arrays                     |
+| Wiki pages | (n/a)         | beacon, coordinator | Server-to-server only           |
 
 ### Not Included
 

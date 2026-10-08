@@ -1,6 +1,11 @@
 ---
 tags: [decision, lsp, hashes, platform-support, auto-install]
-related: [decisions/102-multi-language-lsp-support.md, modules/drone-core.md, modules/drone-agent-plugins.md]
+related:
+  [
+    decisions/102-multi-language-lsp-support.md,
+    modules/drone-core.md,
+    modules/drone-agent-plugins.md,
+  ]
 ---
 
 # Decision 103: LSP Server Integrity Hashes & Platform Support (5.10.2)
@@ -23,9 +28,12 @@ Added to `drone-core/src/lsp-types.ts`:
 
 ```typescript
 export type DroneLspPlatformKey =
-  | 'linux-x64' | 'linux-arm64'
-  | 'darwin-x64' | 'darwin-arm64'
-  | 'win32-x64' | 'win32-arm64';
+  | 'linux-x64'
+  | 'linux-arm64'
+  | 'darwin-x64'
+  | 'darwin-arm64'
+  | 'win32-x64'
+  | 'win32-arm64';
 
 export type DroneLspPlatformSpec = {
   tarballUrl: string;
@@ -46,10 +54,12 @@ The top-level `tarballUrl`/`integrity` serve as the default fallback when no pla
 Added to `drone-agent/src/plugins/lsp/installer.ts`:
 
 ```typescript
-export function resolvePlatformSpec(
-  spec: DroneLspInstallSpec
-): { tarballUrl: string; integrity: string } {
-  const platformKey = `${process.platform}-${process.arch}` as DroneLspPlatformKey;
+export function resolvePlatformSpec(spec: DroneLspInstallSpec): {
+  tarballUrl: string;
+  integrity: string;
+} {
+  const platformKey =
+    `${process.platform}-${process.arch}` as DroneLspPlatformKey;
   const platformOverride = spec.platforms?.[platformKey];
   if (platformOverride) return platformOverride;
   return { tarballUrl: spec.tarballUrl, integrity: spec.integrity };
@@ -61,6 +71,7 @@ Called in `ensureServerInstalled()` to resolve the correct URL and hash before d
 ### 3. gopls Fix — Zip Extraction + Build Step
 
 **URL fix**: Changed `resolveTarballUrl()` for `go` type from `.tar.gz` to `.zip`:
+
 - Before: `https://proxy.golang.org/{module}/@v/{version}.tar.gz`
 - After: `https://proxy.golang.org/{module}/@v/{version}.zip`
 
@@ -77,6 +88,7 @@ If you don't have Go installed, install gopls manually or set it up via your sys
 ### 4. Hash Computation Script
 
 Created `scripts/compute-lsp-hashes.mjs` — a standalone Node.js script that:
+
 1. Downloads each tarball from its URL
 2. Computes sha512 of the raw bytes
 3. Outputs the integrity string in `sha512-<base64>` format
@@ -88,28 +100,30 @@ The script is kept in the repo for reproducibility and future updates.
 
 During hash computation, several package names/versions were found to be incorrect:
 
-| Server | Old | New | Reason |
-|--------|-----|-----|--------|
-| bash-language-server | 5.1.8 | 5.6.0 | Version 5.1.8 doesn't exist on npm |
-| vscode-json-languageserver | 1.15.0 | 1.3.4 | Package was unpublished after 1.3.4 |
-| taplo | 0.9.3 | @taplo/cli 0.7.0 | `taplo` package doesn't exist; `@taplo/cli` is correct |
-| vscode-css-languageserver | 1.15.0 | vscode-css-languageserver-bin 1.4.0 | Original package was unpublished |
-| vscode-html-languageserver | 1.15.0 | vscode-html-languageserver-bin 1.4.0 | Original package doesn't exist |
-| svelte-language-server | 1.0.0 | 0.18.3 | Version 1.0.0 doesn't exist on npm |
-| rust-analyzer | 2024-11-18 | 2026-07-27 | Old release assets were 404 |
-| gopls | .tar.gz | .zip | Go module proxy only serves .zip |
+| Server                     | Old        | New                                  | Reason                                                 |
+| -------------------------- | ---------- | ------------------------------------ | ------------------------------------------------------ |
+| bash-language-server       | 5.1.8      | 5.6.0                                | Version 5.1.8 doesn't exist on npm                     |
+| vscode-json-languageserver | 1.15.0     | 1.3.4                                | Package was unpublished after 1.3.4                    |
+| taplo                      | 0.9.3      | @taplo/cli 0.7.0                     | `taplo` package doesn't exist; `@taplo/cli` is correct |
+| vscode-css-languageserver  | 1.15.0     | vscode-css-languageserver-bin 1.4.0  | Original package was unpublished                       |
+| vscode-html-languageserver | 1.15.0     | vscode-html-languageserver-bin 1.4.0 | Original package doesn't exist                         |
+| svelte-language-server     | 1.0.0      | 0.18.3                               | Version 1.0.0 doesn't exist on npm                     |
+| rust-analyzer              | 2024-11-18 | 2026-07-27                           | Old release assets were 404                            |
+| gopls                      | .tar.gz    | .zip                                 | Go module proxy only serves .zip                       |
 
 ### 6. Platform Entries
 
 Added platform entries for:
 
 **rust-analyzer** (4 platforms):
+
 - `linux-x64`: `rust-analyzer-x86_64-unknown-linux-gnu.gz`
 - `linux-arm64`: `rust-analyzer-aarch64-unknown-linux-gnu.gz`
 - `darwin-x64`: `rust-analyzer-x86_64-apple-darwin.gz`
 - `darwin-arm64`: `rust-analyzer-aarch64-apple-darwin.gz`
 
 **lua-language-server** (4 platforms):
+
 - `linux-x64`: `lua-language-server-3.10.6-linux-x64.tar.gz`
 - `linux-arm64`: `lua-language-server-3.10.6-linux-arm64.tar.gz`
 - `darwin-x64`: `lua-language-server-3.10.6-darwin-x64.tar.gz`

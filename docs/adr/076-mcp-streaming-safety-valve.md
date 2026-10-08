@@ -1,6 +1,11 @@
 ---
 tags: [decision, mcp, streaming, safety, sse]
-related: [modules/drone-agent-mcp-client.md, decisions/074-mcp-spawn-timeout.md, decisions/075-mcp-tool-name-collisions.md]
+related:
+  [
+    modules/drone-agent-mcp-client.md,
+    decisions/074-mcp-spawn-timeout.md,
+    decisions/075-mcp-tool-name-collisions.md,
+  ]
 ---
 
 # 076: SSE Streaming Safety Valve with Context-Aware Size Limit (Item 14)

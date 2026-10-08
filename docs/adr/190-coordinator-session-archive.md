@@ -1,6 +1,26 @@
 ---
-tags: [decision, coordinator, drone-core, drone-coordinator-ui, drone-beacon, drone-swarm, sessions, archive]
-related: [modules/drone-coordinator.md, modules/drone-coordinator-ui.md, modules/drone-core.md, modules/drone-beacon.md, modules/drone-swarm.md, concepts/session-processing-pipeline.md, decisions/093-session-status-mismatch-fix.md, decisions/031-session-processing-pipeline.md]
+tags:
+  [
+    decision,
+    coordinator,
+    drone-core,
+    drone-coordinator-ui,
+    drone-beacon,
+    drone-swarm,
+    sessions,
+    archive,
+  ]
+related:
+  [
+    modules/drone-coordinator.md,
+    modules/drone-coordinator-ui.md,
+    modules/drone-core.md,
+    modules/drone-beacon.md,
+    modules/drone-swarm.md,
+    concepts/session-processing-pipeline.md,
+    decisions/093-session-status-mismatch-fix.md,
+    decisions/031-session-processing-pipeline.md,
+  ]
 ---
 
 # 190: Coordinator session archive + guarded transition UI
@@ -23,7 +43,7 @@ default, with a toggle to view archived sessions only and a per-row restore
 back to `processed`.
 
 This also surfaced a latent gap: the manual `POST /sessions/:id/end` route was
-**permissive** (it transitioned *any* status to `ended` via the raw
+**permissive** (it transitioned _any_ status to `ended` via the raw
 `updateSwarmSessionStatus`, with a `// Allow ending from any status` comment).
 Tracing history (ADR 093's original insight) revealed this was never a
 deliberate "any status may end" decision — it was a by-product of the status
@@ -38,6 +58,7 @@ the pipeline. The beacon-facing sync `DELETE /sync/sessions/:id` (the
 authoritative agent-shutdown signal) stays permissive.
 
 **New/extended state machine:**
+
 ```
 active ──(24h no activity)──→ stale
 active/stale/processing/processed ──(manual /end)──→ ended   (guarded; NOT from archived)
@@ -138,7 +159,7 @@ by `NODE_ENV`); bare vitest leaves `NODE_ENV` unset so react loads the
 production build (no `act`). Running via the package's `pnpm test` script
 (`NODE_ENV=test vitest run`) makes the whole 52-test suite pass. The only real
 bug was in the new `sessions.test.tsx`, which used `.find()` on the mock fetch
-calls (grabbing the *first* `exclude=archived` fetch) instead of the *latest*
+calls (grabbing the _first_ `exclude=archived` fetch) instead of the _latest_
 `status=archived` fetch after toggling; fixed with a `lastSessionsCall()`
 helper (`.filter().at(-1)`). This is documented in project memory
 (`pre-existing-integration-failures`) — the suite was never actually broken.

@@ -1,17 +1,28 @@
 ---
 tags: [decision, slash-commands, conversation-loop, tui, queue, adr]
-related: [decisions/040-message-queue-cancel.md, decisions/015-unified-slash-commands.md, decisions/198-coordinator-ui-launch-interact.md, concepts/session-management.md, flows/tool-call-loop.md, modules/drone-agent.md, modules/drone-agent-tui.md, entities/DronePlugin.md, drone-core.md]
+related:
+  [
+    decisions/040-message-queue-cancel.md,
+    decisions/015-unified-slash-commands.md,
+    decisions/198-coordinator-ui-launch-interact.md,
+    concepts/session-management.md,
+    flows/tool-call-loop.md,
+    modules/drone-agent.md,
+    modules/drone-agent-tui.md,
+    entities/DronePlugin.md,
+    drone-core.md,
+  ]
 ---
 
 # 215: Slash commands are never sent as plain text while the LLM is working
 
-**Status**: Implemented (2026-09-11) · **Branch**: `feat/slash-commands-during-working-fix` · **Plan**: project-memory `slash-commands-during-work-fix` — *deleted from project memory after ingest*
+**Status**: Implemented (2026-09-11) · **Branch**: `feat/slash-commands-during-working-fix` · **Plan**: project-memory `slash-commands-during-work-fix` — _deleted from project memory after ingest_
 
 **Summary**: A slash command typed while a turn was in flight (e.g. `/focus set clear`) was delivered to the LLM as a **plain-text steering message** instead of being executed. Two causes: the TUI's busy `onSubmit` routed any non-`/cancel` input to `enqueueUserMessage`, and the remote-steering path (`_runtime.submitUserMessage`, fed by the coordinator UI's `sendMessage(steer)`) never checked for a leading `/` at all. This ADR completes the split that [040-message-queue-cancel](040-message-queue-cancel.md) explicitly deferred — a slash command is **never** sent as plain text, at **every** user-role entry point — and adds a plugin-supplied busy-behavior classifier, a universal `--now` escape hatch, shared subcommand/flag parsing, and one unified ordered entry queue.
 
 ## Context
 
-[040-message-queue-cancel](040-message-queue-cancel.md) added a message queue and soft cancel to the conversation service, and routed TUI input by `isLlmActive`. It deliberately left the read-only/immediate vs. mutating/queued distinction unimplemented: while busy, *everything* except `/cancel` became queued **text**. So a command like `/focus set clear` was appended to the session as a user utterance and sent to the model, which is both wrong (the command never ran) and confusing (the model sees command syntax as natural language).
+[040-message-queue-cancel](040-message-queue-cancel.md) added a message queue and soft cancel to the conversation service, and routed TUI input by `isLlmActive`. It deliberately left the read-only/immediate vs. mutating/queued distinction unimplemented: while busy, _everything_ except `/cancel` became queued **text**. So a command like `/focus set clear` was appended to the session as a user utterance and sent to the model, which is both wrong (the command never ran) and confusing (the model sees command syntax as natural language).
 
 The gap was wider than the TUI. The coordinator UI's "Send"/"Stop & Send" path reaches the agent through `_runtime.submitUserMessage` → `conversation.submitUserMessage`, which performed **no** leading-`/` check whatsoever. Any remote operator typing a command mid-turn hit the same defect, with no TUI involved.
 
@@ -28,11 +39,11 @@ The locked decisions, in the user's terms:
 7. **The command channel is a leading `/` on the whole user-role line**; a mid-utterance `/` is natural language. Agent-role output is a separate channel, untouched.
 8. **`--now` is allowed universally**, including for destructive commands. `/exit` and `/quit` stay host-special (Ctrl-C remains the immediate exit).
 9. **One unified ordered entry queue.** `pendingEntries: Array<{kind:'text', content} | {kind:'slash', line}>`. `enqueueUserMessage` pushes `text`; the new `enqueueSlashCommand` pushes `slash`. Arrival order is preserved across kinds, and `clearSession` flushes the whole queue. There is no separate text path — this is the single source of truth for all deferred user intent.
-10. **Uniform drain timing — no mid-round absorption.** The rule is "is a turn in flight? → queue; idle? → send directly." Drain happens at exactly **two** points: (A) in a `finally` on *normal* completion, after `turnInFlight=false` and `roundComplete`; (B) at the start of the next `sendUserMessage`, before `turnInFlight=true` and before appending the new prompt.
+10. **Uniform drain timing — no mid-round absorption.** The rule is "is a turn in flight? → queue; idle? → send directly." Drain happens at exactly **two** points: (A) in a `finally` on _normal_ completion, after `turnInFlight=false` and `roundComplete`; (B) at the start of the next `sendUserMessage`, before `turnInFlight=true` and before appending the new prompt.
 
 ## The own-round semantics of point A
 
-Point A is the subtle part. At a normal completion, a queued **slash** is dispatched (awaited), but a queued **text** entry runs as its **own full round** — appended and run through the full machinery (its own `roundComplete`, `onBeforePrompt`, `onAfterToolCall` hooks) so the agent actually *answers* it. A `completedNormally` flag is set before each real-content return and is **not** set on `CANCEL_SENTINEL` or a throw; the `finally` checks it, which is what makes cancel preservation work. While entries remain and `turnInFlight` is false, draining continues — each entry drains exactly once, so it terminates.
+Point A is the subtle part. At a normal completion, a queued **slash** is dispatched (awaited), but a queued **text** entry runs as its **own full round** — appended and run through the full machinery (its own `roundComplete`, `onBeforePrompt`, `onAfterToolCall` hooks) so the agent actually _answers_ it. A `completedNormally` flag is set before each real-content return and is **not** set on `CANCEL_SENTINEL` or a throw; the `finally` checks it, which is what makes cancel preservation work. While entries remain and `turnInFlight` is false, draining continues — each entry drains exactly once, so it terminates.
 
 At point B, a queued **slash** is dispatched (awaited) and a queued **text** entry is only **appended**, bundled into the upcoming round rather than given its own.
 

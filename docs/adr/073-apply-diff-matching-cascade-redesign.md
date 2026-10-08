@@ -1,21 +1,27 @@
 ---
 tags: [decision, file-plugin, diff-format, matching-engine]
-related: [drone-agent-plugins.md, 033-file-apply-diff-v2.md, 038-file-apply-diff-unified-diff.md, 048-large-file-splitting.md]
+related:
+  [
+    drone-agent-plugins.md,
+    033-file-apply-diff-v2.md,
+    038-file-apply-diff-unified-diff.md,
+    048-large-file-splitting.md,
+  ]
 ---
 
 # 073: `file__apply_diff` Matching Cascade Redesign
 
 **Status**: Implemented (2026-07-19)
 
-**Supersedes**: [038-file-apply-diff-unified-diff](038-file-apply-diff-unified-diff.md) (matching engine only — the unified diff *input format* is preserved)
+**Supersedes**: [038-file-apply-diff-unified-diff](038-file-apply-diff-unified-diff.md) (matching engine only — the unified diff _input format_ is preserved)
 
 ## Context
 
-ADR 038 replaced the nested JSON hunk format with a flat unified diff *string* input (a success — LLMs produce valid unified diff strings reliably). But the *matching engine* under that format had three pain points that caused patches to fail even when the LLM's intent was correct:
+ADR 038 replaced the nested JSON hunk format with a flat unified diff _string_ input (a success — LLMs produce valid unified diff strings reliably). But the _matching engine_ under that format had three pain points that caused patches to fail even when the LLM's intent was correct:
 
 1. **Contiguous-block matching was rigid.** The engine required `contextBefore + oldLines + contextAfter` to match as one contiguous run at a candidate site. A single mismatched line (even from a small formatting change elsewhere) failed the whole hunk.
 
-2. **Interleaved context lines inside the change zone were silently dropped.** The parser classified body lines by prefix and assigned ` `-prefixed lines between the first and last `-`/`+` line to *neither* `oldLines` nor `newLines`. This was surprising behavior — standard unified-diff semantics say those lines belong to both the old and new versions of the change zone. The information loss caused matches to fail when the LLM correctly wrote interleaved context.
+2. **Interleaved context lines inside the change zone were silently dropped.** The parser classified body lines by prefix and assigned ` `-prefixed lines between the first and last `-`/`+` line to _neither_ `oldLines` nor `newLines`. This was surprising behavior — standard unified-diff semantics say those lines belong to both the old and new versions of the change zone. The information loss caused matches to fail when the LLM correctly wrote interleaved context.
 
 3. **Only the section heading was used as an anchor, with rigid edit-position probing.** `tryMatchContext` tried only two edit positions (at the anchor, or anchor+1). Section headings were matched as whole lines (no substring matching), so an abbreviated heading like `function foo(` wouldn't match `export async function foo(arg1, arg2) {`.
 
@@ -23,7 +29,7 @@ In practice, the old tool's own author couldn't use `file__apply_diff` to patch 
 
 ## Decision
 
-Rewrite the matching engine as a **4-step progressive cascade** per hunk, processed **top-to-bottom** with **partial success**. Preserve the unified diff *input format* from ADR 038 — only the matching behavior changes.
+Rewrite the matching engine as a **4-step progressive cascade** per hunk, processed **top-to-bottom** with **partial success**. Preserve the unified diff _input format_ from ADR 038 — only the matching behavior changes.
 
 ### Top-level flow
 
@@ -46,7 +52,7 @@ Search the whole file for the old change zone (oldLines) as a contiguous run.
 
 - Exactly 1 match → apply.
 - 0 matches → go to step 1.5.
-- >1 matches → go to step 2 (context narrowing) with all survivors.
+- > 1 matches → go to step 2 (context narrowing) with all survivors.
 
 ### Step 1.5 — Aggressive format-aware fuzz on oldLines
 
@@ -58,7 +64,7 @@ Collapse ALL whitespace (including newlines) on both sides into a single string 
 
 ### Step 2 — Context narrowing (6-level loosening cascade)
 
-Among the multiple match sites, filter by `contextBefore` + `contextAfter`. Adjacency is immediate-before/after in the *same normalization* used to find the match (line-exact for step 1 matches; collapsed-form for step 1.5 matches). Fuzzy adjacency (tolerating interleaved lines) is a known future extension but out of scope for this round.
+Among the multiple match sites, filter by `contextBefore` + `contextAfter`. Adjacency is immediate-before/after in the _same normalization_ used to find the match (line-exact for step 1 matches; collapsed-form for step 1.5 matches). Fuzzy adjacency (tolerating interleaved lines) is a known future extension but out of scope for this round.
 
 Loosening cascade (in order):
 
@@ -69,7 +75,7 @@ Loosening cascade (in order):
 5. Drop outer context lines progressively (try fewer and fewer)
 6. Require fewer context sides (only `contextBefore`, or only `contextAfter`)
 
-`lineHint` is used as a tie-breaker among otherwise-equivalent matches. Narrows to 1 → apply. Narrows to 0 at a given level → try the next level; if 0 after all levels → fall through to step 3 with the survivors from the *previous* (multiple-match) level. Still >1 → step 3.
+`lineHint` is used as a tie-breaker among otherwise-equivalent matches. Narrows to 1 → apply. Narrows to 0 at a given level → try the next level; if 0 after all levels → fall through to step 3 with the survivors from the _previous_ (multiple-match) level. Still >1 → step 3.
 
 ### Step 3 — Section-heading narrowing (4-level loosening cascade)
 
@@ -106,13 +112,13 @@ Unroll to the last step that had multiple matches and report like Type 1.
 
 `patch-applier.ts` grew beyond 1,000 lines during the rewrite (AGENTS.md rule: must split at 1,000). Split into a `patch-applier/` directory with 5 helper modules; the main file is now ~270 lines.
 
-| Module | Responsibility |
-|--------|----------------|
-| `patch-applier/types.ts` | Shared types: `PatchHunk`, `MatchSpan`, `PatchError`, `PatchResult`, `AppliedHunk` (with `hunkIndex`), `MatchSite`, `FuzzySuggestion`, `FailureType`, `NarrowResult` |
-| `patch-applier/fuzz.ts` | Fuzz-level normalization (`0`/`1`/`100`/`200`), `collapseWhitespace` (newline-aware with `lineMap` back-reference), `linesMatch` |
-| `patch-applier/matching.ts` | Step 1 (exact), step 1.5 (aggressive collapse+substring), step 2 (context narrowing with 6-level loosening), step 3 (heading narrowing with 4-level loosening), `lineHint` tie-breaking, pure-insertion locator |
-| `patch-applier/levenshtein.ts` | Levenshtein edit distance + `findFuzzySuggestions` (top 5, cap-at-5 for ties) |
-| `patch-applier/errors.ts` | Type 1/2/3 failure builders + reworked-hunk cheat sheet builder |
+| Module                         | Responsibility                                                                                                                                                                                                  |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `patch-applier/types.ts`       | Shared types: `PatchHunk`, `MatchSpan`, `PatchError`, `PatchResult`, `AppliedHunk` (with `hunkIndex`), `MatchSite`, `FuzzySuggestion`, `FailureType`, `NarrowResult`                                            |
+| `patch-applier/fuzz.ts`        | Fuzz-level normalization (`0`/`1`/`100`/`200`), `collapseWhitespace` (newline-aware with `lineMap` back-reference), `linesMatch`                                                                                |
+| `patch-applier/matching.ts`    | Step 1 (exact), step 1.5 (aggressive collapse+substring), step 2 (context narrowing with 6-level loosening), step 3 (heading narrowing with 4-level loosening), `lineHint` tie-breaking, pure-insertion locator |
+| `patch-applier/levenshtein.ts` | Levenshtein edit distance + `findFuzzySuggestions` (top 5, cap-at-5 for ties)                                                                                                                                   |
+| `patch-applier/errors.ts`      | Type 1/2/3 failure builders + reworked-hunk cheat sheet builder                                                                                                                                                 |
 
 See [048-large-file-splitting](048-large-file-splitting.md) for the broader refactoring pattern.
 

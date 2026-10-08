@@ -358,19 +358,19 @@ Also: the summarizer prompt was retuned to one sentence (≤20 words), and a `pr
 
 ### Deliverables
 
-| Step | Outcome |
-| --- | --- |
-| 1 | `server-description.ts` — `PROMPT_VERSION = 2`, tuned prompt, lazy `cacheDir()`/`cacheFile()`, `withPathLock` + tmp/rename atomic write, new `readCachedDescriptions()` |
-| 2 | `prompt-fragments.ts` (new) — pure `renderServerSection` / `renderStatusSection` |
-| 3 | `index.ts` — capture the generator's return value into `serverDescriptions`, `collectServerSummaries`, two `registerPromptFragment` calls, cache seed in `onPluginsLoaded` |
-| 4 | `test/mcp-prompt-fragments.test.ts` (13 tests) + `test/mcp-server-description.test.ts` (9 tests) |
-| 5 | `test/mcp.test.ts` — 6 new fragment tests + `os.homedir` isolation (18 total) |
-| 6 | `docs/agents/mcp-plugin.md` — full accuracy pass |
-| 7 | `docs/adr/240-mcp-server-description-surfacing.md` (new) + index row |
-| 8 | `AGENTS.md:180` de-staled; roadmap 5.7 → PARTIAL |
-| 9 | Review pass — clean |
-| 10 | 3 insights logged; `followup-mcp-server-allowlist-unenforced` memory created |
-| 11 | Validation — all gates green |
+| Step | Outcome                                                                                                                                                                    |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `server-description.ts` — `PROMPT_VERSION = 2`, tuned prompt, lazy `cacheDir()`/`cacheFile()`, `withPathLock` + tmp/rename atomic write, new `readCachedDescriptions()`    |
+| 2    | `prompt-fragments.ts` (new) — pure `renderServerSection` / `renderStatusSection`                                                                                           |
+| 3    | `index.ts` — capture the generator's return value into `serverDescriptions`, `collectServerSummaries`, two `registerPromptFragment` calls, cache seed in `onPluginsLoaded` |
+| 4    | `test/mcp-prompt-fragments.test.ts` (13 tests) + `test/mcp-server-description.test.ts` (9 tests)                                                                           |
+| 5    | `test/mcp.test.ts` — 6 new fragment tests + `os.homedir` isolation (18 total)                                                                                              |
+| 6    | `docs/agents/mcp-plugin.md` — full accuracy pass                                                                                                                           |
+| 7    | `docs/adr/240-mcp-server-description-surfacing.md` (new) + index row                                                                                                       |
+| 8    | `AGENTS.md:180` de-staled; roadmap 5.7 → PARTIAL                                                                                                                           |
+| 9    | Review pass — clean                                                                                                                                                        |
+| 10   | 3 insights logged; `followup-mcp-server-allowlist-unenforced` memory created                                                                                               |
+| 11   | Validation — all gates green                                                                                                                                               |
 
 ### Validation results
 

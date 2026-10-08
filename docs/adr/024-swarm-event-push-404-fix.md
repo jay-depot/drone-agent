@@ -1,6 +1,12 @@
 ---
 tags: [decision, swarm, events, bugfix]
-related: [023-conversation-event-push-through.md, flows/swarm-connection.md, modules/drone-beacon.md, modules/drone-coordinator.md]
+related:
+  [
+    023-conversation-event-push-through.md,
+    flows/swarm-connection.md,
+    modules/drone-beacon.md,
+    modules/drone-coordinator.md,
+  ]
 ---
 
 # 024 — Swarm Event Push 404 Fix and Session Cleanup

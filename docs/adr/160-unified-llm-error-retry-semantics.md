@@ -1,6 +1,18 @@
 ---
 tags: [decision, llm, providers, retry, error-handling, conversation-service]
-related: [decisions/145-guardrail-reliability-features.md, decisions/155-provider-model-config.md, decisions/157-runtime-truth-context-windows.md, concepts/session-management.md, concepts/provider-model-selection.md, flows/tool-call-loop.md, entities/DroneAgentConfig.md, modules/drone-agent.md, modules/drone-core.md, modules/drone-agent-plugins.md]
+related:
+  [
+    decisions/145-guardrail-reliability-features.md,
+    decisions/155-provider-model-config.md,
+    decisions/157-runtime-truth-context-windows.md,
+    concepts/session-management.md,
+    concepts/provider-model-selection.md,
+    flows/tool-call-loop.md,
+    entities/DroneAgentConfig.md,
+    modules/drone-agent.md,
+    modules/drone-core.md,
+    modules/drone-agent-plugins.md,
+  ]
 ---
 
 # 160: Unified LLM Error / Retry Semantics Across Providers

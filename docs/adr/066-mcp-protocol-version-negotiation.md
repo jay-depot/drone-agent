@@ -1,6 +1,11 @@
 ---
 tags: [decision, mcp]
-related: [modules/drone-agent-mcp-client.md, decisions/050-mcp-client-session-id-iserror.md, decisions/054-mcp-http-sse-stream-delete.md]
+related:
+  [
+    modules/drone-agent-mcp-client.md,
+    decisions/050-mcp-client-session-id-iserror.md,
+    decisions/054-mcp-http-sse-stream-delete.md,
+  ]
 ---
 
 # MCP Protocol Version Negotiation (Gap Item 4)

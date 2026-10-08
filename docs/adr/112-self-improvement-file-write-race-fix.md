@@ -1,6 +1,11 @@
 ---
 tags: [decision, self-improvement, concurrency, bug-fix]
-related: [concepts/self-improvement.md, modules/drone-agent-plugins.md, flows/tool-call-loop.md]
+related:
+  [
+    concepts/self-improvement.md,
+    modules/drone-agent-plugins.md,
+    flows/tool-call-loop.md,
+  ]
 ---
 
 # ADR 112: Serialize Self-Improvement File Writes (Race Fix)
@@ -12,8 +17,8 @@ related: [concepts/self-improvement.md, modules/drone-agent-plugins.md, flows/to
 The self-improvement plugin's file storage engines (`recordInsight`, `storePrinciple`, `deletePrinciple` in `drone-agent/src/plugins/self-improvement/file-engine.ts`) performed **unsynchronized read-modify-write** on JSON files:
 
 ```ts
-const entries = await readJsonArray<DroneInsightEntry>(filePath);  // read
-entries.push({ timestamp, insight });                              // modify
+const entries = await readJsonArray<DroneInsightEntry>(filePath); // read
+entries.push({ timestamp, insight }); // modify
 await writeFile(filePath, JSON.stringify(entries, null, 2), 'utf-8'); // write
 ```
 
@@ -34,7 +39,10 @@ Added a dependency-free, keyed async mutex in `io.ts` that serializes operations
 
 ```ts
 const queues = new Map<string, Promise<unknown>>();
-export async function withFileLock<T>(key: string, task: () => Promise<T>): Promise<T> {
+export async function withFileLock<T>(
+  key: string,
+  task: () => Promise<T>
+): Promise<T> {
   const prev = queues.get(key) ?? Promise.resolve();
   const run = prev.then(task, task);
   queues.set(key, run);
@@ -53,7 +61,10 @@ The full read-modify-write cycle runs inside the lock, so concurrent same-file o
 Added a tmp+rename helper so a crash mid-write cannot leave a truncated JSON file:
 
 ```ts
-export async function writeJsonArrayAtomic<T>(filePath: string, entries: T[]): Promise<void> {
+export async function writeJsonArrayAtomic<T>(
+  filePath: string,
+  entries: T[]
+): Promise<void> {
   const tmpPath = `${filePath}.tmp`;
   await writeFile(tmpPath, JSON.stringify(entries, null, 2), 'utf-8');
   await rename(tmpPath, filePath);

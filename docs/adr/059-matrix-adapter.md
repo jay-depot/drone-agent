@@ -1,6 +1,11 @@
 ---
 tags: [decision, gateway, matrix, adapter]
-related: [modules/drone-gateway.md, decisions/058-gateway-config-model.md, decisions/235-gateway-architecture-standalone-service.md]
+related:
+  [
+    modules/drone-gateway.md,
+    decisions/058-gateway-config-model.md,
+    decisions/235-gateway-architecture-standalone-service.md,
+  ]
 ---
 
 # 059: Matrix Service Adapter — matrix-js-sdk Bot Client, Folder Config, Discard Surface

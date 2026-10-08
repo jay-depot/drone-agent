@@ -1,19 +1,31 @@
 ---
 tags: [decision, slash-commands, conversation-loop, steering, tui, adr]
-related: [decisions/215-slash-commands-during-work.md, decisions/040-message-queue-cancel.md, decisions/198-coordinator-ui-launch-interact.md, decisions/208-beancounter-usage-cost-widget.md, concepts/session-management.md, flows/tool-call-loop.md, modules/drone-agent.md, modules/drone-agent-tui.md, modules/drone-core.md, modules/drone-coordinator.md]
+related:
+  [
+    decisions/215-slash-commands-during-work.md,
+    decisions/040-message-queue-cancel.md,
+    decisions/198-coordinator-ui-launch-interact.md,
+    decisions/208-beancounter-usage-cost-widget.md,
+    concepts/session-management.md,
+    flows/tool-call-loop.md,
+    modules/drone-agent.md,
+    modules/drone-agent-tui.md,
+    modules/drone-core.md,
+    modules/drone-coordinator.md,
+  ]
 ---
 
 # 217: `/steer` and `/btw` built-in slash commands
 
-**Status**: Implemented (2026-09-19) · **Branch**: `feat/btw-and-steer-commands` · **Plan**: project-memory `plan-steer-and-btw-slash-commands` — *deleted from project memory after ingest*
+**Status**: Implemented (2026-09-19) · **Branch**: `feat/btw-and-steer-commands` · **Plan**: project-memory `plan-steer-and-btw-slash-commands` — _deleted from project memory after ingest_
 
-**Summary**: Two new built-in slash commands, both `busyBehavior: true`. **`/steer <message>`** injects a message as a user turn into the **currently in-flight** round at the next tool-loop boundary — the opt-in restoration of the mid-round absorption that [215-slash-commands-during-work](215-slash-commands-during-work.md) deliberately removed for plain text. (Because the new queue always turns mid-turn text into its *own later round*, live steering needs its own explicit command.) When no turn is in flight it degrades to an ordinary round. **`/btw <question>`** asks an **ephemeral side question**: it re-assembles the current context into a throwaway copy, sends it to the LLM with **no tools**, displays the answer, and discards the copy — session history is never touched. It surfaces as one new `aside` conversation event that renders in the TUI and is recorded in the coordinator's readable transcript.
+**Summary**: Two new built-in slash commands, both `busyBehavior: true`. **`/steer <message>`** injects a message as a user turn into the **currently in-flight** round at the next tool-loop boundary — the opt-in restoration of the mid-round absorption that [215-slash-commands-during-work](215-slash-commands-during-work.md) deliberately removed for plain text. (Because the new queue always turns mid-turn text into its _own later round_, live steering needs its own explicit command.) When no turn is in flight it degrades to an ordinary round. **`/btw <question>`** asks an **ephemeral side question**: it re-assembles the current context into a throwaway copy, sends it to the LLM with **no tools**, displays the answer, and discards the copy — session history is never touched. It surfaces as one new `aside` conversation event that renders in the TUI and is recorded in the coordinator's readable transcript.
 
 ## Context
 
-[215-slash-commands-during-work](215-slash-commands-during-work.md) unified all deferred user intent into one ordered `pendingEntries` queue drained at exactly two round boundaries, and **deleted mid-round absorption** (the ADR 040 boundary-2). That made queued text correct and predictable, but it removed any way to influence a round *while it runs*: a message typed mid-turn now becomes its own later round, never reaching the in-flight model.
+[215-slash-commands-during-work](215-slash-commands-during-work.md) unified all deferred user intent into one ordered `pendingEntries` queue drained at exactly two round boundaries, and **deleted mid-round absorption** (the ADR 040 boundary-2). That made queued text correct and predictable, but it removed any way to influence a round _while it runs_: a message typed mid-turn now becomes its own later round, never reaching the in-flight model.
 
-The project's own vocabulary never dropped steering, though. `drone-agent/CONTEXT.md` still defines a **Round** as containing "zero or more user steering message turns," and the swarm memory pipeline's `ConversationWindowTracker` still classifies a late `userMessage` in the same round as a `steering[]` turn. The mechanism was gone; the language remained. There was also no way to ask a question *about* the current context without it becoming part of the conversation.
+The project's own vocabulary never dropped steering, though. `drone-agent/CONTEXT.md` still defines a **Round** as containing "zero or more user steering message turns," and the swarm memory pipeline's `ConversationWindowTracker` still classifies a late `userMessage` in the same round as a `steering[]` turn. The mechanism was gone; the language remained. There was also no way to ask a question _about_ the current context without it becoming part of the conversation.
 
 ## Decision
 
@@ -27,7 +39,7 @@ The locked decisions (17, from a grilling session), in the user's terms:
 6. **`/steer` uses a dedicated `steeringMessages: string[]` buffer**, separate from `pendingEntries`, drained at the loop top after the soft-cancel check and before `getLlmTools()`; each absorbed message appends a user turn and emits `userMessage`.
 7. **Late/un-absorbed steers are discarded** at round end with a `[steering: discarded late steering message: "<msg>"]` notice.
 8. **All queued steering messages drain per boundary, in order.**
-9. **A successful injection emits `[steering: <msg>]`** — moved to *absorption* time (see findings) so it never contradicts the discard notice.
+9. **A successful injection emits `[steering: <msg>]`** — moved to _absorption_ time (see findings) so it never contradicts the discard notice.
 10. **`steerMessage()` owns both the busy/idle decision and the lifecycle hooks** (idle path runs `onBeforePrompt` → `sendUserMessage` → `onAfterToolCall`).
 11. **Mid-round injection resets the degeneracy guards but NOT `iterationCount`** — a steer can break a loop, but cannot extend the tool-call depth safety limit.
 12. **`/btw` runs immediately and concurrently with an in-flight turn**; the TUI `aside` render is an immediately-**committed** scrollback entry (never a tail item).
@@ -59,8 +71,8 @@ The locked decisions (17, from a grilling session), in the user's terms:
 
 ## Notable findings en route
 
-1. **A review pass caught two blockers before commit.** (a) The new test file passed *partial* conversation literals to its helper, which fails `tsc -p tsconfig.test.json` while `pnpm test` (vitest/esbuild) stays green — vitest does not typecheck tests. (b) A failed `/btw`, or an idle `/steer`, could take down the process: the slash handlers `await` the promise, `engine.dispatchSlashCommand` has no try/catch, and the TUI's busy branch calls it with `void` — so a routine 429/500 became an unhandled rejection (Node default `--unhandled-rejections=throw` terminates). Both service methods now catch and emit an `error` event instead of throwing.
-2. **The success notice originally lied.** It fired at *enqueue* time, so a late steer printed `[steering: foo]` immediately followed by `[steering: discarded late steering message: "foo"]`. Moved to absorption time.
+1. **A review pass caught two blockers before commit.** (a) The new test file passed _partial_ conversation literals to its helper, which fails `tsc -p tsconfig.test.json` while `pnpm test` (vitest/esbuild) stays green — vitest does not typecheck tests. (b) A failed `/btw`, or an idle `/steer`, could take down the process: the slash handlers `await` the promise, `engine.dispatchSlashCommand` has no try/catch, and the TUI's busy branch calls it with `void` — so a routine 429/500 became an unhandled rejection (Node default `--unhandled-rejections=throw` terminates). Both service methods now catch and emit an `error` event instead of throwing.
+2. **The success notice originally lied.** It fired at _enqueue_ time, so a late steer printed `[steering: foo]` immediately followed by `[steering: discarded late steering message: "foo"]`. Moved to absorption time.
 3. **`/btw` initially bypassed the configured reasoning level.** It passed the raw session variable, while the main loop resolves `reasoningLevel ?? resolveConfiguredReasoningLevel(config, selection)`. Extracted `resolveEffectiveReasoningLevel` and reused it in both places.
 4. **`file__apply_diff` silently no-op'd several hunks** (reported `patched: true`, did not apply) — four times, plus one tail-fragment corruption in `transcript.ts`. Every apply must be verified with a read-back plus a typecheck/test run; a silent no-op left `parseEvent`'s `question`/`answer` extraction missing until a failing unit test caught it.
 5. **`pnpm lint` reformats unrelated files** (its `lint:prettier` step is `prettier --write .`). The run rewrote `pnpm-lock.yaml` (a 5,863-line churn from prettier style drift), two unrelated test files, and unrelated `.drone-agent` memory/insight files — all reverted with `git checkout --` before the feature commit. Use `npx prettier --check <paths>` to verify formatting without side effects.

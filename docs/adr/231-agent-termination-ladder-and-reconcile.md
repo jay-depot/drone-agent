@@ -1,6 +1,27 @@
 ---
-tags: [decision, adr, spawn, terminate, process-lifecycle, beacon, coordinator, gateway, agent]
-related: [modules/drone-beacon.md, modules/drone-swarm-common.md, modules/drone-gateway.md, modules/drone-coordinator.md, modules/drone-agent.md, concepts/mtls-and-reverse-channel.md, decisions/197-beacon-cwd-roots.md, decisions/198-coordinator-ui-launch-interact.md]
+tags:
+  [
+    decision,
+    adr,
+    spawn,
+    terminate,
+    process-lifecycle,
+    beacon,
+    coordinator,
+    gateway,
+    agent,
+  ]
+related:
+  [
+    modules/drone-beacon.md,
+    modules/drone-swarm-common.md,
+    modules/drone-gateway.md,
+    modules/drone-coordinator.md,
+    modules/drone-agent.md,
+    concepts/mtls-and-reverse-channel.md,
+    decisions/197-beacon-cwd-roots.md,
+    decisions/198-coordinator-ui-launch-interact.md,
+  ]
 ---
 
 # 231 — Cross-platform agent termination ladder + boot reconcile
@@ -35,7 +56,7 @@ Every client that terminates agents inherited this boundary: the gateway swarm-c
 
 Stage 2 serves two triggers: the fallback when the socket is down, and the timeout escalation when stage 1 does not exit.
 
-**A pid is only ever signalled when enumeration *positively found it*.** When enumeration is unavailable (`unavailable`) and the agent is unreachable, the handler returns **409** rather than risk signalling the wrong process. When the pid is `absent` and the agent is not connected, the row is marked `terminated` with `error = 'process lost across beacon restart'` and 409 is returned.
+**A pid is only ever signalled when enumeration _positively found it_.** When enumeration is unavailable (`unavailable`) and the agent is unreachable, the handler returns **409** rather than risk signalling the wrong process. When the pid is `absent` and the agent is not connected, the row is marked `terminated` with `error = 'process lost across beacon restart'` and 409 is returned.
 
 Grace defaults: `stage1GraceMs = 5000`, `stage2GraceMs = 5000`, `pollIntervalMs = 100`. The 5 s stage-1 wait is deliberate — bulkier MCP servers need time to exit in-process.
 
@@ -65,17 +86,17 @@ The seam is wired like the existing `submitUserMessage`/`cancelCurrentRequest` o
 New `drone-beacon/src/spawn-reconcile.ts`:
 
 - **Reachability** — `isSpawnReachable(agentId, lastActivity, connectedAgentIds, now, grace)` is true when the agent's socket is open **or** it heartbeated within `HEARTBEAT_GRACE_MS = 45_000` (one 30 s heartbeat tick + jitter). It is deliberately **independent** of the pid check: a wedged process is `exists && !reachable`.
-- **Liveness** — `getSpawnLiveness(spawns)` derives `{ exists, reachable, live = exists || reachable }` from one enumeration; `handleGetSpawn` is now async and exposes the derived `live` field on `GET /spawn/:id`. **Nothing is written** — "orphaned" is a *view*, not a *state*.
+- **Liveness** — `getSpawnLiveness(spawns)` derives `{ exists, reachable, live = exists || reachable }` from one enumeration; `handleGetSpawn` is now async and exposes the derived `live` field on `GET /spawn/:id`. **Nothing is written** — "orphaned" is a _view_, not a _state_.
 - **Reconcile** — `reconcileSpawnRows` downgrades a `running`/`spawning` row to `terminated` (+ the `process lost across beacon restart` note) **only** when it is neither reachable nor has a live pid, and drops the phantom `agent_sessions` row. A row that fails only one signal is left alone. **Enumeration failure never downgrades a row.**
 - Scheduled boot-only via `startSpawnReconcile` (`RECONCILE_GRACE_MS = 45_000`, one-shot, `unref`'d) wired in `index.ts` after `registerWebSocketServer`, with `stopSpawnReconcile` on shutdown. Boot-only because the grace window is what makes it safe against a slow reconnect.
 
 ### Eternal WS retry (assumption change)
 
-The agent's beacon WebSocket now **retries forever** with backoff capped at 15 minutes (dropped `maxReconnectAttempts`; kept `ctx.shuttingDown` so an intentional close does not retry). This is a deliberate assumption change: the beacon stays up, and if it goes down it comes back, so a live agent is always *eventually* reachable. The previous budget (`maxReconnectAttempts: 5`, ~60 s total) was **one-shot** — `connectWebSocket`'s only caller is `onPluginsLoaded` — so any beacon outage longer than a minute stranded the agent's socket permanently. Because the HTTP heartbeat is an independent channel that never stops while the process lives, a live agent also re-announces itself within ~30 s of the beacon returning.
+The agent's beacon WebSocket now **retries forever** with backoff capped at 15 minutes (dropped `maxReconnectAttempts`; kept `ctx.shuttingDown` so an intentional close does not retry). This is a deliberate assumption change: the beacon stays up, and if it goes down it comes back, so a live agent is always _eventually_ reachable. The previous budget (`maxReconnectAttempts: 5`, ~60 s total) was **one-shot** — `connectWebSocket`'s only caller is `onPluginsLoaded` — so any beacon outage longer than a minute stranded the agent's socket permanently. Because the HTTP heartbeat is an independent channel that never stops while the process lives, a live agent also re-announces itself within ~30 s of the beacon returning.
 
 ### En-route corrections
 
-- **Gateway `terminateSession` targeted the wrong id** (`7a7742b1`). `CoordinatorSpawnBackend.spawnSession` stored `processId = agentId || spawnId`, and `terminateSession` passed `processId` into the terminate endpoint's **spawnId** slot, so `DELETE /api/spawn/<beacon>/<agentId>` 404'd at the beacon and the ladder never ran — a silent no-op (the warning was swallowed and the local session deleted). Fix: `SpawnSession` gained an optional `spawnId` (set from `spawnResult.spawnId`); `processId` stays the agentId (used by `sendMessage`); `terminateSession` calls `terminateSpawn(targetBeaconId, spawnId)` and warns + skips when no spawnId was recorded, instead of sending a wrong id. *(The console handler already resolved correctly; this was a distinct path.)*
+- **Gateway `terminateSession` targeted the wrong id** (`7a7742b1`). `CoordinatorSpawnBackend.spawnSession` stored `processId = agentId || spawnId`, and `terminateSession` passed `processId` into the terminate endpoint's **spawnId** slot, so `DELETE /api/spawn/<beacon>/<agentId>` 404'd at the beacon and the ladder never ran — a silent no-op (the warning was swallowed and the local session deleted). Fix: `SpawnSession` gained an optional `spawnId` (set from `spawnResult.spawnId`); `processId` stays the agentId (used by `sendMessage`); `terminateSession` calls `terminateSpawn(targetBeaconId, spawnId)` and warns + skips when no spawnId was recorded, instead of sending a wrong id. _(The console handler already resolved correctly; this was a distinct path.)_
 - **Coordinator terminate timeout widened to 30 s** (`7630812a`). The ladder runs **synchronously inside the reverse-channel RPC**, bounded at ~5 s + 2 s (`ps`) + 5 s + polling ≈ 12 s, against `sendBeaconCommand`'s 15 s default (`drone-coordinator/src/beacon-ws.ts`). Too little headroom: a slow host could time the command out while the beacon still completed the kill, returning `503 BEACON_UNAVAILABLE` **for a successful terminate**, after which a retry hits `400 ... status is terminated`. New `TERMINATE_COMMAND_TIMEOUT_MS = 30000` at the route (`drone-coordinator/src/routes/spawn.ts`); other commands keep the 15 s default.
 - **CodeQL `js/polynomial-redos` on the ps parser** (`b702ab1e`). The parse regex `/^\s*(\d+)\s+(.+)$/` overlaps: `\s` ⊆ `.`, so the separator `\s+` and the unanchored tail `.+` can split a run of spaces ambiguously (witness: `"9 "` + many spaces). Fixed for free by anchoring the command's first char to non-whitespace (`/^\s*(\d+)\s+(\S.*)$/`), which removes the overlap; `ps` pads the column and `argv[0]` is never whitespace-led, so real output is unchanged (the one delta — a pid-only line is now skipped instead of yielding an empty argv — is more correct). No suppression comment: the project reserves `// codeql[...]` for genuine dismissals (cf. `7ea4582f` for the same rule on `persona-metadata.ts`, [228-persona-metadata-derivation](228-persona-metadata-derivation.md)).
 

@@ -1,6 +1,13 @@
 ---
 tags: [decision, memory-pipeline, bootstrap, workflow, session-end, cli]
-related: [decisions/151-memory-pipeline-infra.md, decisions/179-swarm-memory-rag-retrieval.md, concepts/memory-pipeline.md, modules/drone-swarm.md, modules/drone-coordinator.md]
+related:
+  [
+    decisions/151-memory-pipeline-infra.md,
+    decisions/179-swarm-memory-rag-retrieval.md,
+    concepts/memory-pipeline.md,
+    modules/drone-swarm.md,
+    modules/drone-coordinator.md,
+  ]
 ---
 
 # 180 — Swarm memory bootstrap workflow
@@ -9,15 +16,16 @@ related: [decisions/151-memory-pipeline-infra.md, decisions/179-swarm-memory-rag
 
 ## Context
 
-ADR 151's Context referred to `bootstrap__swarm-memory` as the "opinionated default" and `docs/agents/memory-pipeline.md` recommended it as the complete pipeline — but a workspace sweep found **no such workflow in the code** (total registered workflows: `bootstrap__project`, `bootstrap__user`, `skills__create`, `persona__create`, macros `reload`). Git history confirmed it was never committed. The docs described a phantom. The other half of the claimed default, the seeded `coordinator-wiki-librarian` persona, *was* real but **broken**: its prompt instructed it to call `session_list`/`session_get_log`/`session_mark_processed` — tools that exist nowhere — and to hunt for sessions itself, while its allowlist used patterns matching no canonical tool name (`wiki_*` vs the real `swarm__wiki_*`; `!file.write` vs `file__write`; `!exec.*` vs id `exec`), and the seeded `memory-wiki` skill taught the same phantom workflow. Any `sessionEnd` spawn trigger would fire a librarian whose steps 2/3/6 were unexecutable.
+ADR 151's Context referred to `bootstrap__swarm-memory` as the "opinionated default" and `docs/agents/memory-pipeline.md` recommended it as the complete pipeline — but a workspace sweep found **no such workflow in the code** (total registered workflows: `bootstrap__project`, `bootstrap__user`, `skills__create`, `persona__create`, macros `reload`). Git history confirmed it was never committed. The docs described a phantom. The other half of the claimed default, the seeded `coordinator-wiki-librarian` persona, _was_ real but **broken**: its prompt instructed it to call `session_list`/`session_get_log`/`session_mark_processed` — tools that exist nowhere — and to hunt for sessions itself, while its allowlist used patterns matching no canonical tool name (`wiki_*` vs the real `swarm__wiki_*`; `!file.write` vs `file__write`; `!exec.*` vs id `exec`), and the seeded `memory-wiki` skill taught the same phantom workflow. Any `sessionEnd` spawn trigger would fire a librarian whose steps 2/3/6 were unexecutable.
 
 Separately, `drone-swarm session process` returns raw event JSON, but the ingester needs the readable `--- Turn N ---` transcript (`GET /api/sessions/:id/transcript`, built for ADR 146 session import) — a plan-gap the user confirmed mid-flight.
 
 ## Decision
 
-Four pieces, shaped by explicit user direction (see log for the interview): a setup **workflow** runs *on the coordinator host* and writes server-side config/scripts with a check-in before every mutation; restarts are **sanctioned with a confirm gate** instead of banned (the user's reasoning: models improvise restarts anyway — teach the guided path and gate it); the librarian is re-modeled as ingest-what-you're-given; and validation follows check-always-static + confirm-first-live.
+Four pieces, shaped by explicit user direction (see log for the interview): a setup **workflow** runs _on the coordinator host_ and writes server-side config/scripts with a check-in before every mutation; restarts are **sanctioned with a confirm gate** instead of banned (the user's reasoning: models improvise restarts anyway — teach the guided path and gate it); the librarian is re-modeled as ingest-what-you're-given; and validation follows check-always-static + confirm-first-live.
 
 **1. The `bootstrap__swarm-memory` workflow** (`drone-agent/src/plugins/bootstrap/swarm-memory.ts` + `swarm-memory-scripts.ts` after a 750-line-limit split; registered in `bootstrap/index.ts`). Step flow, each mutating step = one `ctx.elicit` confirm with full preview:
+
 - **Discover**: coordinator URL (probe via `drone-swarm session list --limit 1`), beacon opt-in, catch-up batch limit, cron schedule (defaults: `http://localhost:3456`, coordinator-only, 5, `0 * * * *`).
 - **Scripts** (`~/.drone-swarm-memory/bin/`): `session-end-ingest.sh` (claim via `session process` → `session transcript` → kickoff NDJSON → `drone-agent --output-json --once --persona coordinator-wiki-librarian` → `session processed --summary`) and `catch-up-ingest.sh` (list `ended` newest-first, batch limit, per-session failure isolation, feeds the hook). Atomic tmp+rename writes, `chmod 0755`.
 - **Config merge**: `sessionEnd: {type:'command', command:'<hook> {session_id}'}` merged into `~/.drone-coordinator/config.json` (+ optional beacon) via the **real** `drone-swarm-common` `mergeConfig`+`validateConfigFile` (the same code the server runs; differing-type triggers replace wholesale; never copy loader logic).

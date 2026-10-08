@@ -1,13 +1,18 @@
 ---
 tags: [decision, file-plugin, diff-format]
-related: [drone-agent-plugins.md, 033-file-apply-diff-v2.md, 073-apply-diff-matching-cascade-redesign.md]
+related:
+  [
+    drone-agent-plugins.md,
+    033-file-apply-diff-v2.md,
+    073-apply-diff-matching-cascade-redesign.md,
+  ]
 ---
 
 # 038: Flat Unified Diff Format for `file__apply_diff`
 
 **Status**: Input format preserved; matching engine superseded by [073-apply-diff-matching-cascade-redesign](073-apply-diff-matching-cascade-redesign.md) (2026-07-19)
 
-**Note**: The unified diff *input format* introduced by this ADR is still in use and is a success — LLMs produce valid unified diff strings reliably. However, the *matching engine* (contiguous-block matching, dropped interleaved context, whole-line heading match) was replaced by the 4-step cascade in [073-apply-diff-matching-cascade-redesign](073-apply-diff-matching-cascade-redesign.md) (aggressive fuzz, partial success, cheat-sheet error reporting). The parser, `patch-applier.ts`, and `file.ts` were rewritten under ADR 073.
+**Note**: The unified diff _input format_ introduced by this ADR is still in use and is a success — LLMs produce valid unified diff strings reliably. However, the _matching engine_ (contiguous-block matching, dropped interleaved context, whole-line heading match) was replaced by the 4-step cascade in [073-apply-diff-matching-cascade-redesign](073-apply-diff-matching-cascade-redesign.md) (aggressive fuzz, partial success, cheat-sheet error reporting). The parser, `patch-applier.ts`, and `file.ts` were rewritten under ADR 073.
 
 **Supersedes**: [033-file-apply-diff-v2](033-file-apply-diff-v2.md)
 

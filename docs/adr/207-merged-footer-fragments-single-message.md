@@ -1,6 +1,15 @@
 ---
 tags: [llm, prompt-fragments, prompt-cache, glm, guardrails, adr]
-related: [modules/drone-agent.md, concepts/session-management.md, flows/tool-call-loop.md, decisions/153-pre-compaction-nudge.md, decisions/173-swarm-prompt-fragments.md, decisions/145-guardrail-reliability-features.md, meta/decision-bug-fixes-go-in-decisions.md]
+related:
+  [
+    modules/drone-agent.md,
+    concepts/session-management.md,
+    flows/tool-call-loop.md,
+    decisions/153-pre-compaction-nudge.md,
+    decisions/173-swarm-prompt-fragments.md,
+    decisions/145-guardrail-reliability-features.md,
+    meta/decision-bug-fixes-go-in-decisions.md,
+  ]
 ---
 
 # Merged footer fragments: single trailing system message (amends the phase-aware footer rendering)

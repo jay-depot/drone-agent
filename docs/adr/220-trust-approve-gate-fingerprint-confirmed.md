@@ -1,6 +1,15 @@
 ---
 tags: [decision, swarm, trust, coordinator-ui, beacon]
-related: [decisions/211-beacon-coordinator-trust-hardening.md, decisions/191-topology-live-ws-status.md, concepts/beacon-verification.md, concepts/mtls-and-reverse-channel.md, modules/drone-coordinator.md, modules/drone-beacon.md, modules/drone-coordinator-ui.md]
+related:
+  [
+    decisions/211-beacon-coordinator-trust-hardening.md,
+    decisions/191-topology-live-ws-status.md,
+    concepts/beacon-verification.md,
+    concepts/mtls-and-reverse-channel.md,
+    modules/drone-coordinator.md,
+    modules/drone-beacon.md,
+    modules/drone-coordinator-ui.md,
+  ]
 ---
 
 # 220 — `/trust-coordinator` approve gate: deliver `fingerprintConfirmed` to the UI + live trust refresh

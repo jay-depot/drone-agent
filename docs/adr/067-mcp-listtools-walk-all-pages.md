@@ -1,6 +1,11 @@
 ---
 tags: [decision, mcp]
-related: [modules/drone-agent-mcp-client.md, decisions/064-mcp-deferred-tool-loading.md, decisions/065-mcp-tool-mounting-cache-and-server-descriptions.md]
+related:
+  [
+    modules/drone-agent-mcp-client.md,
+    decisions/064-mcp-deferred-tool-loading.md,
+    decisions/065-mcp-tool-mounting-cache-and-server-descriptions.md,
+  ]
 ---
 
 # MCP `listTools` Walks All Pages (Gap Item 9)

@@ -1,6 +1,13 @@
 ---
 tags: [decision, search, semantic-search, dedup, beacon, drone-swarm-common]
-related: [concepts/semantic-search.md, modules/drone-beacon.md, modules/drone-swarm-common.md, decisions/129-structure-aware-chunking.md, decisions/131-sqlite-vec-semantic-search.md]
+related:
+  [
+    concepts/semantic-search.md,
+    modules/drone-beacon.md,
+    modules/drone-swarm-common.md,
+    decisions/129-structure-aware-chunking.md,
+    decisions/131-sqlite-vec-semantic-search.md,
+  ]
 ---
 
 # 130. Deduplicate Semantic Search Results by File

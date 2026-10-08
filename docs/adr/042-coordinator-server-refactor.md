@@ -1,6 +1,11 @@
 ---
 tags: [decision, coordinator, beacon, refactor, testing]
-related: [modules/drone-coordinator.md, modules/drone-beacon.md, decisions/041-beacon-coordinator-test-suite.md]
+related:
+  [
+    modules/drone-coordinator.md,
+    modules/drone-beacon.md,
+    decisions/041-beacon-coordinator-test-suite.md,
+  ]
 ---
 
 # ADR 042: Coordinator Server Refactor — buildApp(), Config Dirs, Wiki Root

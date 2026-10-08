@@ -21,11 +21,11 @@ Create a generic `deepMerge` function in a new `drone-core/src/deep-merge.ts` mo
 
 ```typescript
 type MergeSpec = {
-  replace?: string[];        // Layer value replaces base entirely
-  merge?: string[];           // Layer value is shallow-merged via spread
-  deepMerge?: Record<string, MergeSpec>;  // Recursive deep merge with nested spec
+  replace?: string[]; // Layer value replaces base entirely
+  merge?: string[]; // Layer value is shallow-merged via spread
+  deepMerge?: Record<string, MergeSpec>; // Recursive deep merge with nested spec
   replaceNullable?: string[]; // Like replace, but null is a valid value
-  mergeArrays?: string[];    // Arrays are merged and deduplicated
+  mergeArrays?: string[]; // Arrays are merged and deduplicated
 };
 ```
 
@@ -35,7 +35,16 @@ type MergeSpec = {
 const CONFIG_MERGE_SPEC: MergeSpec = {
   replace: ['enabledPlugins', 'externalPlugins', 'systemPrompt'],
   replaceNullable: ['activePersona'],
-  merge: ['trustedPlugins', 'llm', 'ollama', 'session', 'compaction', 'memory', 'log', 'terminal'],
+  merge: [
+    'trustedPlugins',
+    'llm',
+    'ollama',
+    'session',
+    'compaction',
+    'memory',
+    'log',
+    'terminal',
+  ],
   deepMerge: {
     openai: { replace: ['models'] },
     anthropic: { replace: ['models'] },
@@ -51,28 +60,28 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
 
 ### Behavior preserved
 
-| Field | Merge Rule | Notes |
-|-------|-----------|-------|
-| `enabledPlugins` | Replace | Additive behavior is handled by caller |
-| `externalPlugins` | Replace | |
-| `trustedPlugins` | Merge objects | `{ ...base, ...layer }` |
-| `systemPrompt` | Replace | |
-| `activePersona` | Replace (nullable) | `null` is a valid value (explicit clear) |
-| `llm` | Spread merge | |
-| `ollama` | Spread merge | |
-| `openai` | Spread merge, replace `models` | `models` is an array, layer replaces |
-| `anthropic` | Spread merge, replace `models` | |
-| `openrouter` | Spread merge, replace `models` | |
-| `session` | Spread merge | |
-| `lsp` | Spread merge, replace `servers` | `servers` is a record, layer replaces |
-| `mcp` | Spread merge, replace `servers` | |
-| `compaction` | Spread merge | |
-| `memory` | Spread merge | |
-| `log` | Spread merge | |
-| `terminal` | Spread merge | |
-| `promptFile` | Spread merge, merge+dedup `files` | `files` is an array, merged with Set |
-| `swarm` | Spread merge, spread merge `knowledgeSync` | Nested object merge |
-| `tui` | Spread merge, spread merge `syntaxHighlighting`, spread merge `syntaxHighlighting.colors` | 3 levels deep |
+| Field             | Merge Rule                                                                                | Notes                                    |
+| ----------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `enabledPlugins`  | Replace                                                                                   | Additive behavior is handled by caller   |
+| `externalPlugins` | Replace                                                                                   |                                          |
+| `trustedPlugins`  | Merge objects                                                                             | `{ ...base, ...layer }`                  |
+| `systemPrompt`    | Replace                                                                                   |                                          |
+| `activePersona`   | Replace (nullable)                                                                        | `null` is a valid value (explicit clear) |
+| `llm`             | Spread merge                                                                              |                                          |
+| `ollama`          | Spread merge                                                                              |                                          |
+| `openai`          | Spread merge, replace `models`                                                            | `models` is an array, layer replaces     |
+| `anthropic`       | Spread merge, replace `models`                                                            |                                          |
+| `openrouter`      | Spread merge, replace `models`                                                            |                                          |
+| `session`         | Spread merge                                                                              |                                          |
+| `lsp`             | Spread merge, replace `servers`                                                           | `servers` is a record, layer replaces    |
+| `mcp`             | Spread merge, replace `servers`                                                           |                                          |
+| `compaction`      | Spread merge                                                                              |                                          |
+| `memory`          | Spread merge                                                                              |                                          |
+| `log`             | Spread merge                                                                              |                                          |
+| `terminal`        | Spread merge                                                                              |                                          |
+| `promptFile`      | Spread merge, merge+dedup `files`                                                         | `files` is an array, merged with Set     |
+| `swarm`           | Spread merge, spread merge `knowledgeSync`                                                | Nested object merge                      |
+| `tui`             | Spread merge, spread merge `syntaxHighlighting`, spread merge `syntaxHighlighting.colors` | 3 levels deep                            |
 
 ### TypeScript consideration
 

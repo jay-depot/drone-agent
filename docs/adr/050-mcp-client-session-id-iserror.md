@@ -1,6 +1,11 @@
 ---
 tags: [decision, mcp, bug-fix]
-related: [modules/drone-agent-mcp-client.md, flows/tool-call-loop.md, drone-agent-plugins.md]
+related:
+  [
+    modules/drone-agent-mcp-client.md,
+    flows/tool-call-loop.md,
+    drone-agent-plugins.md,
+  ]
 ---
 
 # 050 — MCP client: capture/echo Mcp-Session-Id + throw on tools/call isError

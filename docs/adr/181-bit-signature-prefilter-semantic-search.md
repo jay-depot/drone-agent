@@ -1,6 +1,22 @@
 ---
-tags: [decision, semantic-search, sqlite-vec, binary-quantization, lsh, vector-index, drone-beacon]
-related: [concepts/semantic-search.md, decisions/179-swarm-memory-rag-retrieval.md, decisions/150-semantic-search-prompt-surface.md, modules/drone-beacon.md, modules/drone-swarm-common.md]
+tags:
+  [
+    decision,
+    semantic-search,
+    sqlite-vec,
+    binary-quantization,
+    lsh,
+    vector-index,
+    drone-beacon,
+  ]
+related:
+  [
+    concepts/semantic-search.md,
+    decisions/179-swarm-memory-rag-retrieval.md,
+    decisions/150-semantic-search-prompt-surface.md,
+    modules/drone-beacon.md,
+    modules/drone-swarm-common.md,
+  ]
 ---
 
 # 181 — Bit-signature prefilter for beacon semantic search
@@ -34,7 +50,7 @@ Motivation is the wiki corpus's expected growth (the workspace index is the prov
 
 **Harness — fast-suite recall gates.** (a) Exact-parity: seeded corpus, prefiltered top-k ordering and scores identical to the float path. (b) Anisotropic recall: ~3000 synthetic 768-dim vectors, `v = normalize(3·u + topic + noise)` with a shared dominant direction and topic-structured residuals, 5 deterministic queries; recall@10 = 1.0 and recall@50 ≥ 0.98 at bitK = 400 (50 × 8). Bulk seeding in one transaction.
 
-**Harness-construction finding worth keeping**: sign quantization only carries signal when similarity is expressed through *shared sign patterns*. A corpus where each vector has its own random dominant dimension yields ~50% random sign agreement in every dim — Hamming distance stops predicting cosine (measured recall 0.52 ≈ random). The harness therefore models real embedding corpora: global anisotropy + topic centroids on disjoint dim-slices + small noise, giving ~4.5σ separation between same-topic and cross-topic Hamming.
+**Harness-construction finding worth keeping**: sign quantization only carries signal when similarity is expressed through _shared sign patterns_. A corpus where each vector has its own random dominant dimension yields ~50% random sign agreement in every dim — Hamming distance stops predicting cosine (measured recall 0.52 ≈ random). The harness therefore models real embedding corpora: global anisotropy + topic centroids on disjoint dim-slices + small noise, giving ~4.5σ separation between same-topic and cross-topic Hamming.
 
 ## Alternatives considered
 

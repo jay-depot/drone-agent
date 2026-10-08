@@ -1,6 +1,12 @@
 ---
 tags: [decision, drone-agent, reference-expansion, conversation-service, hosts]
-related: [decisions/218-reference-expansion-and-tab-completion.md, decisions/222-reference-expansion-image-inlining.md, concepts/reference-expansion.md, modules/drone-agent.md]
+related:
+  [
+    decisions/218-reference-expansion-and-tab-completion.md,
+    decisions/222-reference-expansion-image-inlining.md,
+    concepts/reference-expansion.md,
+    modules/drone-agent.md,
+  ]
 ---
 
 # 221 — `@`-reference expansion host wiring: engine capability as the default expander (+ missing receipts)
@@ -20,7 +26,9 @@ A second, independent gap: the plan (S12 "the receipt arrives separately as a `n
 `createConversationService`'s `expandUserMessage` option loses its identity default and gains a lazy default resolver:
 
 ```ts
-async function defaultExpandUserMessage(text): Promise<DroneReferenceExpansion> {
+async function defaultExpandUserMessage(
+  text
+): Promise<DroneReferenceExpansion> {
   const capability = engine.getCapability<DroneReferenceCapability>(
     DRONE_REFERENCE_CAPABILITY_ID
   );
@@ -30,7 +38,7 @@ async function defaultExpandUserMessage(text): Promise<DroneReferenceExpansion> 
 const resolveExpandUserMessage = expandUserMessage ?? defaultExpandUserMessage;
 ```
 
-**Lazy resolution is required, not stylistic**: the service is constructed *before* `await engine.initialize()`, and the engine seeds the capability into its `capabilities` map *during* initialize; `getCapability` reads the map at call time and nothing ever clears it. First user message always happens after `initialize()`, so per-call resolution is safe. A construction-time lookup would read empty.
+**Lazy resolution is required, not stylistic**: the service is constructed _before_ `await engine.initialize()`, and the engine seeds the capability into its `capabilities` map _during_ initialize; `getCapability` reads the map at call time and nothing ever clears it. First user message always happens after `initialize()`, so per-call resolution is safe. A construction-time lookup would read empty.
 
 This needs **no change to `ephemeral-conversation.ts`** — the workflow `ctx.agent` host already passes `engine` into `createConversationService`, so capability-resolving covers it automatically.
 

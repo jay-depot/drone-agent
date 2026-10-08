@@ -1,6 +1,11 @@
 ---
 tags: [decision, tui, syntax-highlighting, rendering]
-related: [modules/drone-agent-tui.md, decisions/163-tui-markdown-color-collision-fix.md, decisions/077-tui-syntax-highlighting-ansi-escape-codes.md]
+related:
+  [
+    modules/drone-agent-tui.md,
+    decisions/163-tui-markdown-color-collision-fix.md,
+    decisions/077-tui-syntax-highlighting-ansi-escape-codes.md,
+  ]
 ---
 
 # 172: TUI long-line padding fix (ceil(L/W)·W width mode)
@@ -18,7 +23,7 @@ related: [modules/drone-agent-tui.md, decisions/163-tui-markdown-color-collision
 
 Add an optional `width` parameter to `renderHighlightedTree`. When provided (the container's available content width in terminal columns), each line pads to `ceil(L / W) · W` where `L` is the line's visible length and `W` is the width. This is a single formula with no branches that yields three desired behaviors:
 
-- **Long lines** soft-wrap into exactly `ceil(L/W)` rows, every one fully background-filled — the padding lands *inside* the last wrapped row, so there is no bare spill band.
+- **Long lines** soft-wrap into exactly `ceil(L/W)` rows, every one fully background-filled — the padding lands _inside_ the last wrapped row, so there is no bare spill band.
 - **Short lines** fill exactly one full-width row.
 - **Blank lines** pad to one full-width row so they stay visible as a background band (zero-width text is dropped by ink's output writer, which would otherwise make them vanish).
 
@@ -39,7 +44,7 @@ The formula's correctness depends on Ink's wrap behavior. Verified against Ink 6
 
 - A row of **exactly W** visible columns does **not** wrap (wrapping is strictly `> W`) — so no `W−1` constant is needed.
 - Hard-break lines wrap into exactly `ceil(L/W)` fully-filled rows.
-- **Known accepted edge**: wordy lines with tokens longer than W wrap at word boundaries, so the last row can be short but is always *text-bearing* (a ragged edge, never a text-free band — strictly better than the legacy spill).
+- **Known accepted edge**: wordy lines with tokens longer than W wrap at word boundaries, so the last row can be short but is always _text-bearing_ (a ragged edge, never a text-free band — strictly better than the legacy spill).
 
 Ink-premise **canary tests** were added so a future Ink upgrade that changes the exactly-W behavior fails loudly.
 

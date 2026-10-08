@@ -1,6 +1,14 @@
 ---
 tags: [decision, search, semantic-search, chunking, beacon, tree-sitter]
-related: [concepts/semantic-search.md, modules/drone-beacon.md, modules/drone-swarm-common.md, modules/drone-agent-plugins.md, decisions/127-semantic-search-beacon.md, decisions/130-dedupe-search-results-by-file.md]
+related:
+  [
+    concepts/semantic-search.md,
+    modules/drone-beacon.md,
+    modules/drone-swarm-common.md,
+    modules/drone-agent-plugins.md,
+    decisions/127-semantic-search-beacon.md,
+    decisions/130-dedupe-search-results-by-file.md,
+  ]
 ---
 
 # 129. Structure-Aware Chunking (web-tree-sitter)

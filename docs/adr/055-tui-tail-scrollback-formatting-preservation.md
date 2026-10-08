@@ -1,6 +1,11 @@
 ---
 tags: [decision, tui, scrollback, formatting, refactor]
-related: [046-tui-tail-region-refactor.md, 047-plugin-customizable-tool-render.md, modules/drone-agent-tui.md]
+related:
+  [
+    046-tui-tail-region-refactor.md,
+    047-plugin-customizable-tool-render.md,
+    modules/drone-agent-tui.md,
+  ]
 ---
 
 # ADR 055: TUI Tail → Scrollback Formatting Preservation
@@ -21,7 +26,7 @@ This was a formatting-regression gap between the live tail and the persistent sc
 
 ### 1. `ChatEntry.node`
 
-`types.ts` `ChatEntry` gained an optional `node?: ReactNode` field. The tail region's `commitItem`/`commitAll` now attach `item.component` (the live `ReactNode`) onto the committed entry as `node`. `ChatLog` renders `entry.node ?? renderEntry(entry, scheme)` inside `<Static>` — so the scrollback shows the *exact same* component the tail showed, with full theme color and structure, and only falls back to the plain `renderEntry` path when no node is attached (e.g. legacy/plain entries).
+`types.ts` `ChatEntry` gained an optional `node?: ReactNode` field. The tail region's `commitItem`/`commitAll` now attach `item.component` (the live `ReactNode`) onto the committed entry as `node`. `ChatLog` renders `entry.node ?? renderEntry(entry, scheme)` inside `<Static>` — so the scrollback shows the _exact same_ component the tail showed, with full theme color and structure, and only falls back to the plain `renderEntry` path when no node is attached (e.g. legacy/plain entries).
 
 ### 2. Single source of truth for preview/JSON helpers
 

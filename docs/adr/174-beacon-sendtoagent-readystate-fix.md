@@ -1,6 +1,12 @@
 ---
 tags: [decision, beacon, websocket, bug-fix, ready-state]
-related: [concepts/swarm-prompt-fragments.md, decisions/173-swarm-prompt-fragments.md, modules/drone-beacon.md, decisions/123-rate-limit-mtls-ws-reverse-channel.md]
+related:
+  [
+    concepts/swarm-prompt-fragments.md,
+    decisions/173-swarm-prompt-fragments.md,
+    modules/drone-beacon.md,
+    decisions/123-rate-limit-mtls-ws-reverse-channel.md,
+  ]
 ---
 
 # 174: Beacon `sendToAgent` numeric-readyState fix

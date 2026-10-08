@@ -1,6 +1,22 @@
 ---
-tags: [decision, coordinator, drone-core, drone-swarm-common, coordinator-ui, wiki, tags]
-related: [modules/drone-coordinator.md, modules/drone-coordinator-ui.md, modules/drone-swarm-common.md, modules/drone-core.md, decisions/187-coordinator-ui-wiki-browser-improvements.md]
+tags:
+  [
+    decision,
+    coordinator,
+    drone-core,
+    drone-swarm-common,
+    coordinator-ui,
+    wiki,
+    tags,
+  ]
+related:
+  [
+    modules/drone-coordinator.md,
+    modules/drone-coordinator-ui.md,
+    modules/drone-swarm-common.md,
+    modules/drone-core.md,
+    decisions/187-coordinator-ui-wiki-browser-improvements.md,
+  ]
 ---
 
 # 189: Coordinator-side wiki tag filtering (scale-up)
@@ -10,7 +26,7 @@ related: [modules/drone-coordinator.md, modules/drone-coordinator-ui.md, modules
 ## Context
 
 [187-coordinator-ui-wiki-browser-improvements](187-coordinator-ui-wiki-browser-improvements.md) added a virtual tag
-page (`WikiTagPage` at `/wiki/tag/:tag`) that filtered the *full* page list
+page (`WikiTagPage` at `/wiki/tag/:tag`) that filtered the _full_ page list
 client-side by `tags.includes(tag)`. That approach works while the page list is
 small, but it will not scale to the thousands of memory-wiki pages the
 `coordinator-wiki-librarian` persona ultimately produces — every tag view

@@ -1,6 +1,10 @@
 ---
 tags: [decision, mcp, logging]
-related: [modules/drone-agent-mcp-client.md, decisions/064-mcp-deferred-tool-loading.md]
+related:
+  [
+    modules/drone-agent-mcp-client.md,
+    decisions/064-mcp-deferred-tool-loading.md,
+  ]
 ---
 
 # 070: MCP Logging Capability (Item 7)

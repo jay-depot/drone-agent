@@ -1,6 +1,27 @@
 ---
-tags: [decision, swarm, memory, rag, wiki, semantic-search, beacon, prompt-fragments, embeddings]
-related: [concepts/memory-pipeline.md, concepts/semantic-search.md, modules/drone-beacon.md, modules/drone-agent-plugins.md, concepts/swarm-prompt-fragments.md, decisions/151-memory-pipeline-infra.md, decisions/173-swarm-prompt-fragments.md, decisions/164-model-role-bindings.md]
+tags:
+  [
+    decision,
+    swarm,
+    memory,
+    rag,
+    wiki,
+    semantic-search,
+    beacon,
+    prompt-fragments,
+    embeddings,
+  ]
+related:
+  [
+    concepts/memory-pipeline.md,
+    concepts/semantic-search.md,
+    modules/drone-beacon.md,
+    modules/drone-agent-plugins.md,
+    concepts/swarm-prompt-fragments.md,
+    decisions/151-memory-pipeline-infra.md,
+    decisions/173-swarm-prompt-fragments.md,
+    decisions/164-model-role-bindings.md,
+  ]
 ---
 
 # 179: Swarm Memory RAG — query-aware wiki injection (selection & retrieval)

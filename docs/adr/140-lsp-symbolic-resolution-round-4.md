@@ -1,6 +1,14 @@
 ---
 tags: [decision, lsp, ergonomics, position-resolution]
-related: [concepts/lsp-symbolic-resolution.md, decisions/136-lsp-symbolic-resolution.md, decisions/138-lsp-symbolic-resolution-round-2.md, decisions/139-lsp-symbolic-resolution-round-3.md, modules/drone-core.md, modules/drone-agent-plugins.md]
+related:
+  [
+    concepts/lsp-symbolic-resolution.md,
+    decisions/136-lsp-symbolic-resolution.md,
+    decisions/138-lsp-symbolic-resolution-round-2.md,
+    decisions/139-lsp-symbolic-resolution-round-3.md,
+    modules/drone-core.md,
+    modules/drone-agent-plugins.md,
+  ]
 ---
 
 # 140: LSP Symbolic Resolution Round 4 — code_action query.filePath + ref.range, minimal `suggestedContext` block, concurrency tradeoff documented
@@ -11,7 +19,7 @@ related: [concepts/lsp-symbolic-resolution.md, decisions/136-lsp-symbolic-resolu
 
 A review of the round-3 LSP symbolic resolution work (decision 139) found six follow-up items. Four were addressed in this round; the fifth (a pre-existing flaky test-isolation fix) was deferred; the sixth (a symmetry regression test) was revised during execution after the user clarified the intended block shape.
 
-1. **`code_action` query.filePath bug** — the end of `createCodeActionTool.execute` returned `query: { filePath, range }` using the *input* `filePath`, not `targetFilePath`. When a `referenceId` resolved cross-file, the tool operated on `ref.filePath` but reported the input filePath. `rename` already did this correctly (`resolved.document.uri`).
+1. **`code_action` query.filePath bug** — the end of `createCodeActionTool.execute` returned `query: { filePath, range }` using the _input_ `filePath`, not `targetFilePath`. When a `referenceId` resolved cross-file, the tool operated on `ref.filePath` but reported the input filePath. `rename` already did this correctly (`resolved.document.uri`).
 
 2. **`suggestedContext` returned the entire window** — `suggestContext` returned the full `[line-1-w, line+w]` window block (up to 61 lines at the hard limit), not a minimal disambiguating block. The LLM had to reproduce a large exact block to disambiguate, which is brittle.
 
@@ -46,6 +54,7 @@ The referenceId branch now sets `range = ref.range` instead of reconstructing th
 ### 5. Symmetry test revised to minimality/anchoring tests
 
 The plan's symmetry assertion (odd n+1+n on `suggestedContext`) was based on crossed signals. Per the user's "option 1" decision, the minimal block is asymmetric by construction. Replaced with:
+
 - **"suggests a minimal block for each ambiguous match"** — asserts the block collapses to the match line when the match line is unique.
 - **"anchors on the nearest unique line when the match line is not unique"** — asserts match1 anchors on a marker 2 lines above and match2 on a marker 1 line below.
 
@@ -76,12 +85,12 @@ The pre-existing flaky test-isolation fix (coordinator spawn test holds its own 
 
 ## Files Modified
 
-| File | Changes |
-|------|---------|
-| `drone-agent/src/plugins/lsp/tools/editing.ts` | `query.filePath` → `targetFilePath`; referenceId branch uses `range = ref.range` |
-| `drone-core/src/position-types.ts` | `suggestContext` anchors on nearest unique line, returns minimal block; jsdoc updated |
-| `drone-agent/src/plugins/lsp/server.ts` | `withCacheLock` comment documents the disk-read tradeoff |
-| `drone-agent/test/lsp-ergonomics.test.ts` | 47 tests (was 46): minimal-block test, nearest-unique-line anchoring test; updated rename/code_action ambiguity assertions |
+| File                                           | Changes                                                                                                                    |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `drone-agent/src/plugins/lsp/tools/editing.ts` | `query.filePath` → `targetFilePath`; referenceId branch uses `range = ref.range`                                           |
+| `drone-core/src/position-types.ts`             | `suggestContext` anchors on nearest unique line, returns minimal block; jsdoc updated                                      |
+| `drone-agent/src/plugins/lsp/server.ts`        | `withCacheLock` comment documents the disk-read tradeoff                                                                   |
+| `drone-agent/test/lsp-ergonomics.test.ts`      | 47 tests (was 46): minimal-block test, nearest-unique-line anchoring test; updated rename/code_action ambiguity assertions |
 
 ## Related
 

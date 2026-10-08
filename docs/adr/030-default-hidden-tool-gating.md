@@ -1,6 +1,12 @@
 ---
 tags: [decision, tool-gating, persona]
-related: [entities/Persona.md, decisions/002-plugin-system.md, concepts/broker-provider.md, decisions/071-tool-consolidation-batch-2.md]
+related:
+  [
+    entities/Persona.md,
+    decisions/002-plugin-system.md,
+    concepts/broker-provider.md,
+    decisions/071-tool-consolidation-batch-2.md,
+  ]
 ---
 
 # ADR 030: Default-Hidden Tool Gating

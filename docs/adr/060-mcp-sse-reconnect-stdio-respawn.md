@@ -1,6 +1,11 @@
 ---
 tags: [decision, mcp, resilience, reconnect, respawn]
-related: [modules/drone-agent-mcp-client.md, decisions/054-mcp-http-sse-stream-delete.md, decisions/050-mcp-client-session-id-iserror.md]
+related:
+  [
+    modules/drone-agent-mcp-client.md,
+    decisions/054-mcp-http-sse-stream-delete.md,
+    decisions/050-mcp-client-session-id-iserror.md,
+  ]
 ---
 
 # Decision 060: MCP Client SSE Reconnect + Stdio Respawn (Points 15 & 16)

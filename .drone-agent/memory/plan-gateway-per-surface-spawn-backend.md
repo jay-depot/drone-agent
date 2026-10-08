@@ -51,40 +51,40 @@ coordinator mode without a beacon (the backend rejects it) or local mode with a 
 
 ### Locked decisions (from grilling)
 
-| # | Decision |
-|---|----------|
-| Q1 | Fully per-surface. Drop the global `spawnBackend`. No backward-compat requirement. |
-| Q2/Q3 | Mode is **inferred** from `config.targetBeaconId` presence. No explicit `spawnBackend` field. No gateway-wide `targetBeaconId`. |
-| Q4 | `coordinatorUrl`/`coordinatorToken` stay gateway-wide. Drop `spawnBackend` + `targetBeaconId` from `config.json`. |
-| Q5 | New `SpawnBackendRegistry` class; `GatewayEngine` ctor becomes `(config, backends, swarm?)`. |
-| Q6 | `ctx.spawnBackend` stays **required**; engine injects the inferred backend. `resolveTargetBeaconId` drops its coordinator-mode guard. |
-| Q7 | Loader hard-requires `coordinatorUrl` iff **any** loaded surface is a coordinator-mode spawner **or** a `swarm-console`. |
-| Q8 | New `src/surfaces/requirements.ts` with `SURFACES_REQUIRING_COORDINATOR`. |
-| Q9 | Replace `createSpawnBackend` with `createSpawnBackends(config, coordinatorClient?)` returning a `SpawnBackendRegistry`; register `local` always, `coordinator` iff a client is supplied. Delete the "Unknown spawn backend type" exit path. |
-| Q10 | A **spawning** surface with a present-but-invalid `targetBeaconId` is a **hard load error**. |
-| Q11 | Shared `resolveSurfaceSpawnMode(spec): 'local' \| 'coordinator'` in `requirements.ts`. |
-| Q12 | Loader **hard-errors** on the now-removed keys (`spawnBackend`, gateway-level `targetBeaconId`) in `config.json`. |
-| Q13 | `SpawnBackendRegistry` mirrors `SurfaceRegistry` (`register`/`get`/`types` + duplicate guard). Startup log lists registered backend types. |
-| Q14 | Startup logs each conversation's resolved surface modes once. |
-| Q15 | **Scope expansion:** improve the `--persona`-not-found message (agent side). No gateway load-time check. |
-| Q15a | Do **not** force swarm connectivity on locally-spawned children (no `--plugin swarm` from the gateway). Connectivity stays governed by the child's config cascade. |
-| Q16 | Reword the message **and** make `LocalSpawnBackend` drain child stderr into the gateway logger (so it is visible in `journalctl`). |
-| Q17 | Only `SPAWNING_SURFACES` may carry `config.targetBeaconId`; a `targetBeaconId` on any other surface is warned about and **dropped**. |
-| Q18 | Two-branch not-found message, chosen by config introspection (`enabledPlugins.includes('swarm')`). |
-| Q19 | An **explicit** `--persona` that will not resolve is **fatal** (throw from the persona-broker `onSessionStart`; `exitCode=1`). |
-| Q20 | Fatality applies to explicit requests only; `config.activePersona` stays lenient. |
-| Q21 | Fatality applies to the **`--persona` flag only**; `DRONE_PERSONA` env and `config.activePersona` stay lenient. |
-| Q22 | Drop `options.persona ??= process.env.DRONE_PERSONA` from `cli.ts`; `runtimeOptions.persona` becomes the explicit flag only. The broker resolves flag (**fatal**) → `process.env.DRONE_PERSONA` (lenient) → `config.activePersona` (lenient). |
-| Q23 | `LocalSpawnBackend` detects a child that exits before its first `turnComplete(stream close)` and returns an error string (with the stderr tail) instead of `''`. |
-| Q24 | Uniform fatality on every path (CLI, gateway-local, beacon-spawn). A doomed beacon spawn row is reconciled by ADR 231. |
-| Q25 | A configured `coordinatorUrl` with no needing surface is silently accepted (unused backend/client registered). |
-| Q26 | Extend stderr-tail capture to the one-shot inject helper (`src/inject/spawn-once.ts`). |
-| Q27 | The broker picks the Q18 branch by config introspection (`registration.getConfig().enabledPlugins.includes('swarm')`), no cross-plugin import. |
-| Q28 | Docs: new ADR `238`, gateway `CONTEXT.md`, roadmap memory; wiki follows via ingest. |
-| Q29 | Dedupe `CoordinatorClient`: build **one** instance and inject it into both `ctx.swarm` and `CoordinatorSpawnBackend`. |
-| Q30 | Keep the `swarm-console` fail-closed guard; reword to "Swarm console requires a configured coordinatorUrl." |
+| #     | Decision                                                                                                                                                                                                                                      |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q1    | Fully per-surface. Drop the global `spawnBackend`. No backward-compat requirement.                                                                                                                                                            |
+| Q2/Q3 | Mode is **inferred** from `config.targetBeaconId` presence. No explicit `spawnBackend` field. No gateway-wide `targetBeaconId`.                                                                                                               |
+| Q4    | `coordinatorUrl`/`coordinatorToken` stay gateway-wide. Drop `spawnBackend` + `targetBeaconId` from `config.json`.                                                                                                                             |
+| Q5    | New `SpawnBackendRegistry` class; `GatewayEngine` ctor becomes `(config, backends, swarm?)`.                                                                                                                                                  |
+| Q6    | `ctx.spawnBackend` stays **required**; engine injects the inferred backend. `resolveTargetBeaconId` drops its coordinator-mode guard.                                                                                                         |
+| Q7    | Loader hard-requires `coordinatorUrl` iff **any** loaded surface is a coordinator-mode spawner **or** a `swarm-console`.                                                                                                                      |
+| Q8    | New `src/surfaces/requirements.ts` with `SURFACES_REQUIRING_COORDINATOR`.                                                                                                                                                                     |
+| Q9    | Replace `createSpawnBackend` with `createSpawnBackends(config, coordinatorClient?)` returning a `SpawnBackendRegistry`; register `local` always, `coordinator` iff a client is supplied. Delete the "Unknown spawn backend type" exit path.   |
+| Q10   | A **spawning** surface with a present-but-invalid `targetBeaconId` is a **hard load error**.                                                                                                                                                  |
+| Q11   | Shared `resolveSurfaceSpawnMode(spec): 'local' \| 'coordinator'` in `requirements.ts`.                                                                                                                                                        |
+| Q12   | Loader **hard-errors** on the now-removed keys (`spawnBackend`, gateway-level `targetBeaconId`) in `config.json`.                                                                                                                             |
+| Q13   | `SpawnBackendRegistry` mirrors `SurfaceRegistry` (`register`/`get`/`types` + duplicate guard). Startup log lists registered backend types.                                                                                                    |
+| Q14   | Startup logs each conversation's resolved surface modes once.                                                                                                                                                                                 |
+| Q15   | **Scope expansion:** improve the `--persona`-not-found message (agent side). No gateway load-time check.                                                                                                                                      |
+| Q15a  | Do **not** force swarm connectivity on locally-spawned children (no `--plugin swarm` from the gateway). Connectivity stays governed by the child's config cascade.                                                                            |
+| Q16   | Reword the message **and** make `LocalSpawnBackend` drain child stderr into the gateway logger (so it is visible in `journalctl`).                                                                                                            |
+| Q17   | Only `SPAWNING_SURFACES` may carry `config.targetBeaconId`; a `targetBeaconId` on any other surface is warned about and **dropped**.                                                                                                          |
+| Q18   | Two-branch not-found message, chosen by config introspection (`enabledPlugins.includes('swarm')`).                                                                                                                                            |
+| Q19   | An **explicit** `--persona` that will not resolve is **fatal** (throw from the persona-broker `onSessionStart`; `exitCode=1`).                                                                                                                |
+| Q20   | Fatality applies to explicit requests only; `config.activePersona` stays lenient.                                                                                                                                                             |
+| Q21   | Fatality applies to the **`--persona` flag only**; `DRONE_PERSONA` env and `config.activePersona` stay lenient.                                                                                                                               |
+| Q22   | Drop `options.persona ??= process.env.DRONE_PERSONA` from `cli.ts`; `runtimeOptions.persona` becomes the explicit flag only. The broker resolves flag (**fatal**) → `process.env.DRONE_PERSONA` (lenient) → `config.activePersona` (lenient). |
+| Q23   | `LocalSpawnBackend` detects a child that exits before its first `turnComplete(stream close)` and returns an error string (with the stderr tail) instead of `''`.                                                                              |
+| Q24   | Uniform fatality on every path (CLI, gateway-local, beacon-spawn). A doomed beacon spawn row is reconciled by ADR 231.                                                                                                                        |
+| Q25   | A configured `coordinatorUrl` with no needing surface is silently accepted (unused backend/client registered).                                                                                                                                |
+| Q26   | Extend stderr-tail capture to the one-shot inject helper (`src/inject/spawn-once.ts`).                                                                                                                                                        |
+| Q27   | The broker picks the Q18 branch by config introspection (`registration.getConfig().enabledPlugins.includes('swarm')`), no cross-plugin import.                                                                                                |
+| Q28   | Docs: new ADR `238`, gateway `CONTEXT.md`, roadmap memory; wiki follows via ingest.                                                                                                                                                           |
+| Q29   | Dedupe `CoordinatorClient`: build **one** instance and inject it into both `ctx.swarm` and `CoordinatorSpawnBackend`.                                                                                                                         |
+| Q30   | Keep the `swarm-console` fail-closed guard; reword to "Swarm console requires a configured coordinatorUrl."                                                                                                                                   |
 
-**Explicitly deferred (NOT in this plan):** surfacing the persona failure into chat from the *agent* side (Q16 "C"); beacon-side persona pre-validation before spawn (Q24 "B").
+**Explicitly deferred (NOT in this plan):** surfacing the persona failure into chat from the _agent_ side (Q16 "C"); beacon-side persona pre-validation before spawn (Q24 "B").
 
 ---
 
@@ -93,6 +93,7 @@ coordinator mode without a beacon (the backend rejects it) or local mode with a 
 > Line numbers are as read on 2026-10-08 (`main` @ `6547791`). **Re-read each file immediately before editing.**
 
 **drone-gateway**
+
 - `src/types.ts:94` `export type SpawnBackendType = 'local' | 'coordinator';`; `:110` `GatewayConfig.spawnBackend`; `:113-114` its doc comment; `:116` `targetBeaconId?`.
 - `src/spawn-backend.ts:27` `SpawnBackend` interface; `:39-43` `spawnSession(conv, persona, opts?)`; `:54-58` `sendMessage`; `:63` `terminateSession`.
 - `src/local-spawn-backend.ts` — ctor `(agentPath?)` `:24`; `spawnSession` `:28`; args `['--output-json', …]` `:67-81`; `sendMessage` `:116` (readline loop, returns `lastAssistantMessage` after loop); `terminateSession` `:181`.
@@ -107,6 +108,7 @@ coordinator mode without a beacon (the backend rejects it) or local mode with a 
 - `src/inject/spawn-once.ts` — `:63` `child.stderr.resume()` (discarded); `:100-105` `SpawnOnceFailureError(lastError ?? exit code)`.
 
 **drone-agent**
+
 - `src/cli.ts:181` `options.persona = argv[++i]`; `:268` `options.persona ??= process.env.DRONE_PERSONA;` (inside the `default`-kind branch, after the workflow/positional returns).
 - `src/index.tsx:211` `persona: invocation.options.persona` into `runtimeOptions`; `:356` `engine.initialize()`; `:371-372` `onPluginsLoaded` then `onSessionStart`; `:579-588` `main().catch` → `process.exitCode = 1`.
 - `src/runtime/plugin-engine.ts:961` `runtimeOptions.persona` → `_runtime`; `:1002-1020` `runHooks` (re-throws all hooks except `onBeforePrompt`).
@@ -188,6 +190,7 @@ export class SpawnBackendRegistry {
 Remove `spawnBackend: SpawnBackendType;` and `targetBeaconId?: string;` (and their JSDoc) from `GatewayConfig`. **Keep** `export type SpawnBackendType = 'local' | 'coordinator';` (the registry keys on it). Update the `GatewayConfig` doc comment to describe the per-surface inference.
 
 **Step 1.4 — `src/config/load.ts`: validation rewrite.**
+
 - At the top of `loadGatewayConfig` (before anything else), **reject removed keys**:
 
 ```ts
@@ -202,15 +205,21 @@ for (const removed of ['spawnBackend', 'targetBeaconId'] as const) {
   }
 }
 ```
+
 - Read `coordinatorUrl`/`coordinatorToken` as before, but **delete** the `spawnBackend` computation (`:267-268`) and the coordinatorUrl required-iff-coordinator block (`:270-283`) and the gateway-level targetBeaconId block (`:286-318`). Do not warn about either key.
 - Change `sanitizeSurfaceConfig` to take the surface `type` and enforce Q10/Q17:
 
 ```ts
 if (rest.targetBeaconId !== undefined) {
   if (!SPAWNING_SURFACES.has(type)) {
-    warn(`surface type "${type}" does not spawn agents; ignoring its targetBeaconId`);
+    warn(
+      `surface type "${type}" does not spawn agents; ignoring its targetBeaconId`
+    );
     delete rest.targetBeaconId;
-  } else if (typeof rest.targetBeaconId !== 'string' || rest.targetBeaconId.trim() === '') {
+  } else if (
+    typeof rest.targetBeaconId !== 'string' ||
+    rest.targetBeaconId.trim() === ''
+  ) {
     throw new Error(
       `Control surface "${type}" in "${file}" (conversation "${convId}", ` +
         `adapter "${adapterId}") has an invalid targetBeaconId (expected a non-empty string).`
@@ -218,7 +227,9 @@ if (rest.targetBeaconId !== undefined) {
   }
 }
 ```
-  (`workingDir`, `lifecycle.idleTimeoutMs`, `batch.debounceMs` handling unchanged.)
+
+(`workingDir`, `lifecycle.idleTimeoutMs`, `batch.debounceMs` handling unchanged.)
+
 - Build the `GatewayConfig` **without** `spawnBackend`/`targetBeaconId`.
 - **After** all adapters/conversations are loaded, enforce Q7/Q25:
 
@@ -230,10 +241,13 @@ if (!coordinatorUrl && anySurfaceNeedsCoordinator(config.serviceAdapters)) {
   );
 }
 ```
-  with a local helper:
+
+with a local helper:
 
 ```ts
-function anySurfaceNeedsCoordinator(adapters: ResolvedServiceAdapter[]): boolean {
+function anySurfaceNeedsCoordinator(
+  adapters: ResolvedServiceAdapter[]
+): boolean {
   for (const adapter of adapters) {
     for (const conv of adapter.conversations.values()) {
       for (const spec of conv.surfaces) {
@@ -250,6 +264,7 @@ function anySurfaceNeedsCoordinator(adapters: ResolvedServiceAdapter[]): boolean
 Change the ctor from `(coordinatorUrl, coordinatorToken)` to `(client: CoordinatorClient)`; store it; delete the internal `new CoordinatorClient(...)`. Everything else unchanged.
 
 **Step 1.6 — `src/engine.ts`: registry + per-surface resolution.**
+
 - Ctor `(config: GatewayConfig, backends: SpawnBackendRegistry, swarm?: SwarmApi)`; field `private backends: SpawnBackendRegistry;`.
 - Startup log lists registered backends: `` `(spawn backends: ${this.backends.types().join(', ') || 'none'})` ``.
 - In the per-conversation loop in `start()`, log each conversation's surfaces once (Q14):
@@ -260,7 +275,8 @@ logger.info(
   `Conversation "${convId}" surfaces: ${conv.surfaces.map(s => this.describeSurface(s)).join(', ')}`
 );
 ```
-  with:
+
+with:
 
 ```ts
 private describeSurface(spec: ControlSurfaceSpec): string {
@@ -270,6 +286,7 @@ private describeSurface(spec: ControlSurfaceSpec): string {
   return mode === 'coordinator' ? `${spec.type}(coordinator:${beacon})` : `${spec.type}(local)`;
 }
 ```
+
 - `resolveTargetBeaconId` loses the coordinator guard (Q6): return the sanitized `spec.config?.targetBeaconId` when it is a non-empty string, else `undefined`.
 - `surfaceContext` injects `spawnBackend: this.resolveSpawnBackend(spec)` (new private method below) and `targetBeaconId: this.resolveTargetBeaconId(spec)`:
 
@@ -287,6 +304,7 @@ private resolveSpawnBackend(spec: ControlSurfaceSpec): SpawnBackend {
 ```
 
 **Step 1.7 — `src/index.ts`: registry factory + one shared client (Q9, Q29).**
+
 - Replace `createSpawnBackend` with:
 
 ```ts
@@ -300,12 +318,18 @@ export function createSpawnBackends(
     `Registered local spawn backend (agentPath: ${config.agentPath || 'drone-agent (from PATH)'})`
   );
   if (coordinatorClient) {
-    registry.register('coordinator', new CoordinatorSpawnBackend(coordinatorClient));
-    logger.info(`Registered coordinator spawn backend (${config.coordinatorUrl})`);
+    registry.register(
+      'coordinator',
+      new CoordinatorSpawnBackend(coordinatorClient)
+    );
+    logger.info(
+      `Registered coordinator spawn backend (${config.coordinatorUrl})`
+    );
   }
   return registry;
 }
 ```
+
 - In `main()`: build the client once, reuse it for both the backend and the engine:
 
 ```ts
@@ -315,6 +339,7 @@ const coordinatorClient = config.coordinatorUrl
 const backends = createSpawnBackends(config, coordinatorClient);
 const engine = new GatewayEngine(config, backends, coordinatorClient);
 ```
+
 - Remove the late `if (!config.spawnBackend) config.spawnBackend = 'local'` default in `loadConfig`, and the unknown-backend `process.exit(1)` path. Drop the now-unused `SpawnBackendType` import if it becomes unused.
 
 **Step 1.8 — `src/surfaces/swarm-console.ts` (Q30).** Reword the fail-closed message to `"Swarm console requires a configured coordinatorUrl."` Keep the branch.
@@ -330,7 +355,7 @@ const engine = new GatewayEngine(config, backends, coordinatorClient);
 - `test/index.test.ts`: replace `createSpawnBackend` tests with `createSpawnBackends` (local-only registry; local+coordinator registry when a client is passed); remove the "unknown spawn backend type" test; drop `spawnBackend` from config fixtures.
 - `test/coordinator-spawn-backend.test.ts`: construct with a mock `CoordinatorClient` instead of `(url, token)`; keep all spawn/terminate assertions.
 - `test/swarm-console-surface.test.ts`: update the expected fail-closed string.
-- Confirm `surface-registry.test.ts`, `session-lifecycle.test.ts`, `persona-assignment-surface.test.ts` still pass unchanged (the `SurfaceContext` *shape* is unchanged).
+- Confirm `surface-registry.test.ts`, `session-lifecycle.test.ts`, `persona-assignment-surface.test.ts` still pass unchanged (the `SurfaceContext` _shape_ is unchanged).
 
 ### Phase 3 — `drone-agent`: explicit-`--persona` validation (coder)
 
@@ -341,20 +366,23 @@ const engine = new GatewayEngine(config, backends, coordinatorClient);
 ```ts
 registration.hooks.onSessionStart(async () => {
   const runtime = registration.request<{ persona?: string }>('runtime');
-  const explicit = runtime?.persona;                    // --persona: FATAL if unresolved
-  const envPersona = process.env.DRONE_PERSONA;          // lenient
-  const configured = config.activePersona;              // lenient
+  const explicit = runtime?.persona; // --persona: FATAL if unresolved
+  const envPersona = process.env.DRONE_PERSONA; // lenient
+  const configured = config.activePersona; // lenient
   const candidate = explicit ?? envPersona ?? configured;
   if (!candidate) return;
 
   const activated = await activatePersona(candidate);
   if (activated) {
-    registration.logger.info(`active persona: ${activated.name} (${activated.id})`);
+    registration.logger.info(
+      `active persona: ${activated.name} (${activated.id})`
+    );
     return;
   }
 
-  const swarmEnabled =
-    registration.getConfig().enabledPlugins.includes('swarm');
+  const swarmEnabled = registration
+    .getConfig()
+    .enabledPlugins.includes('swarm');
   const message = swarmEnabled
     ? `persona "${candidate}" not found. Swarm personas are loaded, but none has id ` +
       `"${candidate}" — check the id and its scope (local/beacon/coordinator).`
@@ -366,7 +394,7 @@ registration.hooks.onSessionStart(async () => {
 });
 ```
 
-Also make `activatePersona` silent on miss (remove the `logger.warn` at `:247-249`; it currently double-logs on startup) and have the `selectPersona` capability (`:265`) log its own `persona "${id}" not found` when activation returns `null` (preserves the TUI capability's feedback). **Note the consequence:** because the env fallback moved into the broker, `DRONE_PERSONA` now applies to *all* invocation kinds (previously only the `default` kind) — an accepted, documented widening of its scope.
+Also make `activatePersona` silent on miss (remove the `logger.warn` at `:247-249`; it currently double-logs on startup) and have the `selectPersona` capability (`:265`) log its own `persona "${id}" not found` when activation returns `null` (preserves the TUI capability's feedback). **Note the consequence:** because the env fallback moved into the broker, `DRONE_PERSONA` now applies to _all_ invocation kinds (previously only the `default` kind) — an accepted, documented widening of its scope.
 
 **Step 3.3 — verify `src/plugins/swarm/index.ts:247`.** With the env fallback gone from `runtimeOptions.persona`, the `sessionStarted` event's persona fallback no longer sees `DRONE_PERSONA`. This is harmless (the active persona wins; the subagent passes `--persona` explicitly). No code change expected; add a one-line comment only if it clarifies.
 
@@ -379,6 +407,7 @@ Also make `activatePersona` silent on miss (remove the `logger.warn` at `:247-24
 ### Phase 5 — `drone-gateway`: child stderr visibility + early-exit error (coder)
 
 **Step 5.1 — `src/local-spawn-backend.ts` (Q16, Q23).**
+
 - In `startSession`, attach a `readline` interface over `childProcess.stderr`; for each non-empty line: forward it to the gateway `logger` (e.g. `logger.info({ conversationId }, line)`), **and** push it into a bounded ring (`MAX_STDERR_LINES = 20`) stored on `ManagedAgentSession`.
 - In `sendMessage`, track whether `turnComplete` was observed. On `turnComplete`, return `lastAssistantMessage` as today. If the readline loop over stdout ends **without** a `turnComplete` (child died / stdout closed), return an error string built from the ring (last ~10 lines, capped ~800 chars):
 
@@ -386,9 +415,11 @@ Also make `activatePersona` silent on miss (remove the `logger.warn` at `:247-24
 const tail = managed.stderrTail.join('\n').trim().slice(-800);
 return `Error: agent exited before replying${tail ? `: ${tail}` : ''}`;
 ```
-  This replaces the current "return whatever we have" fallback. (The `persona-assignment` surface already posts any non-empty reply, so the reason reaches chat.)
+
+This replaces the current "return whatever we have" fallback. (The `persona-assignment` surface already posts any non-empty reply, so the reason reaches chat.)
 
 **Step 5.2 — `src/inject/spawn-once.ts` (Q26).**
+
 - Replace `child.stderr.resume()` with a buffered reader (same ring pattern).
 - On non-zero exit, include the tail: `throw new SpawnOnceFailureError(lastError ?? \`Agent exited with code ${exitCode}: ${tail}\`);`.
 
@@ -401,7 +432,7 @@ return `Error: agent exited before replying${tail ? `: ${tail}` : ''}`;
 
 - **New** `docs/adr/238-gateway-per-surface-spawn-backend.md`: context (the mixed-mode blocker), the inference rule, the registry, the loader rules (removed keys throw; coordinatorUrl required iff needed; invalid beacon on a spawner throws; stray beacon on a non-spawner dropped), the shared-client dedupe, and the persona-fix scope expansion (explicit `--persona` fatal; env/config lenient; new branchy message; stderr drain + early-exit error).
 - Add a row to `docs/adr/index.md`.
-- **`drone-gateway/CONTEXT.md`**: rewrite *Spawn Target Beacon* (inference, no gateway-wide default), the *Swarm Console* "requires coordinator" note → "requires a configured `coordinatorUrl`", the config-layout block (drop `spawnBackend`/`targetBeaconId`; document per-surface `config.targetBeaconId`), and the *Surface Registry* entry (mention `SpawnBackendRegistry`).
+- **`drone-gateway/CONTEXT.md`**: rewrite _Spawn Target Beacon_ (inference, no gateway-wide default), the _Swarm Console_ "requires coordinator" note → "requires a configured `coordinatorUrl`", the config-layout block (drop `spawnBackend`/`targetBeaconId`; document per-surface `config.targetBeaconId`), and the _Surface Registry_ entry (mention `SpawnBackendRegistry`).
 - **Roadmap memory** (`memory__manage` key `roadmap`): update the Phase-4 "Gateway Spawn Targeting" entry to state the backend is per-surface and inferred from `config.targetBeaconId`.
 
 ### Phase 8 — Verification (review/tester)
@@ -413,6 +444,7 @@ Run the full Validation Criteria below; then commit. Per `AGENTS.md`, project me
 ## 4. Files changed (checklist)
 
 **New**
+
 - `drone-gateway/src/surfaces/requirements.ts`
 - `drone-gateway/src/spawn-backend-registry.ts`
 - `drone-gateway/test/requirements.test.ts`
@@ -420,6 +452,7 @@ Run the full Validation Criteria below; then commit. Per `AGENTS.md`, project me
 - `docs/adr/238-gateway-per-surface-spawn-backend.md`
 
 **Modified (source)**
+
 - `drone-gateway/src/types.ts`
 - `drone-gateway/src/config/load.ts`
 - `drone-gateway/src/coordinator-spawn-backend.ts`
@@ -432,10 +465,12 @@ Run the full Validation Criteria below; then commit. Per `AGENTS.md`, project me
 - `drone-agent/src/plugins/persona/index.ts`
 
 **Modified (tests)**
+
 - `drone-gateway/test/{config-load,engine,index,coordinator-spawn-backend,swarm-console-surface,local-spawn-backend,inject-spawn-once}.test.ts`
 - `drone-agent/test/persona-cli-flag.test.ts` (+ `persona-select.test.ts` if needed)
 
 **Modified (docs)**
+
 - `drone-gateway/CONTEXT.md`
 - `docs/adr/index.md`
 
@@ -448,7 +483,7 @@ All of the following must pass, **zero errors**:
 1. **LSP:** diagnostics clean across the workspace (the connected TypeScript LSP must report no errors).
 2. **Build:** `pnpm -r run build` exits 0 (run after the `drone-core`/types-bearing changes, since dependents resolve the built `dist/`).
 3. **Typecheck:** `pnpm typecheck` exits 0.
-4. **Lint:** `pnpm run lint` (ESLint + Prettier) exits 0. *(Reminder: prettier rewrites files — re-read before further edits.)*
+4. **Lint:** `pnpm run lint` (ESLint + Prettier) exits 0. _(Reminder: prettier rewrites files — re-read before further edits.)_
 5. **Tests (fast suite):** `pnpm run test` passes with zero failures; the `drone-gateway` and `drone-agent` suites are green.
 6. **New coverage:** every new behavior has unit tests — `resolveSurfaceSpawnMode`, the two constants, `SpawnBackendRegistry`, the loader rules (removed keys; coordinatorUrl-required; invalid-beacon-on-spawner; stray-beacon-dropped; unused-url-accepted), the engine's per-surface backend selection + missing-backend throw, the reworded `swarm-console` message, the explicit-`--persona` fatality + two-branch message + lenient env/config, the stderr drain, the early-exit error string, and the inject-helper stderr tail.
 7. **Dead-code sweep:** no `GatewayConfig.spawnBackend`; no gateway-wide `targetBeaconId`; no `createSpawnBackend(` (singular) references; no `'default'` beacon literal; no unused imports/params introduced.
@@ -471,6 +506,7 @@ All of the following must pass, **zero errors**:
 All 20 phases executed. **Gates:** LSP clean; `pnpm -r run build` 0; `pnpm typecheck` 0; `pnpm run lint` 0; `pnpm run test` **3694 passed / 14 skipped / 0 failed** (gateway suite **461**).
 
 **Deviations / notes:**
+
 - Step 1.3 (`types.ts`) and several edit sites were mangled by fuzzy `apply_diff` anchors; repaired by rewriting the affected span or re-anchoring. `types.ts` was rewritten whole.
 - `LocalSpawnBackend` tests: the mock's stderr was a `Writable`; the readline drain calls `input.resume()`, so the mock's stderr was switched to a `Readable` (+ an `emitStderrLine` helper).
 - Phase 4 (`persona-cli-flag.test.ts`) needed a minimal `swarm` `DronePlugin` stub so `enabledPlugins: ['persona','swarm']` passes engine validation (the swarm plugin is not otherwise in that test's plugin list).

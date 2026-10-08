@@ -1,6 +1,12 @@
 ---
 tags: [decision, testing, integration, swarm]
-related: [concepts/test-infrastructure.md, concepts/subagent.md, modules/drone-beacon.md, modules/drone-coordinator.md]
+related:
+  [
+    concepts/test-infrastructure.md,
+    concepts/subagent.md,
+    modules/drone-beacon.md,
+    modules/drone-coordinator.md,
+  ]
 ---
 
 # 137: Isolated Integration Testing for Beacon Interactions
@@ -12,6 +18,7 @@ related: [concepts/test-infrastructure.md, concepts/subagent.md, modules/drone-b
 Swarm integration tests (agent ↔ beacon ↔ coordinator interactions) previously relied on ad-hoc Docker setups and could accidentally connect to a user's real local beacon/coordinator when run outside the provisioned environment. The old test-runner Dockerfile used a minimal `node:22-alpine` image that couldn't build native modules required by the workspace dependencies.
 
 Additionally, several integration test helpers were incomplete or stale:
+
 - The beacon's channel subscription API had no REST fallback (only WebSocket)
 - Message body payloads weren't consistently JSON-stringified
 - Coordinator API paths in test helpers didn't match the `/api` prefix
@@ -37,6 +44,7 @@ Additionally, several integration test helpers were incomplete or stale:
 ### 3. REST channel subscription routes
 
 New `drone-beacon/src/routes/channels.ts`:
+
 - `PUT /agents/:agentId/channels/:channel` — subscribe an agent to a channel via REST (works for non-WS agents)
 - `DELETE /agents/:agentId/channels/:channel` — unsubscribe
 - `POST /channels/:channel/messages` — send a channel message (verifies sender registration)
@@ -73,20 +81,20 @@ Added `restSubscribeToChannel()` / `restUnsubscribeFromChannel()` wrappers to `w
 
 ## Files Modified
 
-| File | Changes |
-|------|---------|
-| `docker/docker-compose.integration-test.yaml` | Private test-swarm network, no host port mappings |
-| `docker/test-runner.Dockerfile` | node:22-slim, build tooling, pnpm workspace install |
-| `docker/dummy-agent/src/index.ts` | Registration retry loop (10 attempts, 2s delay) |
-| `.github/workflows/integration-test.yml` | `pnpm test:integration` direct |
-| `drone-agent/test/fixtures/swarm.ts` | `shouldSkipIntegrationSuite`, `getRequiredIntegrationEnv`, `registerBeaconAgent`, helper fixes |
-| `drone-agent/test/subagent/dispatch.test.ts` | Integration guards |
-| `drone-beacon/src/routes/channels.ts` | **New** — REST channel subscription routes |
-| `drone-beacon/src/ws-server.ts` | REST wrappers for channel subscribe/unsubscribe |
-| `drone-beacon/src/routes/index.ts` | Register channel routes |
-| `drone-beacon/src/db/init.ts` | `status` column migration on agent_sessions |
-| `drone-beacon/src/types.ts` | `AgentSession.status` field |
-| `drone-agent/src/plugins/echo/index.ts` | Context window 4096 → 32768 |
+| File                                          | Changes                                                                                        |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `docker/docker-compose.integration-test.yaml` | Private test-swarm network, no host port mappings                                              |
+| `docker/test-runner.Dockerfile`               | node:22-slim, build tooling, pnpm workspace install                                            |
+| `docker/dummy-agent/src/index.ts`             | Registration retry loop (10 attempts, 2s delay)                                                |
+| `.github/workflows/integration-test.yml`      | `pnpm test:integration` direct                                                                 |
+| `drone-agent/test/fixtures/swarm.ts`          | `shouldSkipIntegrationSuite`, `getRequiredIntegrationEnv`, `registerBeaconAgent`, helper fixes |
+| `drone-agent/test/subagent/dispatch.test.ts`  | Integration guards                                                                             |
+| `drone-beacon/src/routes/channels.ts`         | **New** — REST channel subscription routes                                                     |
+| `drone-beacon/src/ws-server.ts`               | REST wrappers for channel subscribe/unsubscribe                                                |
+| `drone-beacon/src/routes/index.ts`            | Register channel routes                                                                        |
+| `drone-beacon/src/db/init.ts`                 | `status` column migration on agent_sessions                                                    |
+| `drone-beacon/src/types.ts`                   | `AgentSession.status` field                                                                    |
+| `drone-agent/src/plugins/echo/index.ts`       | Context window 4096 → 32768                                                                    |
 
 ## Related
 

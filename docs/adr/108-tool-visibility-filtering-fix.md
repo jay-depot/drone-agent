@@ -1,6 +1,13 @@
 ---
 tags: [decision, tool-visibility, persona, list-mount, bug-fix]
-related: [concepts/default-hidden-tools.md, entities/Persona.md, entities/DronePlugin.md, flows/tool-call-loop.md, decisions/105-runtime-level-list-mount.md]
+related:
+  [
+    concepts/default-hidden-tools.md,
+    entities/Persona.md,
+    entities/DronePlugin.md,
+    flows/tool-call-loop.md,
+    decisions/105-runtime-level-list-mount.md,
+  ]
 ---
 
 # ADR 108: Fix Tool Visibility Filtering — Honor defaultHidden in runtime__list_tools and mounted list
@@ -76,6 +83,7 @@ return personaCap
 ## Tests
 
 Added regression tests in:
+
 - `plugin-engine.test.ts` — 4 tests covering default-hidden filtering with persona active (no allowedTools), no persona active, persona allowedTools re-including a default-hidden tool, and no persona capability at all (exercising the new fallback)
 - `conversation-service.test.ts` — 2 tests for the mounted list: default-hidden filtered when no persona present, and persona overlay applied to the mounted list
 

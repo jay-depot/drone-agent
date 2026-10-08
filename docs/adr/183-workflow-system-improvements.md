@@ -1,6 +1,14 @@
 ---
 tags: [decision, workflows, tui, engine, agent-assist]
-related: [decisions/164-model-role-bindings.md, decisions/182-web-port-api-auth-enforcement.md, concepts/workflow-system.md, modules/drone-agent-tui.md, modules/drone-agent-plugins.md, concepts/session-management.md]
+related:
+  [
+    decisions/164-model-role-bindings.md,
+    decisions/182-web-port-api-auth-enforcement.md,
+    concepts/workflow-system.md,
+    modules/drone-agent-tui.md,
+    modules/drone-agent-plugins.md,
+    concepts/session-management.md,
+  ]
 ---
 
 # 183 — Workflow system improvements: TUI host, agent assist, session continuation, kick contract
@@ -14,7 +22,7 @@ Four defects/design gaps, all found by running real workflows:
 1. **Output-mode coupling**: `--workflow` always ran in plain-output mode — the workflow branch executed before any TUI mount, attaching a readline elicitation and a plain handler. Workflows lost streaming, tool renders, the status bar, and the inline elicitation UI, for no reason except dispatch order.
 2. **No agent assist**: a workflow's only responder was the human (`elicit`). There was no way for a workflow to use the LLM as a step — e.g. "look at this host and tell me how the coordinator actually runs" — without spawning subagent processes or overloading elicitation.
 3. **Hard exit**: workflows exited immediately on completion. `bootstrap__swarm-memory` in particular cries out for followups (enable the read side, review stale sessions), and nothing declared whether a given workflow even makes sense to continue.
-4. **Broken kick handoff**: the kickMessage was appended to the session **twice** (callers pre-appended before `sendUserMessage`, which appends its own prompt — three copies of the bug: the `--workflow` branch, `/persona create`, `/skills create`), arrived unframed (the model couldn't tell instruction from report — swarm-memory's kick was a status dump), and no contract said what kickMessage is *for*. The user saw it as "the LLM complains about getting instructions twice and has no idea what to do with any of it."
+4. **Broken kick handoff**: the kickMessage was appended to the session **twice** (callers pre-appended before `sendUserMessage`, which appends its own prompt — three copies of the bug: the `--workflow` branch, `/persona create`, `/skills create`), arrived unframed (the model couldn't tell instruction from report — swarm-memory's kick was a status dump), and no contract said what kickMessage is _for_. The user saw it as "the LLM complains about getting instructions twice and has no idea what to do with any of it."
 
 ## Decision
 
@@ -28,7 +36,7 @@ Four grilled decisions (Q1–Q4), plus two approved fold-ins:
 
 **Q4 — The kick contract.** (a) The runner wraps every kickMessage in a standard envelope: `Workflow <name> completed and handed off the following. Read it and continue the session appropriately:\n\n---\n<kickMessage>\n---` — one frame retroactively disambiguates the synthetic turn for all existing workflows. (b) Documented contract: **kickMessage is an instruction to the agent, not a report to the user**; reports belong in `toolResult`. (c) The double-append is removed at all three sites — `sendUserMessage` appends its own prompt, so callers must never pre-append. Synthetic-turn injection must be audited at BOTH layers (caller + service).
 
-**Fold-ins** (approved during grilling): the restart unit-name fix (the workflow now *observes* the real unit/container name via ctx.agent, see below) and the coordinator `--help` HTTPS-default drift line (help claimed `COORDINATOR_HTTPS` controlled the default; the code hardcodes HTTPS on).
+**Fold-ins** (approved during grilling): the restart unit-name fix (the workflow now _observes_ the real unit/container name via ctx.agent, see below) and the coordinator `--help` HTTPS-default drift line (help claimed `COORDINATOR_HTTPS` controlled the default; the code hardcodes HTTPS on).
 
 ## Consequences
 

@@ -1,6 +1,12 @@
 ---
 tags: [coordinator, coordinator-ui, chat, events, adr]
-related: [drone-coordinator.md, drone-coordinator-ui.md, decisions/202-session-chat-view-blob-delivery.md, decisions/201-session-detail-live-chat-resilience.md]
+related:
+  [
+    drone-coordinator.md,
+    drone-coordinator-ui.md,
+    decisions/202-session-chat-view-blob-delivery.md,
+    decisions/201-session-detail-live-chat-resilience.md,
+  ]
 ---
 
 # Session chat view: expandable truncation slugs + placeholder previews

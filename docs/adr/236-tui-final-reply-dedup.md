@@ -1,6 +1,7 @@
 ---
 tags: [decision, tui, bug-fix]
-related: [046-tui-tail-region-refactor.md, drone-agent-tui.md, flows/tool-call-loop.md]
+related:
+  [046-tui-tail-region-refactor.md, drone-agent-tui.md, flows/tool-call-loop.md]
 ---
 
 # 236 — TUI final reply rendered exactly once
@@ -35,7 +36,7 @@ Remove the redundant `log(response, 'plain')` block. The assistant reply is rend
 
 The `response` return value is still used — but exclusively for the `CANCEL_SENTINEL` early-return check. No lifecycle hook, plugin, or other code depends on the returned text for side effects (verified by grep: `response` is referenced only at the `sendUserMessage` call and the `CANCEL_SENTINEL` check).
 
-The try/catch `log(\`Error: ${msg}\`, 'error')` for hook-thrown errors is **preserved**, as is the in-stream `error` event. Tool/hook errors still render exactly once.
+The try/catch `log(\`Error: ${msg}\`, 'error')`for hook-thrown errors is **preserved**, as is the in-stream`error` event. Tool/hook errors still render exactly once.
 
 ## Why this is safe
 

@@ -1,6 +1,12 @@
 ---
 tags: [decision, gateway, architecture]
-related: [modules/drone-gateway.md, decisions/044-gateway-core.md, decisions/058-gateway-config-model.md, decisions/059-matrix-adapter.md]
+related:
+  [
+    modules/drone-gateway.md,
+    decisions/044-gateway-core.md,
+    decisions/058-gateway-config-model.md,
+    decisions/059-matrix-adapter.md,
+  ]
 ---
 
 # 235: Gateway Architecture — Standalone Service, Spawn Backends, NDJSON, Control Surfaces, Coordinator Web Port

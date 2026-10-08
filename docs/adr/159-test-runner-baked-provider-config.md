@@ -1,6 +1,13 @@
 ---
 tags: [decision, adr, testing, docker, providers]
-related: [concepts/test-infrastructure.md, concepts/provider-model-selection.md, entities/DroneAgentConfig.md, decisions/155-provider-model-config.md, decisions/137-integration-test-isolation.md]
+related:
+  [
+    concepts/test-infrastructure.md,
+    concepts/provider-model-selection.md,
+    entities/DroneAgentConfig.md,
+    decisions/155-provider-model-config.md,
+    decisions/137-integration-test-isolation.md,
+  ]
 ---
 
 # 159: Test-Runner Baked Provider Config
@@ -19,10 +26,10 @@ entry exists and its protocol plugin is enabled.' to be undefined
 The image still baked the **pre-refactor selector shape**:
 
 ```json
-{"llm":{"provider":"echo"},"enabledPlugins":["llm","echo"]}
+{ "llm": { "provider": "echo" }, "enabledPlugins": ["llm", "echo"] }
 ```
 
-That shape worked only in the old world where the echo plugin self-registered as a provider via the now-deprecated legacy `registerProvider` path, matched against `llm.provider`. Under providers-as-data, the llm broker instantiates one provider per `config.providers` entry whose protocol has a registered driver and auto-activates from the canonical `llm.active: "<providerId>/<modelLocalId>"`. The legacy-section migrator synthesizes entries only for `ollama`/`openai`/`anthropic`/`openrouter` sections — a bare `llm.provider` value pointing at a *plugin* id synthesizes nothing. Zero provider instances existed, activation fell through, and every spawned subagent threw.
+That shape worked only in the old world where the echo plugin self-registered as a provider via the now-deprecated legacy `registerProvider` path, matched against `llm.provider`. Under providers-as-data, the llm broker instantiates one provider per `config.providers` entry whose protocol has a registered driver and auto-activates from the canonical `llm.active: "<providerId>/<modelLocalId>"`. The legacy-section migrator synthesizes entries only for `ollama`/`openai`/`anthropic`/`openrouter` sections — a bare `llm.provider` value pointing at a _plugin_ id synthesizes nothing. Zero provider instances existed, activation fell through, and every spawned subagent threw.
 
 The drift survived for weeks because the JSON lives inside a Dockerfile heredoc-style string: nothing typechecks it, the fast suite stayed green (its tests construct capability mocks directly), and only the slow Docker-provisioned run exercised the real config path.
 
@@ -66,13 +73,13 @@ Choices within the fix:
 ## Consequences
 
 - Config-schema refactors now fail the fast suite if they strand the baked image config, instead of surfacing as CI-only failures days later.
-- The regression test reads a repo file (`docker/test-runner.Dockerfile`) from a unit test — acceptable coupling, since the file *is* the subject under test.
+- The regression test reads a repo file (`docker/test-runner.Dockerfile`) from a unit test — acceptable coupling, since the file _is_ the subject under test.
 - Process rule reinforced: a cross-cutting config-shape refactor must sweep every consumer, including **non-typechecked** ones — Dockerfiles baking JSON, compose environment blocks, scripts that emit config files. Hidden consumers have no compiler.
 
 ## Validation
 
 - `pnpm test:integration`: 8 files passed, 65 passed / 4 skipped (the expected echo-instant-response skips), 0 failures — all 6 previously failing subagent dispatch tests green.
-- Fast suite green including the 3 new assertions; verified the new test fails against the old baked config (which still *parsed* cleanly — proving the activation-contract assertions, not the schema check, are the load-bearing ones).
+- Fast suite green including the 3 new assertions; verified the new test fails against the old baked config (which still _parsed_ cleanly — proving the activation-contract assertions, not the schema check, are the load-bearing ones).
 - Typecheck, lint, build clean. Authored as `feda09f` on `feat/provider-model-config`; landed on `main` via the PR #70 squash merge `8a56922`.
 
 ## Related

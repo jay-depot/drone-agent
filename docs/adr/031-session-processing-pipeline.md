@@ -1,6 +1,11 @@
 ---
 tags: [decision, session-pipeline, coordinator]
-related: [entities/Session.md, modules/drone-coordinator.md, decisions/030-default-hidden-tool-gating.md]
+related:
+  [
+    entities/Session.md,
+    modules/drone-coordinator.md,
+    decisions/030-default-hidden-tool-gating.md,
+  ]
 ---
 
 # ADR 031: Session Processing Pipeline
@@ -16,6 +21,7 @@ Sessions needed a defined lifecycle to support automated knowledge management. T
 Expand the `swarm_sessions.status` field to support the full lifecycle: `active`, `stale`, `finished`, `processing`, `processed`. Add a `transitionSessionStatus()` function with from-status validation to prevent invalid transitions.
 
 Add the following endpoints:
+
 - `GET /sessions` — list sessions with status filter, sorting, pagination
 - `GET /sessions/:id/log` — reconstruct full conversation from events, resolving blob references
 - `POST /sessions/:id/process` — mark as `processing`, return session log

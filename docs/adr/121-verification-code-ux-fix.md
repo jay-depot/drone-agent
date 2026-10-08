@@ -1,6 +1,16 @@
 ---
 tags: [decision, security, verification, coordinator, beacon, ui, bug-fix]
-related: [concepts/beacon-verification.md, modules/drone-beacon.md, modules/drone-coordinator.md, modules/drone-coordinator-ui.md, modules/drone-agent-plugins.md, decisions/120-bidirectional-verification-ux.md, decisions/119-bidirectional-verification-code.md, decisions/117-tofu-fingerprint-pinning.md]
+related:
+  [
+    concepts/beacon-verification.md,
+    modules/drone-beacon.md,
+    modules/drone-coordinator.md,
+    modules/drone-coordinator-ui.md,
+    modules/drone-agent-plugins.md,
+    decisions/120-bidirectional-verification-ux.md,
+    decisions/119-bidirectional-verification-code.md,
+    decisions/117-tofu-fingerprint-pinning.md,
+  ]
 ---
 
 # 121. Restore bidirectional verification-code UX (MITM protection)

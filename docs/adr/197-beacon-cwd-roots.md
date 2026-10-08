@@ -1,6 +1,12 @@
 ---
 tags: [beacon, spawn, cwd-roots, coordinator, heartbeat, adr]
-related: [drone-beacon.md, drone-coordinator.md, drone-swarm-common.md, concepts/spawn-backend.md]
+related:
+  [
+    drone-beacon.md,
+    drone-coordinator.md,
+    drone-swarm-common.md,
+    concepts/spawn-backend.md,
+  ]
 ---
 
 # Beacon CWD Roots (decision 8) + coordinator↔beacon heartbeat fix

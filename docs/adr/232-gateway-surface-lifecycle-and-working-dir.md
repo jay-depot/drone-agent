@@ -1,11 +1,31 @@
 ---
-tags: [decision, gateway, spawn, lifecycle, working-dir, control-surface, config, architecture, adr]
-related: [modules/drone-gateway.md, concepts/spawn-backend.md, modules/drone-agent.md, decisions/224-gateway-spawn-targeting.md, decisions/223-gateway-swarm-console-control-surface.md, decisions/197-beacon-cwd-roots.md, decisions/231-agent-termination-ladder-and-reconcile.md]
+tags:
+  [
+    decision,
+    gateway,
+    spawn,
+    lifecycle,
+    working-dir,
+    control-surface,
+    config,
+    architecture,
+    adr,
+  ]
+related:
+  [
+    modules/drone-gateway.md,
+    concepts/spawn-backend.md,
+    modules/drone-agent.md,
+    decisions/224-gateway-spawn-targeting.md,
+    decisions/223-gateway-swarm-console-control-surface.md,
+    decisions/197-beacon-cwd-roots.md,
+    decisions/231-agent-termination-ladder-and-reconcile.md,
+  ]
 ---
 
 # 232 — Gateway surface lifecycle management + per-surface working directory
 
-**Status**: Implemented (2026-10-05) · **Branch**: `feat/gateway-surface-lifecycle-and-workdir` · **Commits**: `81f3e203` (plan) + `c4fd39f4` (feature) + `aaf40e0d` (plan summary + insights) · **Plan**: project-memory `plan-gateway-surface-lifecycle-and-workdir` — *deleted from project memory after ingest* · **Gateway ADR**: merged into this page (2026-10-06) — the former in-tree `drone-gateway/docs/adr/005-surface-lifecycle-and-working-dir.md` copy was deleted
+**Status**: Implemented (2026-10-05) · **Branch**: `feat/gateway-surface-lifecycle-and-workdir` · **Commits**: `81f3e203` (plan) + `c4fd39f4` (feature) + `aaf40e0d` (plan summary + insights) · **Plan**: project-memory `plan-gateway-surface-lifecycle-and-workdir` — _deleted from project memory after ingest_ · **Gateway ADR**: merged into this page (2026-10-06) — the former in-tree `drone-gateway/docs/adr/005-surface-lifecycle-and-working-dir.md` copy was deleted
 
 **Summary**: The gateway's spawning control surface (`persona-assignment`) spawned one agent per conversation on the first message and **never terminated it**. Three consequences followed: agents leaked on gateway shutdown, a dead agent poisoned its conversation forever, and nothing reclaimed memory. Separately, every bot inherited the gateway process cwd, so there was nowhere per-bot for memories and scratch files. This ADR adds **surface-local lifecycle management** (idle-timeout terminate + lazy re-spawn, one-shot death detection + retry, shutdown disposal) behind a shared `SessionLifecycle` helper, gives each control surface its own **working directory**, serializes dispatch **per conversation**, and fixes the long-dead `drone-agent --working-dir` flag. Deliberately **no session resume**: continuity across a re-spawn is the on-disk working directory.
 
@@ -39,7 +59,7 @@ Finally, `drone-agent --working-dir` was **parsed but never consumed** (`cli.ts`
 - `drone-gateway/src/surfaces/lifecycle.ts` (**new**) — `SessionLifecycle` + `DEFAULT_IDLE_TIMEOUT_MS = 300_000`: spawn-on-demand, idle-timeout terminate + lazy re-spawn, one-shot death detection (a throwing `sendMessage` → best-effort terminate + clear → re-spawn → retry once; a second failure propagates), idempotent `dispose()`, internal serial tail.
 - `drone-gateway/src/surfaces/persona-assignment.ts` — rewritten on `SessionLifecycle`; gains `dispose: () => lifecycle.dispose()`; keeps the `{ response: 'Error: …', handled: true }` contract.
 - `drone-gateway/src/engine.ts` — `surfaceContext(spec)` now resolves `targetBeaconId` + `workingDir` + `idleTimeoutMs`; `InstantiatedConversation` gains a `tail` and dispatch is serialized per conversation via `runOnTail`; `stop()` disposes every instantiated surface after adapters stop.
-- Plus gateway `CONTEXT.md` (glossary: *Working Directory*, *Idle Timeout*, *Surface Disposal*; amended *Persona Assignment*, *Control Surface*, *Spawn Registry*, *Spawn Target Beacon*; config layout) and the gateway ADR 005.
+- Plus gateway `CONTEXT.md` (glossary: _Working Directory_, _Idle Timeout_, _Surface Disposal_; amended _Persona Assignment_, _Control Surface_, _Spawn Registry_, _Spawn Target Beacon_; config layout) and the gateway ADR 005.
 
 ## Validation
 
@@ -47,7 +67,7 @@ LSP clean; `pnpm -r run build` (8 packages) exit 0; `pnpm typecheck` exit 0; `pn
 
 ## Implementation notes (gotchas)
 
-- **`apply_diff` mangles files whose change zone contains template-literal lines.** A hunk over `test/engine.test.ts` whose zone held `` order.push(`start:${text}`) `` collapsed the surrounding newlines and swallowed a trailing `describe` block (esbuild: "Unexpected end of file"). Caught by the build gate; repaired by truncating at the last good line and re-appending the tail via a quoted heredoc. Same failure family as the swarm-wiki page `drone-agent-plan-execution-verification-lessons` (lesson 3), which warns against `apply_diff` on interpolated template lines — it holds for the *surrounding block*, not just the line itself.
+- **`apply_diff` mangles files whose change zone contains template-literal lines.** A hunk over `test/engine.test.ts` whose zone held ``order.push(`start:${text}`)`` collapsed the surrounding newlines and swallowed a trailing `describe` block (esbuild: "Unexpected end of file"). Caught by the build gate; repaired by truncating at the last good line and re-appending the tail via a quoted heredoc. Same failure family as the swarm-wiki page `drone-agent-plan-execution-verification-lessons` (lesson 3), which warns against `apply_diff` on interpolated template lines — it holds for the _surrounding block_, not just the line itself.
 - **`pnpm run lint` runs `prettier --write .` repo-wide and `pnpm-lock.yaml` is not in `.prettierignore`** (only `dist/` is), so lint dirtied the tree with a ~5877-line lockfile reflow plus unrelated `.drone-agent/insights/*.json` newline fixes. Reverted with `git checkout HEAD -- pnpm-lock.yaml .drone-agent/insights/ …` before committing, keeping only reformats of files actually changed this session. (Already recorded in `.drone-agent/insights/project/tooling.json`; it recurred.)
 
 ## Out of scope (explicitly deferred)

@@ -1,6 +1,12 @@
 ---
 tags: [decision, macros, bug-fix, conversation]
-related: [decisions/040-message-queue-cancel.md, decisions/045-macro-event-streaming-unified-hooks.md, decisions/086-macro-argument-reuse.md, modules/drone-agent-plugins.md]
+related:
+  [
+    decisions/040-message-queue-cancel.md,
+    decisions/045-macro-event-streaming-unified-hooks.md,
+    decisions/086-macro-argument-reuse.md,
+    modules/drone-agent-plugins.md,
+  ]
 ---
 
 # Decision 094: Macro Chat Prompt LLM Trigger Fix — Restore `sendUserMessage` with Lifecycle Hooks
@@ -26,6 +32,7 @@ Three changes were made to `drone-agent/src/plugins/macros/index.ts`:
 ### 1. Restore `sendUserMessage` with Event Handler
 
 Replaced `enqueueUserMessage` with `sendUserMessage`, including an event handler that logs events to the macro's logger:
+
 - `reasoning` → logged with `💭` prefix
 - `toolCall` → logged with `→ tool:` prefix
 - `toolResult` → logged with `←` prefix (content truncated to 200 chars)

@@ -1,6 +1,15 @@
 ---
 tags: [decision, tui, conversation, events]
-related: [023-conversation-event-push-through.md, 036-ink-6-react-19.md, 037-incremental-rendering-removal.md, 045-macro-event-streaming-unified-hooks.md, flows/tool-call-loop.md, modules/drone-agent-tui.md, entities/Session.md]
+related:
+  [
+    023-conversation-event-push-through.md,
+    036-ink-6-react-19.md,
+    037-incremental-rendering-removal.md,
+    045-macro-event-streaming-unified-hooks.md,
+    flows/tool-call-loop.md,
+    modules/drone-agent-tui.md,
+    entities/Session.md,
+  ]
 ---
 
 # ADR 046: TUI Tail Region — Live Pre-Rendering with Atomic Commit
@@ -35,9 +44,11 @@ The conversation service's tool-call loop was changed from a serial `for` loop t
 ```typescript
 const rawResults = await Promise.all(
   toolCalls.map(toolCall =>
-    executeToolSafely(toolCall.name, toolCall.arguments).then(
-      toolResult => ({ name, toolResult, toolCallId })
-    )
+    executeToolSafely(toolCall.name, toolCall.arguments).then(toolResult => ({
+      name,
+      toolResult,
+      toolCallId,
+    }))
   )
 );
 ```
@@ -48,12 +59,12 @@ const rawResults = await Promise.all(
 
 ### New Tail Components
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| `TailRegion` | `components/TailRegion.tsx` | Renders live-updating items above `<Static>` |
-| `ToolCallProgress` | `components/ToolCallProgress.tsx` | Live tool call with status indicator (running/done/error) |
-| `ReasoningBlock` | `components/ReasoningBlock.tsx` | Live reasoning text with proper coloring |
-| `AssistantMessageBlock` | `components/AssistantMessageBlock.tsx` | Live assistant message |
+| Component               | File                                   | Purpose                                                   |
+| ----------------------- | -------------------------------------- | --------------------------------------------------------- |
+| `TailRegion`            | `components/TailRegion.tsx`            | Renders live-updating items above `<Static>`              |
+| `ToolCallProgress`      | `components/ToolCallProgress.tsx`      | Live tool call with status indicator (running/done/error) |
+| `ReasoningBlock`        | `components/ReasoningBlock.tsx`        | Live reasoning text with proper coloring                  |
+| `AssistantMessageBlock` | `components/AssistantMessageBlock.tsx` | Live assistant message                                    |
 
 ### useTailRegion Hook
 
@@ -111,6 +122,7 @@ The `ChatLog` component now accepts `tailItems: TailItem[]` instead of a single 
 ### Testing
 
 4 new tests in `conversation-service-events.test.ts`:
+
 - Batch event emission (toolCallBatch + toolResultBatch)
 - Parallel execution (verifies 100ms/10ms tools complete in <150ms)
 - reasoningComplete emission

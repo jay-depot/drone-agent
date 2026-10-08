@@ -1,6 +1,11 @@
 ---
 tags: [decision, prompt-fragments, system-prompt]
-related: [modules/drone-agent-plugins.md, concepts/notepad.md, concepts/session-management.md]
+related:
+  [
+    modules/drone-agent-plugins.md,
+    concepts/notepad.md,
+    concepts/session-management.md,
+  ]
 ---
 
 # 126. Prompt Fragment Improvements
@@ -13,7 +18,7 @@ Several prompt fragments in the drone-agent plugins were too passive, vague, or 
 
 1. **File Editing fragment** (`file.ts`): "prefer `apply_diff` over `write`" was a suggestion, not a requirement. LLMs often default to `write` because it's simpler, even when it's dangerous for large files (risking token truncation or accidental deletion of code).
 
-2. **Session Notepad fragment** (`notepad.ts`): Descriptive rather than prescriptive. It told the agent what the notepad *is*, but not *when* or *how* it should be used to be effective.
+2. **Session Notepad fragment** (`notepad.ts`): Descriptive rather than prescriptive. It told the agent what the notepad _is_, but not _when_ or _how_ it should be used to be effective.
 
 3. **Current Focus fragment** (`focus.ts`): Hyperbolic "UTTERLY OBSESSED" language could trigger an LLM's refusal or "over-correction" behavior where it ignores critical side-effects or warnings because it's too focused on the one goal. It lacked a "safety valve."
 

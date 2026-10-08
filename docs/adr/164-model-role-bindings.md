@@ -1,6 +1,17 @@
 ---
 tags: [decision, llm, providers, model-roles, config, compaction]
-related: [decisions/155-provider-model-config.md, decisions/160-unified-llm-error-retry-semantics.md, concepts/provider-model-selection.md, concepts/vision-support.md, modules/drone-core.md, modules/drone-agent.md, modules/drone-agent-plugins.md, entities/DroneAgentConfig.md, flows/tool-call-loop.md]
+related:
+  [
+    decisions/155-provider-model-config.md,
+    decisions/160-unified-llm-error-retry-semantics.md,
+    concepts/provider-model-selection.md,
+    concepts/vision-support.md,
+    modules/drone-core.md,
+    modules/drone-agent.md,
+    modules/drone-agent-plugins.md,
+    entities/DroneAgentConfig.md,
+    flows/tool-call-loop.md,
+  ]
 ---
 
 # 164: Model Role Bindings (`llm.modelRoles`)
@@ -15,9 +26,9 @@ Several built-in plugins make their **own** LLM calls rather than riding the mai
 - **persona wizard** (`persona.create`) — drafting a persona `.md` from a description
 - **MCP server-descriptions** — generating a ≤3-sentence purpose summary of a server's tool list
 
-Before this feature, all three reused the session's **single active selection** (`llm.active`). There was no way to route a *specific purpose* to a different — typically cheaper or differently-provisioned — provider/model. This was a known gap flagged as "per-role model bindings" (à la Continue roles / Aider main+weak) in the provider/model config refactor backlog.
+Before this feature, all three reused the session's **single active selection** (`llm.active`). There was no way to route a _specific purpose_ to a different — typically cheaper or differently-provisioned — provider/model. This was a known gap flagged as "per-role model bindings" (à la Continue roles / Aider main+weak) in the provider/model config refactor backlog.
 
-The core challenge: a role pointing at a *different provider* than the session's active one cannot just swap the model string on the existing active provider's `chat()` — it needs a **different provider instance**, and only the broker knows how to hand one out (with the same parameter/metadata enrichment as the active provider).
+The core challenge: a role pointing at a _different provider_ than the session's active one cannot just swap the model string on the existing active provider's `chat()` — it needs a **different provider instance**, and only the broker knows how to hand one out (with the same parameter/metadata enrichment as the active provider).
 
 ## Decision
 
@@ -35,7 +46,7 @@ A single `llm.modelRoles: Record<string, string>` on `DroneLlmConfig`, mapping a
 `DroneLlmCapability` gains `resolveModelForRole(role) → DroneResolvedModelRole` (`{ provider, providerId, model, reasoningLevel? }`):
 
 - **Stateless** — never mutates the active selection and emits no events (D6). `activeProviderId`/`currentModel` are untouched.
-- **Fallback-to-active** — unset/unknown/broken roles return the active selection with a **warn-once-per-role-per-session** log (D6). An info-once log fires when a role resolves *differently* from active.
+- **Fallback-to-active** — unset/unknown/broken roles return the active selection with a **warn-once-per-role-per-session** log (D6). An info-once log fires when a role resolves _differently_ from active.
 - The resolved provider is **broker-enriched** exactly like the active one (`enrichProvider` was extracted from `getActiveProvider` and shared) — so role-bound chat calls get effective parameters, resolved context window, and `DroneLlmError.providerId` tagging for free.
 - **Reasoning level**: `reasoningLevel` comes from a shared pure helper `resolveConfiguredReasoningLevel(config, selection)` = selected model entry `.reasoningLevel` → `config.llm.reasoningLevel` (no session tier for role calls). The conversation service adopted the same helper for its main-loop reasoning chain (keeping its session-override tier ahead), so per-model reasoning config behaves consistently whether a model is active or role-bound (D12).
 

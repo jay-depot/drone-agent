@@ -1,13 +1,22 @@
 ---
 tags: [decision, swarm, session-import, llm, providers, testing, refactor, adr]
-related: [decisions/146-swarm-session-import.md, decisions/156-broker-context-windows-migration-persistence.md, decisions/196-context-window-fallback-fix.md, modules/drone-agent-plugins.md, modules/drone-agent.md, concepts/provider-model-selection.md, concepts/test-infrastructure.md]
+related:
+  [
+    decisions/146-swarm-session-import.md,
+    decisions/156-broker-context-windows-migration-persistence.md,
+    decisions/196-context-window-fallback-fix.md,
+    modules/drone-agent-plugins.md,
+    modules/drone-agent.md,
+    concepts/provider-model-selection.md,
+    concepts/test-infrastructure.md,
+  ]
 ---
 
 # 214: Swarm session import — provider-refactor repair + context-window funnel conversion
 
-**Status**: Implemented (2026-08-25) · **Branch**: `feat/swarm-session-import` (`50e31d1`, `10484f8`) · **Plan**: project-memory `plan-swarm-session-import-provider-fixes` — *deleted from project memory after ingest*
+**Status**: Implemented (2026-08-25) · **Branch**: `feat/swarm-session-import` (`50e31d1`, `10484f8`) · **Plan**: project-memory `plan-swarm-session-import-provider-fixes` — _deleted from project memory after ingest_
 
-**Summary**: Merging the provider/protocol/model refactor (`8a56922`, PR #70) into `feat/swarm-session-import` produced exactly one compile defect — the swarm session command's `makeLlm()` test mock lacked the new required `registerDriver` member (TS2741), turning the CI typecheck gate red while the runtime suite stayed fully green (vitest does not typecheck). Fixing that one line was the whole *repair*. Because the file had to be touched anyway, the plan also consolidated the swarm plugin's hand-rolled context-window resolver onto the canonical `ContextBudgetService` via **funnel conversion**, deleting the duplicate resolver rather than demoting it.
+**Summary**: Merging the provider/protocol/model refactor (`8a56922`, PR #70) into `feat/swarm-session-import` produced exactly one compile defect — the swarm session command's `makeLlm()` test mock lacked the new required `registerDriver` member (TS2741), turning the CI typecheck gate red while the runtime suite stayed fully green (vitest does not typecheck). Fixing that one line was the whole _repair_. Because the file had to be touched anyway, the plan also consolidated the swarm plugin's hand-rolled context-window resolver onto the canonical `ContextBudgetService` via **funnel conversion**, deleting the duplicate resolver rather than demoting it.
 
 ## Context
 

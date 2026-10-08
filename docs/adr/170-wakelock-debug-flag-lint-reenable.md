@@ -1,6 +1,12 @@
 ---
 tags: [decision, wakelock, lint, debug-flag, engineering-tooling]
-related: [decisions/169-wakelock-plugin.md, modules/drone-agent.md, modules/drone-core.md, modules/drone-agent-plugins.md]
+related:
+  [
+    decisions/169-wakelock-plugin.md,
+    modules/drone-agent.md,
+    modules/drone-core.md,
+    modules/drone-agent-plugins.md,
+  ]
 ---
 
 # 170: Wakelock debug-flag fix + project-wide lint re-enablement
@@ -57,19 +63,19 @@ ignores: [
 
 The stated rationale in the commit message was "update eslint config to exclude test files and other packages with deep issues." In practice it stripped ESLint coverage from **every test file** (`**/test/**/*.ts`/`.tsx`), the **entire beacon**, the **entire coordinator**, and **all of drone-agent's source** (`drone-agent/src/**`). The bulk of that commit's diff was Prettier reformatting plus Docker dependency/`package-lock.json` additions; the lint-disablement was a small but consequential `eslint.config.mjs` hunk. Because `pnpm lint` continued to "pass" under the narrowed config, roughly **228 latent errors accumulated over the subsequent ~two months** (125 `no-explicit-any`, 65 `no-unused-vars`, 15 `no-unsafe-function-type`, 12 `no-useless-assignment`, 5 `preserve-caught-error`, 4 `no-control-regex`, 2 `prefer-const`) without any signal — the exact conditions that made the `--debug wakelock` `TypeError` (section A of this ADR) sail through undetected.
 
-This is the inverse companion to the current fix: commit `91fac79e` is *where* linting silently stopped guarding the codebase, and the re-enablement in the `plan-wakelock-fix-and-lint-cleanup` branch (commit `b34dd397`) + this ADR is *where* it was restored and the backlog cleared. The process lesson: an ESLint `ignores` block is a hidden config consumer with no compiler — sweep it whenever the lint surface changes, and be alert to a green `pnpm lint` that is green because large swaths of code are excluded rather than because they are clean.
+This is the inverse companion to the current fix: commit `91fac79e` is _where_ linting silently stopped guarding the codebase, and the re-enablement in the `plan-wakelock-fix-and-lint-cleanup` branch (commit `b34dd397`) + this ADR is _where_ it was restored and the backlog cleared. The process lesson: an ESLint `ignores` block is a hidden config consumer with no compiler — sweep it whenever the lint surface changes, and be alert to a green `pnpm lint` that is green because large swaths of code are excluded rather than because they are clean.
 
 ## The 228-error cleanup
 
-| Rule | Count | Notes |
-|------|-------|-------|
-| `no-explicit-any` | 125 | 33 prod / 92 test |
-| `no-unused-vars` | 65 | dead imports/locals/params across src + test |
-| `no-unsafe-function-type` | 15 | `Function` → `DroneToolDefinition['execute']` / `(...args: unknown[]) => unknown` |
-| `no-useless-assignment` | 12 | dead initializers + `body = retry.body` etc. |
-| `preserve-caught-error` | 5 | attach `{ cause }` |
-| `no-control-regex` | 4 | build control-char regexes via `String.fromCharCode` |
-| `prefer-const` | 2 | `captured` (safe); `resetStuckDetectorsRef` (trap) |
+| Rule                      | Count | Notes                                                                             |
+| ------------------------- | ----- | --------------------------------------------------------------------------------- |
+| `no-explicit-any`         | 125   | 33 prod / 92 test                                                                 |
+| `no-unused-vars`          | 65    | dead imports/locals/params across src + test                                      |
+| `no-unsafe-function-type` | 15    | `Function` → `DroneToolDefinition['execute']` / `(...args: unknown[]) => unknown` |
+| `no-useless-assignment`   | 12    | dead initializers + `body = retry.body` etc.                                      |
+| `preserve-caught-error`   | 5     | attach `{ cause }`                                                                |
+| `no-control-regex`        | 4     | build control-char regexes via `String.fromCharCode`                              |
+| `prefer-const`            | 2     | `captured` (safe); `resetStuckDetectorsRef` (trap)                                |
 
 Notable decisions within the sweep:
 

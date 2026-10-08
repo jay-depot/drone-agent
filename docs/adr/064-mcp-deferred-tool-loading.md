@@ -1,6 +1,12 @@
 ---
 tags: [decision, mcp, tool-loading, architecture]
-related: [drone-agent-mcp-client.md, plugin-system.md, DronePlugin.md, 061-mcp-notifications-tools-list-changed.md]
+related:
+  [
+    drone-agent-mcp-client.md,
+    plugin-system.md,
+    DronePlugin.md,
+    061-mcp-notifications-tools-list-changed.md,
+  ]
 ---
 
 # 064 — MCP Deferred Tool Loading (List/Mount Pattern)
@@ -11,11 +17,11 @@ related: [drone-agent-mcp-client.md, plugin-system.md, DronePlugin.md, 061-mcp-n
 
 Real-world MCP servers can expose hundreds of tools, consuming most of the LLM's context window with tool definitions alone:
 
-| Server | Tools | Token Cost |
-|--------|-------|------------|
-| Datadog MCP | 142 across 22 toolsets | ~70K+ tokens |
-| MCP_DOCKER | 135 | ~126K tokens |
-| Cloudflare native MCP | entire API | ~1.17M tokens |
+| Server                | Tools                  | Token Cost    |
+| --------------------- | ---------------------- | ------------- |
+| Datadog MCP           | 142 across 22 toolsets | ~70K+ tokens  |
+| MCP_DOCKER            | 135                    | ~126K tokens  |
+| Cloudflare native MCP | entire API             | ~1.17M tokens |
 
 Three MCP servers can eat 72% of a 200K context window before the user types anything. Tool selection accuracy drops from 95% with 4 tools to 71% with 46 tools. The previous approach — mounting every MCP tool eagerly as a native tool definition at connection time — was unbounded: context cost grew linearly with server tool count.
 
@@ -41,6 +47,7 @@ This bounds context cost to 3 meta-tools per server regardless of how many tools
 ### Engine API Addition: `unregisterTool`
 
 A new `unregisterTool(canonicalName: string)` method was added to both `DronePluginRegistration` and `DronePluginEngine`, complementing the existing `unregisterPluginTools(pluginId)` for bulk removal. This is needed for:
+
 - `__unmount_tool` meta-tool to remove individual mounted tools
 - `handleToolsListChanged` to surgically unmount stale tools
 
@@ -55,6 +62,7 @@ If this pattern works well for MCP, it may be expanded globally to all tools (no
 ## Research Context
 
 Other MCP clients handle this problem differently:
+
 - **Claude Code (Anthropic)**: Tool Search meta-tool with deferred loading (85% token reduction)
 - **Cursor IDE**: Hard cap (40→80 tools, silently drops extras)
 - **Datadog/Speakeasy**: Server-side tag/toolset filtering

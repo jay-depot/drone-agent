@@ -1,6 +1,28 @@
 ---
-tags: [decision, skills, persona, swarm, beacon, coordinator, coordinator-ui, isolation, adr]
-related: [concepts/identity-assets.md, concepts/scope-hierarchy.md, entities/Skill.md, entities/Persona.md, modules/drone-core.md, modules/drone-agent-plugins.md, modules/drone-beacon.md, modules/drone-coordinator.md, modules/drone-coordinator-ui.md]
+tags:
+  [
+    decision,
+    skills,
+    persona,
+    swarm,
+    beacon,
+    coordinator,
+    coordinator-ui,
+    isolation,
+    adr,
+  ]
+related:
+  [
+    concepts/identity-assets.md,
+    concepts/scope-hierarchy.md,
+    entities/Skill.md,
+    entities/Persona.md,
+    modules/drone-core.md,
+    modules/drone-agent-plugins.md,
+    modules/drone-beacon.md,
+    modules/drone-coordinator.md,
+    modules/drone-coordinator-ui.md,
+  ]
 ---
 
 # 226 — Persona-owned skills at beacon/coordinator scope (+ true isolation at all scopes + coordinator-UI exposure)
@@ -10,7 +32,7 @@ related: [concepts/identity-assets.md, concepts/scope-hierarchy.md, entities/Ski
 **Summary**: Persona-owned skills — a persona's private, automatically-attached skills — now work at
 **beacon/coordinator scope**, not just user/project scope, and are shown with full CRUD on the persona page of
 the coordinator UI. The change also **fixes the ownership semantics**: owned skills are now truly isolated
-(visible only to their owning persona) at *every* scope, where before ownership merely shaped the `# Skills`
+(visible only to their owning persona) at _every_ scope, where before ownership merely shaped the `# Skills`
 prompt fragment while `skills__list`, `skills__recall`, and `@skill:` leaked every persona's skills to everyone.
 
 ## Why

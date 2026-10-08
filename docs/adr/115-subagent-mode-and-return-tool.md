@@ -1,6 +1,13 @@
 ---
 tags: [decision]
-related: [concepts/subagent.md, flows/tool-call-loop.md, entities/DronePlugin.md, decisions/071-tool-consolidation-batch-2.md, decisions/104-subagent-activity-timeout-and-error-detection.md]
+related:
+  [
+    concepts/subagent.md,
+    flows/tool-call-loop.md,
+    entities/DronePlugin.md,
+    decisions/071-tool-consolidation-batch-2.md,
+    decisions/104-subagent-activity-timeout-and-error-detection.md,
+  ]
 ---
 
 # 115. Fix subagent mode activation + return tool (review-state #1 + #2)
@@ -63,6 +70,7 @@ export type DroneToolExecutionContext = {
 ## Tests
 
 6 new tests across 3 files:
+
 - `plugin-engine.test.ts` — `_runtime` capability available during `register()` (main + subagent modes)
 - `subagent-plugin.test.ts` (new) — return tool named `'return'` in subagent mode (not `dispatch`), prompt references `subagent__return`; return tool calls `stopLoop()` instead of `process.exit`; `dispatch` registered in main-agent mode
 - `conversation-service.test.ts` — loop breaks when a tool calls `context.stopLoop()` (provider called only once); `toolCallBatch` exposes canonical `subagent__return` name (so `hasExplicitReturn` matches)

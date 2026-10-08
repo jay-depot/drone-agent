@@ -1,6 +1,12 @@
 ---
 tags: [decision, persona, frontmatter, parser, bug-fix, plugins, adr]
-related: [decisions/218-reference-expansion-and-tab-completion.md, decisions/107-persona-tool-premounting.md, concepts/default-hidden-tools.md, modules/drone-agent-plugins.md]
+related:
+  [
+    decisions/218-reference-expansion-and-tab-completion.md,
+    decisions/107-persona-tool-premounting.md,
+    concepts/default-hidden-tools.md,
+    modules/drone-agent-plugins.md,
+  ]
 ---
 
 # 219: Persona loader — allow hyphenated plugin ids in `premountedTools`

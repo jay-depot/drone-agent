@@ -31,6 +31,7 @@ The v38 SDK only supports the Rust-based crypto backend. Changed `await this.cli
 ### 3. Fix imports in sqlite-crypto-store.ts
 
 The following types moved to `.../crypto/store/base.js` in v38:
+
 - `InboundGroupSessionData` (was `.../crypto/OlmDevice.js`)
 - `IRoomEncryption` (was `.../crypto/RoomList.js`)
 - `IRoomKeyRequestBody` (was `.../crypto/index.js`)
@@ -39,6 +40,7 @@ The following types moved to `.../crypto/store/base.js` in v38:
 ### 4. Remove dead methods from SqliteCryptoStore
 
 The following methods were removed from the v38 `CryptoStore` interface and are now dead code:
+
 - `storeEndToEndSessionProblem` / `getEndToEndSessionProblem` (and `IProblem` type)
 - `filterOutNotifiedErrorDevices` (and `IOlmDevice` type)
 - `getAllEndToEndSessions`
@@ -50,6 +52,7 @@ The following methods were removed from the v38 `CryptoStore` interface and are 
 - `getSessionsNeedingBackup` / `countSessionsNeedingBackup` / `unmarkSessionsNeedingBackup`
 
 Also removed the associated SQL tables from the schema in `db.ts`:
+
 - `session_problems`
 - `shared_history`
 - `parked_shared_history`

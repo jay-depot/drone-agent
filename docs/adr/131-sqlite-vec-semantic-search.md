@@ -1,6 +1,14 @@
 ---
 tags: [decision, search, semantic-search, sqlite-vec, beacon, vector-search]
-related: [concepts/semantic-search.md, modules/drone-beacon.md, modules/drone-swarm-common.md, decisions/127-semantic-search-beacon.md, decisions/129-structure-aware-chunking.md, decisions/130-dedupe-search-results-by-file.md]
+related:
+  [
+    concepts/semantic-search.md,
+    modules/drone-beacon.md,
+    modules/drone-swarm-common.md,
+    decisions/127-semantic-search-beacon.md,
+    decisions/129-structure-aware-chunking.md,
+    decisions/130-dedupe-search-results-by-file.md,
+  ]
 ---
 
 # 131. Move Semantic Search to sqlite-vec (SIMD Brute-Force)

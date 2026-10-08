@@ -1,11 +1,22 @@
 ---
 tags: [decision, config, underlay, swarm, secrets, env-vars, bugfix, adr]
-related: [concepts/beacon-config-override-spec.md, architecture/config-cascade.md, modules/drone-agent-plugins.md, modules/drone-core.md, modules/drone-coordinator.md, modules/drone-beacon.md, decisions/212-coordinator-config-pipeline.md, decisions/095-config-deep-merge-refactor.md, decisions/209-stored-secrets-config-split.md]
+related:
+  [
+    concepts/beacon-config-override-spec.md,
+    architecture/config-cascade.md,
+    modules/drone-agent-plugins.md,
+    modules/drone-core.md,
+    modules/drone-coordinator.md,
+    modules/drone-beacon.md,
+    decisions/212-coordinator-config-pipeline.md,
+    decisions/095-config-deep-merge-refactor.md,
+    decisions/209-stored-secrets-config-split.md,
+  ]
 ---
 
 # 213: Swarm config underlay — rebuild precedence fix + receiver-side `${VAR}` interpolation
 
-**Status**: Implemented (2026-09-12) · **Branch**: `feat/coordinator-config-ui-and-secure-storage` (`feb18d2`, `fcf246a1`) · **Plans**: project-memory `fix-swarm-config-underlay-rebuild` + `plan-receiver-side-env-var-interpolation` — *both deleted from project memory after ingest*; the seeding memory `seed-receiver-side-env-var-interpolation` is **CONSUMED**
+**Status**: Implemented (2026-09-12) · **Branch**: `feat/coordinator-config-ui-and-secure-storage` (`feb18d2`, `fcf246a1`) · **Plans**: project-memory `fix-swarm-config-underlay-rebuild` + `plan-receiver-side-env-var-interpolation` — _both deleted from project memory after ingest_; the seeding memory `seed-receiver-side-env-var-interpolation` is **CONSUMED**
 
 **Summary**: Two coupled defects made the coordinator→beacon→agent underlay from [212-coordinator-config-pipeline](212-coordinator-config-pipeline.md) unsafe to use. First, `rebuild()` recomputed config from defaults + injectors **only**, then mutated the shared engine config **in place** — so after the swarm `onSessionStart` hook ran, `providers` was `{}` and `llm.active`/`modelRoles` were lost. Second, the beacon injector returned **flat dotted keys** (`providers.x`) which `deepMerge` has no semantics for, and the coordinator's `maskSecretValue` **corrupted `${VAR}` templates** (`'${OPENROUTER_API_KEY}'` → `'••••KEY}'`). Separately, the underlay path never performed the env-template interpolation the disk-config path already did, so a pushed `"apiKey": "${OPENROUTER_API_KEY}"` arrived as a literal string. This ADR covers the three fixes plus the receiver-side interpolation feature.
 
@@ -13,7 +24,7 @@ related: [concepts/beacon-config-override-spec.md, architecture/config-cascade.m
 
 The three root causes were verified before implementation:
 
-1. **PRIMARY — `rebuild()` clobbers the live config.** `rebuild()` recomputed from `createDefaultAgentConfig()` + registered injectors only (no disk-config injector exists), then mutated the shared engine config object in place. After the swarm `onSessionStart` hook, `providers = {}` and `llm.active`/`modelRoles` were lost. Chat survived only because the broker had captured provider state *before* the rebuild; a bare `/model` listed nothing (the listing re-reads `providers` at call time through a 60s cache) and `/context` fell back to `source: config`.
+1. **PRIMARY — `rebuild()` clobbers the live config.** `rebuild()` recomputed from `createDefaultAgentConfig()` + registered injectors only (no disk-config injector exists), then mutated the shared engine config object in place. After the swarm `onSessionStart` hook, `providers = {}` and `llm.active`/`modelRoles` were lost. Chat survived only because the broker had captured provider state _before_ the rebuild; a bare `/model` listed nothing (the listing re-reads `providers` at call time through a 60s cache) and `/context` fell back to `source: config`.
 2. **LATENT — the injector returned flat dotted keys.** `BeaconConfigInjector.inject()` returned `{ 'providers.x': {...} }`, but `deepMerge` ([decisions/095-config-deep-merge-refactor]]) has no dotted-key semantics. The Plan B test passed only because its **fake** injectors used nested shapes — a test-double shape mismatch that hid the bug.
 3. **DESIGN DEFECT — template corruption.** The coordinator's `maskSecretValue` masked `${VAR}` templates (`'${OPENROUTER_API_KEY}'` → `'••••KEY}'`), corrupting the entries the beacon persists and the underlay consumes.
 

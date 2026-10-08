@@ -1,6 +1,31 @@
 ---
-tags: [decision, drone-core, drone-swarm-common, drone-beacon, drone-coordinator, drone-agent, drone-swarm, drone-coordinator-ui, wiki, rag]
-related: [modules/drone-core.md, modules/drone-swarm-common.md, modules/drone-beacon.md, modules/drone-coordinator.md, modules/drone-agent-plugins.md, modules/drone-swarm.md, modules/drone-coordinator-ui.md, concepts/memory-pipeline.md, concepts/semantic-search.md, decisions/179-swarm-memory-rag-retrieval.md, decisions/180-swarm-memory-bootstrap-workflow.md]
+tags:
+  [
+    decision,
+    drone-core,
+    drone-swarm-common,
+    drone-beacon,
+    drone-coordinator,
+    drone-agent,
+    drone-swarm,
+    drone-coordinator-ui,
+    wiki,
+    rag,
+  ]
+related:
+  [
+    modules/drone-core.md,
+    modules/drone-swarm-common.md,
+    modules/drone-beacon.md,
+    modules/drone-coordinator.md,
+    modules/drone-agent-plugins.md,
+    modules/drone-swarm.md,
+    modules/drone-coordinator-ui.md,
+    concepts/memory-pipeline.md,
+    concepts/semantic-search.md,
+    decisions/179-swarm-memory-rag-retrieval.md,
+    decisions/180-swarm-memory-bootstrap-workflow.md,
+  ]
 ---
 
 # 193: Wiki page `pitch` as an official schema field
@@ -54,7 +79,7 @@ pages written without one) stay valid.
 
 ## Consequences
 
-- RAG results show the *curated* pitch; `matchedChunk` only appears for pages
+- RAG results show the _curated_ pitch; `matchedChunk` only appears for pages
   the librarian has not yet curated.
 - Adding a schema field to `wiki-storage.listPages` requires touching its
   explicit field list — a spread would have avoided this, but the explicit

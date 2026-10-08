@@ -1,6 +1,7 @@
 ---
 tags: [decision, ui]
-related: [drone-agent-tui.md, 001-use-ink.md, 037-incremental-rendering-removal.md]
+related:
+  [drone-agent-tui.md, 001-use-ink.md, 037-incremental-rendering-removal.md]
 ---
 
 # 036: Ink 5→6 Upgrade + React 18→19 + Debounced Resize Hook
@@ -24,6 +25,7 @@ Apply two complementary changes:
 - `@types/react`: `^18.3.12` → `^19.2.17`
 
 Ink 6.x brings:
+
 - **PR #828 fix** for UI stamping on terminal shrink
 - **Shared resize listener** (fewer duplicate re-renders)
 - **`incrementalRendering` option** — only redraws changed lines instead of entire output (enabled in `createTui()`)

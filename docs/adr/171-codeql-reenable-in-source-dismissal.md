@@ -1,6 +1,11 @@
 ---
 tags: [decision, codeql, security, ci, engineering-tooling]
-related: [decisions/132-codeql-fix-jam.md, modules/drone-coordinator.md, modules/drone-swarm-common.md]
+related:
+  [
+    decisions/132-codeql-fix-jam.md,
+    modules/drone-coordinator.md,
+    modules/drone-swarm-common.md,
+  ]
 ---
 
 # 171: CodeQL re-enable with in-source dismissal

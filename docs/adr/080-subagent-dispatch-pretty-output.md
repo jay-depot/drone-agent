@@ -1,6 +1,13 @@
 ---
 tags: [decision, tui, rendering, subagent]
-related: [078-pretty-tool-output.md, 079-pretty-tool-output-phase-2.md, 081-meta-tool-pretty-output.md, concepts/subagent.md, modules/drone-agent-tui.md]
+related:
+  [
+    078-pretty-tool-output.md,
+    079-pretty-tool-output-phase-2.md,
+    081-meta-tool-pretty-output.md,
+    concepts/subagent.md,
+    modules/drone-agent-tui.md,
+  ]
 ---
 
 # ADR 080: Subagent Dispatch Pretty Output
@@ -42,11 +49,13 @@ Args truncated to ~80 chars, message content to ~120 chars.
 ## Consequences
 
 ### Positive
+
 - Subagent dispatch now shows live progress in the TUI
 - NDJSON parsing infrastructure reusable for other features
 - Users can see what subagents are doing in real-time
 
 ### Negative
+
 - Subagent stdout parsing adds complexity to the dispatch tool
 - Progress strings are truncated (may lose detail for very long messages)
 
