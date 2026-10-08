@@ -1,6 +1,17 @@
 ---
 tags: [decision, security, verification, coordinator, beacon, ui]
-related: [concepts/beacon-verification.md, modules/drone-beacon.md, modules/drone-coordinator.md, modules/drone-coordinator-ui.md, modules/drone-agent-plugins.md, decisions/117-tofu-fingerprint-pinning.md, decisions/118-tofu-interactive-confirmation.md, decisions/119-bidirectional-verification-code.md, decisions/121-verification-code-ux-fix.md]
+related:
+  [
+    concepts/beacon-verification.md,
+    modules/drone-beacon.md,
+    modules/drone-coordinator.md,
+    modules/drone-coordinator-ui.md,
+    modules/drone-agent-plugins.md,
+    decisions/117-tofu-fingerprint-pinning.md,
+    decisions/118-tofu-interactive-confirmation.md,
+    decisions/119-bidirectional-verification-code.md,
+    decisions/121-verification-code-ux-fix.md,
+  ]
 ---
 
 # 120. Bidirectional verification-code UX + remove approval token

@@ -1,6 +1,11 @@
 ---
 tags: [decision, beacon, security, usability]
-related: [modules/drone-beacon.md, modules/drone-coordinator.md, decisions/091-beacon-mitm-verification.md]
+related:
+  [
+    modules/drone-beacon.md,
+    modules/drone-coordinator.md,
+    decisions/091-beacon-mitm-verification.md,
+  ]
 ---
 
 # ADR 092: Beacon Approval Token Re-output and Shortening
@@ -39,6 +44,7 @@ ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789
 ```
 
 The alphabet excludes ambiguous characters:
+
 - `0` (zero) and `O` (letter O) — visually similar
 - `1` (one) and `l` (letter l) — visually similar
 - `I` (letter I) — visually similar to `1` and `l`

@@ -1,11 +1,26 @@
 ---
 tags: [decision, coordinator, config, underlay, secrets, ui, adr]
-related: [concepts/beacon-config-override-spec.md, architecture/config-cascade.md, modules/drone-coordinator.md, modules/drone-beacon.md, modules/drone-coordinator-ui.md, modules/drone-core.md, modules/drone-agent-plugins.md, entities/DroneAgentConfig.md, decisions/007-beacon-config-underlay.md, decisions/005-config-cascade.md, decisions/211-beacon-coordinator-trust-hardening.md, decisions/209-stored-secrets-config-split.md, decisions/213-swarm-config-underlay-resolution.md]
+related:
+  [
+    concepts/beacon-config-override-spec.md,
+    architecture/config-cascade.md,
+    modules/drone-coordinator.md,
+    modules/drone-beacon.md,
+    modules/drone-coordinator-ui.md,
+    modules/drone-core.md,
+    modules/drone-agent-plugins.md,
+    entities/DroneAgentConfig.md,
+    decisions/007-beacon-config-underlay.md,
+    decisions/005-config-cascade.md,
+    decisions/211-beacon-coordinator-trust-hardening.md,
+    decisions/209-stored-secrets-config-split.md,
+    decisions/213-swarm-config-underlay-resolution.md,
+  ]
 ---
 
 # 212: Coordinator config pipeline — allowlisted store, beacon pull, `rebuild()` wiring, `/config` page
 
-**Status**: Implemented (2026-09-11) · **Branch**: `feat/coordinator-config-ui-and-secure-storage` (`9a24458`..`d4527ac`) · **Plan**: project-memory `plan-coordinator-config-ui-and-secret-handling` (Plan B) — *deleted from project memory after ingest*
+**Status**: Implemented (2026-09-11) · **Branch**: `feat/coordinator-config-ui-and-secure-storage` (`9a24458`..`d4527ac`) · **Plan**: project-memory `plan-coordinator-config-ui-and-secret-handling` (Plan B) — _deleted from project memory after ingest_
 
 **Summary**: The documented coordinator→beacon→agent config cascade was **aspirational dead plumbing**: `DroneConfigCapability.rebuild()` was declared but never implemented, `inject()`/`getInjectors()`/`rebuild()` were never called, the runtime loaded only default→user→project from disk, there was no coordinator config table or `/config` API, and `beacon_config.scope='swarm'` was unused. This ADR makes the cascade real end-to-end: a global **allowlisted** key/value store on the coordinator, a 5-minute **pull** by the beacon into a merged underlay, a `rebuild()` on the agent that applies that underlay at session start, and a `/config` management page in the coordinator UI.
 
@@ -15,14 +30,14 @@ Plan A ([211-beacon-coordinator-trust-hardening](211-beacon-coordinator-trust-ha
 
 The pre-implementation review found the config-push infrastructure was largely non-functional:
 
-| Claimed capability | Actual state |
-| --- | --- |
-| `DroneConfigCapability.rebuild()` | Declared in the type, **never implemented** |
-| `inject()` / `getInjectors()` / `rebuild()` calls | **Never called** anywhere |
-| Documented "Coordinator (50) → Beacon (75)" cascade | Docs-only; no coordinator injector existed |
-| Coordinator config table + `/config` API | **Did not exist** |
-| `beacon_config.scope='swarm'` | Dead column value |
-| Runtime config load | Default→user→project from disk only |
+| Claimed capability                                  | Actual state                                |
+| --------------------------------------------------- | ------------------------------------------- |
+| `DroneConfigCapability.rebuild()`                   | Declared in the type, **never implemented** |
+| `inject()` / `getInjectors()` / `rebuild()` calls   | **Never called** anywhere                   |
+| Documented "Coordinator (50) → Beacon (75)" cascade | Docs-only; no coordinator injector existed  |
+| Coordinator config table + `/config` API            | **Did not exist**                           |
+| `beacon_config.scope='swarm'`                       | Dead column value                           |
+| Runtime config load                                 | Default→user→project from disk only         |
 
 ## Decision
 
@@ -48,7 +63,7 @@ The pre-implementation review found the config-push infrastructure was largely n
 
 - The plan's stated fast suite was root `pnpm test`; `pnpm -r run lint` has no lint script at package level — the real gates are root `pnpm lint` (`lint:eslint` + `lint:prettier`).
 - The plan's suggested branch `feat/stored-secrets-config-split` was created but **git did not switch to it**; all work was committed on `feat/coordinator-config-ui-and-secure-storage`. The branch name was only a suggestion.
-- Underlay filtering uses `isUnderlayAllowed` (`UNDERLAY_ALLOWLIST`), *not* `KNOWN_CONFIG_KEYS` as the plan's literal text implied — `KNOWN_CONFIG_KEYS` has no `providers.*` entries and would have silently dropped every coordinator-pushed provider entry, defeating the feature.
+- Underlay filtering uses `isUnderlayAllowed` (`UNDERLAY_ALLOWLIST`), _not_ `KNOWN_CONFIG_KEYS` as the plan's literal text implied — `KNOWN_CONFIG_KEYS` has no `providers.*` entries and would have silently dropped every coordinator-pushed provider entry, defeating the feature.
 
 ## Key gotchas (recorded for future planners)
 

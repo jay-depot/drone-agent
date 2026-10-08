@@ -1,6 +1,17 @@
 ---
 tags: [decision, plugin-system, tool-reduction, runtime-flags]
-related: [decisions/064-mcp-deferred-tool-loading.md, decisions/065-mcp-tool-mounting-cache-and-server-descriptions.md, decisions/068-tool-reduction-followup.md, decisions/069-lsp-ergonomics.md, decisions/098-lsp-file-list-mount-conversion.md, decisions/101-systemprompt-runtime-flags.md, modules/drone-core.md, modules/drone-agent-plugins.md, architecture/plugin-system.md]
+related:
+  [
+    decisions/064-mcp-deferred-tool-loading.md,
+    decisions/065-mcp-tool-mounting-cache-and-server-descriptions.md,
+    decisions/068-tool-reduction-followup.md,
+    decisions/069-lsp-ergonomics.md,
+    decisions/098-lsp-file-list-mount-conversion.md,
+    decisions/101-systemprompt-runtime-flags.md,
+    modules/drone-core.md,
+    modules/drone-agent-plugins.md,
+    architecture/plugin-system.md,
+  ]
 ---
 
 # Decision 100: List-Mount Pattern Improvements
@@ -39,6 +50,7 @@ All 5 list-mount plugins (file, lsp, git, mcp, swarm) call `runtime?.flags?.appe
 The flags system is designed for future use beyond list-mount. Any plugin can set a flag, and the rendered output includes all flags as `key: value` lines. Potential future uses: debug subsystems, swarm connection state, compaction mode.
 
 **Key files:**
+
 - `drone-core/src/runtime-flags.ts` — `RuntimeFlagRegistry` class with `set`, `append` (comma-separated, dedup), `get`, `has`, `entries`, `render`
 - `drone-agent/src/runtime/plugin-engine.ts` — Creates registry, exposes via `_runtime`, returns via `getRuntimeFlags()`
 - `drone-agent/src/runtime/context-budget-service.ts` — Accepts `runtimeFlags` lazy getter, injects into `buildSystemMessages()`
@@ -48,14 +60,15 @@ The flags system is designed for future use beyond list-mount. Any plugin can se
 
 Merged related tools by adding a parameter to select the mode:
 
-| Previous Tools | Consolidated Into | Parameter |
-|----------------|-------------------|----------|
-| `call_hierarchy_incoming` + `call_hierarchy_outgoing` | `call_hierarchy` | `direction: "incoming" \| "outgoing"` |
-| `go_to_definition` + `type_definition` + `implementation` | `go_to` | `kind: "definition" \| "type" \| "implementation"` (default: "definition") |
-| `document_symbols` + `workspace_symbol` | `symbols` | `scope: "document" \| "workspace"` |
-| `hover` + `signature_help` | `inspect` | (always returns both) |
+| Previous Tools                                            | Consolidated Into | Parameter                                                                  |
+| --------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------- |
+| `call_hierarchy_incoming` + `call_hierarchy_outgoing`     | `call_hierarchy`  | `direction: "incoming" \| "outgoing"`                                      |
+| `go_to_definition` + `type_definition` + `implementation` | `go_to`           | `kind: "definition" \| "type" \| "implementation"` (default: "definition") |
+| `document_symbols` + `workspace_symbol`                   | `symbols`         | `scope: "document" \| "workspace"`                                         |
+| `hover` + `signature_help`                                | `inspect`         | (always returns both)                                                      |
 
 **`server_status` moved to prompt fragment** — Removed as a tool entirely. Now rendered as a prompt fragment alongside the existing diagnostics fragment, producing:
+
 ```
 # LSP Servers
 
@@ -71,6 +84,7 @@ Clean. No errors or warnings detected.
 **Shared position properties** — The common parameter set (filePath, line, column, text, symbol) was extracted as a `POSITION_PROPERTIES` const object and spread into each tool's schema, keeping the code DRY.
 
 **Key files:**
+
 - `drone-agent/src/plugins/lsp/plugin.ts` — 10 tools, updated descriptions, server_status prompt fragment
 - `drone-agent/src/plugins/lsp/tools/navigation.ts` — `go_to` + `find_references`
 - `drone-agent/src/plugins/lsp/tools/symbols.ts` — `symbols` (scope param)
@@ -90,6 +104,7 @@ Three layers to make `apply_diff` the preferred edit path:
 3. **Enhanced descriptions** — `apply_diff` description marked as "Preferred for editing existing files", `write` description marked as "Use for new files or complete rewrites". The `list_tools` description also highlights `apply_diff` as preferred.
 
 **Key files:**
+
 - `drone-agent/src/plugins/file.ts` — Prompt fragment, reordered descriptions, enhanced descriptions
 
 ## Consequences
@@ -112,12 +127,14 @@ Three layers to make `apply_diff` the preferred edit path:
 - **Branch**: `feat/lsp-file-list-mount-conversion`
 - **Commit**: `4ad68e7`
 - **Files changed** (27 total):
+
 ### Follow-up: `/systemprompt` Runtime Flags Visibility
 
 After implementation, it was discovered that the `/systemprompt` slash command did not show the runtime flags block — it was sent to the LLM but invisible to the user. Fixed in commit `693e44d` by adding `buildSystemMessages` to the engine interface and having the handler use it instead of manually assembling the pieces. See [101-systemprompt-runtime-flags](101-systemprompt-runtime-flags.md).
 
 **Validation**: 108 test files, 1694 tests passed. Lint, build, LSP diagnostics all clean.
-  - **New**: `drone-core/src/runtime-flags.ts`, `drone-core/test/runtime-flags.test.ts`, `drone-agent/test/context-budget-service.test.ts`
-  - **Deleted**: `drone-agent/src/plugins/lsp/tools/status.ts`
-  - **Modified**: 23 files across drone-core, drone-agent (plugins, runtime, tests)
+
+- **New**: `drone-core/src/runtime-flags.ts`, `drone-core/test/runtime-flags.test.ts`, `drone-agent/test/context-budget-service.test.ts`
+- **Deleted**: `drone-agent/src/plugins/lsp/tools/status.ts`
+- **Modified**: 23 files across drone-core, drone-agent (plugins, runtime, tests)
 - **Validation**: 108 test files, 1694 tests passed. Lint, build, LSP diagnostics all clean.

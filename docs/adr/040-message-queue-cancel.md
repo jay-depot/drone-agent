@@ -1,6 +1,11 @@
 ---
 tags: [decision, tui, conversation]
-related: [flows/tool-call-loop.md, session-management.md, 023-conversation-event-push-through.md]
+related:
+  [
+    flows/tool-call-loop.md,
+    session-management.md,
+    023-conversation-event-push-through.md,
+  ]
 ---
 
 # ADR 040: Message Queue & Soft Cancel for Conversation Service

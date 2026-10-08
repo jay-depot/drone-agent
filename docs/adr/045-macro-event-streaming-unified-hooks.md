@@ -1,6 +1,13 @@
 ---
 tags: [decision, macros, tui, conversation]
-related: [023-conversation-event-push-through.md, 040-message-queue-cancel.md, flows/tool-call-loop.md, modules/drone-agent-tui.md, decisions/168-macro-duplicate-render-fix.md]
+related:
+  [
+    023-conversation-event-push-through.md,
+    040-message-queue-cancel.md,
+    flows/tool-call-loop.md,
+    modules/drone-agent-tui.md,
+    decisions/168-macro-duplicate-render-fix.md,
+  ]
 ---
 
 # ADR 045: Unify Conversation Event Streaming Through Engine Hooks

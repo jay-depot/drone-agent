@@ -1,6 +1,12 @@
 ---
 tags: [decision, adr, llm, providers, context-window, discovery, model-registry]
-related: [157-runtime-truth-context-windows.md, 156-broker-context-windows-migration-persistence.md, 155-provider-model-config.md, ../concepts/provider-model-selection.md]
+related:
+  [
+    157-runtime-truth-context-windows.md,
+    156-broker-context-windows-migration-persistence.md,
+    155-provider-model-config.md,
+    ../concepts/provider-model-selection.md,
+  ]
 ---
 
 # 196 — Context-window fallback fix: await discovery + bundled model-metadata registry
@@ -59,9 +65,9 @@ Seed data (retrieved 2026-09-07 from developers.openai.com/api/docs/models
 and docs.anthropic.com):
 
 - **OpenAI** (current flagship): `gpt-6-astra`, `gpt-5.6-sol`/`terra`/`luna`
-  + `gpt-5.6` alias — 1,050,000 ctx / 128k out; legacy `gpt-4.1`/`-mini`/`-nano`
-  1,047,576 / 32,768; `gpt-4o` 128,000 / 16,384; `o3`/`o3-mini`/`o4-mini`
-  200,000 / 100,000. All vision + tool calling.
+  - `gpt-5.6` alias — 1,050,000 ctx / 128k out; legacy `gpt-4.1`/`-mini`/`-nano`
+    1,047,576 / 32,768; `gpt-4o` 128,000 / 16,384; `o3`/`o3-mini`/`o4-mini`
+    200,000 / 100,000. All vision + tool calling.
 - **Anthropic** (the three discovered models): `claude-haiku-4-5` 200k / 64k,
   `claude-sonnet-4-6` 1M / 128k, `claude-opus-4-8` 1M / 128k. These match the
   canonical values already in `drone-core/src/config-types.ts` and

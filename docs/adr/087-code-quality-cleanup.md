@@ -1,6 +1,13 @@
 ---
 tags: [decision, code-quality, refactoring]
-related: [decisions/048-large-file-splitting.md, modules/drone-core.md, modules/drone-agent-plugins.md, modules/drone-agent.md, modules/drone-agent-tui.md]
+related:
+  [
+    decisions/048-large-file-splitting.md,
+    modules/drone-core.md,
+    modules/drone-agent-plugins.md,
+    modules/drone-agent.md,
+    modules/drone-agent-tui.md,
+  ]
 ---
 
 # ADR 087: Code Quality Cleanup

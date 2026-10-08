@@ -1,6 +1,14 @@
 ---
 tags: [beacon, coordinator, swarm, wiki, proxy, fastify, adr]
-related: [drone-beacon.md, drone-swarm-common.md, drone-agent-plugins.md, decisions/179-swarm-memory-rag-retrieval.md, decisions/177-reverse-channel-session-end-trigger.md, decisions/190-coordinator-session-archive.md]
+related:
+  [
+    drone-beacon.md,
+    drone-swarm-common.md,
+    drone-agent-plugins.md,
+    decisions/179-swarm-memory-rag-retrieval.md,
+    decisions/177-reverse-channel-session-end-trigger.md,
+    decisions/190-coordinator-session-archive.md,
+  ]
 ---
 
 # Coordinator-scope deletes: proxy content-type fix + both-sides no-scope wiki delete

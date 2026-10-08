@@ -1,6 +1,17 @@
 ---
 tags: [decision, llm, vision, image-describer, model-roles, compaction]
-related: [decisions/164-model-role-bindings.md, decisions/160-unified-llm-error-retry-semantics.md, decisions/155-provider-model-config.md, concepts/vision-support.md, concepts/provider-model-selection.md, modules/drone-core.md, modules/drone-agent.md, modules/drone-agent-plugins.md, flows/tool-call-loop.md]
+related:
+  [
+    decisions/164-model-role-bindings.md,
+    decisions/160-unified-llm-error-retry-semantics.md,
+    decisions/155-provider-model-config.md,
+    concepts/vision-support.md,
+    concepts/provider-model-selection.md,
+    modules/drone-core.md,
+    modules/drone-agent.md,
+    modules/drone-agent-plugins.md,
+    flows/tool-call-loop.md,
+  ]
 ---
 
 # 165: `image_describer` role — describe images for non-vision models
@@ -9,7 +20,7 @@ related: [decisions/164-model-role-bindings.md, decisions/160-unified-llm-error-
 
 ## Context
 
-When a tool result contains an image (e.g. `file__read_image`) and the **target model is not vision-capable**, the image bytes are useless to that model — it cannot see them. Before this feature, the conversation service would inject the base64 image into the request regardless, and a non-vision model would simply ignore it (or worse, choke on it). The image's *semantics* were lost to the model.
+When a tool result contains an image (e.g. `file__read_image`) and the **target model is not vision-capable**, the image bytes are useless to that model — it cannot see them. Before this feature, the conversation service would inject the base64 image into the request regardless, and a non-vision model would simply ignore it (or worse, choke on it). The image's _semantics_ were lost to the model.
 
 The fix: describe the image with a **vision-capable** model (the `image_describer` role) and store the text description alongside the image in the abstract context. Presentation is then derived per-request: a vision-capable target receives the image bytes; a non-vision target receives the description text. The stored turn is model-agnostic (both representations persisted); exactly one representation crosses the wire per model.
 

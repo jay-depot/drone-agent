@@ -1,6 +1,13 @@
 ---
 tags: [decision, bugfix, persona, cli, swarm]
-related: [entities/Persona.md, flows/plugin-lifecycle.md, concepts/broker-provider.md, architecture/plugin-system.md, concepts/subagent.md]
+related:
+  [
+    entities/Persona.md,
+    flows/plugin-lifecycle.md,
+    concepts/broker-provider.md,
+    architecture/plugin-system.md,
+    concepts/subagent.md,
+  ]
 ---
 
 # 026: Persona CLI Flag Fix — `_runtime` Capability and Hook Ordering

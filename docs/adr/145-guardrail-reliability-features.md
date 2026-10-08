@@ -1,6 +1,16 @@
 ---
 tags: [decision, guardrail, reliability, conversation-service]
-related: [concepts/session-management.md, flows/tool-call-loop.md, entities/Session.md, entities/DroneAgentConfig.md, decisions/116-safety-trim-estimate-drop-mismatch.md, decisions/142-compaction-turn-granularity-fix.md, modules/drone-agent.md, modules/drone-core.md]
+related:
+  [
+    concepts/session-management.md,
+    flows/tool-call-loop.md,
+    entities/Session.md,
+    entities/DroneAgentConfig.md,
+    decisions/116-safety-trim-estimate-drop-mismatch.md,
+    decisions/142-compaction-turn-granularity-fix.md,
+    modules/drone-agent.md,
+    modules/drone-core.md,
+  ]
 ---
 
 # 145: Guardrail & Reliability Features — Broken-Response Retry, Identical-Call Streak Detection, Assistant-Text-Before-ToolCalls
@@ -45,11 +55,12 @@ session: {
 A degenerate response has no tool calls and no assistant message. Truly-empty has no reasoning either; reasoning-only has reasoning text but nothing else. Per-tier counters (`emptyResponseCount`, `reasoningOnlyResponseCount`) keep the two independent so a model alternating between them can't conflate thresholds.
 
 The retry ladder:
+
 - **Phase 1** (`tierCount <= hintAfter`): silent retry with identical context; emits a `notice`, no session mutation.
 - **Phase 2** (`tierCount < hintAfter + maxHints`): sets the `brokenResponseHintActive` flag; the next loop iteration injects a non-persisted system hint (mirrors the identical-call nudge). Emits a `notice`.
 - **Hard limit** (`tierCount >= hintAfter + maxHints`): emits a `notice`, calls `onBrokenResponseLimitReached(label)`; if the host says continue, resets the tier counter + flag and retries; otherwise returns `''`.
 
-> **Why flag-based hint injection rather than a separate `provider.chat()` call?** The initial implementation made a *separate* provider chat call inside phase 2 to deliver the hint. That silently consumed an extra queued response per hint attempt, so the hard-limit (which depends on total attempt count) never fired within the queued responses — two tests ("returns empty string when broken-response limit reached without callback", "calls onBrokenResponseLimitReached when hard limit is reached") failed. Flag-based injection keeps attempt counting aligned with the actual number of LLM round-trips.
+> **Why flag-based hint injection rather than a separate `provider.chat()` call?** The initial implementation made a _separate_ provider chat call inside phase 2 to deliver the hint. That silently consumed an extra queued response per hint attempt, so the hard-limit (which depends on total attempt count) never fired within the queued responses — two tests ("returns empty string when broken-response limit reached without callback", "calls onBrokenResponseLimitReached when hard limit is reached") failed. Flag-based injection keeps attempt counting aligned with the actual number of LLM round-trips.
 
 ### 3. Identical tool-call streak detection (Feature 2)
 
@@ -64,6 +75,7 @@ When a response includes both text and tool calls, `assistantMessage` / `assista
 ### 5. Reset semantics
 
 All guardrail state (identical streak, per-tier broken-response counters, `identicalCallNudgeActive`, `brokenResponseHintActive`) resets when:
+
 - a new user message enters the loop,
 - `conversation.resetStuckDetectors()` is called,
 - `conversation.clearSession()` is called.

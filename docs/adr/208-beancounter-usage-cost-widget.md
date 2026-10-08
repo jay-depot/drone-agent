@@ -1,6 +1,15 @@
 ---
 tags: [llm, usage, cost, tui, mid-panel, widget, adr]
-related: [modules/drone-core.md, modules/drone-agent-plugins.md, modules/drone-agent-tui.md, concepts/provider-model-selection.md, decisions/155-provider-model-config.md, decisions/164-model-role-bindings.md, decisions/165-image-describer-role.md]
+related:
+  [
+    modules/drone-core.md,
+    modules/drone-agent-plugins.md,
+    modules/drone-agent-tui.md,
+    concepts/provider-model-selection.md,
+    decisions/155-provider-model-config.md,
+    decisions/164-model-role-bindings.md,
+    decisions/165-image-describer-role.md,
+  ]
 ---
 
 # Beancounter: provider-reported usage + cost mid-bar widget

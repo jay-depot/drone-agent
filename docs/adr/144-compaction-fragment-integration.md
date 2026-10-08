@@ -1,6 +1,12 @@
 ---
 tags: [decision, compaction, fragment, token-counting]
-related: [concepts/session-management.md, decisions/134-compaction-correctness-fix.md, decisions/135-compaction-slash-command.md, decisions/142-compaction-turn-granularity-fix.md]
+related:
+  [
+    concepts/session-management.md,
+    decisions/134-compaction-correctness-fix.md,
+    decisions/135-compaction-slash-command.md,
+    decisions/142-compaction-turn-granularity-fix.md,
+  ]
 ---
 
 # 144: Compaction Refactor — String-Escaping Fixes + `buildFragmentMessages` Integration

@@ -1,6 +1,26 @@
 ---
-tags: [coordinator, coordinator-ui, swarm, sessions, interactive, listen-mode, synthetic-turns, adr]
-related: [drone-agent.md, drone-beacon.md, drone-coordinator.md, drone-coordinator-ui.md, drone-swarm-common.md, concepts/json-listen-mode.md, concepts/session-processing-pipeline.md, decisions/197-beacon-cwd-roots.md]
+tags:
+  [
+    coordinator,
+    coordinator-ui,
+    swarm,
+    sessions,
+    interactive,
+    listen-mode,
+    synthetic-turns,
+    adr,
+  ]
+related:
+  [
+    drone-agent.md,
+    drone-beacon.md,
+    drone-coordinator.md,
+    drone-coordinator-ui.md,
+    drone-swarm-common.md,
+    concepts/json-listen-mode.md,
+    concepts/session-processing-pipeline.md,
+    decisions/197-beacon-cwd-roots.md,
+  ]
 ---
 
 # Coordinator UI session launch + interactive remote chat
@@ -31,7 +51,7 @@ Model A (message-queue, existing): a message lands in the agent's `pendingMessag
 
 ### CLI step-0 blocker resolved
 
-`--swarm` (boolean), `--session-id`, `--beacon-host`, `--beacon-port` added to `CliOptions` + `parseCliArgs`; `--task`/`--working-dir` parsed too (the spawner passes them — same throw class; `--task` is *not* yet wired as a first turn, deferred). `--swarm` force-enables the swarm plugin (mirroring `--plugin` override semantics) and sets a dedicated `swarmSpawned` runtime flag on `_runtime` (deliberately **not** `isSubagent`). `--beacon-host`/`--beacon-port`/`--session-id` are config-defaulted overrides threaded into `createSwarmPlugin` via a new `swarmConfig` dep on `createBuiltInPlugins`.
+`--swarm` (boolean), `--session-id`, `--beacon-host`, `--beacon-port` added to `CliOptions` + `parseCliArgs`; `--task`/`--working-dir` parsed too (the spawner passes them — same throw class; `--task` is _not_ yet wired as a first turn, deferred). `--swarm` force-enables the swarm plugin (mirroring `--plugin` override semantics) and sets a dedicated `swarmSpawned` runtime flag on `_runtime` (deliberately **not** `isSubagent`). `--beacon-host`/`--beacon-port`/`--session-id` are config-defaulted overrides threaded into `createSwarmPlugin` via a new `swarmConfig` dep on `createBuiltInPlugins`.
 
 The shared spawner (`drone-swarm-common/src/spawner.ts`) now appends `--output-json` to the spawn argv, so every beacon-spawned agent runs in interactive listen-mode.
 

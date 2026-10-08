@@ -1,6 +1,12 @@
 ---
 tags: [decision, swarm, persona, coordinator]
-related: [modules/drone-coordinator.md, modules/drone-beacon.md, modules/drone-agent-plugins.md, decisions/026-persona-cli-flag-fix.md]
+related:
+  [
+    modules/drone-coordinator.md,
+    modules/drone-beacon.md,
+    modules/drone-agent-plugins.md,
+    decisions/026-persona-cli-flag-fix.md,
+  ]
 ---
 
 # ADR 090: Active Persona Propagation to Coordinator Swarm Sessions

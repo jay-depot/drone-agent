@@ -26,16 +26,16 @@ Add a `--debug` CLI flag that accepts a comma-separated list of subsystem names.
 
 **Files changed (7):**
 
-| File | Change |
-|------|--------|
-| `drone-agent/src/cli.ts` | Added `debugSubsystems: string[]` to `CliOptions`, parsed `--debug` flag (comma-separated and repeated forms) |
-| `drone-core/src/provider-types.ts` | Added `debug?: boolean` to chat input type |
-| `drone-agent/src/runtime/conversation-service.ts` | Threaded `debugSubsystems` through, passes `debug: debugSet.has('llm')` to provider |
-| `drone-agent/src/index.tsx` | Wired debug subsystems from CLI to conversation service |
-| `drone-agent/src/plugins/openai/index.ts` | Logs request body before fetch, reads response as text, logs it, then parses JSON |
-| `drone-agent/src/plugins/openrouter/index.ts` | Same pattern, also logs retry request/response on tool-routing errors |
-| `drone-agent/src/plugins/anthropic/index.ts` | Same pattern |
-| `drone-agent/src/plugins/ollama.ts` | Logs input params before `client.chat()`, logs response after |
+| File                                              | Change                                                                                                        |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `drone-agent/src/cli.ts`                          | Added `debugSubsystems: string[]` to `CliOptions`, parsed `--debug` flag (comma-separated and repeated forms) |
+| `drone-core/src/provider-types.ts`                | Added `debug?: boolean` to chat input type                                                                    |
+| `drone-agent/src/runtime/conversation-service.ts` | Threaded `debugSubsystems` through, passes `debug: debugSet.has('llm')` to provider                           |
+| `drone-agent/src/index.tsx`                       | Wired debug subsystems from CLI to conversation service                                                       |
+| `drone-agent/src/plugins/openai/index.ts`         | Logs request body before fetch, reads response as text, logs it, then parses JSON                             |
+| `drone-agent/src/plugins/openrouter/index.ts`     | Same pattern, also logs retry request/response on tool-routing errors                                         |
+| `drone-agent/src/plugins/anthropic/index.ts`      | Same pattern                                                                                                  |
+| `drone-agent/src/plugins/ollama.ts`               | Logs input params before `client.chat()`, logs response after                                                 |
 
 ### Tests
 
@@ -44,12 +44,14 @@ Added tests for each provider verifying debug output is written to stderr when `
 ## Consequences
 
 ### Positive
+
 - Easy debugging of LLM provider issues without code changes
 - Consistent log format across all 4 providers
 - Clean separation from normal output (stderr)
 - Extensible to future subsystems (e.g., `--debug mcp`)
 
 ### Negative
+
 - Slightly more complex CLI parsing
 - Each provider must implement its own logging (duplication, but intentional for proximity to the actual I/O)
 

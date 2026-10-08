@@ -1,6 +1,14 @@
 ---
 tags: [decision, bug-fix, compaction, context-budget]
-related: [concepts/session-management.md, modules/drone-agent-plugins.md, decisions/053-compaction-latch-fix.md, decisions/125-compaction-summary-eviction.md, decisions/133-compaction-oldest-turns-helper-consolidation.md, decisions/135-compaction-slash-command.md]
+related:
+  [
+    concepts/session-management.md,
+    modules/drone-agent-plugins.md,
+    decisions/053-compaction-latch-fix.md,
+    decisions/125-compaction-summary-eviction.md,
+    decisions/133-compaction-oldest-turns-helper-consolidation.md,
+    decisions/135-compaction-slash-command.md,
+  ]
 ---
 
 # 134. Compaction Correctness Fix: sliceSize, Convergence Loop, and Turn Numbering
@@ -11,7 +19,7 @@ related: [concepts/session-management.md, modules/drone-agent-plugins.md, decisi
 
 The compaction plugin (`plugins/compaction/index.ts`) had five correctness bugs:
 
-1. **Bug #1 (High): `sliceSize` computed against `turns.length` — includes summaries.** `turns.length` includes summary turns. When `slicePercent=25` and the array is `[S1, S2, u0..u17]` (20 turns), `desiredSlice = floor(20 * 0.25) = 5`. But 2 of those 20 turns are summaries that can't be compacted, so only `5/18 = 28%` of the *actual* conversation content gets compacted. As summaries accumulate, the fraction shrinks further — compaction falls behind and context usage climbs.
+1. **Bug #1 (High): `sliceSize` computed against `turns.length` — includes summaries.** `turns.length` includes summary turns. When `slicePercent=25` and the array is `[S1, S2, u0..u17]` (20 turns), `desiredSlice = floor(20 * 0.25) = 5`. But 2 of those 20 turns are summaries that can't be compacted, so only `5/18 = 28%` of the _actual_ conversation content gets compacted. As summaries accumulate, the fraction shrinks further — compaction falls behind and context usage climbs.
 
 2. **Bug #2 (Low): Misleading comment about "end of the array."** The comment said oldest non-summary turns "live at the end of the array." They actually live immediately after the summary region. The newest non-summary turns live at the end.
 

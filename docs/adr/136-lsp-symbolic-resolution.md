@@ -1,6 +1,13 @@
 ---
 tags: [decision, lsp, ergonomics, position-resolution]
-related: [concepts/lsp-symbolic-resolution.md, decisions/069-lsp-ergonomics.md, decisions/138-lsp-symbolic-resolution-round-2.md, modules/drone-core.md, modules/drone-agent-plugins.md]
+related:
+  [
+    concepts/lsp-symbolic-resolution.md,
+    decisions/069-lsp-ergonomics.md,
+    decisions/138-lsp-symbolic-resolution-round-2.md,
+    modules/drone-core.md,
+    modules/drone-agent-plugins.md,
+  ]
 ---
 
 # 136: LSP Symbolic Resolution — surroundingText, Auto-Expansion & Reference IDs
@@ -82,17 +89,17 @@ Removed `surroundingText` from the diagnostics tool schema — whole-file granul
 
 ## Files Modified
 
-| File | Changes |
-|------|---------|
-| `drone-core/src/position-types.ts` | **New** — `AmbiguousMatch`, `AmbiguousPositionError`, `buildAmbiguousMatches`, `suggestSurroundingText` |
-| `drone-core/src/index.ts` | Re-export position types |
-| `drone-agent/src/plugins/lsp/server.ts` | Throw `AmbiguousPositionError`; apply `surroundingText` to workspace symbols; remove `column` from `readFileSnippet` |
-| `drone-agent/src/plugins/lsp/tools/editing.ts` | Catch `AmbiguousPositionError`, call `storeReferences`, return crib sheets |
-| `drone-agent/src/plugins/lsp/tools/navigation.ts` | Fix `buildAutoExpansion` dedup; add `refreshIfNeeded` to `go_to` |
-| `drone-agent/src/plugins/lsp/tools/completion.ts` | Add `refreshIfNeeded` + snippet to `completion`; `refreshIfNeeded` to `inspect` |
-| `drone-agent/src/plugins/lsp/tools/hierarchy.ts` | Add `refreshIfNeeded` to `call_hierarchy` |
-| `drone-agent/src/plugins/lsp/tools/diagnostics.ts` | Remove `surroundingText` from schema |
-| `drone-agent/test/lsp-ergonomics.test.ts` | 34 tests (AmbiguousPositionError, reference IDs, suggestedSurroundingText, completion snippet, diagnostics schema, mock updates) |
+| File                                               | Changes                                                                                                                          |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `drone-core/src/position-types.ts`                 | **New** — `AmbiguousMatch`, `AmbiguousPositionError`, `buildAmbiguousMatches`, `suggestSurroundingText`                          |
+| `drone-core/src/index.ts`                          | Re-export position types                                                                                                         |
+| `drone-agent/src/plugins/lsp/server.ts`            | Throw `AmbiguousPositionError`; apply `surroundingText` to workspace symbols; remove `column` from `readFileSnippet`             |
+| `drone-agent/src/plugins/lsp/tools/editing.ts`     | Catch `AmbiguousPositionError`, call `storeReferences`, return crib sheets                                                       |
+| `drone-agent/src/plugins/lsp/tools/navigation.ts`  | Fix `buildAutoExpansion` dedup; add `refreshIfNeeded` to `go_to`                                                                 |
+| `drone-agent/src/plugins/lsp/tools/completion.ts`  | Add `refreshIfNeeded` + snippet to `completion`; `refreshIfNeeded` to `inspect`                                                  |
+| `drone-agent/src/plugins/lsp/tools/hierarchy.ts`   | Add `refreshIfNeeded` to `call_hierarchy`                                                                                        |
+| `drone-agent/src/plugins/lsp/tools/diagnostics.ts` | Remove `surroundingText` from schema                                                                                             |
+| `drone-agent/test/lsp-ergonomics.test.ts`          | 34 tests (AmbiguousPositionError, reference IDs, suggestedSurroundingText, completion snippet, diagnostics schema, mock updates) |
 
 ## Related
 

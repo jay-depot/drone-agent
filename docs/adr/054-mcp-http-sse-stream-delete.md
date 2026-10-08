@@ -1,6 +1,11 @@
 ---
 tags: [decision, mcp, http-transport, notifications]
-related: [modules/drone-agent-mcp-client.md, decisions/050-mcp-client-session-id-iserror.md, decisions/051-mcp-client-test-suite.md]
+related:
+  [
+    modules/drone-agent-mcp-client.md,
+    decisions/050-mcp-client-session-id-iserror.md,
+    decisions/051-mcp-client-test-suite.md,
+  ]
 ---
 
 # Decision 054: MCP Streamable-HTTP GET SSE Stream + `DELETE` Termination
@@ -68,7 +73,7 @@ After `initialize` succeeds (HTTP transport only), the client opens a **serverâ†
 ## Implementation notes (gotchas discovered)
 
 - The in-process `fetch` mock must record the **HTTP verb** (`init.method`) for GET/DELETE â€” those requests have no JSON body, so the JSON-RPC `method` is absent.
-- The client `DELETE` must check `response.ok` (not just `.catch`): a mocked failure returns a non-ok *resolved* `Response`, not a rejection.
+- The client `DELETE` must check `response.ok` (not just `.catch`): a mocked failure returns a non-ok _resolved_ `Response`, not a rejection.
 - The fire-and-forget GET reader can report an error **before** the caller assigns its connection handle. `index.ts` declares `let connection` ahead of the loop with an `if (connection)` guard; unit tests mirror this with a holder. Any future `onStreamError` handler reacting during connect must tolerate a not-yet-assigned handle.
 
 ## Implementation

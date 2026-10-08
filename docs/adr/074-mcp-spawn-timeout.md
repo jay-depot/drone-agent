@@ -1,6 +1,11 @@
 ---
 tags: [decision, mcp, spawn, timeout]
-related: [modules/drone-agent-mcp-client.md, decisions/075-mcp-tool-name-collisions.md, decisions/076-mcp-streaming-safety-valve.md]
+related:
+  [
+    modules/drone-agent-mcp-client.md,
+    decisions/075-mcp-tool-name-collisions.md,
+    decisions/076-mcp-streaming-safety-valve.md,
+  ]
 ---
 
 # 074: MCP Spawn Timeout (Item 12)

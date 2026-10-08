@@ -1,6 +1,11 @@
 ---
 tags: [decision, coordinator, websocket, auth, tailscale]
-related: [concepts/coordinator-web-auth.md, modules/drone-coordinator.md, meta/web-ui-tailscale-detection-research.md]
+related:
+  [
+    concepts/coordinator-web-auth.md,
+    modules/drone-coordinator.md,
+    meta/web-ui-tailscale-detection-research.md,
+  ]
 ---
 
 # 032: WebSocket Auth Local-IP Bypass

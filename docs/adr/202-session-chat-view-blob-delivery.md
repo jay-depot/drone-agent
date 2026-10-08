@@ -1,6 +1,14 @@
 ---
 tags: [coordinator, coordinator-ui, chat, events, adr]
-related: [drone-coordinator.md, drone-coordinator-ui.md, decisions/198-coordinator-ui-launch-interact.md, decisions/201-session-detail-live-chat-resilience.md, decisions/203-coordinator-ui-archive-undo-and-error-display.md, decisions/205-session-chat-truncation-expansion.md]
+related:
+  [
+    drone-coordinator.md,
+    drone-coordinator-ui.md,
+    decisions/198-coordinator-ui-launch-interact.md,
+    decisions/201-session-detail-live-chat-resilience.md,
+    decisions/203-coordinator-ui-archive-undo-and-error-display.md,
+    decisions/205-session-chat-truncation-expansion.md,
+  ]
 ---
 
 # Coordinator UI session chat view: human-friendly event rendering + blob delivery

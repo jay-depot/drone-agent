@@ -1,6 +1,21 @@
 ---
-tags: [decision, coordinator, transcript, memory-pipeline, bug-fix, session-import, json]
-related: [decisions/151-memory-pipeline-infra.md, decisions/146-swarm-session-import.md, modules/drone-coordinator.md, concepts/memory-pipeline.md]
+tags:
+  [
+    decision,
+    coordinator,
+    transcript,
+    memory-pipeline,
+    bug-fix,
+    session-import,
+    json,
+  ]
+related:
+  [
+    decisions/151-memory-pipeline-infra.md,
+    decisions/146-swarm-session-import.md,
+    modules/drone-coordinator.md,
+    concepts/memory-pipeline.md,
+  ]
 ---
 
 # 185: Coordinator transcript bounding — never truncate mid-JSON

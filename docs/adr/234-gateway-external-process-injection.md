@@ -1,17 +1,37 @@
 ---
-tags: [decision, gateway, injection, control-api, external-process, helper-cli, one-shot-agent, architecture, adr]
-related: [modules/drone-gateway.md, decisions/232-gateway-surface-lifecycle-and-working-dir.md, decisions/233-gateway-chat-tagging-batching-optout.md, decisions/224-gateway-spawn-targeting.md, decisions/223-gateway-swarm-console-control-surface.md, concepts/spawn-backend.md, concepts/json-listen-mode.md]
+tags:
+  [
+    decision,
+    gateway,
+    injection,
+    control-api,
+    external-process,
+    helper-cli,
+    one-shot-agent,
+    architecture,
+    adr,
+  ]
+related:
+  [
+    modules/drone-gateway.md,
+    decisions/232-gateway-surface-lifecycle-and-working-dir.md,
+    decisions/233-gateway-chat-tagging-batching-optout.md,
+    decisions/224-gateway-spawn-targeting.md,
+    decisions/223-gateway-swarm-console-control-surface.md,
+    concepts/spawn-backend.md,
+    concepts/json-listen-mode.md,
+  ]
 ---
 
 # 234 — Gateway external-process injection + one-shot agent helper
 
 **Status**: Implemented (2026-10-07) · **Branch**: `feat/gateway-external-process-injection` · **Commit**: `d950a1ce` · **PR**: #119 · **Gateway ADR**: none (project-wiki only)
 
-**Summary**: The gateway bridged chat platforms to agents in **one direction only** — *inbound* (`chat → engine → control surface → SpawnBackend.sendMessage → agent`). There was no way for an *external* process (a cron job, a CI hook, any script) to get text **into** a chat conversation. This ADR adds the **outbound** direction: a new loopback HTTP **control API** on the daemon (`POST /inject`, `GET /status`, `GET /conversations`), a second binary `drone-gateway-inject` with two subcommands (`inject-message` — post a literal string, no LLM; `run-agent` — spawn a one-shot `drone-agent`, post its final chat message), and the engine bridge that ties them together. The daemon performs the actual post (it owns the platform connections, E2EE keys included), so the helper never touches platform state.
+**Summary**: The gateway bridged chat platforms to agents in **one direction only** — _inbound_ (`chat → engine → control surface → SpawnBackend.sendMessage → agent`). There was no way for an _external_ process (a cron job, a CI hook, any script) to get text **into** a chat conversation. This ADR adds the **outbound** direction: a new loopback HTTP **control API** on the daemon (`POST /inject`, `GET /status`, `GET /conversations`), a second binary `drone-gateway-inject` with two subcommands (`inject-message` — post a literal string, no LLM; `run-agent` — spawn a one-shot `drone-agent`, post its final chat message), and the engine bridge that ties them together. The daemon performs the actual post (it owns the platform connections, E2EE keys included), so the helper never touches platform state.
 
 ## Why
 
-1. **Inbound-only.** Every path led *into* the gateway; nothing could post *out* except a live control surface answering a message. Recurring jobs (heartbeats, triage, reports) had no way to surface a result.
+1. **Inbound-only.** Every path led _into_ the gateway; nothing could post _out_ except a live control surface answering a message. Recurring jobs (heartbeats, triage, reports) had no way to surface a result.
 2. **External processes cannot hold platform credentials.** E2EE keys ([229-gateway-matrix-crypto-opt-in](229-gateway-matrix-crypto-opt-in.md)) live only in the daemon process, so a stand-alone helper cannot post directly — the daemon must do the post on the helper's behalf.
 3. **A spawn-and-report job needs a one-shot agent, not a resident session.** The existing machinery (`LocalSpawnBackend`) is built for a persistent child answering turn after turn; a report job launches an agent, lets it finish, and exits.
 
@@ -21,7 +41,7 @@ related: [modules/drone-gateway.md, decisions/232-gateway-surface-lifecycle-and-
 2. **Outbound only.** Inject = `adapter.sendMessage()`. It does **not** go through the engine's surface dispatch. Inbound delivery (a posted message becoming a user turn) and conversation continuity are **deferred** to a later feature that will likely subsume parts of this one.
 3. **Opt-in is per-conversation.** `injection: { enabled: boolean }` in the conversation file; the loader keeps a conversation that has a non-empty `controlSurfaces` **or** `injection.enabled` (a conversation loaded for injection only, with zero surfaces, drops inbound chat — unchanged surface behavior). The **wildcard `*` is never an injection target** — an `injection` block on `_default_.json` is ignored with a warning.
 4. **The agent helper spawns a local child only.** Coordinator-routed spawn is deferred (it needs the deferred coordinator receive path).
-5. **A dedicated one-shot module**, `src/inject/spawn-once.ts` — **not** `LocalSpawnBackend`. Only `resolveDroneExecutable` (from `drone-core`) and the NDJSON event *kinds* are reused; the persistent-child machinery is deliberately avoided.
+5. **A dedicated one-shot module**, `src/inject/spawn-once.ts` — **not** `LocalSpawnBackend`. Only `resolveDroneExecutable` (from `drone-core`) and the NDJSON event _kinds_ are reused; the persistent-child machinery is deliberately avoided.
 6. **Second bin in the same package**, `drone-gateway-inject`, with subcommands `inject-message` and `run-agent`.
 7. **API shape.** `POST /inject`, `GET /status`, `GET /conversations`; unknown adapter/conversation → **404**, not opted in → **403**, bad body → **400**.
 8. **Framing is verbatim** plus an optional caller-supplied `--prefix`.
@@ -39,7 +59,7 @@ related: [modules/drone-gateway.md, decisions/232-gateway-surface-lifecycle-and-
 20. **`inject-message` input = positional or `--file <path|->`; exactly one.**
 21. **`--prefix` on both subcommands**, helper-side, prepends to the first line (literal prepend); interprets `\n`, `\t`, `\\` (other escapes literal).
 22. **Server lifecycle in `main()`.** `ControlApiServer` built after `engine.start()`, stopped before `engine.stop()`; `EADDRINUSE` → exit 1; no hot-reload.
-23. **Fixed 30s helper HTTP timeout.** `--timeout` is the *agent* budget only, not the HTTP call.
+23. **Fixed 30s helper HTTP timeout.** `--timeout` is the _agent_ budget only, not the HTTP call.
 24. **Docs.** This decision lives in project memory (the user's macro pulls it into the wiki). No `docs/` how-to, no gateway-local ADR. `drone-gateway/CONTEXT.md` is updated.
 25. **Hand-rolled arg parser** (may unify into `drone-core` later).
 26. **`run-agent --no-response-sentinel`.** On `isNoResponse(finalMessage)` → inject nothing, stderr notice, **exit 0**; `--json` reports `{ ok: true, injected: false, suppressed: true }`. This lets a recurrent heartbeat job stay quiet.
@@ -48,6 +68,7 @@ related: [modules/drone-gateway.md, decisions/232-gateway-surface-lifecycle-and-
 ## Implementation
 
 **New**
+
 - `drone-gateway/src/errors.ts` — `UnknownAdapterError`, `UnknownConversationError`, `InjectionNotEnabledError`.
 - `drone-gateway/src/control-api/server.ts` — `ControlApiServer` (Fastify): optional `onRequest` Bearer gate; `GET /status`, `GET /conversations`, `POST /inject`; typed error → status mapping (404/403/500), 400 on bad body.
 - `drone-gateway/src/inject/args.ts` — `parseInjectArgs`, `usageText`, `DEFAULT_TIMEOUT_SECONDS = 600`, `InjectInvocation`/`InjectCommonOptions`; subcommand detection, exactly-one input rules, `--port` (1–65535) and `--timeout` (finite ≥ 0) validation, unknown-flag rejection.
@@ -59,12 +80,13 @@ related: [modules/drone-gateway.md, decisions/232-gateway-surface-lifecycle-and-
 - `drone-gateway/bin/drone-gateway-inject` — ESM shim → `dist/inject/cli.js`.
 
 **Modified**
+
 - `drone-gateway/src/types.ts` — `ControlApiConfig { enabled; host; port; token? }`; `GatewayConfig.controlApi?`; `ResolvedConversation.injectionEnabled?`.
 - `drone-gateway/src/config/load.ts` — `parseControlApi` (warn-and-default; non-loopback-host warning when enabled); `parseInjection` (boolean-true only; wildcard ignored with a warning); relaxes the "non-empty surfaces" requirement to `specs.length === 0 && !injectionEnabled → skip`; `controlApi` always present on the built config.
 - `drone-gateway/src/engine.ts` — `InstantiatedConversation.injectionEnabled`; `listAdapterIds()`; `listInjectableConversations()`; `injectMessage()` (outbound-only: straight to `adapter.sendMessage`, **not** through `runOnTail`); imports the three typed errors.
 - `drone-gateway/src/index.ts` — `readGatewayVersion()`; construct/start `ControlApiServer` after `engine.start()` when `controlApi.enabled`, stop it before `engine.stop()` in both the shutdown handler and the catch.
 - `drone-gateway/package.json` — adds `fastify@^5.12.5` + the `drone-gateway-inject` bin.
-- `drone-gateway/CONTEXT.md` — glossary: *Injection*, *Injection API*, *Injection Target*, *Agent Helper*, *Message Helper*; config layout gains `controlApi`.
+- `drone-gateway/CONTEXT.md` — glossary: _Injection_, _Injection API_, _Injection Target_, _Agent Helper_, _Message Helper_; config layout gains `controlApi`.
 - `pnpm-lock.yaml` — the `fastify` specifier for the drone-gateway importer.
 
 ## Validation
@@ -75,7 +97,7 @@ New suites: `control-api-server.test.ts` (10), `inject-args.test.ts` (21), `inje
 
 ## Notes
 
-- **The daemon must own the post.** E2EE keys (ADR 229) live only in the daemon; a helper with its own Matrix client would need its own keys and would fork the session. So the helper only *asks* the daemon to post.
+- **The daemon must own the post.** E2EE keys (ADR 229) live only in the daemon; a helper with its own Matrix client would need its own keys and would fork the session. So the helper only _asks_ the daemon to post.
 - **`spawnOnce` writes-and-closes stdin deliberately.** `runJsonMode` reads stdin until EOF, so the kickoff event must be followed by `end()` or the child never starts.
 - **Two `apply_diff` frictions hit during execution** (recorded as insights): a patch whose hunks lack `@@ -a,b +c,d @@` headers is rejected outright (`no hunks found`), and a multi-hunk patch can **partially** apply (it reports which hunks failed) — re-read and re-apply only the failed hunk.
 - **`pnpm run lint` dirties the tree** (recorded as an insight, recurring): `prettier --write .` reformats `pnpm-lock.yaml` (~5800 lines) and touches `.drone-agent/`; revert those, then restore the real lockfile delta with `pnpm install --no-frozen-lockfile` and verify with `--frozen-lockfile`.

@@ -1,6 +1,14 @@
 ---
 tags: [decision, skills, frontmatter, tui, llm-visibility]
-related: [entities/Skill.md, modules/drone-core.md, modules/drone-agent-plugins.md, concepts/broker-provider.md, decisions/161-runtime-enforcement-required-tool-inputs.md, decisions/029-dynamic-writer-registration.md]
+related:
+  [
+    entities/Skill.md,
+    modules/drone-core.md,
+    modules/drone-agent-plugins.md,
+    concepts/broker-provider.md,
+    decisions/161-runtime-enforcement-required-tool-inputs.md,
+    decisions/029-dynamic-writer-registration.md,
+  ]
 ---
 
 # 176: Skill `remark` frontmatter field (v1, local-scope)
@@ -17,7 +25,7 @@ The real design problem was **where remarks may surface**. Skill payloads serve 
 
 - The **skills prompt fragment** (LLM-facing): renders only `id`/`description`/`recall` — must stay remark-free.
 - **`skills__recall`** tool result: its JSON is appended to the session as a synthetic tool result (the recall mechanism itself), so it must stay remark-free.
-- **`skills__list`**: dual-audience — the TUI's `SkillsListBlock` and `/skills list` both render *from the tool result*, but the LLM also reads it when it calls the tool.
+- **`skills__list`**: dual-audience — the TUI's `SkillsListBlock` and `/skills list` both render _from the tool result_, but the LLM also reads it when it calls the tool.
 - `/skills recall`'s confirmation line (`Loaded skill: …`) is human-only logger output.
 
 Additionally, swarm-synced skills (beacon/coordinator providers) flow through the `skills` SQLite table and fixed wire mappings — a new definition field would be silently dropped there (`skill-library`-era skills don't have remarks; the field's first users are all local-scope).

@@ -1,6 +1,12 @@
 ---
 tags: [decision, lsp, ergonomics, position-resolution, concurrency]
-related: [concepts/lsp-symbolic-resolution.md, decisions/136-lsp-symbolic-resolution.md, decisions/138-lsp-symbolic-resolution-round-2.md, modules/drone-agent-plugins.md]
+related:
+  [
+    concepts/lsp-symbolic-resolution.md,
+    decisions/136-lsp-symbolic-resolution.md,
+    decisions/138-lsp-symbolic-resolution-round-2.md,
+    modules/drone-agent-plugins.md,
+  ]
 ---
 
 # 139: LSP Symbolic Resolution Round 3 — referenceId Precedence, Cache Concurrency Guard, Stale-Handshake Tests
@@ -11,7 +17,7 @@ related: [concepts/lsp-symbolic-resolution.md, decisions/136-lsp-symbolic-resolu
 
 A review of the round-2 LSP symbolic resolution work (decision 138) found four follow-up issues:
 
-1. **`code_action` referenceId/text precedence bug + double-parse** — the ambiguity pre-pass ran `parsePositionInput` on `text`/`symbol` *before* the `referenceId` branch was reached. If both `referenceId` and `text` were supplied, an ambiguous `text` returned an ambiguous-response and **ignored the `referenceId`** the caller supplied to disambiguate. Also, unambiguous text was parsed twice (pre-pass + the text/symbol branch).
+1. **`code_action` referenceId/text precedence bug + double-parse** — the ambiguity pre-pass ran `parsePositionInput` on `text`/`symbol` _before_ the `referenceId` branch was reached. If both `referenceId` and `text` were supplied, an ambiguous `text` returned an ambiguous-response and **ignored the `referenceId`** the caller supplied to disambiguate. Also, unambiguous text was parsed twice (pre-pass + the text/symbol branch).
 
 2. **Missing stale-handshake tool test** — `buildStaleResponse` (the `{ stale: true, referenceId, hint }` handshake) was completely untested at the tool level. The stale path was only covered at the `resolveReference` cache level, not in `rename`/`code_action`.
 
@@ -49,9 +55,10 @@ function withCacheLock<T>(fn: () => Promise<T>): Promise<T> {
 
 ### 4. Fixed-window disambiguation — REJECTED, original kept
 
-The proposed fix (a fixed `HARD_CONTEXT_LINES` window in `matchesSurroundingBlock`) was **evaluated and rejected**. Applying it broke 5 existing disambiguation tests. Root cause: a fixed 30-line window makes a short block (e.g. `class User {`) appear in the window of *every* nearby match (in a small file, both windows span the whole file), so it can no longer disambiguate. The whole point of the small window is that a short block only appears near its own match.
+The proposed fix (a fixed `HARD_CONTEXT_LINES` window in `matchesSurroundingBlock`) was **evaluated and rejected**. Applying it broke 5 existing disambiguation tests. Root cause: a fixed 30-line window makes a short block (e.g. `class User {`) appear in the window of _every_ nearby match (in a small file, both windows span the whole file), so it can no longer disambiguate. The whole point of the small window is that a short block only appears near its own match.
 
 The **original** `window = Math.min(blockLines.length, HARD_CONTEXT_LINES)` is already intrinsically stable:
+
 - The filter sizes its window to the actual handed-back block length `L`, so the block always fits (window of `L` before/after = `2L+1` total ≥ `L`).
 - Short blocks → small windows → disambiguation works (a short block only appears near its own match).
 - The only coupling is through the shared `HARD_CONTEXT_LINES` cap, which is already the single source of truth.
@@ -79,11 +86,11 @@ The plan's premise ("correctness depends on lockstep") was **false**. The origin
 
 ## Files Modified
 
-| File | Changes |
-|------|---------|
-| `drone-agent/src/plugins/lsp/tools/editing.ts` | Guard the ambiguity pre-pass with `!input.referenceId`; `await storeReferences` |
-| `drone-agent/src/plugins/lsp/server.ts` | `withCacheLock` mutex; `storeReferences` async; `resolveReference` wrapped in lock; `ServerManager` type updated |
-| `drone-agent/test/lsp-ergonomics.test.ts` | 46 tests (was 41): referenceId+text precedence, rename/code_action stale responses, concurrent storeReferences ID uniqueness, hard-limit block round-trip |
+| File                                           | Changes                                                                                                                                                   |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `drone-agent/src/plugins/lsp/tools/editing.ts` | Guard the ambiguity pre-pass with `!input.referenceId`; `await storeReferences`                                                                           |
+| `drone-agent/src/plugins/lsp/server.ts`        | `withCacheLock` mutex; `storeReferences` async; `resolveReference` wrapped in lock; `ServerManager` type updated                                          |
+| `drone-agent/test/lsp-ergonomics.test.ts`      | 46 tests (was 41): referenceId+text precedence, rename/code_action stale responses, concurrent storeReferences ID uniqueness, hard-limit block round-trip |
 
 ## Related
 

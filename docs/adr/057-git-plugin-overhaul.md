@@ -1,6 +1,7 @@
 ---
 tags: [decision, git, plugins, tui]
-related: [047-plugin-customizable-tool-render.md, modules/drone-agent-plugins.md]
+related:
+  [047-plugin-customizable-tool-render.md, modules/drone-agent-plugins.md]
 ---
 
 # ADR 057: Git Plugin Overhaul — Folder Split, 11 Tools, TUI Components
@@ -17,11 +18,11 @@ Overhaul the git plugin into a `git/` folder with 11 tools, each with a custom T
 
 ### Tool Set (11 tools, `push` excluded)
 
-| Category | Tools |
-|----------|-------|
-| **Read-only** | `status`, `diff`, `log`, `show` |
-| **Local write** | `add`, `restore`, `commit`, `branch`, `stash` |
-| **Remote (no push)** | `fetch`, `pull` |
+| Category             | Tools                                         |
+| -------------------- | --------------------------------------------- |
+| **Read-only**        | `status`, `diff`, `log`, `show`               |
+| **Local write**      | `add`, `restore`, `commit`, `branch`, `stash` |
+| **Remote (no push)** | `fetch`, `pull`                               |
 
 ### Status Classification Fix
 
@@ -30,6 +31,7 @@ The root cause was `runGit()` calling `stdout.trim()` on the entire porcelain ou
 ### Commit Behavior Change
 
 Previously `commit` force-ran `git add -A` (staging everything including untracked files). Now it does **not** auto-stage. It accepts:
+
 - Explicit `paths` (array) — stage and commit only those files
 - `all: true` — stage tracked+modified (`git add -u`)
 - `all: true` + `includeUntracked: true` — full `git add -A`
@@ -39,6 +41,7 @@ A dedicated `add` tool provides granular staging.
 ### Restore Semantics
 
 Uses the modern `git restore` idiom:
+
 - `staged: true` → unstage (`git restore --staged`)
 - `discard: true` + `paths` → discard worktree changes (irreversible, requires explicit opt-in)
 - `discard: true` without `paths` → rejected with error (safety guard)
@@ -46,12 +49,14 @@ Uses the modern `git restore` idiom:
 ### Action-Based Tools
 
 `branch` and `stash` are single tools with an `action` field (default `list`), keeping the tool namespace tidy:
+
 - `branch({ action: 'list'|'create'|'switch'|'delete', name?, force? })`
 - `stash({ action: 'list'|'push'|'pop'|'apply'|'drop'|'clear', message?, index?, paths? })`
 
 ### Show Semantics
 
 `show({ ref, path?, contentsOnly? })`:
+
 - Default (`contentsOnly: false`) → commit diff vs HEAD
 - `contentsOnly: true` + `path` → file contents at ref (`git show <ref>:<path>`)
 - `contentsOnly: true` without `path` → ignored (falls back to diff)
@@ -59,6 +64,7 @@ Uses the modern `git restore` idiom:
 ### TUI Components
 
 Every tool has a custom render component (no raw JSON blobs shown):
+
 - **status** → `## git status` + colored sections (staged=cyan, unstaged=yellow, untracked=red)
 - **diff** / **show** → existing `GitDiffBlock` (diff view)
 - **add** / **restore** / **stash** → `## git <cmd>` + bulleted list colored by actual FS change (green=added, cyan=modified, red-strikethrough=removed)

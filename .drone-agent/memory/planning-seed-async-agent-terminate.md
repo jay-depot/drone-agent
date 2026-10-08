@@ -19,8 +19,8 @@ updated: 2026-10-05T22:02:17.080Z
 # Planning seed: asynchronous agent termination
 
 **Status:** seed only (2026-10-05), not planned. Captured at the end of the
-`plan-swarm-spawn-terminate-ladder` work (which made terminate *reliable* but
-left it *synchronous*).
+`plan-swarm-spawn-terminate-ladder` work (which made terminate _reliable_ but
+left it _synchronous_).
 
 **Type:** seed — the shape is agreed-in-spirit; nothing here is implemented, and
 several decisions are deliberately open.
@@ -40,9 +40,9 @@ to "it has been accepted and will converge."
 The swarm is already **eventual-consistency-shaped everywhere else**: sessions go
 `active → stale → ended`; spawns go `spawning → running → terminated`; a boot
 reconcile sweep exists (`drone-beacon/src/spawn-reconcile.ts`); `live` on
-`GET /spawn/:id` is a *derived* view, never stored. The synchronous blocking
+`GET /spawn/:id` is a _derived_ view, never stored. The synchronous blocking
 `DELETE` is the **odd one out** — the single place the system demands "answer me
-*now*" over a channel we just spent eight commits making resilient to outage.
+_now_" over a channel we just spent eight commits making resilient to outage.
 
 ### The motivating failure mode (what 1/2 only paper over)
 
@@ -67,8 +67,8 @@ it.** An async `202` is never "failed" — that's the architectural win.
 
 1. **Beacon protocol split.** `handleTerminateSpawn`
    (`drone-beacon/src/routes/spawn-handlers.ts`) is one `await` today. It becomes
-   *validate → dispatch ladder in the background → reply 202-immediately*, plus
-   *run ladder → write outcome (`updateSpawnStatus`)*. Introduces an
+   _validate → dispatch ladder in the background → reply 202-immediately_, plus
+   _run ladder → write outcome (`updateSpawnStatus`)_. Introduces an
    **unsupervised background task** where there was none.
 2. **Coordinator route.** `DELETE /spawn/:beaconId/:spawnId` needs only a short
    beacon **ack** (accepted), then returns `202` without awaiting the ladder —
@@ -91,7 +91,7 @@ it.** An async `202` is never "failed" — that's the architectural win.
 
 **"4-lite":** in the coordinator terminate route, distinguish **"beacon
 connected but the command timed out"** (⇒ return `202 "termination in progress"`;
-a connected beacon that accepted *will* finish the ladder) from **"beacon not
+a connected beacon that accepted _will_ finish the ladder) from **"beacon not
 connected"** (⇒ keep `503`). Today both collapse into one `503
 BEACON_UNAVAILABLE` in `handleCommandError` (`drone-coordinator/src/routes/spawn.ts`).
 This kills the false-failure **without** touching the beacon or client contract,
@@ -100,8 +100,8 @@ before committing to full async.
 
 ## Prerequisite (already landed)
 
-Bounding `ps` was a prerequisite for *any* option here (an unbounded *background*
-task is no better than an unbounded *request*, arguably worse). Done in
+Bounding `ps` was a prerequisite for _any_ option here (an unbounded _background_
+task is no better than an unbounded _request_, arguably worse). Done in
 `4d13d5d3` (`PS_TIMEOUT_MS`). Option 2's timeout widening also landed
 (`7630812a`) as the immediate stopgap.
 

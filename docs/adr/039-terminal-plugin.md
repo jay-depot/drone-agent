@@ -12,6 +12,7 @@ related: [terminal-plugin.md, plugin-system.md, exec.md]
 The existing `exec` plugin runs shell commands via `spawn()` with `shell: true` and `stdio: ['ignore', 'pipe', 'pipe']`. It is stateless — spawn, capture stdout/stderr, return JSON. There is no interactivity, no stdin, no PTY.
 
 Agents needed the ability to:
+
 - Test TUIs (tools like `fzf`, `htop`, `nano`)
 - Drive `tmux` sessions
 - Run interactive programs that require stdin
@@ -40,6 +41,7 @@ Create a **separate** `terminal` plugin using `node-pty` for genuine PTY support
 ### Why hybrid key encoding
 
 Rather than requiring the LLM to know raw ASCII codes (e.g., `\x03` for Ctrl+C) or raw escape sequences (e.g., `\x1b[A` for Up arrow), the plugin provides a hybrid encoder:
+
 - **Named sequences** like `<Ctrl-C>`, `<Enter>`, `<Up>`, `<F1>` are LLM-friendly and descriptive
 - **Raw text** passes through unchanged for normal typing
 - **`<<` escape** provides a way to send literal angle brackets
@@ -50,6 +52,7 @@ This eliminates the need for the LLM to memorize terminal escape codes while sti
 ### Read vs Screenshot distinction
 
 Two separate read tools with deliberately different semantics:
+
 - **`terminal__read`**: Drains the pending output buffer. Use for polling — "what happened since I last checked?"
 - **`terminal__screenshot`**: Returns the full accumulated buffer. Use for inspection — "what does the terminal look like now?"
 

@@ -1,6 +1,12 @@
 ---
 tags: [decision, swarm, beacon, coordinator, prompt-fragments, websocket]
-related: [architecture/swarm-architecture.md, concepts/scope-hierarchy.md, decisions/151-memory-pipeline-infra.md, modules/drone-beacon.md]
+related:
+  [
+    architecture/swarm-architecture.md,
+    concepts/scope-hierarchy.md,
+    decisions/151-memory-pipeline-infra.md,
+    modules/drone-beacon.md,
+  ]
 ---
 
 # 173: Swarm prompt fragments (beacon/coordinator → agent system prompts)

@@ -1,6 +1,22 @@
 ---
-tags: [decision, drone-coordinator, drone-coordinator-ui, drone-beacon, topology, websocket, live-events]
-related: [modules/drone-coordinator.md, modules/drone-coordinator-ui.md, modules/drone-beacon.md, concepts/mtls-and-reverse-channel.md, decisions/089-coordinator-live-events-api-paths.md]
+tags:
+  [
+    decision,
+    drone-coordinator,
+    drone-coordinator-ui,
+    drone-beacon,
+    topology,
+    websocket,
+    live-events,
+  ]
+related:
+  [
+    modules/drone-coordinator.md,
+    modules/drone-coordinator-ui.md,
+    modules/drone-beacon.md,
+    concepts/mtls-and-reverse-channel.md,
+    decisions/089-coordinator-live-events-api-paths.md,
+  ]
 ---
 
 # 191: Swarm topology status = live WebSocket state
@@ -50,7 +66,7 @@ Use the live WebSocket state as the status signal and wire it end to end.
 
 ## Consequences
 
-- Status is now a *connection* property, not a liveness guess: an idle beacon
+- Status is now a _connection_ property, not a liveness guess: an idle beacon
   that stays connected stays green; a crashed beacon turns red the moment the
   sweep (or a real close) notices.
 - Half-open sockets (peer gone without FIN) are reaped within one sweep

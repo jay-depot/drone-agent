@@ -1,6 +1,12 @@
 ---
 tags: [decision, input-validation, tools, plugins, error-handling]
-related: [flows/tool-call-loop.md, modules/drone-agent-plugins.md, decisions/071-tool-consolidation-batch-2.md, decisions/105-runtime-level-list-mount.md]
+related:
+  [
+    flows/tool-call-loop.md,
+    modules/drone-agent-plugins.md,
+    decisions/071-tool-consolidation-batch-2.md,
+    decisions/105-runtime-level-list-mount.md,
+  ]
 ---
 
 # 161: Runtime Enforcement of Required Tool Inputs
@@ -11,9 +17,9 @@ related: [flows/tool-call-loop.md, modules/drone-agent-plugins.md, decisions/071
 
 A user-visible crash exposed a systemic gap: calling `self-improvement__insight` with `targetType` but **no `targetId`** threw `TypeError: Cannot read properties of undefined (reading 'trim')` instead of the tool's own friendly `"targetId must be a non-empty string."` error.
 
-Root cause is architectural: `engine.executeTool()` (`drone-agent/src/runtime/plugin-engine.ts`) dispatches **straight to `tool.execute()`** with no JSON-schema validation layer anywhere in the dispatch path. Every tool's `inputSchema.required` array — and every enum/type constraint — is purely an LLM-facing hint. The conversation service wraps execution in `executeToolSafely`, but that only converts *thrown* errors into `{kind:'error'}` results; it never validates inputs. So any tool that casts-then-calls-methods on an unenforced field (`(input.x as string).trim()`) crashes opaquely whenever a caller omits or mistypes it.
+Root cause is architectural: `engine.executeTool()` (`drone-agent/src/runtime/plugin-engine.ts`) dispatches **straight to `tool.execute()`** with no JSON-schema validation layer anywhere in the dispatch path. Every tool's `inputSchema.required` array — and every enum/type constraint — is purely an LLM-facing hint. The conversation service wraps execution in `executeToolSafely`, but that only converts _thrown_ errors into `{kind:'error'}` results; it never validates inputs. So any tool that casts-then-calls-methods on an unenforced field (`(input.x as string).trim()`) crashes opaquely whenever a caller omits or mistypes it.
 
-Why tests missed it for so long: existing "rejects empty targetId" cases passed `targetId: ''` — an empty *string*, which survives `.trim()` and reaches the downstream guard. The crash comes from the **omitted** variant (`undefined`), which no test exercised. Empty-string-passes-through vs. omitted-crashes-before-guard is now a standing test-design distinction (see [145-guardrail-reliability-features](145-guardrail-reliability-features.md) for the sibling lesson about guardrail counters).
+Why tests missed it for so long: existing "rejects empty targetId" cases passed `targetId: ''` — an empty _string_, which survives `.trim()` and reaches the downstream guard. The crash comes from the **omitted** variant (`undefined`), which no test exercised. Empty-string-passes-through vs. omitted-crashes-before-guard is now a standing test-design distinction (see [145-guardrail-reliability-features](145-guardrail-reliability-features.md) for the sibling lesson about guardrail counters).
 
 ## Decision
 
@@ -44,7 +50,7 @@ Conventions preserved per family: memory/subagent **throw** (executeToolSafely n
 - The audit cleared several suspicious-looking sites as SAFE — e.g. bootstrap's guarded `(input.path as string).trim()` behind a leading `typeof` conjunct, git/lsp/exec/todo's validate-first helpers, persona/skills select-recall's exact `typeof x === 'string' ? trim : ''` pattern. Grep hits are leads, not verdicts; classify by reading context.
 - Validation regression tests were proven to fail against pre-fix source via a stash-dance (stash only source files → run new tests → 22 failures → pop → green), keeping the new tests honest without reverting anything.
 - Validation: targeted self-improvement suite 73/73; touched-spec suite 51/51; full fast suite 2227 passed / 9 skipped; build + lint + LSP clean. Commits `1183cc4`, `43276bf` on `fix/insight-logging-hints`.
-- **Known residual (minor, as of 2026-08-25):** a few `(x as string) || default` sites remain — e.g. the `swarm/tools-message.ts` action and the `search` mode — where a non-string *truthy* input is used as-is rather than defaulted, so it degrades to an `Unknown action: <junk>` message instead of an explicit membership error. **None crash; none false-succeed.** A low-priority future-sweep candidate; re-verify against source before acting, since the original line refs go stale.
+- **Known residual (minor, as of 2026-08-25):** a few `(x as string) || default` sites remain — e.g. the `swarm/tools-message.ts` action and the `search` mode — where a non-string _truthy_ input is used as-is rather than defaulted, so it degrades to an `Unknown action: <junk>` message instead of an explicit membership error. **None crash; none false-succeed.** A low-priority future-sweep candidate; re-verify against source before acting, since the original line refs go stale.
 
 ## Related
 

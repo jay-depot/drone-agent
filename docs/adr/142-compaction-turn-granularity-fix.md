@@ -1,6 +1,13 @@
 ---
 tags: [decision, compaction, turn-granularity, session-management]
-related: [concepts/session-management.md, decisions/134-compaction-correctness-fix.md, decisions/135-compaction-slash-command.md, decisions/053-compaction-latch-fix.md, entities/Session.md]
+related:
+  [
+    concepts/session-management.md,
+    decisions/134-compaction-correctness-fix.md,
+    decisions/135-compaction-slash-command.md,
+    decisions/053-compaction-latch-fix.md,
+    entities/Session.md,
+  ]
 ---
 
 # 142: Compaction Turn Granularity Fix — Each Assistant Message Is Its Own Turn

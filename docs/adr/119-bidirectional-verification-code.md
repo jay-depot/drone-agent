@@ -1,11 +1,20 @@
 ---
 tags: [decision, security, verification, coordinator, beacon]
-related: [concepts/beacon-verification.md, modules/drone-beacon.md, modules/drone-coordinator.md, modules/drone-swarm-common.md, decisions/091-beacon-mitm-verification.md, decisions/117-tofu-fingerprint-pinning.md, decisions/118-tofu-interactive-confirmation.md]
+related:
+  [
+    concepts/beacon-verification.md,
+    modules/drone-beacon.md,
+    modules/drone-coordinator.md,
+    modules/drone-swarm-common.md,
+    decisions/091-beacon-mitm-verification.md,
+    decisions/117-tofu-fingerprint-pinning.md,
+    decisions/118-tofu-interactive-confirmation.md,
+  ]
 ---
 
 # 119. Bidirectional verification code
 
-**Summary**: Made the MitM verification code prove *both* identities — the beacon's and the coordinator's — by including the coordinator's TLS fingerprint as a third input to `generateVerificationCode`.
+**Summary**: Made the MitM verification code prove _both_ identities — the beacon's and the coordinator's — by including the coordinator's TLS fingerprint as a third input to `generateVerificationCode`.
 
 ## Context
 
@@ -20,7 +29,11 @@ Extend `generateVerificationCode` to three inputs: `generateVerificationCode(bea
 `registerBeaconTrust` in `drone-coordinator/src/db/beacon-trust.ts` now computes the code with its own fingerprint, via a new `getCoordinatorFingerprint()` getter in `routes/health.ts` (alongside the existing `setCoordinatorFingerprint()` setter):
 
 ```typescript
-generateVerificationCode(req.publicKey, req.tlsFingerprint ?? '', getCoordinatorFingerprint() ?? '')
+generateVerificationCode(
+  req.publicKey,
+  req.tlsFingerprint ?? '',
+  getCoordinatorFingerprint() ?? ''
+);
 ```
 
 ### Beacon side
@@ -28,7 +41,11 @@ generateVerificationCode(req.publicKey, req.tlsFingerprint ?? '', getCoordinator
 `registerBeacon` in `drone-beacon/src/coordinator-client.ts` now computes the code with the observed coordinator fingerprint, via a new `getObservedCoordinatorFingerprint()` in `coordinator-trust.ts` (returns the trusted value if confirmed, else the pending value):
 
 ```typescript
-generateVerificationCode(identity.publicKey, tlsFingerprint, getObservedCoordinatorFingerprint() ?? '')
+generateVerificationCode(
+  identity.publicKey,
+  tlsFingerprint,
+  getObservedCoordinatorFingerprint() ?? ''
+);
 ```
 
 ## Consequences

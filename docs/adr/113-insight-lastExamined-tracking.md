@@ -1,6 +1,15 @@
 ---
 tags: [decision, self-improvement, insights, swarm]
-related: [concepts/self-improvement.md, modules/drone-core.md, modules/drone-beacon.md, modules/drone-coordinator.md, modules/drone-agent-plugins.md, decisions/013-swarm-insights-principles.md, decisions/112-self-improvement-file-write-race-fix.md]
+related:
+  [
+    concepts/self-improvement.md,
+    modules/drone-core.md,
+    modules/drone-beacon.md,
+    modules/drone-coordinator.md,
+    modules/drone-agent-plugins.md,
+    decisions/013-swarm-insights-principles.md,
+    decisions/112-self-improvement-file-write-race-fix.md,
+  ]
 ---
 
 # ADR 113: Insight `lastExamined` Tracking for the Promotion Process

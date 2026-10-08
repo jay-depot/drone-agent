@@ -1,6 +1,14 @@
 ---
 tags: [decision, slash-command, tools, list-mount, feature]
-related: [decisions/105-runtime-level-list-mount.md, decisions/109-persona-level-tool-premounting.md, decisions/110-debug-tools-flag.md, modules/drone-agent.md, modules/drone-core.md, architecture/plugin-system.md]
+related:
+  [
+    decisions/105-runtime-level-list-mount.md,
+    decisions/109-persona-level-tool-premounting.md,
+    decisions/110-debug-tools-flag.md,
+    modules/drone-agent.md,
+    modules/drone-core.md,
+    architecture/plugin-system.md,
+  ]
 ---
 
 # ADR 111: `/tool mount` / `/tool unmount` Slash Commands

@@ -1,6 +1,13 @@
 ---
 tags: [decision, tui, plugins, rendering]
-related: [046-tui-tail-region-refactor.md, 055-tui-tail-scrollback-formatting-preservation.md, modules/drone-agent-tui.md, entities/Session.md, flows/tool-call-loop.md]
+related:
+  [
+    046-tui-tail-region-refactor.md,
+    055-tui-tail-scrollback-formatting-preservation.md,
+    modules/drone-agent-tui.md,
+    entities/Session.md,
+    flows/tool-call-loop.md,
+  ]
 ---
 
 # ADR 047: Plugin-Customizable Tool Render Components
@@ -29,9 +36,9 @@ Allow plugins to optionally register a custom JSX component for rendering their 
 export type ToolRenderState = {
   name: string;
   arguments: Record<string, unknown>;
-  result?: string;       // Present when completed (success or error)
+  result?: string; // Present when completed (success or error)
   status: 'running' | 'done' | 'error';
-  scheme: unknown;       // DroneColorScheme, cast to unknown to keep drone-core React-free
+  scheme: unknown; // DroneColorScheme, cast to unknown to keep drone-core React-free
 };
 ```
 
@@ -59,6 +66,7 @@ The `toolCallBatch` and `toolResultBatch` event handlers in `app.tsx` now look u
 ### Removed Special-Case Code
 
 The following were removed from `app.tsx`:
+
 - `ANSI` constant, `formatDiffResult`, `formatDiffOutput`, `tryParseJson` (moved to shared utility)
 - `formatExecResult` (removed entirely — `exec__run` gets default preview)
 - `formatToolResult` (removed entirely — no more special-casing tools)

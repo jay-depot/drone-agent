@@ -1,6 +1,14 @@
 ---
 tags: [decision, macros, tui, console, conversation, bug-fix]
-related: [decisions/045-macro-event-streaming-unified-hooks.md, decisions/094-macro-chat-prompt-llm-trigger-fix.md, modules/drone-agent.md, modules/drone-agent-tui.md, modules/drone-agent-plugins.md, decisions/236-tui-final-reply-dedup.md]
+related:
+  [
+    decisions/045-macro-event-streaming-unified-hooks.md,
+    decisions/094-macro-chat-prompt-llm-trigger-fix.md,
+    modules/drone-agent.md,
+    modules/drone-agent-tui.md,
+    modules/drone-agent-plugins.md,
+    decisions/236-tui-final-reply-dedup.md,
+  ]
 ---
 
 # 168: Macro duplicate-render fix — re-unify conversation event streaming
@@ -16,7 +24,7 @@ While a macro executes, the `reasoning` and `assistantMessage` parts of every re
 Two rendering channels collided during a macro's `chatPrompt` step:
 
 1. **TUI global listener** — `app.tsx` registers `opts.engine.onConversationEvent(...)`, which renders `reasoning`, `assistantMessage`, `toolCallBatch`, and `toolResultBatch` correctly with proper color-coding in the tail region.
-2. **Macro's per-call `onEvent` callback** — `macros/index.ts` passed an `onEvent` to `sendUserMessage` that re-logged the *singular* `reasoning` and `assistantMessage` events via `ctx.logger.info(...)`. In the TUI, slash-command `logger.info` maps to `log(msg, 'user')`, which renders with the `>` prefix. This produced the duplicate.
+2. **Macro's per-call `onEvent` callback** — `macros/index.ts` passed an `onEvent` to `sendUserMessage` that re-logged the _singular_ `reasoning` and `assistantMessage` events via `ctx.logger.info(...)`. In the TUI, slash-command `logger.info` maps to `log(msg, 'user')`, which renders with the `>` prefix. This produced the duplicate.
 
 Only `reasoning` and `assistantMessage` doubled (not tools) because the conversation service emits tools as `toolCallBatch`/`toolResultBatch` — which the callback's `switch` never matched — while `reasoning` and `assistantMessage` are emitted as singular events. A further redundant line came from `ctxLogger.info(reply)`, which logged the `sendUserMessage` return value on top of the already-rendered `assistantMessage`.
 
@@ -27,7 +35,7 @@ This was a **regression of ADR 045** ([045-macro-event-streaming-unified-hooks](
 - **ADR 045** unified all conversation event streaming through the engine's `onConversationEvent` hooks, removing the macro's inline event handler (which logged everything through the lossy `DroneLogger` and rendered it as `>` user input).
 - **ADR 094** ([094-macro-chat-prompt-llm-trigger-fix](094-macro-chat-prompt-llm-trigger-fix.md), commit `d62ac76`) re-introduced the inline `onEvent` callback in order to fix a separate regression (macro chat-prompt steps not triggering the LLM). This re-introduced the double-render ADR 045 had fixed.
 
-The complication: the console/readline host (`interactive.ts` `runInteractiveLoop`) did **not** register a global `onConversationEvent` listener, so in console mode the macro's `onEvent` logging was the *only* thing that showed macro streaming + reply. Removing the callback naively would have fixed the TUI but **regressed console-mode macro streaming**.
+The complication: the console/readline host (`interactive.ts` `runInteractiveLoop`) did **not** register a global `onConversationEvent` listener, so in console mode the macro's `onEvent` logging was the _only_ thing that showed macro streaming + reply. Removing the callback naively would have fixed the TUI but **regressed console-mode macro streaming**.
 
 ## Decision
 
@@ -36,6 +44,7 @@ Re-unify event streaming through engine hooks, and give the console host a globa
 ### 1. `macros/index.ts` — drop the per-call `onEvent` callback
 
 Chat-prompt steps now call `ctx.conversation.sendUserMessage(substituted)` with **no** handler — conversation events flow only through engine hooks (restoring the ADR 045 design). Removed:
+
 - the `onEvent` callback (the whole `switch` over `reasoning`/`toolCall`/`toolResult`/`assistantMessage`/`error`),
 - the `if (reply.length > 0) ctxLogger.info(reply)` reply log (already rendered via the `assistantMessage` event),
 - the now-unused `DroneConversationEvent` import.
@@ -51,6 +60,7 @@ This is needed because the console host has no caller-side reply print once it u
 ### 3. `interactive.ts` `runInteractiveLoop` — console global listener
 
 At loop start, register a global `engine.onConversationEvent?.(makePlainOutputEventHandler({ renderAssistantMessage: true }))` (unsubscribed in the `finally`). In the regular-message path, removed the per-call `makePlainOutputEventHandler()` handler and the `output.write(\`${response}\n\`)` reply print — the global listener now renders the assistant reply and tool events. This:
+
 - **preserves** console-mode macro streaming (the global listener handles events from any source, including macro chat-prompt steps),
 - **prevents the same double-render in console mode** (the regular-message path no longer prints both the per-call handler output AND the reply).
 

@@ -25,6 +25,7 @@ That exclusion is a punt, not a solution. In a mixed conversation the surfaces
 interleave: `swarm.beacon.list` (a command that must run immediately and never
 merge) and free chat text (which **should** batch). Deciding when to flush the
 batch is ambiguous:
+
 - A `swarm.` command arriving mid-batch must not be merged into a merged chat
   turn.
 - But it also should not blindly flush the batch, or every command would force a
@@ -36,7 +37,7 @@ batch is ambiguous:
    different surface? Or is each surface given its own independent buffer, so
    commands and chat text batch separately (and never merge)? The latter seems
    right, but the engine currently keys serialization + dispatch on the
-   *conversation*, not the surface.
+   _conversation_, not the surface.
 2. **Ordering.** If per-surface buffers exist, in what order do the flushes
    happen relative to one another? Arrival order must be preserved across
    surfaces (mirrors the ordered `pendingEntries` queue in the agent, ADR 215).

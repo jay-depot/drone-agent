@@ -1,6 +1,24 @@
 ---
-tags: [decision, drone-swarm-common, drone-coordinator, drone-coordinator-ui, wiki, graph, force-graph]
-related: [modules/drone-swarm-common.md, modules/drone-coordinator.md, modules/drone-coordinator-ui.md, modules/drone-coordinator-ui.md, concepts/memory-pipeline.md, decisions/187-coordinator-ui-wiki-browser-improvements.md, decisions/189-coordinator-wiki-tag-scaleup.md]
+tags:
+  [
+    decision,
+    drone-swarm-common,
+    drone-coordinator,
+    drone-coordinator-ui,
+    wiki,
+    graph,
+    force-graph,
+  ]
+related:
+  [
+    modules/drone-swarm-common.md,
+    modules/drone-coordinator.md,
+    modules/drone-coordinator-ui.md,
+    modules/drone-coordinator-ui.md,
+    concepts/memory-pipeline.md,
+    decisions/187-coordinator-ui-wiki-browser-improvements.md,
+    decisions/189-coordinator-wiki-tag-scaleup.md,
+  ]
 ---
 
 # 194: Connected node graph view for the wiki browser
@@ -11,7 +29,7 @@ related: [modules/drone-swarm-common.md, modules/drone-coordinator.md, modules/d
 
 The wiki browser ([187-coordinator-ui-wiki-browser-improvements](187-coordinator-ui-wiki-browser-improvements.md),
 [189-coordinator-wiki-tag-scaleup](189-coordinator-wiki-tag-scaleup.md)) had list/grid/tag views but no
-way to *see* the wiki's link structure: orphans, broken `[[wikilinks]]`, and
+way to _see_ the wiki's link structure: orphans, broken `[[wikilinks]]`, and
 page neighborhoods were only discoverable through `POST /wiki/lint` output.
 The memory wiki is a densely cross-referenced corpus (memory-pipeline),
 and its structure is itself information.

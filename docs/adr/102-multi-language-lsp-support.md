@@ -1,6 +1,14 @@
 ---
 tags: [decision, lsp, multi-language, auto-install]
-related: [decisions/098-lsp-file-list-mount-conversion.md, decisions/100-list-mount-improvements.md, decisions/069-lsp-ergonomics.md, decisions/103-lsp-hash-fix.md, modules/drone-agent-plugins.md, modules/drone-core.md]
+related:
+  [
+    decisions/098-lsp-file-list-mount-conversion.md,
+    decisions/100-list-mount-improvements.md,
+    decisions/069-lsp-ergonomics.md,
+    decisions/103-lsp-hash-fix.md,
+    modules/drone-agent-plugins.md,
+    modules/drone-core.md,
+  ]
 ---
 
 # Decision 102: Multi-Language LSP Support (5.10.1)
@@ -20,10 +28,10 @@ Added to `drone-core/src/lsp-types.ts` and exported from the index:
 ```typescript
 export type DroneLspInstallSpec = {
   type: 'npm' | 'cargo' | 'pip' | 'go' | 'github-release';
-  package: string;   // package/crate/module/repo name
+  package: string; // package/crate/module/repo name
   version: string;
   tarballUrl: string; // pre-resolved download URL
-  integrity: string;  // sha512-base64 hash
+  integrity: string; // sha512-base64 hash
   entryPoint?: string; // relative path to server binary/script in extracted archive
 };
 ```
@@ -34,12 +42,12 @@ Replaced the old `KnownServerInstallSpec` type (which was npm-only, with `npmPac
 
 Added `resolveTarballUrl(spec: DroneLspInstallSpec): string` to `installer.ts`:
 
-| Type | URL pattern |
-|------|-------------|
-| `npm` / `github-release` | `spec.tarballUrl` (pre-resolved) |
-| `cargo` | `https://crates.io/api/v1/crates/{pkg}/{version}/download` |
-| `pip` | `https://pypi.org/packages/source/{pkg[0]}/{pkg}/{pkg}-{version}.tar.gz` |
-| `go` | `https://proxy.golang.org/{module}/@v/{version}.tar.gz` |
+| Type                     | URL pattern                                                              |
+| ------------------------ | ------------------------------------------------------------------------ |
+| `npm` / `github-release` | `spec.tarballUrl` (pre-resolved)                                         |
+| `cargo`                  | `https://crates.io/api/v1/crates/{pkg}/{version}/download`               |
+| `pip`                    | `https://pypi.org/packages/source/{pkg[0]}/{pkg}/{pkg}-{version}.tar.gz` |
+| `go`                     | `https://proxy.golang.org/{module}/@v/{version}.tar.gz`                  |
 
 For `go`, the Go module proxy supports `.tar.gz` directly — no zip library needed. For `github-release`, the URL is pre-resolved in the spec to include the correct platform/arch.
 The download/verify/extract flow is unchanged — all package managers use the same tar extraction pipeline. For non-npm types, `entryPoint` points to the server binary after extraction (no `node` invocation prefix needed).
@@ -48,22 +56,22 @@ The download/verify/extract flow is unchanged — all package managers use the s
 
 Added to `drone-agent/src/plugins/lsp/known-servers.ts`:
 
-| ID | Language | Package manager | `rootPatterns` | Ambient? |
-|----|----------|-----------------|----------------|---------|
-| `typescript` | TypeScript/JS | npm | `tsconfig.json`, `package.json`, … | No |
-| `pyright` | Python | npm | `pyproject.toml`, `setup.py`, … | No |
-| `rust-analyzer` | Rust | github-release | `Cargo.toml` | No |
-| `gopls` | Go | go | `go.mod`, `go.sum` | No |
-| `lua-language-server` | Lua | github-release | `.luarc.json` | No |
-| `bash-language-server` | Shell | npm | _(none)_ | Yes |
-| `yaml-language-server` | YAML | npm | _(none)_ | Yes |
-| `json-language-server` | JSON | npm | _(none)_ | Yes |
-| `dockerfile-language-server` | Dockerfile | npm | _(none)_ | Yes |
-| `taplo` | TOML | npm | _(none)_ | Yes |
-| `css-language-server` | CSS/SCSS/Less | npm | _(none)_ | Yes |
-| `html-language-server` | HTML | npm | _(none)_ | Yes |
-| `svelte-language-server` | Svelte | npm | `svelte.config.js` | No |
-| `intelephense` | PHP | npm | `composer.json` | No |
+| ID                           | Language      | Package manager | `rootPatterns`                     | Ambient? |
+| ---------------------------- | ------------- | --------------- | ---------------------------------- | -------- |
+| `typescript`                 | TypeScript/JS | npm             | `tsconfig.json`, `package.json`, … | No       |
+| `pyright`                    | Python        | npm             | `pyproject.toml`, `setup.py`, …    | No       |
+| `rust-analyzer`              | Rust          | github-release  | `Cargo.toml`                       | No       |
+| `gopls`                      | Go            | go              | `go.mod`, `go.sum`                 | No       |
+| `lua-language-server`        | Lua           | github-release  | `.luarc.json`                      | No       |
+| `bash-language-server`       | Shell         | npm             | _(none)_                           | Yes      |
+| `yaml-language-server`       | YAML          | npm             | _(none)_                           | Yes      |
+| `json-language-server`       | JSON          | npm             | _(none)_                           | Yes      |
+| `dockerfile-language-server` | Dockerfile    | npm             | _(none)_                           | Yes      |
+| `taplo`                      | TOML          | npm             | _(none)_                           | Yes      |
+| `css-language-server`        | CSS/SCSS/Less | npm             | _(none)_                           | Yes      |
+| `html-language-server`       | HTML          | npm             | _(none)_                           | Yes      |
+| `svelte-language-server`     | Svelte        | npm             | `svelte.config.js`                 | No       |
+| `intelephense`               | PHP           | npm             | `composer.json`                    | No       |
 
 **Integrity hashes**: TypeScript has a real pinned hash. All other servers had placeholder zeros — these were replaced with real sha512 values in [103-lsp-hash-fix](103-lsp-hash-fix.md).
 
@@ -72,6 +80,7 @@ Added to `drone-agent/src/plugins/lsp/known-servers.ts`:
 Added `hasMatchingFiles(rootPath, fileExtensions): Promise<boolean>` to `server/helpers.ts`. It does an early-exit recursive directory scan (excludes `node_modules`, `.git`, `dist`, etc.) to check if any files with the given extensions exist.
 
 Updated `detectKnownLanguageSpecs()` in `server.ts`:
+
 - Specs with `rootPatterns.length > 0`: check for well-known files (existing behavior)
 - Specs with `rootPatterns.length === 0` (ambient): scan for matching file extensions
 
@@ -80,6 +89,7 @@ This means `yaml-language-server` is now auto-detected for any project that has 
 ### 5. On-Demand Server Startup
 
 Added to `ServerManager`:
+
 - `startServerForFile(filePath: string): Promise<boolean>` — finds a known spec matching the file extension, starts the server if not already running, returns `true` on success
 - `getAvailableServers(): Array<{id, language, fileExtensions, status: 'available'}>` — returns specs whose server isn't currently running
 

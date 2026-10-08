@@ -1,6 +1,15 @@
 ---
 tags: [decision, drone-agent, drone-core, reference-expansion, vision, images]
-related: [decisions/218-reference-expansion-and-tab-completion.md, decisions/221-reference-expansion-host-wiring.md, decisions/167-image-content-refactor-v2.md, concepts/reference-expansion.md, concepts/vision-support.md, modules/drone-core.md, modules/drone-agent.md]
+related:
+  [
+    decisions/218-reference-expansion-and-tab-completion.md,
+    decisions/221-reference-expansion-host-wiring.md,
+    decisions/167-image-content-refactor-v2.md,
+    concepts/reference-expansion.md,
+    concepts/vision-support.md,
+    modules/drone-core.md,
+    modules/drone-agent.md,
+  ]
 ---
 
 # 222 — Image-file inlining in `@`-reference expansion
@@ -9,24 +18,24 @@ related: [decisions/218-reference-expansion-and-tab-completion.md, decisions/221
 
 ## Context
 
-`DroneReferenceResolution.images` / `DroneReferenceExpansion.images` existed and were documented as *"v1: always empty; reserved for image refs"*, and `expandAndAppend` already forwarded `result.images` into `sessionManager.appendUserMessage(text, images?)`. The describe/present/budget/compaction pipeline is role-agnostic and needed **no change** (lazy `describeUndescribedImages`, `prepareRequestMessages`, compaction `flushImageDescriptions`, token `max(256, desc)`). The only blocker was the resolver's NUL-byte binary sniff classifying every PNG/JPEG/GIF/WebP as binary.
+`DroneReferenceResolution.images` / `DroneReferenceExpansion.images` existed and were documented as _"v1: always empty; reserved for image refs"_, and `expandAndAppend` already forwarded `result.images` into `sessionManager.appendUserMessage(text, images?)`. The describe/present/budget/compaction pipeline is role-agnostic and needed **no change** (lazy `describeUndescribedImages`, `prepareRequestMessages`, compaction `flushImageDescriptions`, token `max(256, desc)`). The only blocker was the resolver's NUL-byte binary sniff classifying every PNG/JPEG/GIF/WebP as binary.
 
 ## Decision (12 locked choices)
 
-| # | Choice |
-| --- | --- |
-| Q1 | **Extension-based** recognition inside the existing `file` kind — no new `@image:` namespace, no magic-byte sniffing; reuse `read_image`'s extension set |
-| Q2 | Image refs produce **no text block** (`block: ''`) — the image rides only in `images[]` |
-| Q3 | Reuse `session.maxImageSizeBytes` (per image) and **generalize `session.maxImagesPerMessage` to all messages** via one shared cap helper |
-| Q4 | Adopt the **established tool-image standard verbatim** (size cap, count cap kept-first-N, omission marker, `max(256,desc)` accounting); the 1 MiB reference **text** budget is untouched (images never charge it) |
-| Q5 | Success receipt `[expanded @pic.png (image/png, 12.3 KB)]` — same `[expanded @…]` vocabulary; MIME replaces the line count |
-| Q6 | **Direct file refs AND glob refs** attach images; directory listings stay name-only |
-| Q7 | Directory-listing inlining ("inlining a directory's images") is **DEFERRED** |
-| Q8 | The extension→MIME helper lives in **`drone-core`** |
-| Q9 | Oversize image → skip + notice `[image too large: @pic.png (24.5 MB > 20 MB)]`, checked **before reading** the file |
-| Q10 | Read failure → **`[could not read: @…]`**, uniform for text and image; `ENOENT` stays `[unresolved reference: @…]`; fs-level retry DEFERRED |
-| Q11 | Over-cap marker `[N additional images omitted. Retrieve them individually if needed.]`; globs do **not** enumerate omitted names |
-| Q12 | The capability learns the image size limit via a **constructor option** on `createReferenceCapability`, threaded from `index.tsx` |
+| #   | Choice                                                                                                                                                                                                            |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q1  | **Extension-based** recognition inside the existing `file` kind — no new `@image:` namespace, no magic-byte sniffing; reuse `read_image`'s extension set                                                          |
+| Q2  | Image refs produce **no text block** (`block: ''`) — the image rides only in `images[]`                                                                                                                           |
+| Q3  | Reuse `session.maxImageSizeBytes` (per image) and **generalize `session.maxImagesPerMessage` to all messages** via one shared cap helper                                                                          |
+| Q4  | Adopt the **established tool-image standard verbatim** (size cap, count cap kept-first-N, omission marker, `max(256,desc)` accounting); the 1 MiB reference **text** budget is untouched (images never charge it) |
+| Q5  | Success receipt `[expanded @pic.png (image/png, 12.3 KB)]` — same `[expanded @…]` vocabulary; MIME replaces the line count                                                                                        |
+| Q6  | **Direct file refs AND glob refs** attach images; directory listings stay name-only                                                                                                                               |
+| Q7  | Directory-listing inlining ("inlining a directory's images") is **DEFERRED**                                                                                                                                      |
+| Q8  | The extension→MIME helper lives in **`drone-core`**                                                                                                                                                               |
+| Q9  | Oversize image → skip + notice `[image too large: @pic.png (24.5 MB > 20 MB)]`, checked **before reading** the file                                                                                               |
+| Q10 | Read failure → **`[could not read: @…]`**, uniform for text and image; `ENOENT` stays `[unresolved reference: @…]`; fs-level retry DEFERRED                                                                       |
+| Q11 | Over-cap marker `[N additional images omitted. Retrieve them individually if needed.]`; globs do **not** enumerate omitted names                                                                                  |
+| Q12 | The capability learns the image size limit via a **constructor option** on `createReferenceCapability`, threaded from `index.tsx`                                                                                 |
 
 ## Implementation
 

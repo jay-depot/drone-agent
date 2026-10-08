@@ -1,6 +1,13 @@
 ---
 tags: [decision, persona, tool-premount, list-mount, feature]
-related: [entities/Persona.md, entities/DronePlugin.md, architecture/plugin-system.md, concepts/default-hidden-tools.md, decisions/105-runtime-level-list-mount.md]
+related:
+  [
+    entities/Persona.md,
+    entities/DronePlugin.md,
+    architecture/plugin-system.md,
+    concepts/default-hidden-tools.md,
+    decisions/105-runtime-level-list-mount.md,
+  ]
 ---
 
 # ADR 109: Persona-Level Tool Pre-mounting
@@ -52,7 +59,9 @@ const premountedNames = new Set(expandPremountedCanonical());
 // no activePersona / no allowedTools branch:
 return allTools.filter(t => !t.defaultHidden || premountedNames.has(t.name));
 // allowedTools branch:
-return allTools.filter(t => filteredSet.has(t.name) || premountedNames.has(t.name));
+return allTools.filter(
+  t => filteredSet.has(t.name) || premountedNames.has(t.name)
+);
 ```
 
 ### Wizard

@@ -1,6 +1,11 @@
 ---
 tags: [coordinator-ui, websocket, session-detail, adr]
-related: [drone-coordinator-ui.md, decisions/198-coordinator-ui-launch-interact.md, followup-coordinator-ws-event-ids.md]
+related:
+  [
+    drone-coordinator-ui.md,
+    decisions/198-coordinator-ui-launch-interact.md,
+    followup-coordinator-ws-event-ids.md,
+  ]
 ---
 
 # Session-detail live-chat resilience: WS event crash fix + late-registration recovery

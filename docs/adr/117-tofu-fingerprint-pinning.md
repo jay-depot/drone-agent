@@ -1,6 +1,16 @@
 ---
 tags: [decision, security, tls, tofu, coordinator]
-related: [concepts/beacon-verification.md, modules/drone-beacon.md, modules/drone-coordinator.md, modules/drone-swarm-common.md, decisions/091-beacon-mitm-verification.md, decisions/118-tofu-interactive-confirmation.md, decisions/119-bidirectional-verification-code.md, decisions/122-tofu-fingerprint-pin-socket-secureconnect.md]
+related:
+  [
+    concepts/beacon-verification.md,
+    modules/drone-beacon.md,
+    modules/drone-coordinator.md,
+    modules/drone-swarm-common.md,
+    decisions/091-beacon-mitm-verification.md,
+    decisions/118-tofu-interactive-confirmation.md,
+    decisions/119-bidirectional-verification-code.md,
+    decisions/122-tofu-fingerprint-pin-socket-secureconnect.md,
+  ]
 ---
 
 # 117. TOFU fingerprint pinning for coordinator TLS

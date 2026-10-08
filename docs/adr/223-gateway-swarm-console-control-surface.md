@@ -1,11 +1,26 @@
 ---
-tags: [decision, drone-gateway, swarm-console, control-surface, surface-registry, roadmap-4.4, adr]
-related: [concepts/swarm-console-command-spec.md, modules/drone-gateway.md, decisions/058-gateway-config-model.md, decisions/124-executable-resolution-refactor.md]
+tags:
+  [
+    decision,
+    drone-gateway,
+    swarm-console,
+    control-surface,
+    surface-registry,
+    roadmap-4.4,
+    adr,
+  ]
+related:
+  [
+    concepts/swarm-console-command-spec.md,
+    modules/drone-gateway.md,
+    decisions/058-gateway-config-model.md,
+    decisions/124-executable-resolution-refactor.md,
+  ]
 ---
 
 # 223 — Gateway `swarm-console` control surface + engine surface registry (roadmap 4.4)
 
-**Status**: Implemented (2026-09-26) · **Branch**: `feat/gateway-swarm-console` · **Commits**: `5fdc520b` (+ memory/breadcrumbs `3444c81e`, `27ac4031`, `26d6ba35`, `0406f508`) · **Plan**: project-memory `plan-swarm-console-control-surface` — *deleted from project memory after ingest* · **Gateway ADR**: merged into this page (2026-10-06) — the former in-tree `drone-gateway/docs/adr/003-surface-registry-and-swarm-console.md` copy was deleted
+**Status**: Implemented (2026-09-26) · **Branch**: `feat/gateway-swarm-console` · **Commits**: `5fdc520b` (+ memory/breadcrumbs `3444c81e`, `27ac4031`, `26d6ba35`, `0406f508`) · **Plan**: project-memory `plan-swarm-console-control-surface` — _deleted from project memory after ingest_ · **Gateway ADR**: merged into this page (2026-10-06) — the former in-tree `drone-gateway/docs/adr/003-surface-registry-and-swarm-console.md` copy was deleted
 
 **Summary**: Roadmap 4.4. A new gateway-side `swarm-console` control surface lets a human drive the swarm from a chat platform with dot-notation commands (`swarm.<namespace>.<command> [args] [--flags]`), each mapped **directly onto an existing coordinator REST endpoint** — no LLM, no spawned agent, deterministic output. The work also extracts an **engine-level control-surface registry** (replacing the hardcoded `switch`), migrates all three surfaces onto it, and adds a **conversation-level `allowedSenders` authorization gate** enforced by the engine.
 
@@ -29,27 +44,27 @@ The console exists to **exercise the gateway end-to-end** (spawn / terminate / i
 
 ## Command → endpoint mapping (shipped v1)
 
-| Command | Method + path |
-|---|---|
-| `swarm.help` | — (lists the registry) |
-| `swarm.broadcast <message> [--channel <name>]` | `POST /api/messages/broadcast` (`{fromAgentId:"gateway", channel, body}`) |
-| `swarm.persona.list` | `GET /api/personas` |
-| `swarm.persona.create <id> <description> [systemPrompt]` | `POST /api/personas` (`{id, name, description, systemPrompt}`) |
-| `swarm.persona.update <id> [systemPrompt]` | `PUT /api/personas/:id` |
-| `swarm.persona.delete <id>` | `DELETE /api/personas/:id` |
-| `swarm.skill.list` | `GET /api/skills` |
-| `swarm.skill.create <id> <description> [body]` | `POST /api/skills` (`{id, name, description, trigger, body}`) |
-| `swarm.skill.update <id> [body]` | `PUT /api/skills/:id` |
-| `swarm.skill.delete <id>` | `DELETE /api/skills/:id` |
-| `swarm.session.list [--status --limit --offset]` | `GET /api/sessions` (`{sessions, count}`) |
-| `swarm.session.get <sessionId>` | `GET /api/sessions/:id` (`{session}`) |
-| `swarm.beacon.list` | `GET /api/beacons` (bare array) |
-| `swarm.beacon.status <beaconId>` | `GET /api/beacons` + `GET /api/spawn/:beaconId` |
-| `swarm.beacon.spawn <beaconId> [--persona <id>] [--task <text>]` | `POST /api/spawn` (`{targetBeaconId, personaId?, task?}`) |
-| `swarm.agent.status <agentId>` | `GET /api/sessions/:agentId` (`agentId` **is** the session id) |
-| `swarm.agent.terminate <agentId>` | `GET /api/beacons` → `GET /api/spawn/:beaconId` → `DELETE /api/spawn/:beaconId/:spawnId` (client-side resolution, decision 9) |
-| `swarm.agent.inject <agentId> <text> [--steer]` | `POST /api/sessions/:agentId/message` (`{content, steer}`) |
-| `swarm.agent.persona <agentId> <personaId>` (or `--clear`) | `PATCH /api/sessions/:agentId/persona` (`{personaId \| null}`) |
+| Command                                                          | Method + path                                                                                                                 |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `swarm.help`                                                     | — (lists the registry)                                                                                                        |
+| `swarm.broadcast <message> [--channel <name>]`                   | `POST /api/messages/broadcast` (`{fromAgentId:"gateway", channel, body}`)                                                     |
+| `swarm.persona.list`                                             | `GET /api/personas`                                                                                                           |
+| `swarm.persona.create <id> <description> [systemPrompt]`         | `POST /api/personas` (`{id, name, description, systemPrompt}`)                                                                |
+| `swarm.persona.update <id> [systemPrompt]`                       | `PUT /api/personas/:id`                                                                                                       |
+| `swarm.persona.delete <id>`                                      | `DELETE /api/personas/:id`                                                                                                    |
+| `swarm.skill.list`                                               | `GET /api/skills`                                                                                                             |
+| `swarm.skill.create <id> <description> [body]`                   | `POST /api/skills` (`{id, name, description, trigger, body}`)                                                                 |
+| `swarm.skill.update <id> [body]`                                 | `PUT /api/skills/:id`                                                                                                         |
+| `swarm.skill.delete <id>`                                        | `DELETE /api/skills/:id`                                                                                                      |
+| `swarm.session.list [--status --limit --offset]`                 | `GET /api/sessions` (`{sessions, count}`)                                                                                     |
+| `swarm.session.get <sessionId>`                                  | `GET /api/sessions/:id` (`{session}`)                                                                                         |
+| `swarm.beacon.list`                                              | `GET /api/beacons` (bare array)                                                                                               |
+| `swarm.beacon.status <beaconId>`                                 | `GET /api/beacons` + `GET /api/spawn/:beaconId`                                                                               |
+| `swarm.beacon.spawn <beaconId> [--persona <id>] [--task <text>]` | `POST /api/spawn` (`{targetBeaconId, personaId?, task?}`)                                                                     |
+| `swarm.agent.status <agentId>`                                   | `GET /api/sessions/:agentId` (`agentId` **is** the session id)                                                                |
+| `swarm.agent.terminate <agentId>`                                | `GET /api/beacons` → `GET /api/spawn/:beaconId` → `DELETE /api/spawn/:beaconId/:spawnId` (client-side resolution, decision 9) |
+| `swarm.agent.inject <agentId> <text> [--steer]`                  | `POST /api/sessions/:agentId/message` (`{content, steer}`)                                                                    |
+| `swarm.agent.persona <agentId> <personaId>` (or `--clear`)       | `PATCH /api/sessions/:agentId/persona` (`{personaId \| null}`)                                                                |
 
 **Key identity fact:** a spawned agent's `agentId` equals its swarm session id (`agent-<uuid>`), **not** its `spawnId` — which is why `terminate` needs the client-side spawn scan.
 

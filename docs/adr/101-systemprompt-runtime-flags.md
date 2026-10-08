@@ -1,6 +1,12 @@
 ---
 tags: [decision, systemprompt, runtime-flags, slash-command]
-related: [decisions/100-list-mount-improvements.md, modules/drone-agent.md, modules/drone-core.md, architecture/plugin-system.md]
+related:
+  [
+    decisions/100-list-mount-improvements.md,
+    modules/drone-agent.md,
+    modules/drone-core.md,
+    architecture/plugin-system.md,
+  ]
 ---
 
 # Decision 101: `/systemprompt` Shows Runtime Flags

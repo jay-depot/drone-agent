@@ -1,6 +1,10 @@
 ---
 tags: [decision, tui, input, paste]
-related: [modules/drone-agent-tui.md, decisions/077-tui-syntax-highlighting-ansi-escape-codes.md]
+related:
+  [
+    modules/drone-agent-tui.md,
+    decisions/077-tui-syntax-highlighting-ansi-escape-codes.md,
+  ]
 ---
 
 # Decision 099: TUI Paste Handling — Bracketed Paste Detection + Debounce Fallback
@@ -36,6 +40,7 @@ Clipboard content and bracketed paste data can contain `\r\n` (Windows clipboard
 The `normalizePastedText()` helper converts `\r\n` → `\n` first, then any remaining bare `\r` → `\n`. The order matters: replacing `\r\n` before `\r` avoids double-converting `\r\n` into `\n\n`.
 
 Normalization is applied at all four paste delivery points:
+
 1. Bracketed paste, split across chunks
 2. Bracketed paste, complete in one chunk
 3. Debounce fallback flush
@@ -48,6 +53,7 @@ Clipboard content and bracketed paste data can contain `\r\n` (Windows clipboard
 The `normalizePastedText()` helper converts `\r\n` → `\n` first, then any remaining bare `\r` → `\n`. The order matters: replacing `\r\n` before `\r` avoids double-converting `\r\n` into `\n\n`.
 
 Normalization is applied at all four paste delivery points:
+
 1. Bracketed paste, split across chunks
 2. Bracketed paste, complete in one chunk
 3. Debounce fallback flush
@@ -56,15 +62,19 @@ Normalization is applied at all four paste delivery points:
 ## Key Design Decisions
 
 ### Why not just debounce?
+
 A pure debounce approach has a race condition: if the user types slowly (e.g., thinking mid-sentence), the debounce could flush mid-paste, causing the same visual mangling. Bracketed paste detection is the correct solution — it captures the entire paste atomically.
 
 ### Why tap into `process.stdin` directly?
+
 Ink's `useInput` doesn't expose raw data or bracketed paste sequences. The hook listens to `process.stdin` `data` events at a lower level to detect the escape sequences.
 
 ### Why keep both components separate?
+
 `FreeformInput` is intentionally minimal (no cursor navigation, no multiline) and replacing it with `MultilineTextInput` would add complexity to a component meant for quick inline answers. A future multiline elicitation prompt should be a separate decision.
 
 ### Debounce fallback behavior
+
 The first character is always delivered immediately because `lastCharTimeRef` starts at 0 (`Date.now() - 0 > 30ms`). This means rapid pastes without bracketed paste support will have the first character appear instantly, then the rest appears atomically after a brief 50ms pause. This is acceptable — the user sees immediate feedback, then the full paste appears.
 
 ## Implementation
@@ -81,19 +91,21 @@ The first character is always delivered immediately because `lastCharTimeRef` st
 - Cleans up stdin listener on unmount
 
 **Modified files:**
+
 - `drone-agent/src/tui/components/MultilineTextInput.tsx` — Routes printable characters through `onCharInput`; paste callback inserts at cursor offset
 - `drone-agent/src/tui/components/ElicitationPrompt.tsx` (`FreeformInput`) — Same pattern; paste callback appends to value
 
 ## Files Changed
 
-| File | Change |
-|------|--------|
-| `drone-agent/src/tui/hooks/useBracketedPaste.ts` | **New** — shared paste detection hook |
+| File                                                    | Change                                            |
+| ------------------------------------------------------- | ------------------------------------------------- |
+| `drone-agent/src/tui/hooks/useBracketedPaste.ts`        | **New** — shared paste detection hook             |
 | `drone-agent/src/tui/components/MultilineTextInput.tsx` | Integrate hook, route chars through `onCharInput` |
-| `drone-agent/src/tui/components/ElicitationPrompt.tsx` | Integrate hook into `FreeformInput` |
-| `drone-agent/test/useBracketedPaste.test.tsx` | **New** — 9 tests for the hook |
-| `drone-agent/test/multiline-text-input.test.tsx` | 4 new paste-related tests |
-| `drone-agent/test/useBracketedPaste.test.tsx` | 4 new `\r`/`\r\n` normalization tests (13 total) |
+| `drone-agent/src/tui/components/ElicitationPrompt.tsx`  | Integrate hook into `FreeformInput`               |
+| `drone-agent/test/useBracketedPaste.test.tsx`           | **New** — 9 tests for the hook                    |
+| `drone-agent/test/multiline-text-input.test.tsx`        | 4 new paste-related tests                         |
+| `drone-agent/test/useBracketedPaste.test.tsx`           | 4 new `\r`/`\r\n` normalization tests (13 total)  |
+
 ## Test Coverage
 
 - **Bracketed paste detection**: Single chunk, multi-chunk, multiple sequences, non-paste data ignored, stdin listener registration

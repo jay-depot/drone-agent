@@ -1,6 +1,10 @@
 ---
 tags: [decision, coordinator-ui, wiki, markdown, react]
-related: [modules/drone-coordinator-ui.md, decisions/186-coordinator-ui-pagination-and-search-fixes.md]
+related:
+  [
+    modules/drone-coordinator-ui.md,
+    decisions/186-coordinator-ui-pagination-and-search-fixes.md,
+  ]
 ---
 
 # 187: Coordinator UI wiki browser improvements

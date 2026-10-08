@@ -1,6 +1,10 @@
 ---
 tags: [decision, coordinator-ui, wiki, markdown, frontmatter]
-related: [modules/drone-coordinator-ui.md, decisions/187-coordinator-ui-wiki-browser-improvements.md]
+related:
+  [
+    modules/drone-coordinator-ui.md,
+    decisions/187-coordinator-ui-wiki-browser-improvements.md,
+  ]
 ---
 
 # 188: Coordinator UI wiki frontmatter collapse
@@ -13,7 +17,7 @@ The `coordinator-wiki-librarian` persona regularly writes wiki pages whose
 markdown **body** begins with a redundant YAML frontmatter block (`id`, `title`,
 `scope`, `tags`, `sources`) that duplicates the structured fields the
 coordinator already stores. The librarian's habit is harmless — the storage
-layer (`drone-swarm-common/src/wiki-storage.ts`) strips only the *outer*
+layer (`drone-swarm-common/src/wiki-storage.ts`) strips only the _outer_
 frontmatter that `writePage()` builds, so `page.content` still begins with the
 librarian's own `---\n...\n---\n` block. The wiki browser's read view
 (`WikiMarkdown`, added in [187-coordinator-ui-wiki-browser-improvements](187-coordinator-ui-wiki-browser-improvements.md))

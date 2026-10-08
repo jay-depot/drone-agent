@@ -1,6 +1,11 @@
 ---
 tags: [decision, cli, debugging, slash-command]
-related: [decisions/082-debug-flag-llm-logging.md, modules/drone-agent.md, modules/drone-core.md]
+related:
+  [
+    decisions/082-debug-flag-llm-logging.md,
+    modules/drone-agent.md,
+    modules/drone-core.md,
+  ]
 ---
 
 # ADR 097: `/debug` Slash Command for Runtime Debug Subsystem Toggling
@@ -31,14 +36,14 @@ Add a `/debug` built-in slash command that lets users enable and disable debug s
 
 **Files changed (5 source + 6 test):**
 
-| File | Change |
-|------|--------|
-| `drone-core/src/plugin-system.ts` | Added `getDebugSubsystems`, `enableDebugSubsystem`, `disableDebugSubsystem` to `DroneSlashCommandContext.conversation` type |
-| `drone-agent/src/runtime/conversation-service.ts` | Exposed the existing `debugSet` on `ConversationService` with the same three methods |
-| `drone-agent/src/runtime/builtin-commands.ts` | Added `/debug` command handler with enable/disable logic and no-args state display |
-| `drone-agent/src/interactive.ts` | Wired debug methods through the conversation adapter for interactive mode |
-| `drone-agent/src/tui/types.ts` | Added debug methods to `DroneTuiOptions.conversation` type |
-| 6 test files | Added mock implementations of the new methods |
+| File                                              | Change                                                                                                                      |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `drone-core/src/plugin-system.ts`                 | Added `getDebugSubsystems`, `enableDebugSubsystem`, `disableDebugSubsystem` to `DroneSlashCommandContext.conversation` type |
+| `drone-agent/src/runtime/conversation-service.ts` | Exposed the existing `debugSet` on `ConversationService` with the same three methods                                        |
+| `drone-agent/src/runtime/builtin-commands.ts`     | Added `/debug` command handler with enable/disable logic and no-args state display                                          |
+| `drone-agent/src/interactive.ts`                  | Wired debug methods through the conversation adapter for interactive mode                                                   |
+| `drone-agent/src/tui/types.ts`                    | Added debug methods to `DroneTuiOptions.conversation` type                                                                  |
+| 6 test files                                      | Added mock implementations of the new methods                                                                               |
 
 ### Data Flow
 
@@ -58,12 +63,14 @@ All 1650 existing tests pass. No new tests were added — the feature is a thin 
 ## Consequences
 
 ### Positive
+
 - Users can toggle debug logging mid-session without restarting
 - Works in both TUI and interactive modes
 - Complements the existing `--debug` CLI flag (startup + runtime)
 - Extensible to future debug subsystems automatically
 
 ### Negative
+
 - Slightly more surface area on the `ConversationService` type
 - The `DroneSlashCommandContext.conversation` type grows by 3 methods
 

@@ -1,6 +1,12 @@
 ---
 tags: [decision, adr, llm, providers, context-window]
-related: [156-broker-context-windows-migration-persistence.md, 155-provider-model-config.md, ../concepts/provider-model-selection.md, ../concepts/session-management.md]
+related:
+  [
+    156-broker-context-windows-migration-persistence.md,
+    155-provider-model-config.md,
+    ../concepts/provider-model-selection.md,
+    ../concepts/session-management.md,
+  ]
 ---
 
 # 157 — Runtime-truth context windows + discovery metadata enrichment
@@ -10,7 +16,7 @@ related: [156-broker-context-windows-migration-persistence.md, 155-provider-mode
 
 ## Context
 
-Decision 156 made the *broker chain* correct, but the data feeding it still
+Decision 156 made the _broker chain_ correct, but the data feeding it still
 had two holes, and one of its own features didn't work in practice.
 
 1. **OpenAI-family discovery threw metadata away.** `discoverModels()` mapped

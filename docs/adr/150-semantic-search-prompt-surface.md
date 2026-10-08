@@ -1,6 +1,12 @@
 ---
 tags: [decision, search, semantic-search, prompt-engineering]
-related: [concepts/semantic-search.md, modules/drone-agent-plugins.md, decisions/127-semantic-search-beacon.md, decisions/143-lsp-tool-reliability.md]
+related:
+  [
+    concepts/semantic-search.md,
+    modules/drone-agent-plugins.md,
+    decisions/127-semantic-search-beacon.md,
+    decisions/143-lsp-tool-reliability.md,
+  ]
 ---
 
 # 150: Semantic search discoverability via prompt surface (not runtime nudges)
@@ -11,7 +17,7 @@ related: [concepts/semantic-search.md, modules/drone-agent-plugins.md, decisions
 
 The beacon-backed semantic search (`search__text` with `mode: "semantic"`) was fully functional but effectively unused by agents. The root cause was the **prompt surface**, not capability:
 
-- The tool description **led with regex** and mentioned semantic mode only as a trailing afterthought: *"Regex/fixed-string search via ripgrep (falls back to grep). Returns file, line, content. Use mode="semantic" for semantic (vector) search when a beacon connection is available."* An agent skimming its tool list gets no signal about *when* to prefer semantic mode or what it returns.
+- The tool description **led with regex** and mentioned semantic mode only as a trailing afterthought: _"Regex/fixed-string search via ripgrep (falls back to grep). Returns file, line, content. Use mode="semantic" for semantic (vector) search when a beacon connection is available."_ An agent skimming its tool list gets no signal about _when_ to prefer semantic mode or what it returns.
 - The only prompt fragment (`search-indexed-directories`, registered only when `search.enabled` + swarm connected + beacon PUT succeeds) was two sentences listing indexed directories — no decision guidance at all.
 
 The counter-example that proved the fix: the `# LSP Usage` header fragment (`drone-agent/src/plugins/lsp/plugin.ts`) demonstrably shapes agent behavior because it gives concrete **when/why/how** rules rather than just naming a capability.

@@ -1,6 +1,12 @@
 ---
 tags: [decision, lsp, ergonomics, reliability]
-related: [concepts/lsp-symbolic-resolution.md, decisions/069-lsp-ergonomics.md, decisions/136-lsp-symbolic-resolution.md, modules/drone-agent-plugins.md]
+related:
+  [
+    concepts/lsp-symbolic-resolution.md,
+    decisions/069-lsp-ergonomics.md,
+    decisions/136-lsp-symbolic-resolution.md,
+    modules/drone-agent-plugins.md,
+  ]
 ---
 
 # 143: LSP Tool Reliability — Call-Hierarchy Cross-Check & Symbols Exact-First + Dedup
@@ -33,6 +39,7 @@ Extracted a shared `filterSymbolsByQuery(symbols, query)` helper (in `normalize/
 ### 3. `lsp-usage` prompt fragment (plugin.ts)
 
 Registered a header-phase fragment (key `lsp-usage`) alongside `lsp-status`, teaching:
+
 - Prefer `symbol` over `text` (text is a raw substring search, ambiguous for reused symbols); use `surroundingText` to disambiguate.
 - `call_hierarchy` can return empty results even when callers/callees exist; check `warning`/`references` or verify with `find_references`.
 - Prefer `symbols` with `scope: "document"` when the target file is known; workspace search is exact-first + deduped — set `limit` and expect to filter.

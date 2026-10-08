@@ -1,6 +1,16 @@
 ---
 tags: [decision, swarm, coordinator, proxy, beacon, spawn]
-related: [architecture/swarm-architecture.md, modules/drone-beacon.md, modules/drone-agent-plugins.md, modules/drone-core.md, entities/DroneAgentConfig.md, decisions/043-inter-beacon-spawn-routing.md, decisions/146-swarm-session-import.md, decisions/024-swarm-event-push-404-fix.md]
+related:
+  [
+    architecture/swarm-architecture.md,
+    modules/drone-beacon.md,
+    modules/drone-agent-plugins.md,
+    modules/drone-core.md,
+    entities/DroneAgentConfig.md,
+    decisions/043-inter-beacon-spawn-routing.md,
+    decisions/146-swarm-session-import.md,
+    decisions/024-swarm-event-push-404-fix.md,
+  ]
 ---
 
 # 147: Proxy coordinator tools through the beacon + drop `coordinatorUrl`
@@ -33,13 +43,13 @@ The `coordinatorUrl` config itself was a mistake: it was added on the false assu
 
 ## The 6 tools → CoordinatorClient methods → coordinator endpoints
 
-| Agent tool | CoordinatorClient method | Coordinator endpoint |
-|---|---|---|
-| swarm_list_beacons | listBeacons() | GET /api/beacons |
-| swarm_list_agents | listAgentLocations(beaconId?) | GET /api/agents/location |
-| swarm_spawn | spawnSpawn(body) | POST /api/spawn |
-| swarm_get_spawn | getSpawn(beaconId, spawnId) | GET /api/spawn/:beaconId/:spawnId |
-| swarm_list_spawns | listSpawns(beaconId, status?) | GET /api/spawn/:beaconId |
+| Agent tool            | CoordinatorClient method          | Coordinator endpoint                 |
+| --------------------- | --------------------------------- | ------------------------------------ |
+| swarm_list_beacons    | listBeacons()                     | GET /api/beacons                     |
+| swarm_list_agents     | listAgentLocations(beaconId?)     | GET /api/agents/location             |
+| swarm_spawn           | spawnSpawn(body)                  | POST /api/spawn                      |
+| swarm_get_spawn       | getSpawn(beaconId, spawnId)       | GET /api/spawn/:beaconId/:spawnId    |
+| swarm_list_spawns     | listSpawns(beaconId, status?)     | GET /api/spawn/:beaconId             |
 | swarm_terminate_spawn | terminateSpawn(beaconId, spawnId) | DELETE /api/spawn/:beaconId/:spawnId |
 
 ## Key Points

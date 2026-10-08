@@ -23,12 +23,18 @@ Change `getCanonicalToolName` in `drone-core/src/utils.ts` to use `__` (double u
 
 ```typescript
 // Before:
-export function getCanonicalToolName(pluginId: string, toolName: string): string {
+export function getCanonicalToolName(
+  pluginId: string,
+  toolName: string
+): string {
   return `${pluginId}.${toolName}`;
 }
 
 // After:
-export function getCanonicalToolName(pluginId: string, toolName: string): string {
+export function getCanonicalToolName(
+  pluginId: string,
+  toolName: string
+): string {
   return `${pluginId}__${toolName}`;
 }
 ```
@@ -46,10 +52,12 @@ The change touched 37 files across the monorepo:
 ## Consequences
 
 **Positive**:
+
 - Kimi 2.7 Code should now correctly recognize and call tools without hallucinating nonexistent ones
 - The `__` separator uses only characters in `[a-zA-Z0-9_-]`, which is compatible with all major LLM providers' tool-calling formats
 
 **Negative**:
+
 - Breaking change for any user with custom personas using `allowedTools` patterns like `exec.*` — these must be updated to `exec__*`
 - Breaking change for any user scripts or documentation referencing tool names
 - The CLI `--workflow` flag now expects `plugin__workflow` format instead of `plugin.workflow`

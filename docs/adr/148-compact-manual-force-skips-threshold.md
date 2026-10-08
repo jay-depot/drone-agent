@@ -1,6 +1,13 @@
 ---
 tags: [decision, compaction, slash-command, bugfix]
-related: [concepts/session-management.md, modules/drone-agent-plugins.md, decisions/134-compaction-correctness-fix.md, decisions/135-compaction-slash-command.md, decisions/144-compaction-fragment-integration.md]
+related:
+  [
+    concepts/session-management.md,
+    modules/drone-agent-plugins.md,
+    decisions/134-compaction-correctness-fix.md,
+    decisions/135-compaction-slash-command.md,
+    decisions/144-compaction-fragment-integration.md,
+  ]
 ---
 
 # 148: `/compact` manual-force skips the soft-threshold gate
@@ -17,7 +24,7 @@ The `/compact` slash command (and `/compact --all`) printed success messages ("C
 
 ```ts
 if (metrics.usagePercent <= softThreshold) {
-  break;  // ← early exit before any compaction
+  break; // ← early exit before any compaction
 }
 ```
 

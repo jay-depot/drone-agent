@@ -1,6 +1,11 @@
 ---
 tags: [decision, tool-consolidation]
-related: [modules/drone-agent-plugins.md, decisions/068-tool-reduction-followup.md, decisions/030-default-hidden-tool-gating.md]
+related:
+  [
+    modules/drone-agent-plugins.md,
+    decisions/068-tool-reduction-followup.md,
+    decisions/030-default-hidden-tool-gating.md,
+  ]
 ---
 
 # 071: Tool Consolidation Batch 2
@@ -17,18 +22,18 @@ Consolidate 28 tools into 14 across 7 plugins using action-based parameter patte
 
 ### Changes
 
-| Plugin | Before | After | Saved | Pattern |
-|--------|--------|-------|-------|---------|
-| Notepad | 3 | 1 | 2 | `notepad__manage` with `action: "set" \| "clear" \| "append"` |
-| Search | 2 | 1 | 1 | `search__text` with `mode: "regex" \| "semantic"` |
-| Skills | 4 | 3 | 1 | `skills__list` with `reload: boolean` |
-| Persona | 4 | 3 | 1 | `persona__list` with `showCurrent: boolean` |
-| Config | 3 | 2 | 1 | `config__get` with `showLayers: boolean` |
-| Memory | 5 | 2 | 3 | `memory__manage` + `memory__browse` with action params |
-| Self-improvement | 7 | 2 | 5 | `self-improvement__insight` + `self-improvement__principle` with action params |
-| MCP (per server) | 5 | 2 | 3 | `__list` + `__get` with type params |
-| Subagent | 1 (pokemon) | 1 (clean) | 0 | `subagent__subagent__dispatch` → `subagent__dispatch` |
-| **Total** | **~34** | **~17** | **~17** | |
+| Plugin           | Before      | After     | Saved   | Pattern                                                                        |
+| ---------------- | ----------- | --------- | ------- | ------------------------------------------------------------------------------ |
+| Notepad          | 3           | 1         | 2       | `notepad__manage` with `action: "set" \| "clear" \| "append"`                  |
+| Search           | 2           | 1         | 1       | `search__text` with `mode: "regex" \| "semantic"`                              |
+| Skills           | 4           | 3         | 1       | `skills__list` with `reload: boolean`                                          |
+| Persona          | 4           | 3         | 1       | `persona__list` with `showCurrent: boolean`                                    |
+| Config           | 3           | 2         | 1       | `config__get` with `showLayers: boolean`                                       |
+| Memory           | 5           | 2         | 3       | `memory__manage` + `memory__browse` with action params                         |
+| Self-improvement | 7           | 2         | 5       | `self-improvement__insight` + `self-improvement__principle` with action params |
+| MCP (per server) | 5           | 2         | 3       | `__list` + `__get` with type params                                            |
+| Subagent         | 1 (pokemon) | 1 (clean) | 0       | `subagent__subagent__dispatch` → `subagent__dispatch`                          |
+| **Total**        | **~34**     | **~17**   | **~17** |                                                                                |
 
 ### Key design decisions
 

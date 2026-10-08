@@ -1,6 +1,11 @@
 ---
 tags: [decision, ui]
-related: [drone-agent-tui.md, 036-ink-6-react-19.md, 037-incremental-rendering-removal.md]
+related:
+  [
+    drone-agent-tui.md,
+    036-ink-6-react-19.md,
+    037-incremental-rendering-removal.md,
+  ]
 ---
 
 # ADR 001: Use Ink (React for CLIs) over Blessed

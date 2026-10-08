@@ -1,6 +1,18 @@
 ---
 tags: [decision, swarm, session-import, slash-command, transcript, coordinator]
-related: [concepts/session-management.md, concepts/session-processing-pipeline.md, modules/drone-coordinator.md, modules/drone-agent.md, modules/drone-core.md, modules/drone-agent-plugins.md, entities/DroneAgentConfig.md, decisions/135-compaction-slash-command.md, decisions/142-compaction-turn-granularity-fix.md, decisions/116-safety-trim-estimate-drop-mismatch.md]
+related:
+  [
+    concepts/session-management.md,
+    concepts/session-processing-pipeline.md,
+    modules/drone-coordinator.md,
+    modules/drone-agent.md,
+    modules/drone-core.md,
+    modules/drone-agent-plugins.md,
+    entities/DroneAgentConfig.md,
+    decisions/135-compaction-slash-command.md,
+    decisions/142-compaction-turn-granularity-fix.md,
+    decisions/116-safety-trim-estimate-drop-mismatch.md,
+  ]
 ---
 
 # 146: Swarm Session Import — `/swarm-session` command + coordinator transcript endpoint
@@ -9,7 +21,7 @@ related: [concepts/session-management.md, concepts/session-processing-pipeline.m
 
 ## Context
 
-Session restoration in other AI agent platforms recreates an old session as a *continuation*. drone-agent's swarm model wanted something different: an **import** that recreates the context of an old swarm session into the current session. Two properties distinguish it from a continuation:
+Session restoration in other AI agent platforms recreates an old session as a _continuation_. drone-agent's swarm model wanted something different: an **import** that recreates the context of an old swarm session into the current session. Two properties distinguish it from a continuation:
 
 1. **Importable at any stage** — it can run mid-session, not just as a resume. (The most common case is picking up an old session in the first turn.)
 2. **Not a continuation** — it does not try to recreate the exact compaction summaries. It's an import, not a resume.
@@ -64,7 +76,9 @@ updated: <iso>
 Following the `/skills recall` precedent (append to conversation as a synthetic tool result), each imported chunk is injected as a **synthetic `session_import` tool-call/result pair**:
 
 ```ts
-sessionManager.appendAssistantMessage('', [{ id, name: 'session_import', arguments: { sessionId, chunk, totalChunks } }]);
+sessionManager.appendAssistantMessage('', [
+  { id, name: 'session_import', arguments: { sessionId, chunk, totalChunks } },
+]);
 sessionManager.appendToolResult('session_import', summary, id);
 ```
 

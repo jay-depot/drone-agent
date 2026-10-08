@@ -1,6 +1,7 @@
 ---
 tags: [decision, subagent, timeout, error-handling]
-related: [concepts/subagent.md, decisions/080-subagent-dispatch-pretty-output.md]
+related:
+  [concepts/subagent.md, decisions/080-subagent-dispatch-pretty-output.md]
 ---
 
 # Decision 104: Subagent Activity-Based Timeout and Error Detection
@@ -47,14 +48,14 @@ The `SubagentDispatchBlock` component now handles `error:` prefix events, render
 
 ## Files Changed
 
-| File | Change |
-|------|--------|
-| `drone-agent/src/plugins/subagent/plugin.ts` | Activity-based timeout + hard cap; error event handling; fallback to last error in close handler; updated tool description |
-| `drone-agent/src/interactive.ts` | Catch errors from `sendUserMessage` in `runJsonMode`; emit error + return events; exit with code 1 |
-| `drone-agent/src/tui/components/SubagentDispatchBlock.tsx` | Handle `error:` prefix in `renderLastAction` |
-| `drone-agent/test/fixtures/subagent.ts` | Mirror timeout changes (activity timer + hard cap) |
-| `drone-agent/test/subagent/dispatch.test.ts` | Tests for activity-based timeout, hard cap timeout, error event handling |
-| `drone-agent/test/subagent-dispatch-block.test.tsx` | Test for `error:` prefix rendering |
+| File                                                       | Change                                                                                                                     |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `drone-agent/src/plugins/subagent/plugin.ts`               | Activity-based timeout + hard cap; error event handling; fallback to last error in close handler; updated tool description |
+| `drone-agent/src/interactive.ts`                           | Catch errors from `sendUserMessage` in `runJsonMode`; emit error + return events; exit with code 1                         |
+| `drone-agent/src/tui/components/SubagentDispatchBlock.tsx` | Handle `error:` prefix in `renderLastAction`                                                                               |
+| `drone-agent/test/fixtures/subagent.ts`                    | Mirror timeout changes (activity timer + hard cap)                                                                         |
+| `drone-agent/test/subagent/dispatch.test.ts`               | Tests for activity-based timeout, hard cap timeout, error event handling                                                   |
+| `drone-agent/test/subagent-dispatch-block.test.tsx`        | Test for `error:` prefix rendering                                                                                         |
 
 ## Related
 

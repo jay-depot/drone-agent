@@ -1,6 +1,26 @@
 ---
-tags: [decision, gateway, chat, tagging, batching, spawn-backend, protocol, architecture, adr]
-related: [modules/drone-gateway.md, modules/drone-agent.md, concepts/spawn-backend.md, decisions/232-gateway-surface-lifecycle-and-working-dir.md, decisions/224-gateway-spawn-targeting.md, decisions/217-steer-and-btw-commands.md, concepts/json-listen-mode.md]
+tags:
+  [
+    decision,
+    gateway,
+    chat,
+    tagging,
+    batching,
+    spawn-backend,
+    protocol,
+    architecture,
+    adr,
+  ]
+related:
+  [
+    modules/drone-gateway.md,
+    modules/drone-agent.md,
+    concepts/spawn-backend.md,
+    decisions/232-gateway-surface-lifecycle-and-working-dir.md,
+    decisions/224-gateway-spawn-targeting.md,
+    decisions/217-steer-and-btw-commands.md,
+    concepts/json-listen-mode.md,
+  ]
 ---
 
 # 233 — Gateway chat tagging, drain-on-idle batching, and multi-user response opt-out
@@ -23,7 +43,7 @@ related: [modules/drone-gateway.md, modules/drone-agent.md, concepts/spawn-backe
 4. **Drain-on-idle batching with a debounce.** Every incoming message for a batch-eligible conversation is appended to its buffer and the flush timer is (re)armed for `debounceMs`; on fire the buffer drains as **one** turn through `runOnTail`, so it waits behind an in-flight turn. One merged reply per batch; buffered turns joined by newline (each already tagged). The engine's tail is the single choke point, so batching must live at or above it — a surface never sees the backlog.
 5. **Batching opt-in is structural; eligibility is exact + single-surface.** An optional `DroneControlSurface.handleBatch(messages)` — its **presence** is the opt-in (no disable flag). Batching is enabled only when a message resolves to an **exact** conversation, the sender is allowed, and the conversation has **exactly one** surface that defines `handleBatch`. Every other case (wildcard, non-batch surfaces, multi-surface conversations) keeps the immediate per-message path. (`swarm-console` must stay immediate per-command; the single-surface rule avoids a command-vs-chat boundary in v1.)
 6. **Debounce precedence, `0`-disables.** `config.batch.debounceMs` (surface) ?? top-level `batch.debounceMs` ?? **500 ms**; `0` disables (flush next tick); loader sanitizes exactly like the idle timeout. Caveat: in a multi-surface conversation the surface debounce is inert (single-surface only).
-7. **Silence is a gateway-owned sentinel.** `NO_RESPONSE_SENTINEL = '<<NO_RESPONSE>>'` plus the room instruction that names it live together in the gateway. The surface checks an **exact match modulo trim**; on a match it returns `{ response: null, handled: true }` so the engine posts nothing, and logs distinctly. Checked **unconditionally** (rooms and DMs). Rationale: an empty assistant reply is already overloaded in `drone-agent` as a *degenerate-response failure* (retried with hints, then returned as `''`), and `LocalSpawnBackend` cannot distinguish "empty reply" from "no reply"; a deliberate non-empty token avoids both. Exact match (not `contains`) avoids swallowing a genuine reply that quotes the token.
+7. **Silence is a gateway-owned sentinel.** `NO_RESPONSE_SENTINEL = '<<NO_RESPONSE>>'` plus the room instruction that names it live together in the gateway. The surface checks an **exact match modulo trim**; on a match it returns `{ response: null, handled: true }` so the engine posts nothing, and logs distinctly. Checked **unconditionally** (rooms and DMs). Rationale: an empty assistant reply is already overloaded in `drone-agent` as a _degenerate-response failure_ (retried with hints, then returned as `''`), and `LocalSpawnBackend` cannot distinguish "empty reply" from "no reply"; a deliberate non-empty token avoids both. Exact match (not `contains`) avoids swallowing a genuine reply that quotes the token.
 8. **The room instruction rides a per-turn system reminder.** Delivered **per turn** as an optional `systemReminder` on the turn payload (the local NDJSON `chat` event); the agent's listen host calls `_runtime.queueSystemReminder(...)`, drained into the next LLM call as a **non-persisted** `role:'user'` `<system-reminder>`. Non-persisted, so it neither accumulates nor survives a re-spawn as stale text.
 9. **Coordinator send-half fix; receive half deferred.** `CoordinatorSpawnBackend.sendMessage` delivers via `CoordinatorClient.sendSessionMessage(processId, text, false)` (the path the coordinator UI uses), **not** the relay, and returns **`null`** = "no synchronous reply"; the surface posts nothing for `null`. The dead relay client method is removed. `systemReminder` is **local-only** here. Rationale: `sendSessionMessage` returns a delivery ack, not the assistant reply, so fixing only the send path would make the surface post the ack object as the chat reply.
 
@@ -43,7 +63,7 @@ related: [modules/drone-gateway.md, modules/drone-agent.md, concepts/spawn-backe
 - `drone-gateway/src/adapters/matrix.ts` — sets `conversationKind` at the emit site.
 - `drone-agent/src/runtime/plugin-engine.ts` — public `queueSystemReminder` on `DronePluginEngine` (beside `drain`/`clear`).
 - `drone-agent/src/interactive.ts` — `InputEvent` chat variant gains `systemReminder?`; `runJsonListenMode` queues it before the turn.
-- Plus gateway `CONTEXT.md` (glossary: *Chat Tag*, *Message Batcher*, *Batch Debounce*, *No-Response Sentinel*, *Room Instruction*; amended *Control Surface*, *Persona Assignment*, *Adapter Message*; config layout) and gateway ADR 006.
+- Plus gateway `CONTEXT.md` (glossary: _Chat Tag_, _Message Batcher_, _Batch Debounce_, _No-Response Sentinel_, _Room Instruction_; amended _Control Surface_, _Persona Assignment_, _Adapter Message_; config layout) and gateway ADR 006.
 
 ## Validation
 

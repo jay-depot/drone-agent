@@ -1,6 +1,14 @@
 ---
 tags: [coordinator, coordinator-ui, sessions, archive, error-handling, adr]
-related: [drone-coordinator-ui.md, decisions/190-coordinator-session-archive.md, decisions/198-coordinator-ui-launch-interact.md, decisions/201-session-detail-live-chat-resilience.md, decisions/202-session-chat-view-blob-delivery.md, decisions/204-coordinator-ui-error-display-sweep-and-ws-initial-fix.md]
+related:
+  [
+    drone-coordinator-ui.md,
+    decisions/190-coordinator-session-archive.md,
+    decisions/198-coordinator-ui-launch-interact.md,
+    decisions/201-session-detail-live-chat-resilience.md,
+    decisions/202-session-chat-view-blob-delivery.md,
+    decisions/204-coordinator-ui-error-display-sweep-and-ws-initial-fix.md,
+  ]
 ---
 
 # Coordinator UI archive undo-row rework + unified error display

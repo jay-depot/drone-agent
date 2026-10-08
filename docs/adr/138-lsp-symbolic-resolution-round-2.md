@@ -1,6 +1,12 @@
 ---
 tags: [decision, lsp, ergonomics, position-resolution]
-related: [concepts/lsp-symbolic-resolution.md, decisions/136-lsp-symbolic-resolution.md, modules/drone-core.md, modules/drone-agent-plugins.md]
+related:
+  [
+    concepts/lsp-symbolic-resolution.md,
+    decisions/136-lsp-symbolic-resolution.md,
+    modules/drone-core.md,
+    modules/drone-agent-plugins.md,
+  ]
 ---
 
 # 138: LSP Symbolic Resolution Round 2 — Dense Context Blocks, Exact-Match Filter, Reference Cache Hardening
@@ -11,7 +17,7 @@ related: [concepts/lsp-symbolic-resolution.md, decisions/136-lsp-symbolic-resolu
 
 A review of the LSP symbolic resolution implementation (decision 136) found four defects:
 
-1. **`code_action` cross-file bug** — the `referenceId` branch used the *input* `filePath` for the runtime/document/diagnostics, but the range came from `ref.filePath`. For workspace ambiguity (matches spanning files), re-invoking with a referenceId targeted the wrong file. `rename` already did this correctly.
+1. **`code_action` cross-file bug** — the `referenceId` branch used the _input_ `filePath` for the runtime/document/diagnostics, but the range came from `ref.filePath`. For workspace ambiguity (matches spanning files), re-invoking with a referenceId targeted the wrong file. `rename` already did this correctly.
 
 2. **Window mismatch between suggestion and filter** — `suggestSurroundingText` expanded its search window 5→30 lines, but the filter only searched a fixed 2/3 (or 3/2) window. So a suggested line far from the match was never found when passed back — the disambiguation silently failed.
 
@@ -72,14 +78,14 @@ The `code_action` referenceId branch now resolves the runtime/document/diagnosti
 
 ## Files Modified
 
-| File | Changes |
-|------|---------|
-| `drone-core/src/position-types.ts` | Rename `suggestedSurroundingText`→`suggestedContext`; `suggestContext` returns dense block; export `HARD_CONTEXT_LINES`/`SOFT_CONTEXT_LINES` |
-| `drone-core/src/index.ts` | Re-export the two context-line constants |
-| `drone-agent/src/plugins/lsp/server.ts` | `matchesSurroundingBlock` exact-match filter (window sized to block); reference cache cap 100 + TTL 10min + staleness (`readLineFingerprint`, async `resolveReference`); `ReferenceLocation`/`ReferenceResolution` types |
-| `drone-agent/src/plugins/lsp/tools/editing.ts` | `code_action` referenceId targets `ref.filePath`; stale handshake in `rename`+`code_action`; `buildAmbiguousResponse` computes fingerprints |
-| `drone-agent/src/plugins/lsp/tools/diagnostics.ts` | File/severity-only (removed `text`/`symbol` + `parsePositionInput`) |
-| `drone-agent/test/lsp-ergonomics.test.ts` | 41 tests (was 34): window-growth, exact-match, cross-file referenceId, stale, cap, TTL, diagnostics schema |
+| File                                               | Changes                                                                                                                                                                                                                  |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `drone-core/src/position-types.ts`                 | Rename `suggestedSurroundingText`→`suggestedContext`; `suggestContext` returns dense block; export `HARD_CONTEXT_LINES`/`SOFT_CONTEXT_LINES`                                                                             |
+| `drone-core/src/index.ts`                          | Re-export the two context-line constants                                                                                                                                                                                 |
+| `drone-agent/src/plugins/lsp/server.ts`            | `matchesSurroundingBlock` exact-match filter (window sized to block); reference cache cap 100 + TTL 10min + staleness (`readLineFingerprint`, async `resolveReference`); `ReferenceLocation`/`ReferenceResolution` types |
+| `drone-agent/src/plugins/lsp/tools/editing.ts`     | `code_action` referenceId targets `ref.filePath`; stale handshake in `rename`+`code_action`; `buildAmbiguousResponse` computes fingerprints                                                                              |
+| `drone-agent/src/plugins/lsp/tools/diagnostics.ts` | File/severity-only (removed `text`/`symbol` + `parsePositionInput`)                                                                                                                                                      |
+| `drone-agent/test/lsp-ergonomics.test.ts`          | 41 tests (was 34): window-growth, exact-match, cross-file referenceId, stale, cap, TTL, diagnostics schema                                                                                                               |
 
 ## Related
 

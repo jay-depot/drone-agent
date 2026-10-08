@@ -1,6 +1,13 @@
 ---
 tags: [decision, plugin, wakelock, power-management, conversation-service]
-related: [modules/drone-agent-plugins.md, entities/Session.md, flows/tool-call-loop.md, concepts/session-management.md, decisions/160-unified-llm-error-retry-semantics.md]
+related:
+  [
+    modules/drone-agent-plugins.md,
+    entities/Session.md,
+    flows/tool-call-loop.md,
+    concepts/session-management.md,
+    decisions/160-unified-llm-error-retry-semantics.md,
+  ]
 ---
 
 # 169: Wakelock Plugin
@@ -39,11 +46,11 @@ The plugin uses a **boolean `working` flag**, not a refcount. Reason: `drainPend
 
 The OS keeps the machine awake while **any** independent inhibitor is held. So each process spawns its own long-lived inhibitor child and kills it to release; no shared state, lockfiles, or coordination:
 
-| Platform | Command | Semantics |
-|----------|---------|-----------|
-| macOS | `caffeinate -i` | One `IOPMAssertion` per instance; refcounted system-wide, released on process exit |
-| Linux | `systemd-inhibit --what=idle:sleep sleep infinity` | One inhibitor entry per process, auto-released on exit |
-| Windows | (no-op in v1) | `SetThreadExecutionState` is per-thread not a refcount; deferred to a later shim |
+| Platform | Command                                            | Semantics                                                                          |
+| -------- | -------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| macOS    | `caffeinate -i`                                    | One `IOPMAssertion` per instance; refcounted system-wide, released on process exit |
+| Linux    | `systemd-inhibit --what=idle:sleep sleep infinity` | One inhibitor entry per process, auto-released on exit                             |
+| Windows  | (no-op in v1)                                      | `SetThreadExecutionState` is per-thread not a refcount; deferred to a later shim   |
 
 - **Subagents never acquire the lock.** A subagent (child process spawned via `--subagent-id`/`DRONE_SUBAGENT_ID`) checks `_runtime.isSubagent` and returns during `register()`. Meanwhile the **parent** holds its own lock while blocked on the subagent round, so the machine stays awake without any coordination.
 - **WSL is detected** via `/proc/version` containing "microsoft"/"WSL": `systemd-inhibit` runs there but only inhibits the guest, not the Windows host — so it's a no-op with one logged warning.

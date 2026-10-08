@@ -1,6 +1,15 @@
 ---
 tags: [decision, tui, rendering, mcp, git, swarm]
-related: [078-pretty-tool-output.md, 079-pretty-tool-output-phase-2.md, 080-subagent-dispatch-pretty-output.md, modules/drone-agent-tui.md, modules/drone-agent-mcp-client.md, decisions/064-mcp-deferred-tool-loading.md, decisions/068-tool-reduction-followup.md]
+related:
+  [
+    078-pretty-tool-output.md,
+    079-pretty-tool-output-phase-2.md,
+    080-subagent-dispatch-pretty-output.md,
+    modules/drone-agent-tui.md,
+    modules/drone-agent-mcp-client.md,
+    decisions/064-mcp-deferred-tool-loading.md,
+    decisions/068-tool-reduction-followup.md,
+  ]
 ---
 
 # ADR 081: Meta-Tool Pretty Output (List/Mount/Unmount)
@@ -21,11 +30,11 @@ Normalize the MCP meta-tool JSON result shapes so the components see a consisten
 
 ### Render Components
 
-| Component | Behavior |
-|-----------|----------|
-| `ListToolsBlock` | `✓ <name> — N tool(s)` header + indented tool list with descriptions |
-| `MountToolBlock` | `✓ <tool> — <description>` on success, `✗ <error>` on failure |
-| `UnmountToolBlock` | `✓ <tool>` on success, `✗ <error>` on failure |
+| Component          | Behavior                                                             |
+| ------------------ | -------------------------------------------------------------------- |
+| `ListToolsBlock`   | `✓ <name> — N tool(s)` header + indented tool list with descriptions |
+| `MountToolBlock`   | `✓ <tool> — <description>` on success, `✗ <error>` on failure        |
+| `UnmountToolBlock` | `✓ <tool>` on success, `✗ <error>` on failure                        |
 
 All three handle running/error/unparseable-result states gracefully.
 
@@ -45,6 +54,7 @@ All three handle running/error/unparseable-result states gracefully.
 ### Tests
 
 22 tests in `test/meta-tool-blocks.test.tsx` covering:
+
 - ListToolsBlock: running, done with tools, singular "1 tool", 0 tools, error, unparseable fallback
 - MountToolBlock: running, success with description, success without description, failure, error, unparseable fallback
 - UnmountToolBlock: running, success, failure, error, unparseable fallback
@@ -54,11 +64,13 @@ All three handle running/error/unparseable-result states gracefully.
 ## Consequences
 
 ### Positive
+
 - Consistent visual presentation for list/mount/unmount across all three plugins
 - MCP result shapes normalized (no more `{ mounted, mountedName, alreadyMounted }` confusion)
 - Reusable components reduce duplication
 
 ### Negative
+
 - MCP result shape change required updating 5 test assertions
 - `registerMetaTool` helper gained a `renderComponent` parameter (slightly more complex API)
 

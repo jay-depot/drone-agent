@@ -1,6 +1,12 @@
 ---
 tags: [decision, cli, debugging, tools, list-mount]
-related: [decisions/082-debug-flag-llm-logging.md, decisions/097-debug-slash-command.md, modules/drone-core.md, modules/drone-agent.md]
+related:
+  [
+    decisions/082-debug-flag-llm-logging.md,
+    decisions/097-debug-slash-command.md,
+    modules/drone-core.md,
+    modules/drone-agent.md,
+  ]
 ---
 
 # ADR 110: `--debug tools` Flag + Shared `DebugFlagRegistry` Refactor
@@ -11,7 +17,7 @@ related: [decisions/082-debug-flag-llm-logging.md, decisions/097-debug-slash-com
 
 The `--debug llm` flag ([082-debug-flag-llm-logging](082-debug-flag-llm-logging.md)) logged LLM request/response bodies, but there was no way to trace the **tool surface** — when tools are mounted, unmounted, registered, unregistered, or when plugins are enabled. Debugging tool-surface issues (e.g. why a tool disappeared, why a mount failed) required adding temporary `console.log` statements.
 
-A deeper structural problem: the debug subsystem set (`debugSet`) lived **privately inside the conversation service**. The plugin engine — where all tool-surface mutations happen — is created *before* the conversation service in `index.tsx`, so it could not read that set. There was no shared, single source of truth for which debug subsystems are active.
+A deeper structural problem: the debug subsystem set (`debugSet`) lived **privately inside the conversation service**. The plugin engine — where all tool-surface mutations happen — is created _before_ the conversation service in `index.tsx`, so it could not read that set. There was no shared, single source of truth for which debug subsystems are active.
 
 ## Decision
 

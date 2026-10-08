@@ -1,6 +1,12 @@
 ---
 tags: [decision, search, semantic-search, config]
-related: [modules/drone-beacon.md, modules/drone-agent-plugins.md, concepts/semantic-search.md, decisions/127-semantic-search-beacon.md]
+related:
+  [
+    modules/drone-beacon.md,
+    modules/drone-agent-plugins.md,
+    concepts/semantic-search.md,
+    decisions/127-semantic-search-beacon.md,
+  ]
 ---
 
 # 128. Search-Path Exclude Globs — Query-Time Filtering
@@ -43,7 +49,11 @@ Previously only a transitive dependency; now a direct dependency (`^10.2.5`, res
 - Extended the GET Querystring type with `exclude?: string | string[]`; normalized to `excludePatterns`.
 - Added helper:
   ```typescript
-  function isExcluded(filePath: string, rootDir: string, patterns: string[]): boolean {
+  function isExcluded(
+    filePath: string,
+    rootDir: string,
+    patterns: string[]
+  ): boolean {
     if (patterns.length === 0) return false;
     const rel = path.relative(rootDir, filePath);
     return patterns.some(p => minimatch(rel, p));

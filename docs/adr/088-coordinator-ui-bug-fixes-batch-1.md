@@ -1,6 +1,11 @@
 ---
 tags: [decision, coordinator-ui, bug-fix]
-related: [modules/drone-coordinator-ui.md, modules/drone-coordinator.md, decisions/031-session-processing-pipeline.md]
+related:
+  [
+    modules/drone-coordinator-ui.md,
+    modules/drone-coordinator.md,
+    decisions/031-session-processing-pipeline.md,
+  ]
 ---
 
 # ADR 088: Coordinator UI Bug Fixes (Batch 1)
@@ -26,6 +31,7 @@ Added a new route handler in `drone-coordinator/src/routes/swarm.ts` that uses t
 ### Step 2: Update terminate flow in sessions UI
 
 Changed the terminate handler to:
+
 1. Try the beacon DELETE endpoint (may return 404 if already ended)
 2. Always call `POST /sessions/:id/end` to update the swarm session status
 3. Refresh the list

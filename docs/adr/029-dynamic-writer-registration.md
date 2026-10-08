@@ -1,6 +1,12 @@
 ---
 tags: [decision]
-related: [broker-provider.md, identity-assets.md, entities/Persona.md, entities/Skill.md]
+related:
+  [
+    broker-provider.md,
+    identity-assets.md,
+    entities/Persona.md,
+    entities/Skill.md,
+  ]
 ---
 
 # ADR 029: Dynamic Writer Registration for Persona and Skills Creation
@@ -29,24 +35,26 @@ The `exists` method allows the wizard to check for existing assets before callin
 ### Capability Extensions
 
 Both `DronePersonaCapability` and `DroneSkillsCapability` gained three new methods:
+
 - `registerWriter(writer)` — register a writer (sorted by scope order)
 - `unregisterWriter(writerId)` — unregister a writer by id
 - `getWriters()` — return all registered writers
 
 ### Writer Implementations
 
-| Provider Plugin | Writer Scope | Storage Backend |
-|-----------------|-------------|-----------------|
-| `persona-provider-project` | `project` | Filesystem: `.drone-agent/personas/<id>/persona.md` |
-| `persona-provider-user` | `user` | Filesystem: `~/.drone-agent/personas/<id>/persona.md` |
-| `skill-provider-project` | `project` | Filesystem: `.drone-agent/skills/<id>.md` |
-| `skill-provider-user` | `user` | Filesystem: `~/.drone-agent/skills/<id>.md` |
-| `swarm` (beacon) | `beacon` | HTTP POST to `{beaconUrl}/personas` or `{beaconUrl}/skills` |
-| `swarm` (coordinator) | `coordinator` | HTTP POST to `{beaconUrl}/personas` or `{beaconUrl}/skills` with `scope: 'coordinator'` |
+| Provider Plugin            | Writer Scope  | Storage Backend                                                                         |
+| -------------------------- | ------------- | --------------------------------------------------------------------------------------- |
+| `persona-provider-project` | `project`     | Filesystem: `.drone-agent/personas/<id>/persona.md`                                     |
+| `persona-provider-user`    | `user`        | Filesystem: `~/.drone-agent/personas/<id>/persona.md`                                   |
+| `skill-provider-project`   | `project`     | Filesystem: `.drone-agent/skills/<id>.md`                                               |
+| `skill-provider-user`      | `user`        | Filesystem: `~/.drone-agent/skills/<id>.md`                                             |
+| `swarm` (beacon)           | `beacon`      | HTTP POST to `{beaconUrl}/personas` or `{beaconUrl}/skills`                             |
+| `swarm` (coordinator)      | `coordinator` | HTTP POST to `{beaconUrl}/personas` or `{beaconUrl}/skills` with `scope: 'coordinator'` |
 
 ### Wizard Changes
 
 Both wizards now:
+
 1. Resolve the broker capability via `requestCapability`
 2. Call `cap.getWriters()` to discover available scopes
 3. Build elicit choices dynamically from writer labels

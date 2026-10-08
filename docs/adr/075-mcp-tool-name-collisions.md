@@ -1,6 +1,11 @@
 ---
 tags: [decision, mcp, tool-naming, collision]
-related: [modules/drone-agent-mcp-client.md, decisions/074-mcp-spawn-timeout.md, decisions/076-mcp-streaming-safety-valve.md]
+related:
+  [
+    modules/drone-agent-mcp-client.md,
+    decisions/074-mcp-spawn-timeout.md,
+    decisions/076-mcp-streaming-safety-valve.md,
+  ]
 ---
 
 # 075: Tool-Name Sanitization Collisions (Item 13)

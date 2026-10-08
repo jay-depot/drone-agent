@@ -12,6 +12,7 @@ related: [external-plugins.md, plugin-system.md, DroneAgentConfig.md]
 The drone-agent plugin system was designed for static, build-time plugin registration. All plugins were compiled into the binary at build time. There was no mechanism for users or projects to add custom plugins without modifying the source code.
 
 We needed a way for:
+
 1. Users to install custom plugins in their home directory
 2. Projects to ship custom plugins in their `.drone-agent/` directory
 3. The system to handle trust for project-level plugins (since a project could push arbitrary code)

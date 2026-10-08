@@ -1,6 +1,11 @@
 ---
 tags: [decision, adr, llm, providers, config, context-window]
-related: [155-provider-model-config.md, ../concepts/provider-model-selection.md, ../concepts/session-management.md]
+related:
+  [
+    155-provider-model-config.md,
+    ../concepts/provider-model-selection.md,
+    ../concepts/session-management.md,
+  ]
 ---
 
 # 156 — Broker metadata context windows + durable legacy migration
@@ -15,7 +20,7 @@ Two defects shared one root: the provider/protocol/model refactor's data
 consumption ends.
 
 1. **Every context-window calculation used the wrong denominator.** Phase 2's
-   driver conversion made `getContextWindowInfo` an *optional* method and the
+   driver conversion made `getContextWindowInfo` an _optional_ method and the
    rewritten openai/anthropic/openrouter `createProvider` factories returned
    providers containing **only `chat`** — the old probes were silently
    dropped. TypeScript never complained; tests stayed green; the bug surfaced
@@ -26,7 +31,7 @@ consumption ends.
    bogus window fed `requiresSafetyTrim` and compaction, so spurious safety
    trims and premature compaction were live risks, not just cosmetics. The
    insult: correct values already existed as declared model metadata that the
-   broker's `resolveModelMetadata()` resolved for every *other* purpose — the
+   broker's `resolveModelMetadata()` resolved for every _other_ purpose — the
    window path simply bound straight through (`inner.getContextWindowInfo?.bind(inner)`)
    instead of using it.
 
@@ -36,7 +41,7 @@ consumption ends.
    (including those 1M `contextWindow`s) survived solely inside this invisible
    per-run shim; any consumer not routed through the migrated object lost it.
    Compounding hazard: `${VAR}` interpolation happens **at parse time**, so a
-   naive write-back of the merged config would have leaked *resolved* API keys
+   naive write-back of the merged config would have leaked _resolved_ API keys
    to disk.
 
 The two bugs compound: fixing (1) alone only helps users whose declared
@@ -62,7 +67,7 @@ declared models[id].contextWindow
   pin a window from config; a chatty probe can never override it. No network
   on the hot path — ollama's `client.show()` probe only fires when no catalog
   data exists.
-- The wrapper resolves at call time against the *current* selection and keys
+- The wrapper resolves at call time against the _current_ selection and keys
   everything on canonical full-form ids (`<providerId>/<modelLocalId>`),
   since `getModel()` returns bare local ids.
 - Wire contract: the inner probe receives the wire model name

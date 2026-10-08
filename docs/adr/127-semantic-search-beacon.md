@@ -1,6 +1,13 @@
 ---
 tags: [decision, search, semantic-search, swarm]
-related: [modules/drone-beacon.md, modules/drone-swarm-common.md, modules/drone-agent-plugins.md, concepts/semantic-search.md, decisions/128-search-exclude-query-time-filtering.md]
+related:
+  [
+    modules/drone-beacon.md,
+    modules/drone-swarm-common.md,
+    modules/drone-agent-plugins.md,
+    concepts/semantic-search.md,
+    decisions/128-search-exclude-query-time-filtering.md,
+  ]
 ---
 
 # 127. Semantic Search Moved to the Beacon

@@ -1,6 +1,21 @@
 ---
-tags: [decision, swarm, memory, rag, retrieval, bug-fix, conversation-events, prompt-fragment]
-related: [decisions/179-swarm-memory-rag-retrieval.md, concepts/memory-pipeline.md, modules/drone-agent-plugins.md]
+tags:
+  [
+    decision,
+    swarm,
+    memory,
+    rag,
+    retrieval,
+    bug-fix,
+    conversation-events,
+    prompt-fragment,
+  ]
+related:
+  [
+    decisions/179-swarm-memory-rag-retrieval.md,
+    concepts/memory-pipeline.md,
+    modules/drone-agent-plugins.md,
+  ]
 ---
 
 # 184: Swarm-Memory Retrieval Trigger Fix — userMessage event, not onBeforePrompt
@@ -14,7 +29,7 @@ swarm memory: a `ConversationWindowTracker` maintains the tight query window fro
 `onConversationEvent` events, and the refresh was fired from the `onBeforePrompt`
 hook. That design was defective: `onBeforePrompt` fires **before**
 `sendUserMessage`, but the `userMessage` conversation event that populates the
-tracker's `current.userQuery` is only emitted *inside* `sendUserMessage`
+tracker's `current.userQuery` is only emitted _inside_ `sendUserMessage`
 (`conversation-service.ts`). So at refresh time `current.userQuery` was always
 `''`.
 
@@ -38,7 +53,7 @@ retrieval hook is removed.
 
 ```ts
 registration.hooks.onConversationEvent(async event => {
-  memoryTracker.onEvent(event);          // sets current.userQuery
+  memoryTracker.onEvent(event); // sets current.userQuery
   if (event.kind === 'userMessage') {
     void memoryRetriever.maybeRefresh(memoryTracker.assemble()).catch(() => {});
   }

@@ -1,6 +1,11 @@
 ---
 tags: [decision, tui, input, cursor]
-related: [drone-agent-tui.md, 106-cursor-navigation-visual-line-model.md, 099-tui-paste-handling.md]
+related:
+  [
+    drone-agent-tui.md,
+    106-cursor-navigation-visual-line-model.md,
+    099-tui-paste-handling.md,
+  ]
 ---
 
 # ADR 107: TUI Input Bug Fixes — Mouse Nav Removal, Soft-Wrap Shift, Cursor End-of-Line
@@ -40,7 +45,7 @@ Ink's `Box` defaults to `flexShrink: 1`. In `InputLine`, the prompt label and LL
 
 `renderWithCursor` inverted the character at the cursor offset. When that character was `\n`, the output was `\u001b[7m\n\u001b[27m` — but the line break happens before the inverse video takes effect, so nothing was visibly inverted. At end-of-text (`undefined`), the inverse-space fallback (`\u001b[7m \u001b[27m`) worked, which is why the end of the last line was fine.
 
-**Decision**: When the character at the cursor is `\n`, render an inverse space *before* the line break: `\u001b[7m \u001b[27m\n`. This matches the end-of-text case and keeps the cursor visible on the correct line.
+**Decision**: When the character at the cursor is `\n`, render an inverse space _before_ the line break: `\u001b[7m \u001b[27m\n`. This matches the end-of-text case and keeps the cursor visible on the correct line.
 
 ## Consequences
 
@@ -63,13 +68,13 @@ Ink's `Box` defaults to `flexShrink: 1`. In `InputLine`, the prompt label and LL
 
 ## Files Changed
 
-| File | Change |
-|------|--------|
-| `src/tui/components/MultilineTextInput.tsx` | Removed mouse click handling; added `[<` SGR filter; fixed `renderWithCursor` for `\n` (inverse space before line break) |
-| `src/tui/components/InputLine.tsx` | Removed `mouseClick` prop; compute effective `textWidth`; added `flexShrink={0}` to label Boxes + `overflow="hidden"` to input Box |
-| `src/tui/components/ElicitationPrompt.tsx` | Removed `mouseClick` prop and `SgrMouseEvent` import |
-| `src/tui/app.tsx` | Removed `useSgrMouse` import and `lastClick` wiring |
-| `test/multiline-text-input.test.tsx` | Added `columns` to test shell; added regression tests for prompt label preservation after soft-wrap and cursor at end of non-last line |
+| File                                        | Change                                                                                                                                 |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/tui/components/MultilineTextInput.tsx` | Removed mouse click handling; added `[<` SGR filter; fixed `renderWithCursor` for `\n` (inverse space before line break)               |
+| `src/tui/components/InputLine.tsx`          | Removed `mouseClick` prop; compute effective `textWidth`; added `flexShrink={0}` to label Boxes + `overflow="hidden"` to input Box     |
+| `src/tui/components/ElicitationPrompt.tsx`  | Removed `mouseClick` prop and `SgrMouseEvent` import                                                                                   |
+| `src/tui/app.tsx`                           | Removed `useSgrMouse` import and `lastClick` wiring                                                                                    |
+| `test/multiline-text-input.test.tsx`        | Added `columns` to test shell; added regression tests for prompt label preservation after soft-wrap and cursor at end of non-last line |
 
 ## Related
 

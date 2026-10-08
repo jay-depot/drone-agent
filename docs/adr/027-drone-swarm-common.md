@@ -1,6 +1,11 @@
 ---
 tags: [decision, refactoring, architecture, swarm]
-related: [modules/drone-swarm-common.md, modules/drone-beacon.md, modules/drone-coordinator.md]
+related:
+  [
+    modules/drone-swarm-common.md,
+    modules/drone-beacon.md,
+    modules/drone-coordinator.md,
+  ]
 ---
 
 # 027: Extract `drone-swarm-common` Package
@@ -13,10 +18,10 @@ The `drone-beacon` and `drone-coordinator` packages both needed wiki storage and
 
 The two files in question:
 
-| File | Beacon Lines | Coordinator Lines | Overlap |
-|------|-------------|-------------------|---------|
-| `wiki-storage.ts` | 377 | 377 | ~98% |
-| `tls.ts` | 124 | 128 | ~95% |
+| File              | Beacon Lines | Coordinator Lines | Overlap |
+| ----------------- | ------------ | ----------------- | ------- |
+| `wiki-storage.ts` | 377          | 377               | ~98%    |
+| `tls.ts`          | 124          | 128               | ~95%    |
 
 The only meaningful difference in `tls.ts` was the cert/key filenames (`beacon-cert.pem` vs `coordinator-cert.pem`). The `wiki-storage.ts` files were functionally identical.
 
@@ -46,7 +51,9 @@ Add a `setTlsLogger()` function so each consumer can inject its own pino logger:
 
 ```typescript
 let logger: pino.Logger = pino({ name: 'drone-swarm-common', level: 'silent' });
-export function setTlsLogger(l: pino.Logger): void { logger = l; }
+export function setTlsLogger(l: pino.Logger): void {
+  logger = l;
+}
 ```
 
 ### Wiki Storage Cleanup

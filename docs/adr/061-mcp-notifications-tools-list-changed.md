@@ -1,6 +1,13 @@
 ---
 tags: [decision, mcp]
-related: [modules/drone-agent-mcp-client.md, architecture/plugin-system.md, decisions/050-mcp-client-session-id-iserror.md, decisions/054-mcp-http-sse-stream-delete.md, decisions/060-mcp-sse-reconnect-stdio-respawn.md]
+related:
+  [
+    modules/drone-agent-mcp-client.md,
+    architecture/plugin-system.md,
+    decisions/050-mcp-client-session-id-iserror.md,
+    decisions/054-mcp-http-sse-stream-delete.md,
+    decisions/060-mcp-sse-reconnect-stdio-respawn.md,
+  ]
 ---
 
 # ADR 061: Handle `notifications/tools/list_changed` with Tool Re-mount

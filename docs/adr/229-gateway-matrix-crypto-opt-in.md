@@ -1,6 +1,11 @@
 ---
 tags: [decision, gateway, matrix, crypto, e2ee, drone-gateway, adr]
-related: [modules/drone-gateway.md, decisions/059-matrix-adapter.md, decisions/062-gateway-sqlite-stores.md]
+related:
+  [
+    modules/drone-gateway.md,
+    decisions/059-matrix-adapter.md,
+    decisions/062-gateway-sqlite-stores.md,
+  ]
 ---
 
 # 229 — Gateway Matrix crypto init is opt-in (no unconditional `initRustCrypto`)
@@ -12,7 +17,7 @@ related: [modules/drone-gateway.md, decisions/059-matrix-adapter.md, decisions/0
 ## Why
 
 - **Node has no `indexedDB`.** `typeof indexedDB === 'undefined'` in Node. The SDK's `initRustCrypto` defaults `useIndexedDB` to `true` (`lib/client.d.ts:1104`) and selects a non-null IndexedDB store prefix whenever `useIndexedDB !== false` (`lib/client.js:1087`). The IndexedDB-backed Rust store then calls the `indexedDB` getter, gets `null`, and panics inside the WASM module.
-- **A WASM panic is an abort, not a JS exception.** `try`/`catch`, `--unhandled-rejections=warn`, and `NODE_OPTIONS` all fail to stop it. The failure therefore had to be *prevented*, not handled.
+- **A WASM panic is an abort, not a JS exception.** `try`/`catch`, `--unhandled-rejections=warn`, and `NODE_OPTIONS` all fail to stop it. The failure therefore had to be _prevented_, not handled.
 - **`cryptoStore` does not persist Rust-crypto keys.** Passing `SqliteCryptoStore` as `createClient({ cryptoStore })` is legacy-crypto / migration-only in v38 (`lib/client.d.ts:91-96`); the Rust-crypto stack ignores it. The old "keys persisted via SQLite" log message was therefore false for E2EE keys.
 
 ## Decision

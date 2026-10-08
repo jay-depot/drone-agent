@@ -1,6 +1,11 @@
 ---
 tags: [decision]
-related: [broker-provider.md, identity-assets.md, decisions/029-dynamic-writer-registration.md]
+related:
+  [
+    broker-provider.md,
+    identity-assets.md,
+    decisions/029-dynamic-writer-registration.md,
+  ]
 ---
 
 # ADR 003: Broker + Provider Pattern for Skills and Personas

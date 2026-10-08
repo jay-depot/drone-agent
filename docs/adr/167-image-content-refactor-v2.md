@@ -1,6 +1,16 @@
 ---
 tags: [decision, vision, images, tool-results, plugin-system, mcp]
-related: [decisions/165-image-describer-role.md, concepts/vision-support.md, modules/drone-core.md, modules/drone-agent.md, modules/drone-agent-plugins.md, modules/drone-agent-mcp-client.md, flows/tool-call-loop.md, decisions/050-mcp-client-session-id-iserror.md]
+related:
+  [
+    decisions/165-image-describer-role.md,
+    concepts/vision-support.md,
+    modules/drone-core.md,
+    modules/drone-agent.md,
+    modules/drone-agent-plugins.md,
+    modules/drone-agent-mcp-client.md,
+    flows/tool-call-loop.md,
+    decisions/050-mcp-client-session-id-iserror.md,
+  ]
 ---
 
 # 167: Image content refactor V2 — first-class images via structured tool results
@@ -60,7 +70,7 @@ The cap is enforced **before** description generation, so over-cap images are ne
 
 ```ts
 return {
-  content: JSON.stringify({ path, mimeType, size }, null, 2),  // metadata, NO base64
+  content: JSON.stringify({ path, mimeType, size }, null, 2), // metadata, NO base64
   images: [{ mimeType, data }],
 };
 ```

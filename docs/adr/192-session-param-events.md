@@ -1,6 +1,25 @@
 ---
-tags: [decision, drone-core, drone-agent, drone-coordinator, drone-agent-plugins, sessions, events]
-related: [modules/drone-core.md, modules/drone-agent.md, modules/drone-agent-plugins.md, modules/drone-coordinator.md, entities/Session.md, flows/tool-call-loop.md, concepts/memory-pipeline.md, decisions/093-session-status-mismatch-fix.md]
+tags:
+  [
+    decision,
+    drone-core,
+    drone-agent,
+    drone-coordinator,
+    drone-agent-plugins,
+    sessions,
+    events,
+  ]
+related:
+  [
+    modules/drone-core.md,
+    modules/drone-agent.md,
+    modules/drone-agent-plugins.md,
+    modules/drone-coordinator.md,
+    entities/Session.md,
+    flows/tool-call-loop.md,
+    concepts/memory-pipeline.md,
+    decisions/093-session-status-mismatch-fix.md,
+  ]
 ---
 
 # 192: Session-parameter events to the coordinator transcript
@@ -13,8 +32,8 @@ Four session-parameter changes were invisible to the swarm event pipeline and
 absent from the readable transcript consumed by the swarm-memory ingest agent
 (memory-pipeline): persona changes, focus-string changes, macro
 executions, and subagent session starts. The librarian reading a session
-transcript could not see *which* persona was active, *what* the focus was, or
-*that* a macro ran — it only saw chat and tool turns.
+transcript could not see _which_ persona was active, _what_ the focus was, or
+_that_ a macro ran — it only saw chat and tool turns.
 
 ## Decision
 

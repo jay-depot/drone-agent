@@ -33,31 +33,31 @@ pnpm start
 
 ## Command-Line Options
 
-| Option                   | Default                           | Description                    |
-| ------------------------ | --------------------------------- | ------------------------------ |
-| `--port`                 | 3456                              | Port to listen on              |
-| `--host`                 | 0.0.0.0                           | Host to bind to                |
-| `--web-port`             | 8080                              | HTTP port for web UI           |
-| `--web-host`             | 127.0.0.1                         | Host for web UI port           |
-| `--config-dir`           | ~/.drone-coordinator              | Configuration directory        |
+| Option                   | Default                           | Description                                                        |
+| ------------------------ | --------------------------------- | ------------------------------------------------------------------ |
+| `--port`                 | 3456                              | Port to listen on                                                  |
+| `--host`                 | 0.0.0.0                           | Host to bind to                                                    |
+| `--web-port`             | 8080                              | HTTP port for web UI                                               |
+| `--web-host`             | 127.0.0.1                         | Host for web UI port                                               |
+| `--config-dir`           | ~/.drone-coordinator              | Configuration directory                                            |
 | `--config-file`          | -                                 | Load settings from a JSON config file (flags override file values) |
-| `--db`                   | <config-dir>/drone-coordinator.db | Path to SQLite database        |
-| `--https`                | true                              | Enable HTTPS server (ON unless `--no-https`) |
-| `--no-https`             | -                                 | Disable HTTPS server           |
-| `--rate-limit-max`       | 100                               | Max requests per IP per window |
-| `--rate-limit-window-ms` | 1000                              | Rate limit window in ms        |
-| `--help`                 | -                                 | Show help message              |
+| `--db`                   | <config-dir>/drone-coordinator.db | Path to SQLite database                                            |
+| `--https`                | true                              | Enable HTTPS server (ON unless `--no-https`)                       |
+| `--no-https`             | -                                 | Disable HTTPS server                                               |
+| `--rate-limit-max`       | 100                               | Max requests per IP per window                                     |
+| `--rate-limit-window-ms` | 1000                              | Rate limit window in ms                                            |
+| `--help`                 | -                                 | Show help message                                                  |
 
 ### Commands
 
-| Command                                        | Description                                            |
-| ---------------------------------------------- | ------------------------------------------------------ |
-| `drone-coordinator serve`                      | Start the coordinator server (default)                 |
-| `drone-coordinator approve-beacon <id>`        | Approve a pending beacon by its ID                     |
-| `drone-coordinator list-beacons`               | List all registered beacons and their trust status     |
-| `drone-coordinator --show-web-token`           | Print the current web UI access token                  |
-| `drone-coordinator --generate-web-token`       | Generate a new web UI access token                     |
-| `drone-coordinator --show-fingerprint`         | Print the coordinator's TLS certificate fingerprint    |
+| Command                                  | Description                                         |
+| ---------------------------------------- | --------------------------------------------------- |
+| `drone-coordinator serve`                | Start the coordinator server (default)              |
+| `drone-coordinator approve-beacon <id>`  | Approve a pending beacon by its ID                  |
+| `drone-coordinator list-beacons`         | List all registered beacons and their trust status  |
+| `drone-coordinator --show-web-token`     | Print the current web UI access token               |
+| `drone-coordinator --generate-web-token` | Generate a new web UI access token                  |
+| `drone-coordinator --show-fingerprint`   | Print the coordinator's TLS certificate fingerprint |
 
 ## API Endpoints
 
@@ -218,7 +218,7 @@ Agent A (Beacon 1) → POST /messages/relay → Coordinator → Beacon 2 → Age
 
 1. Beacon starts and generates an Ed25519 keypair
 2. Beacon sends a trust request to the coordinator with its public key
-3. Coordinator stores a pending trust entry keyed by beacon ID. A new beacon starts `pending` unless it registered over a loopback socket or the deployment opted into `autoApproveBeacons`. A re-registration presenting a *different* public key is rejected as a possible spoofing attempt.
+3. Coordinator stores a pending trust entry keyed by beacon ID. A new beacon starts `pending` unless it registered over a loopback socket or the deployment opted into `autoApproveBeacons`. A re-registration presenting a _different_ public key is rejected as a possible spoofing attempt.
 4. The beacon confirms the coordinator's own TLS fingerprint (`POST /beacons/trust/:id/confirm-fingerprint`) — the coordinator-side half of the TOFU exchange. A loopback beacon is treated as confirmed at registration.
 5. An admin approves the beacon by ID: `drone-coordinator approve-beacon <id>` (the UI's Approve gate stays disabled until the fingerprint is confirmed)
 6. Beacon polls for approval status, then connects securely — the mTLS and reverse-channel gates only pass `approved` beacons

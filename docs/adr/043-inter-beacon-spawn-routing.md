@@ -32,14 +32,15 @@ Add a `POST /spawn` route to the coordinator that accepts spawn requests and for
 
 ### Coordinator Routes (in `drone-coordinator/src/routes/spawn.ts`)
 
-| Route | Purpose | Error Codes |
-|-------|---------|-------------|
-| `POST /spawn` | Spawn agent on target beacon | 400 (missing targetBeaconId), 404 (BEACON_NOT_FOUND), 502 (beacon error), 503 (BEACON_UNAVAILABLE) |
-| `GET /spawn/:beaconId` | List spawns on a beacon (optional `?status=` filter) | 404, 502, 503 |
-| `GET /spawn/:beaconId/:spawnId` | Get spawn status | 404, 502, 503 |
-| `DELETE /spawn/:beaconId/:spawnId` | Terminate a spawned agent | 404, 502, 503 |
+| Route                              | Purpose                                              | Error Codes                                                                                        |
+| ---------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `POST /spawn`                      | Spawn agent on target beacon                         | 400 (missing targetBeaconId), 404 (BEACON_NOT_FOUND), 502 (beacon error), 503 (BEACON_UNAVAILABLE) |
+| `GET /spawn/:beaconId`             | List spawns on a beacon (optional `?status=` filter) | 404, 502, 503                                                                                      |
+| `GET /spawn/:beaconId/:spawnId`    | Get spawn status                                     | 404, 502, 503                                                                                      |
+| `DELETE /spawn/:beaconId/:spawnId` | Terminate a spawned agent                            | 404, 502, 503                                                                                      |
 
 All routes follow the same pattern:
+
 1. Validate the beacon exists via `db.getBeacon(beaconId)` → 404 if not found
 2. Forward the request to the beacon via `fetch()`, with the target built by a `buildBeaconUrl()` helper using `URL` objects (hostname/port/pathname/searchParams) instead of string interpolation — hardens against URL-injection from beacon host/port values (CodeQL #50)
 3. On beacon error → 502 with the beacon's error text
@@ -47,14 +48,14 @@ All routes follow the same pattern:
 
 ### LLM Tools (in `drone-agent/src/plugins/swarm/index.ts`)
 
-| Tool | Calls Coordinator | Parameters |
-|------|-------------------|------------|
-| `swarm_list_beacons` | `GET /beacons` | (none) |
-| `swarm_list_agents` | `GET /agents/location` | `beaconId?` |
-| `swarm_spawn` | `POST /spawn` | `targetBeaconId` (req), `personaId?`, `task?`, `config?`, `spawnId?` |
-| `swarm_get_spawn` | `GET /spawn/:beaconId/:spawnId` | `beaconId` (req), `spawnId` (req) |
-| `swarm_list_spawns` | `GET /spawn/:beaconId` | `beaconId` (req), `status?` |
-| `swarm_terminate_spawn` | `DELETE /spawn/:beaconId/:spawnId` | `beaconId` (req), `spawnId` (req) |
+| Tool                    | Calls Coordinator                  | Parameters                                                           |
+| ----------------------- | ---------------------------------- | -------------------------------------------------------------------- |
+| `swarm_list_beacons`    | `GET /beacons`                     | (none)                                                               |
+| `swarm_list_agents`     | `GET /agents/location`             | `beaconId?`                                                          |
+| `swarm_spawn`           | `POST /spawn`                      | `targetBeaconId` (req), `personaId?`, `task?`, `config?`, `spawnId?` |
+| `swarm_get_spawn`       | `GET /spawn/:beaconId/:spawnId`    | `beaconId` (req), `spawnId` (req)                                    |
+| `swarm_list_spawns`     | `GET /spawn/:beaconId`             | `beaconId` (req), `status?`                                          |
+| `swarm_terminate_spawn` | `DELETE /spawn/:beaconId/:spawnId` | `beaconId` (req), `spawnId` (req)                                    |
 
 ### Config
 

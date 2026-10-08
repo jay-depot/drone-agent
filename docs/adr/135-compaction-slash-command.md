@@ -1,6 +1,14 @@
 ---
 tags: [decision, feature, compaction, slash-command, plugin]
-related: [concepts/session-management.md, modules/drone-agent-plugins.md, decisions/053-compaction-latch-fix.md, decisions/125-compaction-summary-eviction.md, decisions/133-compaction-oldest-turns-helper-consolidation.md, decisions/134-compaction-correctness-fix.md]
+related:
+  [
+    concepts/session-management.md,
+    modules/drone-agent-plugins.md,
+    decisions/053-compaction-latch-fix.md,
+    decisions/125-compaction-summary-eviction.md,
+    decisions/133-compaction-oldest-turns-helper-consolidation.md,
+    decisions/134-compaction-correctness-fix.md,
+  ]
 ---
 
 # 135. Compaction Slash Command + Extended CompactionCapability
@@ -26,10 +34,10 @@ Added five new methods to the capability type:
 ```typescript
 type CompactionCapability = {
   forceEvaluate: () => Promise<void>;
-  forceEvaluateAll: () => Promise<void>;        // for --all
-  getStatus: () => Promise<CompactionStatus>;   // for show + dry-run info
+  forceEvaluateAll: () => Promise<void>; // for --all
+  getStatus: () => Promise<CompactionStatus>; // for show + dry-run info
   dropSummary: (id: string) => Promise<boolean>; // for drop <id>
-  dropAllSummaries: () => Promise<number>;       // for drop all
+  dropAllSummaries: () => Promise<number>; // for drop all
   dropOldestSummaries: (count: number) => Promise<number>; // for drop N
 };
 ```
@@ -37,6 +45,7 @@ type CompactionCapability = {
 Also added a public `CompactionStatus` type describing the current compaction state (enabled, config, turn counts, context-window usage, summary list).
 
 **Why extend the capability (not call internals directly):**
+
 - Keeps the plugin's internal `compactionInFlight` latch respected
 - Reuses `maybeCompact` logic (config checks, LLM calls, event emission)
 - Slash command stays thin — just UI + capability calls
@@ -68,6 +77,7 @@ Also added a public `CompactionStatus` type describing the current compaction st
 ## Tests
 
 Added 20 new tests to `drone-agent/test/compaction.test.ts`:
+
 - `forceEvaluateAll` compacts all non-summary turns in one call
 - `getStatus` returns correct counts and summary previews
 - `dropSummary` / `dropAllSummaries` / `dropOldestSummaries` mutate session correctly

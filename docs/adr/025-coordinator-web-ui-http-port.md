@@ -1,6 +1,12 @@
 ---
 tags: [decision, architecture, coordinator, web-ui, auth]
-related: [021-coordinator-web-ui.md, modules/drone-coordinator.md, modules/drone-coordinator-ui.md, concepts/coordinator-web-auth.md]
+related:
+  [
+    021-coordinator-web-ui.md,
+    modules/drone-coordinator.md,
+    modules/drone-coordinator-ui.md,
+    concepts/coordinator-web-auth.md,
+  ]
 ---
 
 # 025: Coordinator Web UI HTTP Port
@@ -34,6 +40,7 @@ Both servers share the same `setupServer()` factory function that registers all 
 ### Local Connection Bypass
 
 Auth is bypassed for connections from:
+
 - Loopback addresses (`127.0.0.1`, `::1`)
 - The machine's own network interfaces
 - Tailscale CGNAT range (`100.64.0.0/10`)

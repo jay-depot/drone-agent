@@ -1,6 +1,14 @@
 ---
 tags: [coordinator, config, secrets, mcp, adr]
-related: [modules/drone-coordinator.md, modules/drone-coordinator-ui.md, modules/drone-beacon.md, modules/drone-agent-plugins.md, concepts/beacon-config-override-spec.md, decisions/157-runtime-truth-context-windows.md]
+related:
+  [
+    modules/drone-coordinator.md,
+    modules/drone-coordinator-ui.md,
+    modules/drone-beacon.md,
+    modules/drone-agent-plugins.md,
+    concepts/beacon-config-override-spec.md,
+    decisions/157-runtime-truth-context-windows.md,
+  ]
 ---
 
 # Stored secrets split from coordinator config + config UX fixes

@@ -1,6 +1,12 @@
 ---
 tags: [decision, mcp, tool-loading, architecture]
-related: [drone-agent-mcp-client.md, drone-core.md, 064-mcp-deferred-tool-loading.md, 061-mcp-notifications-tools-list-changed.md]
+related:
+  [
+    drone-agent-mcp-client.md,
+    drone-core.md,
+    064-mcp-deferred-tool-loading.md,
+    061-mcp-notifications-tools-list-changed.md,
+  ]
 ---
 
 # 065 — MCP ToolMountingCache, Server Descriptions, and Persona Filtering
@@ -45,6 +51,7 @@ export class ToolMountingCache {
 ```
 
 Key design:
+
 - **One instance per MCP server** — solves the multi-server clobbering bug by design. No shared `mountedToolNames` set.
 - **Stores full `DroneToolDefinition` objects** (including `execute` functions) — easier API for plugin writers.
 - **Constructor takes `pluginId`** — used to construct canonical names for engine unregistration via `getCanonicalToolName(pluginId, tool.name)`.
@@ -126,20 +133,20 @@ The `mountedName` returned by `__mount_tool` in its JSON response includes the `
 
 ### New files
 
-| File | Purpose |
-|------|---------|
-| `drone-core/src/tool-mounting-cache.ts` | `ToolMountingCache` class |
+| File                                                | Purpose                                 |
+| --------------------------------------------------- | --------------------------------------- |
+| `drone-core/src/tool-mounting-cache.ts`             | `ToolMountingCache` class               |
 | `drone-agent/src/plugins/mcp/server-description.ts` | Server description generation + caching |
-| `drone-core/test/tool-mounting-cache.test.ts` | 14 unit tests for `ToolMountingCache` |
+| `drone-core/test/tool-mounting-cache.test.ts`       | 14 unit tests for `ToolMountingCache`   |
 
 ### Modified files
 
-| File | Changes |
-|------|---------|
-| `drone-core/src/index.ts` | Added `ToolMountingCache` export |
+| File                                   | Changes                                                                                                          |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `drone-core/src/index.ts`              | Added `ToolMountingCache` export                                                                                 |
 | `drone-agent/src/plugins/mcp/index.ts` | Refactored to use `ToolMountingCache` per server; added LLM/persona deps; server descriptions; persona filtering |
-| `drone-agent/test/mcp.test.ts` | Added multi-server regression test; updated `mountedName` assertions |
-| `AGENTS.md` | Updated MCP Plugin section with new features |
+| `drone-agent/test/mcp.test.ts`         | Added multi-server regression test; updated `mountedName` assertions                                             |
+| `AGENTS.md`                            | Updated MCP Plugin section with new features                                                                     |
 
 ## Commits
 

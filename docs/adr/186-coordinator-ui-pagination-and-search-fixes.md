@@ -1,6 +1,10 @@
 ---
 tags: [decision, coordinator-ui, pagination, search, bug-fix, react]
-related: [modules/drone-coordinator-ui.md, decisions/088-coordinator-ui-bug-fixes-batch-1.md]
+related:
+  [
+    modules/drone-coordinator-ui.md,
+    decisions/088-coordinator-ui-bug-fixes-batch-1.md,
+  ]
 ---
 
 # 186: Coordinator UI pagination + wiki search fixes

@@ -1,6 +1,11 @@
 ---
 tags: [decision, vision, multimodal, llm]
-related: [concepts/vision-support.md, modules/drone-core.md, modules/drone-agent-plugins.md]
+related:
+  [
+    concepts/vision-support.md,
+    modules/drone-core.md,
+    modules/drone-agent-plugins.md,
+  ]
 ---
 
 # Decision 084: Vision Model Support

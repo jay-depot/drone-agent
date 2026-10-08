@@ -18,6 +18,7 @@ Add `reasoning` to the `OpenAiMessage` type and check `choice.message.reasoning`
 ### Changes
 
 **`drone-agent/src/shared/openai-compatible.ts`:**
+
 - Added `reasoning?: string` to the `OpenAiMessage` type definition
 - After the existing `if (choice.reasoning)` check, added a fallback:
   ```ts
@@ -28,6 +29,7 @@ Add `reasoning` to the `OpenAiMessage` type and check `choice.message.reasoning`
   Choice-level takes precedence (OpenAI standard), message-level is used as fallback (OpenRouter's behavior).
 
 **Tests:**
+
 - Added test in `openai.test.ts`: `'extracts reasoning from message.reasoning when choice.reasoning is absent'`
 - Updated `openrouter.test.ts`: changed existing test to use `message.reasoning` instead of `choice.reasoning` (matching what OpenRouter actually returns)
 - Added test in `openrouter.test.ts`: `'prefers choice.reasoning over message.reasoning when both are present'`
@@ -35,11 +37,13 @@ Add `reasoning` to the `OpenAiMessage` type and check `choice.message.reasoning`
 ## Consequences
 
 ### Positive
+
 - OpenRouter reasoning is no longer silently dropped
 - Backward compatible — OpenAI's `choice.reasoning` still takes precedence
 - All 1599 tests pass
 
 ### Negative
+
 - None — minimal, targeted change
 
 ## Related

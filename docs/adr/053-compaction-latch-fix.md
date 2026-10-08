@@ -1,6 +1,11 @@
 ---
 tags: [decision, compaction, bug-fix, concurrency]
-related: [concepts/session-management.md, modules/drone-agent-plugins.md, flows/tool-call-loop.md]
+related:
+  [
+    concepts/session-management.md,
+    modules/drone-agent-plugins.md,
+    flows/tool-call-loop.md,
+  ]
 ---
 
 # Decision 053: Compaction `compactionInFlight` Latch Fix
@@ -15,14 +20,14 @@ The compaction plugin's re-entrancy guard (`compactionInFlight`) was latched `tr
 
 The root cause is a flag-reset that only happened on the "happy path" exits:
 
-- `hookBody` (and the `forceEvaluate` capability) set `context.compactionInFlight.value = true` *before* calling `maybeCompact()`.
+- `hookBody` (and the `forceEvaluate` capability) set `context.compactionInFlight.value = true` _before_ calling `maybeCompact()`.
 - `maybeCompact` has an early-return for `turns.length === 0` that **does not** reset the flag (compaction/index.ts).
-- Every shell (interactive loop, `index.tsx`, `app.tsx`, JSON mode) fires `onBeforePrompt` **before** the user message is appended to the session. So the *first* prompt of a session calls `hookBody` on an empty session: the flag latches `true`, `maybeCompact` hits the empty-turns early return, and the flag stays `true` forever.
+- Every shell (interactive loop, `index.tsx`, `app.tsx`, JSON mode) fires `onBeforePrompt` **before** the user message is appended to the session. So the _first_ prompt of a session calls `hookBody` on an empty session: the flag latches `true`, `maybeCompact` hits the empty-turns early return, and the flag stays `true` forever.
 - From then on, both `onBeforePrompt` and `onAfterToolCall` bail at `if (context.compactionInFlight.value) return;` — forever. The safety-trim path in the conversation service does the crude drop instead.
 
 ### Why the test suite missed it
 
-The test `resets compactionInFlight after the empty-turns early return` was **bogus**: after running `runBeforePrompt(capture)` once on an empty session, it built a *brand-new* plugin and capture (`smallPlugin`/`smallCapture`) for the second call — which has its own fresh `compactionInFlight: { value: false }`. It never exercised the lock state persisting across calls on the *same* instance, so it validated nothing about the failure mode.
+The test `resets compactionInFlight after the empty-turns early return` was **bogus**: after running `runBeforePrompt(capture)` once on an empty session, it built a _brand-new_ plugin and capture (`smallPlugin`/`smallCapture`) for the second call — which has its own fresh `compactionInFlight: { value: false }`. It never exercised the lock state persisting across calls on the _same_ instance, so it validated nothing about the failure mode.
 
 ## Decision
 
@@ -33,18 +38,22 @@ Extract a module-level `runCompaction(context, budgetService, systemPrompt)` hel
 ```ts
 context.compactionInFlight.value = true;
 try {
-  await runCompaction(context, budgetService, registration.getConfig().systemPrompt);
+  await runCompaction(
+    context,
+    budgetService,
+    registration.getConfig().systemPrompt
+  );
 } finally {
   context.compactionInFlight.value = false;
 }
 ```
 
-The two top guards (`!config.enabled`, already-in-flight) remain plain early returns *before* the flag is set, so their behavior is unchanged and errors still propagate through `finally`.
+The two top guards (`!config.enabled`, already-in-flight) remain plain early returns _before_ the flag is set, so their behavior is unchanged and errors still propagate through `finally`.
 
 ### 2. Fixed + added same-instance regression tests
 
 - Rewrote the bogus test to reuse the **same** `capture`/`sessionManager` across both calls (empty session → append 6 long turns → call again; assert exactly one compaction).
-- Added a dedicated test driving the real runtime ordering on one instance: `onBeforePrompt` (empty session, latch latches), then `onAfterToolCall` after appending tool-result turns. This mirrors the conversation-service ordering where tool results are appended *before* `onAfterToolCall` fires.
+- Added a dedicated test driving the real runtime ordering on one instance: `onBeforePrompt` (empty session, latch latches), then `onAfterToolCall` after appending tool-result turns. This mirrors the conversation-service ordering where tool results are appended _before_ `onAfterToolCall` fires.
 
 ## Consequences
 
