@@ -6,7 +6,8 @@ tags:
   - bugfix
   - plugin
 created: 2026-10-08T22:20:00.000Z
-updated: 2026-10-08T22:20:00.000Z
+updated: 2026-10-08T22:23:00.000Z
+status: completed
 ---
 
 # Plan: herdr `--seq` must be monotonic across process restarts
@@ -400,3 +401,53 @@ All items must pass. Do not skip the test suites.
 - Persisted seq counters / cross-process locking (a wall clock removes the need).
 - Any change to `drone-core`, the engine, MCP, or the swarm plugin.
 - Reworking the `blocked` state (still deferred per ADR 239 D1).
+
+---
+
+## Completion summary (2026-10-08, executed on `fix/herdr-seq-monotonic`)
+
+**Status: COMPLETE.** All five steps executed; every validation criterion passes.
+Commit **`bc209ffd`** — `fix(herdr): derive --seq from the wall clock so restarts
+out-sequence stale watermarks` (6 files, +141/−8).
+
+### What changed
+
+- **`drone-agent/src/plugins/herdr/reporter.ts`** — replaced the 0-based
+  `let seq = 0` counter and both `String(seq++)` sites with
+  `const nextSeq = (): number => (seq = Math.max(Date.now(), seq + 1));`,
+  used by **both** `report()` and `release()`. Header comment updated. No clock
+  parameter was added to `HerdrReporterOptions` (D-A/D-C honoured).
+- **`drone-agent/test/herdr-reporter.test.ts`** (new, 3 cases) — strict
+  monotonicity across reports + release; the **restart regression** (two
+  `createReporter` instances at T and T+1s; every seq from the second exceeds
+  the first's max); same-millisecond monotonicity.
+- **`drone-agent/test/herdr-plugin.test.ts`** — added a wall-clock floor check
+  to `increases --seq across every report` (every seq ≥ `Date.now() - 5_000`).
+- **Docs** — `docs/agents/herdr-plugin.md` (state bullet),
+  `docs/adr/239-herdr-agent-integration.md` (D6 clause + a Consequences note),
+  `docs/adr/index.md` row 239 (`wall-clock --seq (monotonic across restarts)`).
+
+### Validation evidence
+
+- **RED→GREEN proven:** with pre-fix `reporter.ts`, the restart case failed
+  (`AssertionError: expected 0 to be greater than 2`); after the fix it passes.
+- `pnpm -r run typecheck` and `pnpm -r run build` — zero errors.
+- `pnpm exec prettier --check` on all changed files — clean; scoped `eslint`
+  (no `--fix`) on the changed TS files — zero errors, no `eslint-disable`.
+- `pnpm run test` (fast suite) — **282 files / 3777 tests passed**, 0 failed
+  (14 skipped).
+- Consistency greps: `monotonic in-process` absent from `docs/`; no `seq++`
+  remains in `drone-agent/src/plugins/herdr/`.
+
+### Implementation note for future work (deviation from the plan's test snippet)
+
+The plan's Step 2 snippet used plain `vi.useFakeTimers()`. That fakes
+`setTimeout` as well as `Date`, which would hang the `flush()` helper that
+drains the reporter's background coalescing pump. The implementation therefore
+uses `vi.useFakeTimers({ toFake: ['Date'] })` — the clock is still controlled
+deterministically via `setSystemTime`, while real timers keep `flush()` working.
+Behaviour and assertions are otherwise exactly as planned.
+
+Item 10 of the validation criteria (live in-pane round-trip) was **not run**
+(marked recommended, not blocking, per the plan). It remains the only
+unverified check; the automated restart test covers the same regression.

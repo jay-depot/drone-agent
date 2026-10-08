@@ -770,5 +770,13 @@
   {
     "timestamp": "2026-10-08T22:12:00.272Z",
     "insight": "Debugging hazard when investigating the herdr plugin: running probe commands like `herdr pane report-agent <HERDR_PANE_ID> --source X --agent Y ...` against the user's LIVE pane hijacks the pane's displayed agent name/state (Herdr shows the last reporter). This makes it look like the app is misbehaving (\"random garbage agent name that changes after every tool call\") when it is actually the probe. When testing Herdr state semantics, use a scratch `herdr --session <name>` pane, or at minimum release with a high `--seq` afterwards and warn the user you have touched their pane. Also note: `release-agent` clears the pane occupant and needs its own seq that exceeds the source's watermark to be accepted; the next app report re-claims it."
+  },
+  {
+    "timestamp": "2026-10-08T22:22:33.169Z",
+    "insight": "Vitest trap when testing a coalescing/async-pump module: plain `vi.useFakeTimers()` fakes `setTimeout` as well as `Date`, so any test helper that drains a background promise chain via `await new Promise(r => setTimeout(r, 0))` will HANG (the timer never fires). Use `vi.useFakeTimers({ toFake: ['Date'] })` to control the clock deterministically (via `setSystemTime`) while leaving real timers working. Hit in drone-agent/test/herdr-reporter.test.ts while executing plan-herdr-seq-monotonic; the plan's own test snippet used the plain form and would have hung. The drone-agent repo already had precedent for fake timers (test/swarm/swarm-info.test.ts) but not for the `toFake` refinement."
+  },
+  {
+    "timestamp": "2026-10-08T22:22:33.171Z",
+    "insight": "When unit-testing a single-in-flight COALESCING reporter (a `queue()` that keeps only the latest desired state), synchronous back-to-back `report()` calls collapse: intermediate states are dropped, so you cannot assert \"3 reports produced 3 seqs\" unless you drain the pump (await a microtask/timer flush) between each call. In drone-agent/test/herdr-reporter.test.ts this meant interleaving `await flush()` after every report; the alternative (calling all reports then flushing once) yields only the LAST state and one seq. This is correct product behaviour (only the latest state is sent) but a test-design gotcha — assert per-call only after draining."
   }
 ]
