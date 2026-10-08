@@ -103,7 +103,8 @@ Release on `onShutdown` only; **no** global SIGINT/SIGTERM handlers (only
 `runSwarmListenMode` traps signals; Herdr's shell-prompt safety net covers an
 un-released pane within ~1–2 s). No action on `/clear` (the session id is
 unchanged). **Subagents are skipped** — they inherit `HERDR_ENV` and would
-clobber the parent's pane. Reports carry a monotonic in-process `--seq` and are
+clobber the parent's pane. Reports carry a `--seq` that is strictly increasing
+across process restarts (a wall-clock value), not merely in-process, and are
 coalesced to a single in-flight call keeping only the latest state.
 
 ### D7 — Config and surfacing
@@ -117,6 +118,10 @@ herdr` enables verbose logs.
 
 - drone-agent appears in `herdr agent list`, raises finish notifications, and
   survives a Herdr restart (resuming by import).
+- `--seq` is derived from the wall clock so a restarted process cannot be
+  silently dropped by Herdr's "not higher than the last accepted" rule; the
+  earlier 0-based in-process counter produced exactly that failure after a run
+  that exited without releasing.
 - The plugin CLI-flag facility is the seed of a planned general mechanism;
   dotted flags are validated late (after registration), so a misspelled dotted
   core flag becomes a silent plugin flag caught only by the engine's warning.

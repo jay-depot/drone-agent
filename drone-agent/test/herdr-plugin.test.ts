@@ -227,6 +227,11 @@ describe('herdr plugin', () => {
     for (let i = 1; i < seqs.length; i++) {
       expect(seqs[i]).toBeGreaterThan(seqs[i - 1]);
     }
+    // Wall-clock floor: every seq is a real timestamp, so a restart cannot
+    // collide with an older process's watermark.
+    for (const s of seqs) {
+      expect(s).toBeGreaterThanOrEqual(Date.now() - 5_000);
+    }
   });
 
   it('releases the pane on shutdown', async () => {
