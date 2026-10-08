@@ -79,6 +79,7 @@ describe('config setValue real write path (llm.active regression)', () => {
       },
       request: <T>() => undefined as T | undefined,
       runWorkflow: async () => ({ toolResult: '{}' }),
+      getCliFlags: () => ({}),
       requestElicitation: () => undefined,
     };
 

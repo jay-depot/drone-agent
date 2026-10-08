@@ -86,6 +86,7 @@ async function captureWindowCapability(options: {
     },
     request: <T>() => undefined as T | undefined,
     runWorkflow: async () => ({ toolResult: '{}' }),
+    getCliFlags: () => ({}),
     requestElicitation: () => undefined,
   };
 
@@ -463,6 +464,7 @@ describe('broker context-window resolution', () => {
       },
       request: <T>() => undefined as T | undefined,
       runWorkflow: async () => ({ toolResult: '{}' }),
+      getCliFlags: () => ({}),
       requestElicitation: () => undefined,
     };
 

@@ -365,6 +365,11 @@ async function getCapability(
       },
       memory: { enabled: false },
       wakelock: { enabled: false },
+      herdr: {
+        enabled: false,
+        resumeCommand: 'drone-agent',
+        agentLabel: 'drone-agent',
+      },
       log: { enabled: false },
       terminal: {
         enabled: false,
@@ -426,6 +431,7 @@ async function getCapability(
     },
     request: () => undefined,
     runWorkflow: async () => ({ toolResult: '{}' }),
+    getCliFlags: () => ({}),
     requestElicitation: () => undefined,
   });
   if (!cap) throw new Error('Capability not offered');

@@ -235,6 +235,11 @@ type CreateDronePluginEngineOptions = {
   logToStderr?: boolean;
   debugFlags?: DebugFlagRegistry;
   referenceCapability?: DroneReferenceCapability;
+  /**
+   * Plugin-namespaced CLI flags (`--<pluginId>.<flag>[=<value>]`), parsed by
+   * the CLI and consumed by plugins via `registration.getCliFlags()`.
+   */
+  pluginFlags?: Record<string, string | true>;
   runtimeOptions?: {
     subagentId?: string;
     persona?: string;
@@ -291,19 +296,40 @@ export function getDefaultEnabledPluginIds(plugins: DronePlugin[]): string[] {
 
 function resolveEnabledPluginIds(
   plugins: DronePlugin[],
-  config: DroneAgentConfig
+  config: DroneAgentConfig,
+  pluginFlags: Record<string, string | true>
 ): Set<string> {
-  if (config.enabledPlugins.length > 0) {
-    const enabledPluginIds = new Set(config.enabledPlugins);
-    for (const plugin of plugins) {
-      if (plugin.metadata.required) {
-        enabledPluginIds.add(plugin.metadata.id);
-      }
+  const enabledPluginIds =
+    config.enabledPlugins.length > 0
+      ? new Set(config.enabledPlugins)
+      : new Set(getDefaultEnabledPluginIds(plugins));
+
+  for (const plugin of plugins) {
+    if (plugin.metadata.required) {
+      enabledPluginIds.add(plugin.metadata.id);
     }
-    return enabledPluginIds;
   }
 
-  return new Set(getDefaultEnabledPluginIds(plugins));
+  // A plugin whose id namespaces a CLI flag is force-enabled, so e.g.
+  // `--swarm.session-import <id>` works without `--swarm` or editing
+  // `enabledPlugins`.
+  for (const namespace of pluginFlagNamespaces(pluginFlags)) {
+    if (pluginMapIds(plugins).has(namespace)) {
+      enabledPluginIds.add(namespace);
+    }
+  }
+
+  return enabledPluginIds;
+}
+
+function pluginFlagNamespaces(
+  pluginFlags: Record<string, string | true>
+): Set<string> {
+  return new Set(Object.keys(pluginFlags).map(key => key.split('.')[0]));
+}
+
+function pluginMapIds(plugins: DronePlugin[]): Set<string> {
+  return new Set(plugins.map(plugin => plugin.metadata.id));
 }
 
 function validatePluginRegistry(
@@ -382,6 +408,7 @@ export function createDronePluginEngine({
   logToStderr = false,
   debugFlags = createDebugFlagRegistry(),
   referenceCapability,
+  pluginFlags = {},
   runtimeOptions,
   buildSystemMessages: buildSystemMessagesFromHost,
   buildFooterMessages: buildFooterMessagesFromHost,
@@ -392,7 +419,11 @@ export function createDronePluginEngine({
 }: CreateDronePluginEngineOptions): DronePluginEngine {
   const systemReminders = new SystemReminderQueue();
   const pluginMap = validatePluginRegistry(plugins);
-  const enabledPluginIds = resolveEnabledPluginIds(plugins, config);
+  const enabledPluginIds = resolveEnabledPluginIds(
+    plugins,
+    config,
+    pluginFlags
+  );
   validateKnownEnabledPlugins(enabledPluginIds, pluginMap);
   const sortedPlugins = sortPluginsByDependencies(
     plugins,
@@ -406,6 +437,7 @@ export function createDronePluginEngine({
   const workflows = new Map<string, DroneWorkflow>();
   const promptKeys = new Set<string>();
   const capabilities = new Map<string, unknown>();
+  const claimedNamespaces = new Set<string>();
   const registeredPlugins: RegisteredPluginState[] = [];
   const runtimeFlagRegistry = createRuntimeFlagRegistry();
   const helpSnippets = new Map<string, string[]>();
@@ -641,9 +673,19 @@ export function createDronePluginEngine({
       }
     }
 
+    const flagNamespace = `${plugin.metadata.id}.`;
+    const scopedFlags: Record<string, string | true> = {};
+    for (const [key, value] of Object.entries(pluginFlags)) {
+      if (key.startsWith(flagNamespace)) {
+        scopedFlags[key.slice(flagNamespace.length)] = value;
+      }
+    }
+    claimedNamespaces.add(plugin.metadata.id);
+
     await plugin.register({
       logger: pluginLogger,
       getConfig: () => config,
+      getCliFlags: () => scopedFlags,
       registerTool: tool => {
         const canonicalName = getCanonicalToolName(
           plugin.metadata.id,
@@ -961,6 +1003,7 @@ export function createDronePluginEngine({
         persona: runtimeOptions?.persona,
         isSubagent: !!runtimeOptions?.subagentId,
         swarmSpawned: !!runtimeOptions?.swarmSpawned,
+        pluginFlags,
         debugFlags,
         flags: runtimeFlagRegistry,
         resetStuckDetectors: resetStuckDetectorsFromHost,
@@ -997,6 +1040,13 @@ export function createDronePluginEngine({
 
       // Log override warnings after all plugins are loaded.
       logOverrideWarnings();
+
+      // Warn once per plugin-flag namespace that no enabled plugin claimed.
+      for (const namespace of pluginFlagNamespaces(pluginFlags)) {
+        if (!claimedNamespaces.has(namespace)) {
+          logger.warn(`no enabled plugin owns CLI flag '${namespace}.*'`);
+        }
+      }
 
       return registeredPlugins;
     },

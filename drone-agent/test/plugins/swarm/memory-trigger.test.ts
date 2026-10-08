@@ -55,6 +55,7 @@ function createCapture(
     offer: () => {},
     request: () => undefined,
     runWorkflow: async () => ({ toolResult: undefined }),
+    getCliFlags: () => ({}),
     requestElicitation: () => undefined,
   };
 

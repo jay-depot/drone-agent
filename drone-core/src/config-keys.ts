@@ -80,6 +80,10 @@ export const KNOWN_CONFIG_KEYS: string[] = [
   'search.projectEmbeddingProvider',
   // wakelock.enabled
   'wakelock.enabled',
+  // herdr.*
+  'herdr.enabled',
+  'herdr.resumeCommand',
+  'herdr.agentLabel',
 ];
 
 /**

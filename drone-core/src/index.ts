@@ -245,6 +245,7 @@ export type {
   SearchResult,
   IndexResult,
   DroneSwarmCapability,
+  DroneSessionImportCapability,
 } from './capabilities.js';
 
 // ── Reference types ──────────────────────────────────────────────────

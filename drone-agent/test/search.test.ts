@@ -73,6 +73,7 @@ function captureRegistration(): {
     offer: () => {},
     request: <T>() => undefined as T | undefined,
     runWorkflow: async () => ({ toolResult: '{}' }),
+    getCliFlags: () => ({}),
     requestElicitation: () => undefined,
   };
   return {
@@ -222,6 +223,7 @@ describe('search plugin — semantic exclude passthrough', () => {
           getAgentId: () => 'agent-1',
         }) as T,
       runWorkflow: async () => ({ toolResult: '{}' }),
+      getCliFlags: () => ({}),
       requestElicitation: () => undefined,
     };
 
@@ -392,6 +394,7 @@ describe('search plugin — /search-files slash command', () => {
       offer: () => {},
       request: <T>() => undefined as T | undefined,
       runWorkflow: async () => ({ toolResult: '{}' }),
+      getCliFlags: () => ({}),
       requestElicitation: () => undefined,
     };
     return { registration, slashCommands };

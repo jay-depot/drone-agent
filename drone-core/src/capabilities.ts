@@ -41,6 +41,15 @@ export type DroneSwarmCapability = {
 };
 
 /**
+ * Capability offered by the swarm plugin for recreating an old swarm
+ * session's context into the current session at startup (the
+ * `--swarm.session-import` resume path).
+ */
+export type DroneSessionImportCapability = {
+  runImport: (sessionId: string) => Promise<{ ok: boolean; summary: string }>;
+};
+
+/**
  * Result of a semantic search operation.
  */
 export type SearchResult = {

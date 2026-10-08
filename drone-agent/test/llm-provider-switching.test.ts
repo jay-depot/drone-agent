@@ -74,6 +74,7 @@ async function captureLlmPlugin(
     },
     request: <T>() => undefined as T | undefined,
     runWorkflow: async () => ({ toolResult: '{}' }),
+    getCliFlags: () => ({}),
     requestElicitation: () => undefined,
   };
 

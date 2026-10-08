@@ -2,12 +2,14 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import {
   fetchTranscript,
   injectChunk,
+  runSessionImport,
   splitTranscriptIntoChunks,
   summarizeChunk,
   SESSION_IMPORT_TOOL,
   IMPORT_SUMMARY_SYSTEM_PROMPT,
+  type SessionImportDeps,
 } from '../src/plugins/swarm/session-import.js';
-import type { DroneLlmProvider } from 'drone-core';
+import type { DroneLlmCapability, DroneLlmProvider } from 'drone-core';
 import { createSessionManager } from '../src/runtime/session-manager.js';
 
 describe('splitTranscriptIntoChunks', () => {
@@ -181,5 +183,143 @@ describe('fetchTranscript', () => {
     await expect(
       fetchTranscript('http://localhost:3457', 'ss1')
     ).rejects.toThrow('Session has no transcript to import.');
+  });
+});
+
+describe('runSessionImport', () => {
+  const transcript = [
+    '# Session old1',
+    '',
+    '--- Turn 1 ---',
+    '[user] one',
+    '--- Turn 2 ---',
+    '[user] two',
+  ].join('\n');
+
+  function makeLlm(): {
+    llm: DroneLlmCapability;
+    chat: ReturnType<typeof vi.fn>;
+  } {
+    const chat = vi.fn().mockResolvedValue({ message: 'chunk summary' });
+    const provider: DroneLlmProvider = { chat };
+    const llm = {
+      getActiveProvider: () => provider,
+      getModel: () => 'model-x',
+    } as unknown as DroneLlmCapability;
+    return { llm, chat };
+  }
+
+  function makeDeps(overrides: Partial<SessionImportDeps> = {}): {
+    deps: SessionImportDeps;
+    info: string[];
+    warn: string[];
+    afterToolCall: ReturnType<typeof vi.fn>;
+    sessionManager: ReturnType<typeof createSessionManager>;
+    llmChat: ReturnType<typeof vi.fn>;
+  } {
+    const { llm, chat } = makeLlm();
+    const info: string[] = [];
+    const warn: string[] = [];
+    const afterToolCall = vi.fn().mockResolvedValue(undefined);
+    const sessionManager = createSessionManager();
+    const deps: SessionImportDeps = {
+      baseUrl: 'http://localhost:3457',
+      llm,
+      sessionManager,
+      logger: {
+        info: (message: string) => info.push(message),
+        warn: (message: string) => warn.push(message),
+      },
+      config: { maxChunks: 5, chunkTokenBudgetPercent: 12 },
+      getContextWindowTokens: async () => 32768,
+      runAfterToolCallHooks: afterToolCall,
+      ...overrides,
+    };
+    return { deps, info, warn, afterToolCall, sessionManager, llmChat: chat };
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ transcript }),
+      })
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('imports chunks and runs the after-tool-call hooks between them', async () => {
+    const { deps, afterToolCall, sessionManager, info } = makeDeps();
+    const result = await runSessionImport(deps, 'old1');
+
+    expect(result.ok).toBe(true);
+    expect(result.summary).toContain('old1');
+    // Two turns -> two injected chunks, one hook call between them.
+    expect(sessionManager.getTurns()).toHaveLength(2);
+    expect(afterToolCall).toHaveBeenCalledTimes(1);
+    // Each chunk is logged once, plus a final completion line.
+    expect(info.filter(m => /^Imported chunk \d+\//.test(m))).toHaveLength(2);
+  });
+
+  it('rejects importing the current session into itself', async () => {
+    const { deps, warn } = makeDeps({ currentSessionId: 'old1' });
+    const result = await runSessionImport(deps, 'old1');
+    expect(result.ok).toBe(false);
+    expect(result.summary).toContain('into itself');
+    expect(warn.join(' ')).toContain('into itself');
+  });
+
+  it('rejects an out-of-range --from', async () => {
+    const { deps } = makeDeps();
+    const result = await runSessionImport(deps, 'old1', { from: 99 });
+    expect(result.ok).toBe(false);
+    expect(result.summary).toContain('out of range');
+  });
+
+  it('resumes from the given --from chunk', async () => {
+    const { deps, afterToolCall, sessionManager } = makeDeps();
+    const result = await runSessionImport(deps, 'old1', { from: 2 });
+    expect(result.ok).toBe(true);
+    // Only chunk 2 was imported, so no inter-chunk hook call.
+    expect(sessionManager.getTurns()).toHaveLength(1);
+    expect(afterToolCall).not.toHaveBeenCalled();
+  });
+
+  it('fails non-fatally when the transcript cannot be fetched', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 500 })
+    );
+    const { deps } = makeDeps();
+    const result = await runSessionImport(deps, 'old1');
+    expect(result.ok).toBe(false);
+    expect(result.summary).toContain('Failed to fetch transcript');
+  });
+
+  it('fails non-fatally when the LLM broker is unavailable', async () => {
+    const { deps } = makeDeps({ llm: undefined });
+    const result = await runSessionImport(deps, 'old1');
+    expect(result.ok).toBe(false);
+    expect(result.summary).toContain('LLM provider broker is not available');
+  });
+
+  it('fails non-fatally when the session manager is unavailable', async () => {
+    const { deps } = makeDeps({ sessionManager: undefined });
+    const result = await runSessionImport(deps, 'old1');
+    expect(result.ok).toBe(false);
+    expect(result.summary).toContain('Session manager is not available');
+  });
+
+  it('aborts mid-way when a chunk summarization fails', async () => {
+    const { deps, llmChat } = makeDeps();
+    llmChat
+      .mockResolvedValueOnce({ message: 'ok' })
+      .mockRejectedValueOnce(new Error('boom'));
+    const result = await runSessionImport(deps, 'old1');
+    expect(result.ok).toBe(false);
+    expect(result.summary).toContain('resume with --from 2');
   });
 });

@@ -67,6 +67,7 @@ function captureGitTools(): Map<
     offer: () => {},
     request: <T>() => undefined as T | undefined,
     runWorkflow: async () => ({ toolResult: '{}' }),
+    getCliFlags: () => ({}),
     requestElicitation: () => undefined,
   };
   gitPlugin.register(registration);

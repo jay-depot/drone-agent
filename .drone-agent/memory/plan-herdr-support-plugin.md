@@ -38,12 +38,15 @@ Deliverable: `herdr` shows drone-agent in `herdr agent list`; finishing a turn r
 Env vars inherited in a Herdr pane: `HERDR_ENV=1`, `HERDR_PANE_ID`, `HERDR_BIN_PATH`, `HERDR_SOCKET_PATH` (+ `HERDR_WORKSPACE_ID`, `HERDR_TAB_ID`). Outside Herdr the integration must do nothing.
 
 State report:
+
 ```
 "$HERDR_BIN_PATH" pane report-agent "$HERDR_PANE_ID" \
   --source drone-agent --agent <agentLabel> --state working|idle|blocked \
   [--message <text>] [--seq <n>] [--agent-session-id <id>] [-- <resume argv...>]
 ```
+
 Release:
+
 ```
 "$HERDR_BIN_PATH" pane release-agent "$HERDR_PANE_ID" --source drone-agent --agent <agentLabel> [--seq <n>]
 ```
@@ -93,6 +96,7 @@ Phase D (finish)
 **Files:** `drone-core/src/config-types.ts`, `drone-core/src/config-schema.ts`.
 
 1. Add the type (near `DroneWakelockConfig`, config-types.ts:254):
+
 ```ts
 export type DroneHerdrConfig = {
   /** Master toggle for reporting to the Herdr terminal multiplexer. */
@@ -103,6 +107,7 @@ export type DroneHerdrConfig = {
   agentLabel: string;
 };
 ```
+
 2. Add `herdr: DroneHerdrConfig;` to `DroneAgentConfig` and `herdr: Partial<DroneHerdrConfig>;` to `PartialDroneAgentConfig`.
 3. Add `'herdr'` to the merge-spec `merge` array.
 4. Add the default in `createDefaultAgentConfig()`: `herdr: { enabled: true, resumeCommand: 'drone-agent', agentLabel: 'drone-agent' }`.
@@ -119,11 +124,14 @@ export type DroneHerdrConfig = {
 **Surface:** `--<pluginId>.<flagName>[=<value>]`. Core flags unchanged. Unknown **non-dotted** `--*` still throws.
 
 1. `cli.ts` — add to `CliOptions`:
+
 ```ts
 /** Plugin-namespaced flags: `--<pluginId>.<flag>[=<value>]`. */
 pluginFlags: Record<string, string | true>;
 ```
+
 Initialize `pluginFlags: {}` in the options object. Add one parse branch, **after** all core branches and **before** the `Unknown option` throw (cli.ts:253):
+
 ```ts
 } else if (arg.startsWith('--') && arg.slice(2).includes('.')) {
   const raw = arg.slice(2);
@@ -145,6 +153,7 @@ Initialize `pluginFlags: {}` in the options object. Add one parse branch, **afte
 ```
 
 2. `drone-core/src/plugin-system.ts` — add to `DronePluginRegistration`:
+
 ```ts
 /**
  * This plugin's CLI flags, with the `"<pluginId>."` namespace stripped.
@@ -176,7 +185,9 @@ getCliFlags: () => Record<string, string | true>;
      ```ts
      for (const ns of flagNamespaces) {
        if (!claimedNamespaces.has(ns)) {
-         console.error(`[cli:plugin-flag] no enabled plugin owns flag '${ns}.*'`);
+         console.error(
+           `[cli:plugin-flag] no enabled plugin owns flag '${ns}.*'`
+         );
        }
      }
      ```
@@ -204,6 +215,7 @@ getCliFlags: () => Record<string, string | true>;
 **Files:** `drone-agent/src/plugins/swarm/session-import.ts`, `drone-agent/src/plugins/swarm/session-command.ts`.
 
 Move the body of `handleImport` (session-command.ts) into a context-free function in `session-import.ts`:
+
 ```ts
 export type SessionImportDeps = {
   baseUrl: string | undefined;
@@ -222,6 +234,7 @@ export async function runSessionImport(
   opts: { from?: number } = {}
 ): Promise<{ ok: boolean; summary: string }>;
 ```
+
 Keep the existing behaviour exactly: self-import guard, `--from` clamp check, `fetchTranscript` → `splitTranscriptIntoChunks` → per-chunk `summarizeChunk` → `injectChunk`, `runAfterToolCallHooks()` between chunks, non-fatal error handling. Progress goes to `deps.logger`; the **returned `summary`** is terse (one line on success, plus the failure/warning lines on abort).
 
 `handleImport` (session-command.ts) becomes a thin adapter: build `deps` from `DroneSlashCommandContext`, parse `--from`, call `runSessionImport`, then `ctx.logger.info(result.summary)`. Behaviour of `/swarm-session import` is unchanged from the user's perspective.
@@ -233,16 +246,19 @@ Keep the existing behaviour exactly: self-import guard, `--from` clamp check, `f
 **Files:** `drone-agent/src/plugins/swarm/index.ts`, `drone-core/src/plugin-system.ts` (capability type), `drone-agent/src/index.tsx`, `drone-agent/src/tui/types.ts`, `drone-agent/src/tui/app.tsx`.
 
 1. **Capability** — add to drone-core:
+
 ```ts
 export type DroneSessionImportCapability = {
   runImport: (sessionId: string) => Promise<{ ok: boolean; summary: string }>;
 };
 ```
+
 2. **Swarm plugin** — read its flag and offer the capability:
    - `const importIdFlag = registration.getCliFlags()['session-import'];`
    - `registration.offer<DroneSessionImportCapability>({ runImport: async (sessionId) => runSessionImport(deps, sessionId) })`, where `deps` is assembled from the swarm plugin's handles: `baseUrl` (`getBeaconUrl()`), `llm` (`registration.request<DroneLlmCapability>('llm')`), `sessionManager` (wire into `createSwarmPlugin` deps if not already present), `logger`, `config: getConfig().swarm.sessionImport`, `getContextWindowTokens` (broker-resolved, with the config-only fallback), `runAfterToolCallHooks`.
    - Declare `llm` as an optional dependency if not already.
 3. **Startup** — in `index.tsx`, **after** `runHooks('onSessionStart')` (:473) and **before** the mode dispatch (:451):
+
 ```ts
 let startupEntries: ChatEntry[] | undefined;
 const importSessionId = invocation.options.pluginFlags['swarm.session-import'];
@@ -252,15 +268,19 @@ if (typeof importSessionId === 'string') {
     const res = await cap.runImport(importSessionId);
     if (res.summary) {
       logger.info(res.summary);
-      startupEntries = [{ id: 'startup-session-import', kind: 'notice', text: res.summary }];
+      startupEntries = [
+        { id: 'startup-session-import', kind: 'notice', text: res.summary },
+      ];
     }
   } else {
-    logger.warn('--swarm.session-import: swarm plugin unavailable; skipping import.');
+    logger.warn(
+      '--swarm.session-import: swarm plugin unavailable; skipping import.'
+    );
   }
 }
 ```
-Pass `initialEntries: startupEntries` to **both** `createTui(...)` call sites (:496 and :544). Non-TUI hosts already surface it via `logger.info`.
-4. **TUI seeding** — `tui/types.ts`: add `initialEntries?: ChatEntry[];` to `DroneTuiOptions`. `tui/app.tsx`: seed the log state from `opts.initialEntries` on first mount (initialize the log reducer/state from it; do not re-seed on later renders).
+
+Pass `initialEntries: startupEntries` to **both** `createTui(...)` call sites (:496 and :544). Non-TUI hosts already surface it via `logger.info`. 4. **TUI seeding** — `tui/types.ts`: add `initialEntries?: ChatEntry[];` to `DroneTuiOptions`. `tui/app.tsx`: seed the log state from `opts.initialEntries` on first mount (initialize the log reducer/state from it; do not re-seed on later renders).
 
 **Ordering guarantee:** this runs before `createTui` and before any turn, so it neither races the first LLM call nor emits events the TUI would miss.
 
@@ -305,23 +325,28 @@ Pass `initialEntries: startupEntries` to **both** `createTui(...)` call sites (:
 
 ```ts
 export function buildResumeArgv(input: {
-  resumeCommand: string;         // config.herdr.resumeCommand
-  sessionId: string;             // swarm session id (the import target)
-  personaId: string | null;      // active persona, if any
-  modelOverride?: string;        // CLI --model, only if explicitly set
-  beaconHost?: string;           // CLI --beacon-host, only if explicitly set
-  beaconPort?: number;           // CLI --beacon-port, only if explicitly set
+  resumeCommand: string; // config.herdr.resumeCommand
+  sessionId: string; // swarm session id (the import target)
+  personaId: string | null; // active persona, if any
+  modelOverride?: string; // CLI --model, only if explicitly set
+  beaconHost?: string; // CLI --beacon-host, only if explicitly set
+  beaconPort?: number; // CLI --beacon-port, only if explicitly set
 }): string[] {
   const argv = [input.resumeCommand, '--swarm.session-import', input.sessionId];
   if (input.personaId) argv.push('--persona', input.personaId);
   if (input.modelOverride) argv.push('--model', input.modelOverride);
   if (input.beaconHost) argv.push('--beacon-host', input.beaconHost);
-  if (input.beaconPort !== undefined) argv.push('--beacon-port', String(input.beaconPort));
+  if (input.beaconPort !== undefined)
+    argv.push('--beacon-port', String(input.beaconPort));
   return argv;
 }
 
-export function validateResumeArgv(argv: string[]): { ok: boolean; reason?: string };
+export function validateResumeArgv(argv: string[]): {
+  ok: boolean;
+  reason?: string;
+};
 ```
+
 `validateResumeArgv` enforces Herdr's rules: argv[0] has no path separator (`/`, `\`); no element contains an apostrophe (`'`) or a control character (`/[\u0000-\u001f\u007f]/`); `argv.length <= 64`; total byte length `<= 8192`.
 
 The plugin calls `buildResumeArgv` at register time (persona from `_runtime.persona`, overrides from the DI'd CLI options), validates it, and attaches it to the **first** state report. On validation failure: log (warn) and omit the resume argv while state reporting continues. `--session-id`/`--spawn-id`/`--swarm`/`--once`/`--output-json`/`--working-dir` are deliberately **omitted**.
@@ -347,7 +372,7 @@ The plugin calls `buildResumeArgv` at register time (persona from `_runtime.pers
 - **ADR:** `docs/adr/239-herdr-agent-integration.md` — records: external supervisor integration as a plugin; state fidelity (`idle`/`working` only, `blocked` deferred); session-scoped (swarm-only); resume-by-import, not continuation; the dotted-namespace plugin-flag facility (and its deferred full refactor); release-on-shutdown-only + Herdr's safety net; single-in-flight coalescing + monotonic seq; subagent skip. Add it to `docs/adr/index.md`.
 - **Docs:** `docs/agents/herdr-plugin.md` — env contract, what is reported, the resume argv shape and its rules, config keys, `--debug herdr`, how to verify (`herdr agent list`, `herdr pane get`), and the documented limitations (no signal-trap release; new session id on resume).
 - **`AGENTS.md`:** add `herdr` to the built-in plugin list and the plugin inventory counts; cross-link `docs/agents/herdr-plugin.md`.
-- **`KNOWN_CONFIG_KEYS`:** add `'herdr'` (in the `config` plugin) so `config_set herdr.enabled` does not throw — *the wakelock landmine*.
+- **`KNOWN_CONFIG_KEYS`:** add `'herdr'` (in the `config` plugin) so `config_set herdr.enabled` does not throw — _the wakelock landmine_.
 - Update the project wiki page for `modules/drone-agent-plugins` (a `herdr` mention + ADR 239 link).
 - If on a feature branch: commit the `.drone-agent` plan/memory with the change set (never to `main`).
 
@@ -368,6 +393,7 @@ Run every item in **Validation criteria** below and report results. This step is
 ## Validation criteria
 
 **Automated (must all pass, zero errors):**
+
 1. **LSP diagnostics are clean** for every changed/added file (both packages) — no errors, no warnings.
 2. `pnpm -r run build` — succeeds. (Run **before** trusting dependent-package LSP after editing `drone-core` types, since dependents resolve `drone-core` from built `dist/`.)
 3. `pnpm run lint` — succeeds with zero errors, zero warnings, **no `eslint-disable`**. Note: prettier reformats on success — re-read any file before editing it again.
@@ -376,16 +402,34 @@ Run every item in **Validation criteria** below and report results. This step is
 6. Coverage: every new unit (flag facility, `runSessionImport`, startup wiring, `initialEntries` seeding, herdr plugin guard/state/release/reporter, resume-argv builder+validator) has a dedicated test.
 7. `pnpm test:integration` **at the verifier's discretion** (no integration surface changed, but run if touching shared startup paths is a concern).
 
-**Behavioural (manual, in a real Herdr pane — Herdr ≥ 0.9.2, local v0.9.3):**
-8. `HERDR_ENV=1` is present; `herdr agent list` shows an agent labelled per `herdr.agentLabel` after drone-agent starts with `herdr` enabled and swarm connected.
-9. State flips: `working` while a turn runs, `idle` when it completes; `herdr pane get "$HERDR_PANE_ID"` shows the expected `agent_status` and an `agent_session` reference.
-10. Finish notification: completing a turn raises a Herdr notification (once per completion; no duplicate/flicker from stale reports).
-11. Resume round-trip: start `herdr --session herdr-test`, run drone-agent (swarm connected), `herdr session stop herdr-test`, restart it → the pane runs the reported resume command (`drone-agent --swarm.session-import <id> [--persona …]`), the import runs at startup **before** the first turn, and the terse import summary appears in the TUI log while the agent re-registers (a **new** swarm session id, importing the old transcript).
-12. Exit: `/exit` (and TUI Ctrl-C) clear the pane's agent + resume command (`herdr pane get` shows no agent). A hard SIGKILL is cleared by Herdr's safety net within ~1–2 s.
-13. Non-interference: with `herdr` disabled, or outside Herdr, or in a subagent, drone-agent behaves exactly as before and makes no Herdr calls.
-14. `--swarm.session-import <id>` alone (no `--swarm`) starts in TUI mode, auto-enables swarm, and imports before the first turn.
+**Behavioural (manual, in a real Herdr pane — Herdr ≥ 0.9.2, local v0.9.3):** 8. `HERDR_ENV=1` is present; `herdr agent list` shows an agent labelled per `herdr.agentLabel` after drone-agent starts with `herdr` enabled and swarm connected. 9. State flips: `working` while a turn runs, `idle` when it completes; `herdr pane get "$HERDR_PANE_ID"` shows the expected `agent_status` and an `agent_session` reference. 10. Finish notification: completing a turn raises a Herdr notification (once per completion; no duplicate/flicker from stale reports). 11. Resume round-trip: start `herdr --session herdr-test`, run drone-agent (swarm connected), `herdr session stop herdr-test`, restart it → the pane runs the reported resume command (`drone-agent --swarm.session-import <id> [--persona …]`), the import runs at startup **before** the first turn, and the terse import summary appears in the TUI log while the agent re-registers (a **new** swarm session id, importing the old transcript). 12. Exit: `/exit` (and TUI Ctrl-C) clear the pane's agent + resume command (`herdr pane get` shows no agent). A hard SIGKILL is cleared by Herdr's safety net within ~1–2 s. 13. Non-interference: with `herdr` disabled, or outside Herdr, or in a subagent, drone-agent behaves exactly as before and makes no Herdr calls. 14. `--swarm.session-import <id>` alone (no `--swarm`) starts in TUI mode, auto-enables swarm, and imports before the first turn.
 
-**Documented limitations (must be recorded in `docs/agents/herdr-plugin.md`, not "fixed"):**
-15. `blocked` is not reported (deferred; insertion point marked).
-16. No signal-trap release outside `runSwarmListenMode`; Herdr's shell-prompt safety net is the fallback.
-17. Resume is an import (new session id), not a continuation.
+**Documented limitations (must be recorded in `docs/agents/herdr-plugin.md`, not "fixed"):** 15. `blocked` is not reported (deferred; insertion point marked). 16. No signal-trap release outside `runSwarmListenMode`; Herdr's shell-prompt safety net is the fallback. 17. Resume is an import (new session id), not a continuation.
+
+---
+
+## ✅ STATUS: COMPLETE (2026-10-08, branch `feat/herdr-support`)
+
+All 12 steps executed. **3743 tests pass, 0 fail (14 skipped); typecheck/`pnpm -r build` clean; LSP clean; feature files prettier-clean.**
+
+### What shipped
+
+- **`herdr` plugin** (`drone-agent/src/plugins/herdr/{index,reporter,resume-argv}.ts`) — opt-in (`defaultEnabled:false`, `swarm` optional dep, `herdr.{enabled,resumeCommand,agentLabel}` config). Reports `idle`/`working` (`userMessage`→working, `roundComplete`→idle; initial `idle` on load) via `$HERDR_BIN_PATH pane report-agent`; releases on `onShutdown`; inert unless `HERDR_ENV=1`; subagents skipped; monotonic `--seq` + single-in-flight coalescing; `--source` fixed to `drone-agent`; `--debug herdr` verbose; lazy one-shot warn when no swarm session id.
+- **Resume by import** — `buildResumeArgv`/`validateResumeArgv`; argv `drone-agent --swarm.session-import <id> [--persona][--model][--beacon-host][--beacon-port]` (omits `--session-id`/`--spawn-id`/`--swarm`/`--once`/`--output-json`/`--working-dir`), attached to the first state report, validated against Herdr's rules.
+- **Plugin CLI-flag facility** — `--<pluginId>.<flag>[=<value>]` → `CliOptions.pluginFlags` → `createDronePluginEngine({pluginFlags})` → `registration.getCliFlags()` (namespace stripped); namespacing plugin auto-enabled; unclaimed-namespace warning after `initialize()`; `_runtime.pluginFlags` parity.
+- **Startup session-import** — `runSessionImport(deps, id, {from})` extracted from `/swarm-session import` (which is now a thin adapter); swarm offers `DroneSessionImportCapability`; `index.tsx` runs `--swarm.session-import` after `onSessionStart` and **before** the host mounts, buffering a terse summary seeded into the TUI via new `DroneTuiOptions.initialEntries` (`useChatLog(opts.initialEntries)`).
+- **Config** — `DroneHerdrConfig` in `drone-core` (type + `DroneAgentConfig`/`Partial` + merge array + default + schema) and `KNOWN_CONFIG_KEYS` (`herdr.enabled/resumeCommand/agentLabel`). `shared/exec-async.ts` gained `timeoutMs`.
+- **Docs** — ADR `docs/adr/239-herdr-agent-integration.md` (+ index row), `docs/agents/herdr-plugin.md`, `AGENTS.md` Specialized Subsystems entry, wiki `modules/drone-agent-plugins` row.
+
+### Tests added
+`cli-plugin-flags` 13; `session-import` (+`runSessionImport`) 19; `startup-import` 4; `app-initial-entries` 2; `herdr-plugin` 10; `herdr-resume-argv` 10; `session-command` (rewritten for delegation) 9.
+
+### Deviations from the plan (with rationale)
+1. **Added `src/startup-import.ts`** — extracted the startup-import block from `index.tsx` into `runStartupSessionImport(getCapability, logger, pluginFlags)` so it is unit-testable (the plan's startup-wiring test would otherwise require running `main()`).
+2. **TUI seeding (D9)** — used `initialEntries` as planned; discovered `onSessionStart` runs *before* `createTui` mounts, so an emitted notice would be lost — the buffer+seed approach is required (matches plan Option A).
+3. **`getCliFlags` is a REQUIRED member** of `DronePluginRegistration` (matching `getConfig`/`requestElicitation`), which required sweeping `getCliFlags: () => ({})` into 31 test mock registrations.
+4. **Reporter internals** — replaced the plan's illustrative `seq === 1` check with an explicit `heldPane` flag so the resume command attaches to the first report regardless of seq numbering.
+5. **Lint hazard** — `pnpm run lint` runs `prettier --write .` repo-wide and reformatted 277 **unrelated** files (213 ADRs, READMEs, pnpm-lock, memories) because the committed tree is not prettier-clean; all that churn was reverted and only feature files were formatted.
+
+### Not done (per plan's documented limitations)
+`blocked` reporting (deferred, `TODO(FIXME)` insertion point in the plugin); no signal-trap release (Herdr's safety net is the fallback); resume is an import (new session id); local-log-based import fallback when swarm is off.
