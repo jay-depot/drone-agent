@@ -752,7 +752,19 @@ export function createDronePluginEngine({
         });
       },
       offer: capability => {
-        capabilities.set(plugin.metadata.id, capability);
+        // The registry holds ONE capability per plugin id. A second offer()
+        // from the same plugin would silently clobber the first, so any
+        // consumer that later request()s a field from the overwritten object
+        // fails far from the cause (e.g. `getAgentId is not a function`). A
+        // plugin that needs to expose several capabilities must offer ONE
+        // merged object that satisfies each capability type.
+        const pluginId = plugin.metadata.id;
+        if (capabilities.has(pluginId)) {
+          throw new Error(
+            `Plugin ${pluginId} offered a capability twice. The engine keeps at most one capability per plugin id, so the second offer would overwrite the first and break consumers that request() it. Offer one merged object that satisfies every capability this plugin exposes.`
+          );
+        }
+        capabilities.set(pluginId, capability);
       },
       request: <T>(pluginId: string) => {
         // Special case: allow requesting 'runtime' without declaration

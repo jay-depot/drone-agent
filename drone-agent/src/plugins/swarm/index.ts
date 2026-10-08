@@ -196,9 +196,28 @@ export function createSwarmPlugin(
       });
 
       // ── Offer swarm capability ─────────────────────────────────────────
-      const swarmCap: DroneSwarmCapability = {
+      // The engine's capability registry is ONE SLOT PER PLUGIN ID: a second
+      // `offer()` silently clobbers the first. So the swarm plugin offers a
+      // single object that carries both the beacon/agent accessors and the
+      // session-import entry point (used by the Herdr resume path and the
+      // `--swarm.session-import` startup import). `runImport` closes over
+      // the config/getter declared below; it only runs after register()
+      // returns, so the bindings are initialized by then.
+      const swarmCap: DroneSwarmCapability & DroneSessionImportCapability = {
         getBeaconUrl: () => baseUrl,
         getAgentId: () => sessionId,
+        runImport: targetSessionId =>
+          runSessionImport(
+            buildSessionImportDeps(
+              registration,
+              deps,
+              baseUrl,
+              sessionId,
+              sessionImportConfig,
+              getContextWindowTokens
+            ),
+            targetSessionId
+          ),
       };
       registration.offer(swarmCap);
       registration.logger.info('Offered DroneSwarmCapability');
@@ -341,25 +360,6 @@ export function createSwarmPlugin(
           getContextWindowTokens
         )
       );
-
-      // Offer the startup import capability so the host can run
-      // `--swarm.session-import <id>` before the first turn (the Herdr
-      // resume path). `llm` is resolved lazily from the broker.
-      const importCap: DroneSessionImportCapability = {
-        runImport: targetSessionId =>
-          runSessionImport(
-            buildSessionImportDeps(
-              registration,
-              deps,
-              baseUrl,
-              sessionId,
-              sessionImportConfig,
-              getContextWindowTokens
-            ),
-            targetSessionId
-          ),
-      };
-      registration.offer(importCap);
 
       // ── Tools ───────────────────────────────────────────────────────────
       const toolFactories: Array<() => DroneToolDefinition> = [
