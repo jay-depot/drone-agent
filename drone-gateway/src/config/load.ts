@@ -10,9 +10,13 @@ import type {
   ResolvedServiceAdapter,
   ResolvedConversation,
   ControlSurfaceSpec,
-  SpawnBackendType,
   ControlApiConfig,
 } from '../types.js';
+import {
+  SPAWNING_SURFACES,
+  SURFACES_REQUIRING_COORDINATOR,
+  resolveSurfaceSpawnMode,
+} from '../surfaces/requirements.js';
 
 const MAX_WORKING_DIR_LENGTH = 4096;
 
@@ -64,14 +68,16 @@ function sanitizeNonNegativeNumber(
 }
 
 /**
- * Sanitize a control surface's `config` bag: `targetBeaconId` must be a
- * non-empty string, `workingDir` must be an absolute path, and
- * `lifecycle.idleTimeoutMs` and `batch.debounceMs` must be non-negative
- * numbers. Invalid keys are
- * warned about and dropped (the surface falls back to the gateway default);
- * the load itself always succeeds.
+ * Sanitize a control surface's `config` bag. `targetBeaconId` is only
+ * meaningful on a spawning surface and, when present there, must be a
+ * non-empty string (a hard error otherwise — it selects the spawn mode).
+ * On a non-spawning surface it is warned about and dropped. `workingDir`
+ * must be an absolute path; `lifecycle.idleTimeoutMs` and `batch.debounceMs`
+ * must be non-negative numbers. Invalid values for those are warned about
+ * and dropped.
  */
 function sanitizeSurfaceConfig(
+  type: string,
   config: Record<string, unknown> | undefined,
   adapterId: string,
   file: string,
@@ -89,9 +95,15 @@ function sanitizeSurfaceConfig(
 
   const override = rest.targetBeaconId;
   if (override !== undefined) {
-    if (typeof override !== 'string' || override.trim() === '') {
-      warn('targetBeaconId is not a non-empty string; ignoring');
+    if (!SPAWNING_SURFACES.has(type)) {
+      warn(`type "${type}" does not spawn agents; ignoring its targetBeaconId`);
       delete rest.targetBeaconId;
+    } else if (typeof override !== 'string' || override.trim() === '') {
+      throw new Error(
+        `Control surface type "${type}" in "${file}" (conversation ` +
+          `"${convId}", adapter "${adapterId}") has an invalid targetBeaconId ` +
+          `(expected a non-empty string).`
+      );
     }
   }
 
@@ -263,59 +275,24 @@ export async function loadGatewayConfig(
     throw new Error(`Invalid JSON in config file: ${err}`, { cause: err });
   }
 
-  // Apply defaults (must be before coordinatorUrl check)
-  const spawnBackend: SpawnBackendType =
-    (gatewayConfig.spawnBackend as SpawnBackendType) || 'local';
+  // The spawn backend is now chosen per control surface (inferred from a
+  // surface's config.targetBeaconId). These gateway-wide keys are removed.
+  for (const removed of ['spawnBackend', 'targetBeaconId'] as const) {
+    if (gatewayConfig[removed] !== undefined) {
+      throw new Error(
+        `Removed config field "${removed}": the spawn backend is now chosen ` +
+          `per control surface. A spawning surface that sets ` +
+          `controlSurfaces[].config.targetBeaconId spawns via the coordinator; ` +
+          `any other spawning surface spawns locally. Delete "${removed}" from config.json.`
+      );
+    }
+  }
 
-  // Validate coordinatorUrl: required for coordinator mode, optional for local
+  // coordinatorUrl is optional at this point; it becomes required if any
+  // loaded surface needs the coordinator (enforced after adapters load).
   const coordinatorUrl = gatewayConfig.coordinatorUrl as string | undefined;
-  if (!coordinatorUrl || typeof coordinatorUrl !== 'string') {
-    if (spawnBackend === 'coordinator') {
-      throw new Error(
-        'Config missing required field: coordinatorUrl. ' +
-          'This field is required when spawnBackend is "coordinator".'
-      );
-    }
-    logger.warn(
-      'Config missing coordinatorUrl — this is fine for local spawn backend, ' +
-        'but required if you switch to coordinator mode.'
-    );
-  }
-
-  // Validate targetBeaconId: required for coordinator mode, inert for local
-  const rawTargetBeaconId = gatewayConfig.targetBeaconId as string | undefined;
-  let targetBeaconId: string | undefined;
-  if (rawTargetBeaconId === undefined) {
-    targetBeaconId = undefined;
-  } else if (
-    typeof rawTargetBeaconId !== 'string' ||
-    rawTargetBeaconId.trim() === ''
-  ) {
-    if (spawnBackend === 'coordinator') {
-      throw new Error(
-        'Config field targetBeaconId must be a non-empty string. ' +
-          'This field is required when spawnBackend is "coordinator".'
-      );
-    }
-    logger.warn(
-      'Config field targetBeaconId is not a non-empty string; ignoring it.'
-    );
-    targetBeaconId = undefined;
-  } else {
-    targetBeaconId = rawTargetBeaconId;
-  }
-
-  if (spawnBackend === 'coordinator' && !targetBeaconId) {
-    throw new Error(
-      'Config missing required field: targetBeaconId. ' +
-        'This field is required when spawnBackend is "coordinator".'
-    );
-  }
-
-  if (spawnBackend === 'local' && targetBeaconId) {
-    logger.warn(
-      'Config sets targetBeaconId but spawnBackend is "local" — the value has no effect.'
-    );
+  if (coordinatorUrl !== undefined && typeof coordinatorUrl !== 'string') {
+    throw new Error('Config field coordinatorUrl must be a string.');
   }
 
   // Validate the gateway-wide default idle timeout (inert in local mode).
@@ -337,8 +314,6 @@ export async function loadGatewayConfig(
   const config: GatewayConfig = {
     coordinatorUrl: coordinatorUrl ?? '',
     coordinatorToken: gatewayConfig.coordinatorToken as string | undefined,
-    spawnBackend,
-    targetBeaconId,
     idleTimeoutMs,
     batch:
       batchDebounceMs !== undefined
@@ -372,7 +347,37 @@ export async function loadGatewayConfig(
     }
   }
 
+  // coordinatorUrl is required when any loaded surface needs the coordinator:
+  // a coordinator-mode spawner (config.targetBeaconId present) or a surface in
+  // SURFACES_REQUIRING_COORDINATOR. An unused coordinatorUrl is accepted.
+  if (!coordinatorUrl && anySurfaceNeedsCoordinator(config.serviceAdapters)) {
+    throw new Error(
+      'Config missing required field: coordinatorUrl. At least one control ' +
+        'surface requires the coordinator (a coordinator-mode spawner or a ' +
+        'swarm-console surface).'
+    );
+  }
+
   return config;
+}
+
+/**
+ * True when any loaded surface needs a coordinator connection: a
+ * coordinator-mode spawner (inferred from `config.targetBeaconId`) or a
+ * surface type in SURFACES_REQUIRING_COORDINATOR.
+ */
+function anySurfaceNeedsCoordinator(
+  adapters: ResolvedServiceAdapter[]
+): boolean {
+  for (const adapter of adapters) {
+    for (const conv of adapter.conversations.values()) {
+      for (const spec of conv.surfaces) {
+        if (SURFACES_REQUIRING_COORDINATOR.has(spec.type)) return true;
+        if (resolveSurfaceSpawnMode(spec) === 'coordinator') return true;
+      }
+    }
+  }
+  return false;
 }
 
 async function loadAdapter(
@@ -489,6 +494,7 @@ async function loadAdapter(
         type: spec.type as string,
         personaId: spec.personaId as string | undefined,
         config: sanitizeSurfaceConfig(
+          spec.type as string,
           spec.config as Record<string, unknown> | undefined,
           adapterId,
           file,

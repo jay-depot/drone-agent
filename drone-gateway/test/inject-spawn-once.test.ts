@@ -160,6 +160,35 @@ describe('spawnOnce', () => {
     ).rejects.toBeInstanceOf(SpawnOnceFailureError);
   });
 
+  it('includes the child stderr tail in SpawnOnceFailureError', async () => {
+    const proc = new EventEmitter() as ChildProcess;
+    const stdout = Readable.from([]);
+    const stderr = new Readable({ read() {} });
+    Object.assign(proc, {
+      pid: 1,
+      stdin: new Writable({
+        write(_c, _e, cb) {
+          cb();
+        },
+      }),
+      stdout,
+      stderr,
+      kill: vi.fn(),
+      killed: false,
+    });
+    stdout.on('end', () => proc.emit('close', 1, null));
+    mockSpawn.mockReturnValue(proc);
+
+    const err = spawnOnce({ task: 'x', timeoutMs: 1000 }).catch(e => e);
+    // Push AFTER spawnOnce has attached its stderr reader.
+    await Promise.resolve();
+    stderr.push('persona "ghost" not found\n');
+
+    const error = await err;
+    expect(error).toBeInstanceOf(SpawnOnceFailureError);
+    expect((error as Error).message).toContain('persona "ghost" not found');
+  });
+
   it('throws SpawnOnceTimeoutError and escalates SIGTERM → SIGKILL', async () => {
     vi.useFakeTimers();
     const proc = new EventEmitter() as ChildProcess;

@@ -244,9 +244,6 @@ export const personaPlugin: DronePlugin = {
 
       const found = getPersonaById(id);
       if (!found) {
-        registration.logger.warn(
-          `persona "${id}" not found in loaded personas.`
-        );
         return null;
       }
 
@@ -260,7 +257,11 @@ export const personaPlugin: DronePlugin = {
       getActivePersona: () => activePersona,
       getPersonas: () => getAllPersonas(),
       selectPersona: (id: string | null) => {
-        activatePersona(id);
+        void activatePersona(id).then(activated => {
+          if (id !== null && !activated) {
+            registration.logger.warn(`persona "${id}" not found`);
+          }
+        });
       },
       onPersonaChange: callback => {
         changeCallbacks.push(callback);
@@ -340,32 +341,39 @@ export const personaPlugin: DronePlugin = {
     // onSessionStart — activate configured/runtime persona
     // -----------------------------------------------------------------------
     registration.hooks.onSessionStart(async () => {
-      // Determine which persona to activate: runtime option (--persona CLI flag)
-      // takes precedence over config.activePersona
-      let personaToActivate: string | null = null;
-
-      // First check runtime options (from --persona CLI flag)
+      // Resolution order: the explicit --persona flag (fatal if it will not
+      // resolve), then the DRONE_PERSONA env fallback, then config.activePersona
+      // (both lenient). Only the flag is validated; a stale env var or config
+      // default must not abort startup.
       const runtime = registration.request<{ persona?: string }>('runtime');
-      if (runtime?.persona) {
-        personaToActivate = runtime.persona;
+      const explicit = runtime?.persona;
+      const envPersona = process.env.DRONE_PERSONA;
+      const candidate = explicit ?? envPersona ?? config.activePersona;
+      if (!candidate) return;
+
+      const activated = await activatePersona(candidate);
+      if (activated) {
+        registration.logger.info(
+          `active persona: ${activated.name} (${activated.id})`
+        );
+        return;
       }
 
-      // Fall back to config.activePersona if no runtime persona was specified
-      if (!personaToActivate && config.activePersona) {
-        personaToActivate = config.activePersona;
-      }
+      const swarmEnabled = registration
+        .getConfig()
+        .enabledPlugins.includes('swarm');
+      const message = swarmEnabled
+        ? `persona "${candidate}" not found. Swarm personas are loaded, but ` +
+          `none has id "${candidate}" — check the id and its scope ` +
+          `(local/beacon/coordinator).`
+        : `persona "${candidate}" not found. This agent is running WITHOUT ` +
+          `swarm connectivity — if "${candidate}" is a swarm persona, enable ` +
+          `the "swarm" plugin for this agent (see ~/.drone-agent/config.json).`;
 
-      // Activate the determined persona
-      if (personaToActivate) {
-        const activated = await activatePersona(personaToActivate);
-        if (activated) {
-          registration.logger.info(
-            `active persona: ${activated.name} (${activated.id})`
-          );
-        } else {
-          registration.logger.warn(`persona "${personaToActivate}" not found`);
-        }
+      if (explicit) {
+        throw new Error(message);
       }
+      registration.logger.warn(message);
     });
 
     // -----------------------------------------------------------------------
