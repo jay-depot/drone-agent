@@ -702,5 +702,17 @@
   {
     "timestamp": "2026-10-07T00:57:58.586Z",
     "insight": "Reusable convention: the gateway/config layer validates optional config with a consistent \"warn-and-drop, load always succeeds\" style (sanitizeNonNegativeNumber, sanitizeWorkingDir, parseAllowedSenders). New config fields (controlApi, injection) should follow the same pattern — and note that the gateway loader deliberately has NO ${VAR} interpolation (render-from-env), unlike drone-core's provider config. This asymmetry is easy to forget when adding secret-bearing fields."
+  },
+  {
+    "timestamp": "2026-10-08T05:43:55.002Z",
+    "insight": "drone-gateway defect — `LocalSpawnBackend` spawns the child agent with `stdio:['pipe','pipe','pipe']` but NEVER reads `childProcess.stderr`, so a gateway-spawned agent's stderr is dropped entirely (and the pipe can fill, potentially stalling the child). Consequence: the persona-not-found warning (persona plugin `onSessionStart`) is invisible to the operator for every gateway-spawned agent. Also `src/inject/spawn-once.ts` calls `child.stderr.resume()` but explicitly discards the output. (The plan `plan-gateway-per-surface-spawn-backend` fixes both.)"
+  },
+  {
+    "timestamp": "2026-10-08T05:43:55.004Z",
+    "insight": "drone-agent defect/quirk — the `DRONE_PERSONA` env fallback in `cli.ts` (`options.persona ??= process.env.DRONE_PERSONA`) sits inside the `default`-kind branch, AFTER the `--workflow` and positional-`chat` early returns. So `drone-agent \"hi\"` (a chat positional) ignores `DRONE_PERSONA`, while a bare launch honors it. The plan moves this resolution broker-side and narrows it to lenient (non-fatal) semantics."
+  },
+  {
+    "timestamp": "2026-10-08T05:43:55.006Z",
+    "insight": "The drone-gateway chooses its spawn backend GLOBALLY (`config.spawnBackend`), which blocks mixed local+coordinator deployments. The planned fix (memory `plan-gateway-per-surface-spawn-backend`) infers the mode per control surface from `controlSurfaces[].config.targetBeaconId` presence (present => coordinator, absent => local), introduces a `SpawnBackendRegistry` and a shared `src/surfaces/requirements.ts` (SPAWNING_SURFACES / SURFACES_REQUIRING_COORDINATOR / resolveSurfaceSpawnMode), and makes an explicit `--persona` fatal when it does not resolve."
   }
 ]
