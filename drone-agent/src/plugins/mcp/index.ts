@@ -1,12 +1,15 @@
 import { isRecord } from '../../shared/type-guards.js';
 import os from 'node:os';
+import { getCanonicalToolName } from 'drone-core';
 import type {
   DroneLlmCapability,
   DroneMcpRoot,
   DroneMcpServerState,
+  DronePersonaCapability,
   DronePlugin,
   DroneToolJsonSchema,
   DroneToolJsonSchemaProperty,
+  DroneToolDescriptor,
   DroneToolDefinition,
 } from 'drone-core';
 import {
@@ -15,7 +18,15 @@ import {
   type McpClientConnection,
   type McpToolMeta,
 } from './client.js';
-import { getOrCreateServerDescription } from './server-description.js';
+import {
+  getOrCreateServerDescription,
+  readCachedDescriptions,
+} from './server-description.js';
+import {
+  renderServerSection,
+  renderStatusSection,
+  type McpServerSummary,
+} from './prompt-fragments.js';
 
 const TOOL_PROPERTY_TYPES: DroneToolJsonSchemaProperty['type'][] = [
   'string',
@@ -165,6 +176,7 @@ export const mcpPlugin: DronePlugin = {
     >();
     const serverUsedNames = new Map<string, Set<string>>();
     const serverAllowlists = new Map<string, Set<string> | undefined>();
+    const serverDescriptions = new Map<string, string>();
     const llmCapability = registration.request<DroneLlmCapability>('llm');
 
     function setServerState(state: DroneMcpServerState): void {
@@ -284,13 +296,13 @@ export const mcpPlugin: DronePlugin = {
       const allowlist = serverConfig.allowedTools;
       const allowedToolSet = allowlist ? new Set(allowlist) : undefined;
 
-      // Generate server description via LLM (if available)
-      await getOrCreateServerDescription(
+      const description = await getOrCreateServerDescription(
         serverId,
         tools.map(t => ({ name: t.name, description: t.description })),
         llmCapability,
         registration.logger
       );
+      if (description) serverDescriptions.set(serverId, description);
 
       // Create a fresh tool map for this server
       const toolMap = new Map<
@@ -333,6 +345,45 @@ export const mcpPlugin: DronePlugin = {
         `mcp server ${logMessage}: ${serverId} (discovered ${connection.state.discoveredToolCount} tool(s), mounted ${connection.state.mountedToolCount})`
       );
     }
+
+    function collectServerSummaries(): McpServerSummary[] {
+      const personaCap =
+        registration.request<DronePersonaCapability>('persona');
+      const summaries: McpServerSummary[] = [];
+      for (const serverId of Object.keys(mcpConfig.servers)) {
+        const state = serverStates.get(serverId);
+        if (!state) continue;
+        const descriptors: DroneToolDescriptor[] = Array.from(
+          serverToolMaps.get(serverId)?.values() ?? []
+        ).map(entry => ({
+          name: getCanonicalToolName('mcp', entry.definition.name),
+          description: entry.definition.description,
+          defaultHidden: false,
+        }));
+        const visible = personaCap
+          ? personaCap.getFilteredTools(descriptors)
+          : descriptors.filter(d => !d.defaultHidden);
+        summaries.push({
+          id: serverId,
+          state,
+          description: serverDescriptions.get(serverId),
+          availableToolCount: visible.length,
+        });
+      }
+      return summaries;
+    }
+
+    registration.registerPromptFragment({
+      key: 'mcp-servers',
+      phase: 'header',
+      render: async () => renderServerSection(collectServerSummaries()),
+    });
+
+    registration.registerPromptFragment({
+      key: 'mcp-server-status',
+      phase: 'footer',
+      render: async () => renderStatusSection(collectServerSummaries()),
+    });
 
     async function handleToolsListChanged(
       serverId: string,
@@ -426,6 +477,15 @@ export const mcpPlugin: DronePlugin = {
       if (configuredServers.length === 0) {
         registration.logger.info('mcp enabled but no servers configured');
         return;
+      }
+
+      const cachedDescriptions = await readCachedDescriptions();
+      for (const [serverId, description] of Object.entries(
+        cachedDescriptions
+      )) {
+        if (!serverDescriptions.has(serverId)) {
+          serverDescriptions.set(serverId, description);
+        }
       }
 
       const defaultRoots: DroneMcpRoot[] = [

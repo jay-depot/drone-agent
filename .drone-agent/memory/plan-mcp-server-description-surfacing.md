@@ -1,7 +1,6 @@
 ---
 key: plan-mcp-server-description-surfacing
-tags:
-  []
+tags: []
 created: 2026-10-08T21:01:19.622Z
 updated: 2026-10-08T21:01:19.622Z
 ---
@@ -16,27 +15,27 @@ updated: 2026-10-08T21:01:19.622Z
 
 ## Background (verified against the code)
 
-| Fact | Location |
-| --- | --- |
-| Generator + cache only; returns `Promise<string \| undefined>` | `drone-agent/src/plugins/mcp/server-description.ts` |
-| Called once; **return value discarded** | `drone-agent/src/plugins/mcp/index.ts:288` (in `listAndMountTools`) |
-| ADR 105 replaced per-server meta-tools with engine-owned `runtime__list_tools` | `drone-agent/src/runtime/plugin-engine.ts:843` |
-| `drone-core/src/tool-mounting-cache.ts` no longer exists | glob confirms absent |
-| `server_status` returns `DroneMcpServerState` — no description field | `drone-core/src/mcp-types.ts` |
-| mcp plugin registers **no** prompt fragments today | `index.ts` (581 lines) |
-| Header fragments = stable prefix; footer fragments merged + wrapped in `<system-reminder>` | `context-budget-service.ts:189` |
-| LSP precedent: `# LSP Servers` header fragment | `plugins/lsp/plugin.ts:58` |
-| `serverToolMaps` already holds per-server tool defs | `index.ts:162` |
-| Persona capability: `getFilteredTools` | `plugins/persona/index.ts:312` |
-| `registration.request('persona')` allowed (`persona` is a declared optional dep) but must be resolved **lazily at render** | `plugin-engine.ts:769` |
-| **Dead code:** `serverAllowlists` written, never read; `filteredToolCount` counts tools the LLM *can* mount | `index.ts:167,320` |
+| Fact                                                                                                                       | Location                                                            |
+| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Generator + cache only; returns `Promise<string \| undefined>`                                                             | `drone-agent/src/plugins/mcp/server-description.ts`                 |
+| Called once; **return value discarded**                                                                                    | `drone-agent/src/plugins/mcp/index.ts:288` (in `listAndMountTools`) |
+| ADR 105 replaced per-server meta-tools with engine-owned `runtime__list_tools`                                             | `drone-agent/src/runtime/plugin-engine.ts:843`                      |
+| `drone-core/src/tool-mounting-cache.ts` no longer exists                                                                   | glob confirms absent                                                |
+| `server_status` returns `DroneMcpServerState` — no description field                                                       | `drone-core/src/mcp-types.ts`                                       |
+| mcp plugin registers **no** prompt fragments today                                                                         | `index.ts` (581 lines)                                              |
+| Header fragments = stable prefix; footer fragments merged + wrapped in `<system-reminder>`                                 | `context-budget-service.ts:189`                                     |
+| LSP precedent: `# LSP Servers` header fragment                                                                             | `plugins/lsp/plugin.ts:58`                                          |
+| `serverToolMaps` already holds per-server tool defs                                                                        | `index.ts:162`                                                      |
+| Persona capability: `getFilteredTools`                                                                                     | `plugins/persona/index.ts:312`                                      |
+| `registration.request('persona')` allowed (`persona` is a declared optional dep) but must be resolved **lazily at render** | `plugin-engine.ts:769`                                              |
+| **Dead code:** `serverAllowlists` written, never read; `filteredToolCount` counts tools the LLM _can_ mount                | `index.ts:167,320`                                                  |
 
 ## Design Decisions (explicit)
 
 1. **Two fragments, split by volatility.** HEADER `# MCP Servers` = stable content (server list + descriptions + reminder blurb). FOOTER = volatile connection status, so status churn cannot invalidate the cached header+conversation prefix.
 2. **Header content:** every configured server, its description when known, its **available** tool count, plus a blurb telling the model to call `runtime__list_tools` with `{"plugin":"mcp"}` and to list again if an expected tool is missing (list may be stale or the tool named differently).
 3. **Footer content:** **only non-connected** servers (`connecting`/`disconnected`/`error`) with status + `lastError`. No descriptions. Renders `false` when all connected.
-4. **Tool counts are *available* counts** — computed at render by passing the server's descriptors through persona `getFilteredTools` (exactly what the LLM sees). **No new state field.** No persona capability → all tools minus `defaultHidden` (mirrors the engine fallback).
+4. **Tool counts are _available_ counts** — computed at render by passing the server's descriptors through persona `getFilteredTools` (exactly what the LLM sees). **No new state field.** No persona capability → all tools minus `defaultHidden` (mirrors the engine fallback).
 5. **Servers with no description are still listed** (id + count, no prose).
 6. **Summarizer prompt:** one short sentence, ≤20 words, led by the server's purpose, no preamble/markdown/lists.
 7. **Cache-bust via `promptVersion`:** entries gain `promptVersion`; mismatch = miss → regenerate on next connect. Existing entries stay on disk, rewritten in place. Tool-list-hash + TTL remain deferred.
@@ -45,6 +44,7 @@ updated: 2026-10-08T21:01:19.622Z
 ## Steps
 
 ### Step 1 — `server-description.ts`: prompt, version, lazy paths, locked writes
+
 **Agent:** coder · **Depends on:** none
 **File:** `drone-agent/src/plugins/mcp/server-description.ts`
 
@@ -92,7 +92,8 @@ export async function readCachedDescriptions(): Promise<
   const cache = await readCache();
   const out: Record<string, string> = {};
   for (const [serverId, entry] of Object.entries(cache)) {
-    if (entry.promptVersion === PROMPT_VERSION) out[serverId] = entry.description;
+    if (entry.promptVersion === PROMPT_VERSION)
+      out[serverId] = entry.description;
   }
   return out;
 }
@@ -120,6 +121,7 @@ async function writeCachedDescription(
 In `getOrCreateServerDescription`, replace the inline prompt literal with `SYSTEM_PROMPT`; keep the existing behaviour (cache → generate → cache → return; fail-open on error; `logger.warn`). **Do not** change the function's signature or return type.
 
 ### Step 2 — New file: `mcp/prompt-fragments.ts` (pure renderers)
+
 **Agent:** coder · **Depends on:** none
 **File:** `drone-agent/src/plugins/mcp/prompt-fragments.ts` (new)
 
@@ -168,6 +170,7 @@ export function renderStatusSection(
 Both sync; callers wrap them in the async `render` contract.
 
 ### Step 3 — `mcp/index.ts`: capture the description, register both fragments
+
 **Agent:** coder · **Depends on:** Steps 1, 2
 **File:** `drone-agent/src/plugins/mcp/index.ts`
 
@@ -233,7 +236,7 @@ registration.registerPromptFragment({
 });
 ```
 
-6. **Seed the description map from the cache** in the `onPluginsLoaded` hook, before the per-server connect loop (gives a *failed* server prose in the header — the case where the reminder matters most; one disk read, never per-render):
+6. **Seed the description map from the cache** in the `onPluginsLoaded` hook, before the per-server connect loop (gives a _failed_ server prose in the header — the case where the reminder matters most; one disk read, never per-render):
 
 ```ts
 const cached = await readCachedDescriptions();
@@ -249,6 +252,7 @@ Place after the `mcpConfig.enabled` / no-servers early returns.
 **Constraint:** `collectServerSummaries` stays IO-free (descriptions come from the in-memory map, populated at connect and at seed time).
 
 ### Step 4 — Fast unit tests
+
 **Agent:** tester · **Depends on:** Steps 1, 2
 
 **`drone-agent/test/mcp-prompt-fragments.test.ts` (new):** empty list → both renderers `false`; description present → `- demo (2 tools): <prose>`; no description → `- demo (0 tools)`; singular/plural `(1 tool)`/`(2 tools)`; reminder blurb containing `runtime__list_tools` present; status all-connected → `false`; status mixed → only non-connected rows; status renders `lastError` detail.
@@ -256,21 +260,24 @@ Place after the `mcpConfig.enabled` / no-servers early returns.
 **`drone-agent/test/mcp-server-description.test.ts` (new):** mock `os.homedir()` to a `mkdtemp` temp dir, save+restore the original (precedent `test/config.test.ts:31`, `test/prompt-file.test.ts:92`). Cases: miss→generate→cache (provider called once, entry carries current `promptVersion`); hit (provider not called); version bust (pre-seed `promptVersion: 1` → provider called, entry rewritten); no LLM capability → `undefined`, no write; provider throws → `undefined` + `logger.warn`; outbound system message contains the one-sentence instruction; `readCachedDescriptions()` omits stale-version entries.
 
 ### Step 5 — Slow integration tests
+
 **Agent:** tester · **Depends on:** Step 3
 **File:** `drone-agent/test/mcp.test.ts`
 
-- **Required isolation:** mock `os.homedir()` to a temp dir in `beforeEach`, restore in `afterEach`. The connect path *reads* the cache even with no LLM available — without this, a developer's real `~/.drone-agent/cache/mcp/server-descriptions.json` leaks into assertions and the suite goes machine-dependent.
+- **Required isolation:** mock `os.homedir()` to a temp dir in `beforeEach`, restore in `afterEach`. The connect path _reads_ the cache even with no LLM available — without this, a developer's real `~/.drone-agent/cache/mcp/server-descriptions.json` leaks into assertions and the suite goes machine-dependent.
 - Header (`engine.renderPromptFragmentsByPhase('header')`): contains `# MCP Servers`; contains `- demo (2 tools)` for a `['echo','add']` fake server; contains the `runtime__list_tools` reminder; no prose when no LLM capability.
 - Description-present: pre-seed the temp cache with a current-version entry for `demo`, boot, assert prose appears.
 - Footer: all connected → no MCP entry; unavailable server command → `- demo: error`.
 - Persona-filtered count: fake persona capability dropping one tool → header shows `(1 tool)`.
 
 ### Step 6 — Rewrite `docs/agents/mcp-plugin.md`
+
 **Agent:** coder · **Depends on:** Steps 1–3 settled
 
 Full accuracy pass (not a patched section). The file currently documents `ToolMountingCache` (file no longer exists), per-server `<serverId>__list_tools`/`__mount_tool`/`__unmount_tool` (deleted by ADR 105), and "resources/prompts are still mounted eagerly" (contradicted by ADR 100 and the code). New outline: (1) deferred list/mount via the engine's runtime meta-tools, all MCP tools registered unmounted; (2) per-server `mcp__<server>__list` / `__get` helpers + `mcp__server_status`; (3) `notifications/tools/list_changed` surgical update (the one surviving section); (4) server descriptions — generation, `promptVersion` cache, cache path, `describer` role; (5) **the `# MCP Servers` header fragment and the `<system-reminder>` footer fragment**, with sample renders and the reminder rationale; (6) persona filtering at the runtime seam; (7) known gap — per-server `allowedTools` currently unenforced.
 
 ### Step 7 — New ADR + index row
+
 **Agent:** coder · **Depends on:** Step 6
 **File:** `docs/adr/240-mcp-server-description-surfacing.md` (new; 240 is next sequential)
 
@@ -278,23 +285,27 @@ Record: the orphaned-consumer history (ADR 065 created it inside `__list_tools`;
 **File:** `docs/adr/index.md` — append a 240 row in the existing table format.
 
 ### Step 8 — Fix `AGENTS.md` + roadmap 5.7
+
 **Agent:** coder · **Depends on:** none
 
 - **`AGENTS.md:180`** — plugin index line still says "Deferred list/mount pattern for tool loading, `ToolMountingCache`, server descriptions, persona filtering". Replace `ToolMountingCache` with the current mechanism (runtime-level `ToolRegistry` + engine meta-tools).
 - **Roadmap `5.7 MCP Server Description Cache Invalidation`** — "Not started" → **PARTIAL**: prompt-version invalidation lands; tool-list-hash and TTL remain open. Update via `memory__manage` `store` on key `roadmap`, preserving the rest verbatim.
 
 ### Step 9 — Review pass
+
 **Agent:** reviewer · **Depends on:** Steps 1–8
 
 Verify: no disk IO in any fragment `render`; `registration.request('persona')` resolved inside render, never at register time; canonical vs non-canonical names not conflated in `collectServerSummaries`; every test that boots the plugin mocks `os.homedir()`; footer renders only non-connected servers and `false` otherwise; docs match code; no dead code/fluff comments; no unused exports left in `server-description.ts`.
 
 ### Step 10 — Log the discovered defect
+
 **Agent:** coder · **Depends on:** none
 
 - `self-improvement__insight` (project target): per-server `allowedTools` is written to `serverAllowlists` and never read; the ADR 065 enforcement died with `__mount_tool` in ADR 105, so `filteredToolCount` overstates filtering and the allowlist is decorative.
 - New project memory `followup-mcp-server-allowlist-unenforced`: restore enforcement at the `runtime__list_tools`/persona seam (or at mount), and decide `filteredToolCount`'s fate.
 
 ### Step 11 — Validate
+
 **Agent:** tester · **Depends on:** all. Run the validation criteria below.
 
 ## Dependencies / Order
@@ -321,9 +332,63 @@ Steps 1 and 2 are independent (parallelizable); Step 4 may run alongside Step 3.
 7. **The existing on-disk cache is left untouched until first use** — no migration, no manual delete; entries rewritten in place on next connect.
 
 ## Included hardening (flagged, not explicitly requested)
+
 Step 1 adds `withPathLock` + tmp+rename to the cache write; this matches the standing project principle that plugin cache read-modify-write must be serialized and atomic, and reconnects from separate connections can lose an update.
 
 ## Deliberately out of scope
+
 - Restoring per-server `allowedTools` enforcement (Step 10 tracks it).
 - Tool-list-hash comparison and TTL cache invalidation.
 - The Obsidian wiki pages (`modules/drone-agent-mcp-client.md`) that are likewise stale on `ToolMountingCache` — left to the wiki maintainer, since those pages are derived.
+
+---
+
+## Execution Summary (2026-10-08)
+
+**Status: COMPLETE** — all 11 steps executed, all validation criteria satisfied. Branch `fix/mcp-descriptions-restore`.
+
+### What was built
+
+The generator now has a consumer again. Descriptions are surfaced as two prompt fragments split by volatility:
+
+- **`# MCP Servers`** (`phase: 'header'`) — every configured server, its description when known, its **available** tool count, plus the `runtime__list_tools` / `{"plugin":"mcp"}` reminder blurb.
+- **`# MCP Servers (not connected)`** (`phase: 'footer'`) — only non-connected servers, with status and `lastError`. `false` when all connected.
+
+Also: the summarizer prompt was retuned to one sentence (≤20 words), and a `promptVersion` cache-bust was added so the retuned prompt reaches existing entries.
+
+### Deliverables
+
+| Step | Outcome |
+| --- | --- |
+| 1 | `server-description.ts` — `PROMPT_VERSION = 2`, tuned prompt, lazy `cacheDir()`/`cacheFile()`, `withPathLock` + tmp/rename atomic write, new `readCachedDescriptions()` |
+| 2 | `prompt-fragments.ts` (new) — pure `renderServerSection` / `renderStatusSection` |
+| 3 | `index.ts` — capture the generator's return value into `serverDescriptions`, `collectServerSummaries`, two `registerPromptFragment` calls, cache seed in `onPluginsLoaded` |
+| 4 | `test/mcp-prompt-fragments.test.ts` (13 tests) + `test/mcp-server-description.test.ts` (9 tests) |
+| 5 | `test/mcp.test.ts` — 6 new fragment tests + `os.homedir` isolation (18 total) |
+| 6 | `docs/agents/mcp-plugin.md` — full accuracy pass |
+| 7 | `docs/adr/240-mcp-server-description-surfacing.md` (new) + index row |
+| 8 | `AGENTS.md:180` de-staled; roadmap 5.7 → PARTIAL |
+| 9 | Review pass — clean |
+| 10 | 3 insights logged; `followup-mcp-server-allowlist-unenforced` memory created |
+| 11 | Validation — all gates green |
+
+### Validation results
+
+- LSP diagnostics: clean
+- `pnpm -r run build`: all packages pass
+- `pnpm run lint`: exit 0
+- `pnpm run test` (fast): **3774 passed, 14 skipped, 0 failed** (284 files)
+- Slow suite `test/mcp.test.ts`: **18 passed**
+- On-disk cache: untouched until first use — the 4 existing entries (`lightpanda`, `searxng`, `github`, `playwright`) have no `promptVersion`, so they will regenerate in place on each server's next connect (existing entries are not deleted).
+
+### Deviations from the written plan
+
+1. **`os.homedir` mocking.** The plan assumed `vi.spyOn(os, 'homedir')` would work. It **silently no-ops on ESM module namespaces** — the first test run wrote `demo`/`current` keys into the developer's real `~/.drone-agent/cache/mcp/server-descriptions.json` (removed manually; the 4 genuine entries are intact). Switched to `vi.resetModules()` + `vi.doMock('node:os', ...)` overriding **both** the named export and `default`, then dynamic import. This pattern is documented in-repo at `drone-agent/test/config-allowlist-regression.test.ts`.
+2. **Repo-wide prettier churn reverted.** `pnpm run lint` runs `prettier --write .`, which reformatted ~200 unrelated files (every ADR frontmatter, both `README.md`s, and a 5,877-line `pnpm-lock.yaml` rewrite). All of it was reverted with `git checkout HEAD --` so the commit contains only this change. **The ADR index row had to be re-appended afterward** (it lives under `docs/adr/`).
+3. **`bootWithServers` gained an options arg** (`{ extraPlugins }`) so the persona-filter count test could inject a stub persona plugin — a small test-harness extension not in the plan's step text.
+
+### Follow-ups left open (as planned)
+
+- `followup-mcp-server-allowlist-unenforced` — per-server `allowedTools` is not enforced (pre-existing ADR-105 casualty).
+- Roadmap 5.7 remainder — tool-list-hash comparison and TTL invalidation.
+- Obsidian wiki `modules/drone-agent-mcp-client.md` is likewise stale on `ToolMountingCache` (left to the wiki maintainer).

@@ -750,5 +750,13 @@
   {
     "timestamp": "2026-10-08T21:01:39.251Z",
     "insight": "Orphaned-consumer class of defect: ADR 105 (2026-08-03) deleted the per-server `__list_tools` meta-tools that were the only consumer of `getOrCreateServerDescription()`'s return value, but left the call in `listAndMountTools` with its result discarded. The plugin then paid an LLM call per MCP server connect and wrote a cache file for ~2 months with nobody reading it, and no test or typecheck could catch it (an awaited call whose value is dropped is perfectly well-typed). When a refactor removes the *consumer* of a producer, delete the producer in the same change, or at minimum assert on its output somewhere. A cheap detector for this class: any `await fn(...)` in a plugin whose return value is unused AND whose `fn` has side effects outside the process (LLM calls, network, disk writes)."
+  },
+  {
+    "timestamp": "2026-10-08T21:06:29.039Z",
+    "insight": "In drone-agent tests, `vi.spyOn(os, 'homedir')` SILENTLY NO-OPS on the ESM `node:os` namespace — it does not throw, it just doesn't take effect, so the code under test falls through to the REAL user home. I hit this writing an MCP cache test: the first run wrote `demo`/`current` entries into the developer's actual `~/.drone-agent/cache/mcp/server-descriptions.json` (had to clean it up by hand). The correct pattern is already documented in-repo at `drone-agent/test/config-allowlist-regression.test.ts:beforeEach` — `vi.resetModules()` + `vi.doMock('node:os', async importOriginal => { const actual = await importOriginal(); const mocked = { ...actual, homedir: () => tmpHome }; return { ...mocked, default: mocked }; })`, then `await import(...)` dynamically, and `vi.doUnmock` + `vi.resetModules()` in afterEach. Override BOTH the named `homedir` and `default`, because some modules do `import os from 'node:os'` (default) and others `import * as os from 'node:os'` (namespace). Before writing a test that isolates `$HOME`, grep the test dir for an existing precedent — this trap was already solved in this repo."
+  },
+  {
+    "timestamp": "2026-10-08T21:06:29.041Z",
+    "insight": "Test-isolation traps that silently hit real user state are worse than loud failures: a failing assertion costs minutes, a test that quietly writes to `~/.drone-agent/` corrupts the developer's environment and can make their own agent behave differently afterwards. When a test touches a path derived from `os.homedir()`, `XDG_*`, or a config-dir default, treat isolation as a first-class deliverable: assert the mock took effect (e.g. a helper that fails loudly if `homedir()` is not the temp dir) rather than assuming it. Cheap invariant to add at the top of such a suite: `expect(os.homedir()).toBe(testHomeDir)`."
   }
 ]

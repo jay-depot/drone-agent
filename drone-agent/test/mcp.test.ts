@@ -23,11 +23,31 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { type ChildProcess } from 'node:child_process';
-import { toToolResultContent, type DroneAgentConfig } from 'drone-core';
+import os from 'node:os';
+import path from 'node:path';
+import {
+  toToolResultContent,
+  type DroneAgentConfig,
+  type DronePersonaCapability,
+  type DronePlugin,
+  type DroneToolDescriptor,
+} from 'drone-core';
 import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
 import { mcpPlugin } from '../src/plugins/mcp/index.js';
 import { startFakeMcpServer } from './mcp-fake-server.js';
+
+// ESM module namespaces are not spyable, so `os.homedir` is redirected via a
+// module mock. The MCP plugin's cache reads must land in a temp dir or they
+// would touch the developer's real ~/.drone-agent cache.
+const osState = vi.hoisted(() => ({ homeDir: '' }));
+
+vi.mock('node:os', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:os')>();
+  const mocked = { ...actual, homedir: () => osState.homeDir };
+  return { ...mocked, default: mocked };
+});
 
 // Wrap the real spawn so we can observe the client-owned MCP child processes.
 const spawnedChildren: ChildProcess[] = [];
@@ -65,10 +85,34 @@ async function mountMcpResourceTools(
   }
 }
 
+/**
+ * A minimal persona-plugin stub that offers only `getFilteredTools`, so the
+ * MCP fragment's available-tool count can be exercised against a real
+ * persona-capability lookup. `visibleNames` is the set the persona allows.
+ */
+function makeFilteringPersonaPlugin(visibleNames: string[]): DronePlugin {
+  const allowed = new Set(visibleNames);
+  return {
+    metadata: {
+      id: 'persona',
+      name: 'Persona',
+      version: '0.0.0-test',
+      description: 'test stub',
+    },
+    register: async registration => {
+      registration.offer({
+        getFilteredTools: (tools: DroneToolDescriptor[]) =>
+          tools.filter(t => allowed.has(t.name)),
+      } as DronePersonaCapability);
+    },
+  };
+}
+
 const running: Running = { engine: undefined as never };
 
-beforeEach(() => {
+beforeEach(async () => {
   spawnedChildren.length = 0;
+  osState.homeDir = await mkdtemp(path.join(os.tmpdir(), 'drone-mcp-home-'));
 });
 
 afterEach(async () => {
@@ -89,7 +133,54 @@ afterEach(async () => {
     }
   }
   running.engine = undefined as never;
+  if (osState.homeDir) {
+    await rm(osState.homeDir, { recursive: true, force: true });
+    osState.homeDir = '';
+  }
 });
+
+function cacheFilePath(): string {
+  return path.join(
+    osState.homeDir,
+    '.drone-agent',
+    'cache',
+    'mcp',
+    'server-descriptions.json'
+  );
+}
+
+async function seedCacheFile(
+  entries: Record<string, { description: string; promptVersion: number }>
+): Promise<void> {
+  const file = cacheFilePath();
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(
+    file,
+    JSON.stringify(
+      Object.fromEntries(
+        Object.entries(entries).map(([id, entry]) => [
+          id,
+          { ...entry, generatedAt: new Date().toISOString() },
+        ])
+      ),
+      null,
+      2
+    ),
+    'utf-8'
+  );
+}
+
+async function headerFragments(
+  engine: ReturnType<typeof createDronePluginEngine>
+): Promise<string> {
+  return (await engine.renderPromptFragmentsByPhase('header')).join('\n\n');
+}
+
+async function footerFragments(
+  engine: ReturnType<typeof createDronePluginEngine>
+): Promise<string> {
+  return (await engine.renderPromptFragmentsByPhase('footer')).join('\n\n');
+}
 
 function toolNames(
   engine: ReturnType<typeof createDronePluginEngine>
@@ -110,10 +201,14 @@ function statusOf(
 }
 
 async function bootWithServers(
-  servers: Record<string, unknown>
+  servers: Record<string, unknown>,
+  options: { extraPlugins?: DronePlugin[] } = {}
 ): Promise<ReturnType<typeof createDronePluginEngine>> {
   const config = {
-    enabledPlugins: ['mcp'],
+    enabledPlugins: [
+      'mcp',
+      ...(options.extraPlugins ?? []).map(p => p.metadata.id),
+    ],
     mcp: {
       enabled: true,
       requestTimeoutMs: 5000,
@@ -128,7 +223,7 @@ async function bootWithServers(
   } as unknown as DroneAgentConfig;
 
   const engine = createDronePluginEngine({
-    plugins: [mcpPlugin],
+    plugins: [mcpPlugin, ...(options.extraPlugins ?? [])],
     config,
   });
   await engine.initialize();
@@ -425,5 +520,89 @@ describe('mcp plugin integration (stdio child)', () => {
     expect(names).toContain('mcp__serverA__get');
     expect(names).toContain('mcp__serverB__list');
     expect(names).toContain('mcp__serverB__get');
+  });
+
+  it('renders a # MCP Servers header listing servers and available tool counts', async () => {
+    const server = startFakeMcpServer({ toolNames: ['echo', 'add'] });
+    const engine = await bootWithServers({
+      demo: server.serverConfig,
+    });
+
+    const header = await headerFragments(engine);
+    expect(header).toContain('# MCP Servers');
+    expect(header).toContain('- demo (2 tools)');
+    expect(header).toContain('runtime__list_tools');
+    expect(header).toContain('{"plugin":"mcp"}');
+  });
+
+  it('renders cached description prose in the header, seeded without an LLM', async () => {
+    await seedCacheFile({
+      demo: {
+        description: 'Echoes values and adds numbers.',
+        promptVersion: 2,
+      },
+    });
+    const server = startFakeMcpServer({ toolNames: ['echo', 'add'] });
+    const engine = await bootWithServers({
+      demo: server.serverConfig,
+    });
+
+    const header = await headerFragments(engine);
+    expect(header).toContain(
+      '- demo (2 tools): Echoes values and adds numbers.'
+    );
+  });
+
+  it('omits description prose when nothing is cached and no LLM is enabled', async () => {
+    const server = startFakeMcpServer({ toolNames: ['echo', 'add'] });
+    const engine = await bootWithServers({
+      demo: server.serverConfig,
+    });
+
+    const header = await headerFragments(engine);
+    expect(header).toContain('- demo (2 tools)');
+    expect(header).not.toContain('- demo (2 tools):');
+  });
+
+  it('returns no MCP footer fragment while every server is connected', async () => {
+    const server = startFakeMcpServer({ toolNames: ['echo'] });
+    const engine = await bootWithServers({
+      demo: server.serverConfig,
+    });
+
+    const footer = await footerFragments(engine);
+    expect(footer).not.toContain('# MCP Servers');
+  });
+
+  it('lists only the non-connected server in the footer', async () => {
+    const server = startFakeMcpServer({ toolNames: ['echo'] });
+    const engine = await bootWithServers({
+      demo: server.serverConfig,
+      broken: {
+        transport: 'stdio',
+        command: 'this-command-does-not-exist-anywhere-xyz',
+        args: [],
+        env: {},
+      },
+    });
+
+    const footer = await footerFragments(engine);
+    expect(footer).toContain('# MCP Servers (not connected)');
+    expect(footer).toContain('- broken: error');
+    expect(footer).not.toContain('- demo:');
+  });
+
+  it('reports the persona-filtered available tool count', async () => {
+    const personaPlugin = makeFilteringPersonaPlugin(['mcp__demo__echo']);
+    const server = startFakeMcpServer({ toolNames: ['echo', 'add'] });
+    const engine = await bootWithServers(
+      {
+        demo: server.serverConfig,
+      },
+      { extraPlugins: [personaPlugin] }
+    );
+
+    const header = await headerFragments(engine);
+    expect(header).toContain('- demo (1 tool)');
   });
 });
