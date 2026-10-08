@@ -89,6 +89,7 @@ export function captureRegistration(): {
     offer: () => {},
     request: <T>() => undefined as T | undefined,
     runWorkflow: async () => ({ toolResult: '{}' }),
+    getCliFlags: () => ({}),
     requestElicitation: () => undefined,
     mountTool: () => undefined,
     unmountTool: () => {},

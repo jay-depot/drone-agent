@@ -56,6 +56,7 @@ function captureDriver(
     listMountedTools: () => [],
     emitEvent: () => {},
     runWorkflow: async () => ({}),
+    getCliFlags: () => ({}),
     requestElicitation: () => undefined,
   };
   return (async () => {

@@ -21,6 +21,8 @@ export type ExecFileResult = {
 export type ExecFileOptions = {
   cwd?: string;
   maxBuffer?: number;
+  /** Kill the process after this many milliseconds. */
+  timeoutMs?: number;
 };
 
 /**
@@ -36,6 +38,7 @@ export async function execFileAsync(
     encoding: 'utf-8',
     maxBuffer: options.maxBuffer ?? 10 * 1024 * 1024,
     cwd: options.cwd,
+    timeout: options.timeoutMs,
   });
   return { stdout, stderr };
 }

@@ -20,6 +20,8 @@ export type CliOptions = {
   modelOverride?: string;
   configDir?: string;
   pluginOverrides: string[];
+  /** Plugin-namespaced flags: `--<pluginId>.<flag>[=<value>]`. */
+  pluginFlags: Record<string, string | true>;
   subagentId?: string;
   persona?: string;
   workflow?: {
@@ -101,6 +103,7 @@ function createDefaultCliOptions(): CliOptions {
     outputJson: false,
     swarm: false,
     pluginOverrides: [],
+    pluginFlags: {},
     debugSubsystems: [],
   };
 }
@@ -249,6 +252,25 @@ export function parseCliArgs(argv: string[]): CliInvocation {
         input[argValue.slice(0, eqIndex)] = argValue.slice(eqIndex + 1);
       }
       return { kind: 'tool', toolName, input, options };
+    } else if (arg.startsWith('--') && arg.slice(2).includes('.')) {
+      // Plugin-namespaced flag: --<pluginId>.<flag>[=<value>]. Parsed
+      // liberally here and validated by the owning plugin after registration —
+      // plugins are not registered when the CLI is parsed.
+      const raw = arg.slice(2);
+      const eq = raw.indexOf('=');
+      let key: string;
+      let value: string | true;
+      if (eq >= 0) {
+        key = raw.slice(0, eq);
+        value = raw.slice(eq + 1);
+      } else if (i + 1 < argv.length && !argv[i + 1].startsWith('--')) {
+        key = raw;
+        value = argv[++i];
+      } else {
+        key = raw;
+        value = true;
+      }
+      options.pluginFlags[key] = value;
     } else if (arg.startsWith('--')) {
       throw new Error(`Unknown option: ${arg}`);
     } else {

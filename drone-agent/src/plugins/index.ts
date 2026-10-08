@@ -40,6 +40,7 @@ import { utilsPlugin } from './utils.js';
 import { focusPlugin } from './focus.js';
 import { wakelockPlugin } from './wakelock/index.js';
 import { beancounterPlugin } from './beancounter.js';
+import { createHerdrPlugin } from './herdr/index.js';
 
 // Static built-ins — everything except the compaction plugin, which needs
 // access to the live engine and session manager. The CLI calls
@@ -90,13 +91,20 @@ export function createBuiltInPlugins(
     resolveContextWindow?: () => Promise<DroneContextWindowInfo>;
     /** CLI-provided swarm overrides (--session-id/--beacon-host/--beacon-port). */
     swarmConfig?: import('./swarm/index.js').SwarmConfig;
+    /** Engine hook runner, exposed to the swarm startup session-import path. */
+    runHooks?: (hookName: 'onAfterToolCall') => Promise<void>;
+    /** CLI overrides carried into the Herdr resume command. */
+    herdrDeps?: import('./herdr/index.js').HerdrPluginDeps;
   }
 ): DronePlugin[] {
   return [
     ...staticBuiltInPlugins,
     createSwarmPlugin(compactionDeps.swarmConfig ?? {}, {
       resolveContextWindow: compactionDeps.resolveContextWindow,
+      sessionManager: compactionDeps.sessionManager,
+      runHooks: compactionDeps.runHooks,
     }),
+    createHerdrPlugin(compactionDeps.herdrDeps),
     createCompactionPlugin(compactionDeps),
     createLogPlugin(compactionDeps),
   ];

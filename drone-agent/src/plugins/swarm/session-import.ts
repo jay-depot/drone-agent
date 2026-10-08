@@ -1,6 +1,8 @@
 import type {
   DroneChatMessage,
+  DroneLlmCapability,
   DroneLlmProvider,
+  DroneSessionImportConfig,
   DroneSlashCommandSessionManager,
 } from 'drone-core';
 
@@ -157,4 +159,135 @@ export function injectChunk(
     },
   ]);
   sessionManager.appendToolResult(SESSION_IMPORT_TOOL, summary, toolCallId);
+}
+
+/** Defaults applied when `swarm.sessionImport` config is absent. */
+const DEFAULT_MAX_CHUNKS = 5;
+const DEFAULT_CHUNK_TOKEN_BUDGET_PERCENT = 12;
+
+function normalizeImportConfig(config: DroneSessionImportConfig): {
+  maxChunks: number;
+  chunkTokenBudgetPercent: number;
+} {
+  return {
+    maxChunks: config.maxChunks ?? DEFAULT_MAX_CHUNKS,
+    chunkTokenBudgetPercent:
+      config.chunkTokenBudgetPercent ?? DEFAULT_CHUNK_TOKEN_BUDGET_PERCENT,
+  };
+}
+
+export type SessionImportDeps = {
+  baseUrl: string | undefined;
+  llm: DroneLlmCapability | undefined;
+  sessionManager: DroneSlashCommandSessionManager | undefined;
+  logger: { info: (message: string) => void; warn: (message: string) => void };
+  config: DroneSessionImportConfig;
+  getContextWindowTokens: () => Promise<number>;
+  runAfterToolCallHooks: () => Promise<void>;
+  /** Guard against importing a session into itself. */
+  currentSessionId?: string;
+};
+
+/**
+ * Recreate an old swarm session's context into the current session: fetch the
+ * transcript, split it into chunks, summarize each with the clean LLM, and
+ * inject each chunk as its own synthetic `session_import` tool-call/result
+ * turn (per-chunk degradability under safety-trim). `onAfterToolCall` runs
+ * between chunks so compaction can free space. Shared by the
+ * `/swarm-session import` slash command and the `--swarm.session-import`
+ * startup path.
+ *
+ * Never throws: failures are logged and reported via a terse one-line
+ * `summary`.
+ */
+export async function runSessionImport(
+  deps: SessionImportDeps,
+  sessionId: string,
+  opts: { from?: number } = {}
+): Promise<{ ok: boolean; summary: string }> {
+  const { maxChunks, chunkTokenBudgetPercent } = normalizeImportConfig(
+    deps.config
+  );
+  const from = Math.max(1, Math.floor(opts.from ?? 1));
+
+  if (sessionId === deps.currentSessionId) {
+    const message = 'Cannot import the current session into itself.';
+    deps.logger.warn(message);
+    return { ok: false, summary: `session-import: ${message}` };
+  }
+  if (!deps.llm) {
+    const message = 'LLM provider broker is not available.';
+    deps.logger.warn(message);
+    return { ok: false, summary: `session-import: ${message}` };
+  }
+  if (!deps.sessionManager) {
+    const message = 'Session manager is not available in this host.';
+    deps.logger.warn(message);
+    return { ok: false, summary: `session-import: ${message}` };
+  }
+
+  let transcript: string;
+  try {
+    transcript = await fetchTranscript(deps.baseUrl, sessionId);
+  } catch (err) {
+    const message = `Failed to fetch transcript: ${err}`;
+    deps.logger.warn(message);
+    return { ok: false, summary: `session-import: ${message}` };
+  }
+
+  const chunks = splitTranscriptIntoChunks(transcript, maxChunks);
+  const contextWindowTokens = await deps.getContextWindowTokens();
+  const tokenBudget = Math.max(
+    1,
+    Math.floor(contextWindowTokens * (chunkTokenBudgetPercent / 100))
+  );
+  const provider = deps.llm.getActiveProvider();
+  const model = deps.llm.getModel();
+
+  if (from > chunks.length) {
+    const message = `--from ${from} is out of range: session ${sessionId} was split into ${chunks.length} chunk(s).`;
+    deps.logger.warn(message);
+    return { ok: false, summary: `session-import: ${message}` };
+  }
+
+  deps.logger.info(
+    `Importing session ${sessionId} in ${chunks.length} chunk(s) (${tokenBudget} tokens each), resuming from chunk ${from}...`
+  );
+
+  for (let i = from - 1; i < chunks.length; i++) {
+    let summary: string;
+    try {
+      summary = await summarizeChunk(provider, model, chunks[i], tokenBudget);
+    } catch (err) {
+      deps.logger.warn(
+        `Failed to summarize chunk ${i + 1}: ${err}\n` +
+          `Import aborted: imported chunks ${from}..${i} of ${chunks.length}. ` +
+          `Chunks ${i + 1}..${chunks.length} were NOT imported.\n` +
+          `Resume with: /swarm-session import ${sessionId} --from ${i + 1}`
+      );
+      return {
+        ok: false,
+        summary: `session-import: imported chunks ${from}..${i} of ${chunks.length}; resume with --from ${i + 1}`,
+      };
+    }
+    injectChunk(deps.sessionManager, summary, sessionId, i, chunks.length);
+    deps.logger.info(`Imported chunk ${i + 1}/${chunks.length}.`);
+
+    if (i < chunks.length - 1) {
+      try {
+        await deps.runAfterToolCallHooks();
+      } catch (err) {
+        deps.logger.warn(`onAfterToolCall hook error (non-fatal): ${err}`);
+      }
+    }
+  }
+
+  const imported = chunks.length - from + 1;
+  deps.logger.info(
+    `Imported chunks ${from}..${chunks.length} from session ${sessionId}.`
+  );
+  return {
+    ok: true,
+    summary: `session-import: imported ${imported} chunk(s) from ${sessionId}`,
+  };
 }

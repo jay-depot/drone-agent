@@ -102,6 +102,12 @@ export type DroneStandardHookName = Exclude<
 export type DronePluginRegistration = {
   logger: import('./session-types.js').DroneLogger;
   getConfig: () => DroneAgentConfig;
+  /**
+   * This plugin's CLI flags, with the `"<pluginId>."` namespace stripped.
+   * Values are the raw strings the user passed, or `true` for flag-only
+   * forms. Populated from `--<pluginId>.<flag>[=<value>]` arguments.
+   */
+  getCliFlags: () => Record<string, string | true>;
   registerTool: (tool: DroneToolDefinition) => void;
   registerPromptFragment: (fragment: DronePromptFragment) => void;
   registerHelp: (help: string) => void;

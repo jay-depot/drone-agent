@@ -92,7 +92,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   // ── Hooks ────────────────────────────────────────────────────────────
   const { scheme, pushColorOverride, popColorOverride } = useColorOverrides();
   const { isLlmActive, llmFrame, setIsLlmActive } = useLlmIndicator();
-  const { entries, appendEntry, log } = useChatLog();
+  const { entries, appendEntry, log } = useChatLog(opts.initialEntries);
   const {
     items: tailItems,
     addItem,

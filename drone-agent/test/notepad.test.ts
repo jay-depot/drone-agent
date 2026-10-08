@@ -43,6 +43,7 @@ function createMockRegistration(): {
     offer: () => {},
     request: <T>() => undefined as T | undefined,
     runWorkflow: async () => ({}),
+    getCliFlags: () => ({}),
     requestElicitation: () => undefined,
     mountTool: () => undefined,
     unmountTool: () => {},

@@ -100,6 +100,7 @@ function createRegistrationCapture() {
     request: <T>(id: string) =>
       (id === 'llm' ? (llmCap as T) : undefined) as T | undefined,
     runWorkflow: async () => ({ toolResult: '{}' }),
+    getCliFlags: () => ({}),
     requestElicitation: () => undefined,
   };
 

@@ -7,6 +7,10 @@ import {
   type DroneSlashCommandContext,
 } from 'drone-core';
 
+// The command delegates the actual import to `runSessionImport`; the deep
+// import semantics are unit-tested in `session-import.test.ts`. Here we verify
+// the command's own responsibilities: subcommand routing, argument parsing,
+// and correct dependency assembly.
 vi.mock('../src/plugins/swarm/session-import.js', async importOriginal => {
   const actual =
     await importOriginal<
@@ -14,30 +18,14 @@ vi.mock('../src/plugins/swarm/session-import.js', async importOriginal => {
     >();
   return {
     ...actual,
-    fetchTranscript: vi.fn(),
-    splitTranscriptIntoChunks: vi.fn(),
-    summarizeChunk: vi.fn(),
+    runSessionImport: vi.fn(),
   };
 });
 
-import {
-  fetchTranscript,
-  splitTranscriptIntoChunks,
-  summarizeChunk,
-} from '../src/plugins/swarm/session-import.js';
+import { runSessionImport } from '../src/plugins/swarm/session-import.js';
 
-/**
- * Build a mock DroneLlmCapability whose active provider can be shaped per test.
- * Context-window resolution is injected into the command under test, so the
- * provider mock itself needs none.
- */
-function makeLlm(
-  providerOverrides: Partial<DroneLlmProvider> = {}
-): DroneLlmCapability {
-  const provider: DroneLlmProvider = {
-    chat: async () => ({ message: '' }),
-    ...providerOverrides,
-  };
+function makeLlm(): DroneLlmCapability {
+  const provider: DroneLlmProvider = { chat: async () => ({ message: '' }) };
   return {
     getActiveProvider: () => provider,
     resolveModelForRole: () => ({
@@ -64,7 +52,7 @@ function makeLlm(
 function makeContext(overrides: Partial<DroneSlashCommandContext> = {}) {
   const logs: string[] = [];
   const warns: string[] = [];
-  const calls: Array<{ kind: 'assistant' | 'tool'; args: unknown[] }> = [];
+  const runHooks = vi.fn().mockResolvedValue(undefined);
   const ctx: DroneSlashCommandContext = {
     line: '/swarm-session',
     args: [],
@@ -75,20 +63,18 @@ function makeContext(overrides: Partial<DroneSlashCommandContext> = {}) {
     },
     engine: {
       executeTool: async () => '{}',
-      runHooks: async () => {},
+      runHooks,
       getCapability: () => undefined,
       getConfig: () => createDefaultAgentConfig(),
     },
     sessionManager: {
       appendUserMessage: () => {},
-      appendAssistantMessage: (...args: unknown[]) =>
-        calls.push({ kind: 'assistant', args }),
-      appendToolResult: (...args: unknown[]) =>
-        calls.push({ kind: 'tool', args }),
+      appendAssistantMessage: () => {},
+      appendToolResult: () => {},
     },
     ...overrides,
   };
-  return { ctx, logs, warns, calls };
+  return { ctx, logs, warns, runHooks };
 }
 
 const BASE_URL = 'http://localhost:3457';
@@ -97,9 +83,8 @@ const CONFIG = { maxChunks: 5, chunkTokenBudgetPercent: 12 };
 describe('createSwarmSessionCommand', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
-    vi.mocked(fetchTranscript).mockReset();
-    vi.mocked(splitTranscriptIntoChunks).mockReset();
-    vi.mocked(summarizeChunk).mockReset();
+    vi.mocked(runSessionImport).mockReset();
+    vi.mocked(runSessionImport).mockResolvedValue({ ok: true, summary: 'ok' });
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -144,203 +129,134 @@ describe('createSwarmSessionCommand', () => {
     expect(logs.join('\n')).not.toContain('current ');
   });
 
-  it('rejects importing the current session', async () => {
-    const { ctx, warns } = makeContext({ args: ['import', 'current'] });
-    const cmd = createSwarmSessionCommand(
-      BASE_URL,
-      'current',
-      CONFIG,
-      async () => 1000
-    );
-    const handled = await cmd.handler(ctx);
-    expect(handled).toBe(true);
-    expect(warns.join('\n')).toContain('Cannot import the current session');
-  });
-
   it('warns on unknown subcommand', async () => {
     const { ctx, warns } = makeContext({ args: ['bogus'] });
-    const cmd = createSwarmSessionCommand(
+    const handled = await createSwarmSessionCommand(
       BASE_URL,
       'current',
       CONFIG,
       async () => 1000
-    );
-    const handled = await cmd.handler(ctx);
+    ).handler(ctx);
     expect(handled).toBe(true);
     expect(warns.join('\n')).toContain('Unknown swarm-session command');
   });
 
   it('warns when import is missing a session id', async () => {
     const { ctx, warns } = makeContext({ args: ['import'] });
-    const cmd = createSwarmSessionCommand(
+    const handled = await createSwarmSessionCommand(
       BASE_URL,
       'current',
       CONFIG,
       async () => 1000
-    );
-    const handled = await cmd.handler(ctx);
+    ).handler(ctx);
     expect(handled).toBe(true);
     expect(warns.join('\n')).toContain(
       'Usage: /swarm-session import <sessionId>'
     );
+    expect(runSessionImport).not.toHaveBeenCalled();
   });
 
-  describe('import success path', () => {
-    beforeEach(() => {
-      vi.mocked(fetchTranscript).mockResolvedValue(
-        '# Session ss2\n\n--- Turn 1 ---\n[user] hello\n--- Turn 2 ---\n[user] world'
-      );
-      vi.mocked(splitTranscriptIntoChunks).mockImplementation(
-        (_transcript, maxChunks) => {
-          const n = Math.min(maxChunks, 3);
-          return Array.from({ length: n }, (_, i) => `chunk-${i + 1}`);
-        }
-      );
+  describe('import delegation', () => {
+    it('delegates to runSessionImport with the session id and parsed --from', async () => {
+      const { ctx } = makeContext({ args: ['import', 'ss1', '--from', '2'] });
+      const handled = await createSwarmSessionCommand(
+        BASE_URL,
+        'current',
+        CONFIG,
+        async () => 1000
+      ).handler(ctx);
+
+      expect(handled).toBe(true);
+      expect(runSessionImport).toHaveBeenCalledTimes(1);
+      const call = vi.mocked(runSessionImport).mock.calls[0];
+      expect(call?.[1]).toBe('ss1');
+      expect(call?.[2]).toEqual({ from: 2 });
     });
 
-    function importContext(args: string[]) {
-      const runHooks = vi.fn().mockResolvedValue(undefined);
-      const getContextWindowTokens = vi.fn().mockResolvedValue(1000);
-      const base = makeContext({
-        args,
+    it('defaults --from to 1 when omitted', async () => {
+      const { ctx } = makeContext({ args: ['import', 'ss1'] });
+      await createSwarmSessionCommand(
+        BASE_URL,
+        'current',
+        CONFIG,
+        async () => 1000
+      ).handler(ctx);
+
+      const call = vi.mocked(runSessionImport).mock.calls[0];
+      expect(call?.[2]).toEqual({ from: 1 });
+    });
+
+    it('assembles deps: baseUrl, currentSessionId, config, logger, sessionManager, llm', async () => {
+      const llm = makeLlm();
+      const { ctx } = makeContext({
+        args: ['import', 'ss1'],
         engine: {
           executeTool: async () => '{}',
-          runHooks,
-          getCapability: <T>(_pluginId: string) => makeLlm() as T,
+          runHooks: vi.fn().mockResolvedValue(undefined),
+          getCapability: <T>() => llm as unknown as T,
           getConfig: () => createDefaultAgentConfig(),
         },
       });
-      return { ...base, runHooks, getContextWindowTokens };
-    }
-
-    it('warns and bails when the LLM broker is unavailable', async () => {
-      const { ctx, warns } = makeContext({ args: ['import', 'ss1'] });
-      const cmd = createSwarmSessionCommand(BASE_URL, 'current', CONFIG);
-      const handled = await cmd.handler(ctx);
-      expect(handled).toBe(true);
-      expect(warns.join('\n')).toContain(
-        'LLM provider broker is not available.'
-      );
-    });
-
-    it('imports N chunks into N turns and calls onAfterToolCall between chunks', async () => {
-      vi.mocked(summarizeChunk).mockImplementation(
-        async (_p, _m, chunk) => `summary for ${chunk}`
-      );
-      const { ctx, calls, logs, runHooks, getContextWindowTokens } =
-        importContext(['import', 'ss1']);
-      const handled = await createSwarmSessionCommand(
+      await createSwarmSessionCommand(
         BASE_URL,
         'current',
         CONFIG,
-        getContextWindowTokens
+        async () => 1000
       ).handler(ctx);
 
-      expect(handled).toBe(true);
-      // The injected resolver produces the per-chunk token budget.
-      expect(getContextWindowTokens).toHaveBeenCalledTimes(1);
-      // 3 chunks → 3 assistant (tool-call) + 3 tool results = 6 calls.
-      expect(calls.length).toBe(6);
-      expect(summarizeChunk).toHaveBeenCalledTimes(3);
-      // onAfterToolCall fires between chunks, not after the last: N-1 = 2.
-      expect(runHooks).toHaveBeenCalledTimes(2);
-      expect(runHooks).toHaveBeenCalledWith('onAfterToolCall');
-      expect(logs.join('\n')).toContain(
-        'Imported chunks 1..3 from session ss1.'
-      );
+      const deps = vi.mocked(runSessionImport).mock.calls[0]?.[0];
+      expect(deps?.baseUrl).toBe(BASE_URL);
+      expect(deps?.currentSessionId).toBe('current');
+      expect(deps?.config).toEqual(CONFIG);
+      expect(deps?.logger).toBe(ctx.logger);
+      expect(deps?.sessionManager).toBe(ctx.sessionManager);
+      expect(deps?.llm).toBe(llm);
     });
 
-    it('aborts with a resume hint when a chunk fails mid-import', async () => {
-      vi.mocked(summarizeChunk).mockImplementation(async (_p, _m, chunk) => {
-        if (chunk === 'chunk-2') throw new Error('provider down');
-        return `summary for ${chunk}`;
+    it('wires runAfterToolCallHooks to the engine onAfterToolCall hook', async () => {
+      const runHooks = vi.fn().mockResolvedValue(undefined);
+      const { ctx } = makeContext({
+        args: ['import', 'ss1'],
+        engine: {
+          executeTool: async () => '{}',
+          runHooks,
+          getCapability: () => undefined,
+          getConfig: () => createDefaultAgentConfig(),
+        },
       });
-      const { ctx, warns, calls, getContextWindowTokens } = importContext([
-        'import',
-        'ss1',
-      ]);
-      const handled = await createSwarmSessionCommand(
+      await createSwarmSessionCommand(
         BASE_URL,
         'current',
         CONFIG,
-        getContextWindowTokens
+        async () => 1000
       ).handler(ctx);
 
-      expect(handled).toBe(true);
-      // Chunk 1 imported, chunk 2 failed → 1 assistant + 1 tool call.
-      expect(calls.length).toBe(2);
-      const message = warns.join('\n');
-      expect(message).toContain('Failed to summarize chunk 2');
-      expect(message).toContain('Import aborted: imported chunks 1..1 of 3');
-      expect(message).toContain(
-        'Resume with: /swarm-session import ss1 --from 2'
-      );
+      const deps = vi.mocked(runSessionImport).mock.calls[0]?.[0];
+      await deps?.runAfterToolCallHooks();
+      expect(runHooks).toHaveBeenCalledWith('onAfterToolCall');
     });
 
-    it('resumes from --from N, keeping original chunk indices', async () => {
-      vi.mocked(summarizeChunk).mockImplementation(
-        async (_p, _m, chunk) => `summary for ${chunk}`
-      );
-      const { ctx, calls, logs, getContextWindowTokens } = importContext([
-        'import',
-        'ss1',
-        '--from',
-        '2',
-      ]);
-      const handled = await createSwarmSessionCommand(
+    it('uses the injected context-window resolver', async () => {
+      const getContextWindowTokens = vi.fn().mockResolvedValue(1234);
+      const { ctx } = makeContext({ args: ['import', 'ss1'] });
+      await createSwarmSessionCommand(
         BASE_URL,
         'current',
         CONFIG,
         getContextWindowTokens
       ).handler(ctx);
 
-      expect(handled).toBe(true);
-      // Only chunks 2 and 3 are imported (2 assistant + 2 tool = 4 calls).
-      expect(calls.length).toBe(4);
-      const chunks = vi.mocked(summarizeChunk).mock.calls.map(c => c[2]);
-      expect(chunks).toEqual(['chunk-2', 'chunk-3']);
-      expect(logs.join('\n')).toContain(
-        'Imported chunks 2..3 from session ss1.'
-      );
-    });
-
-    it('rejects an out-of-range --from value', async () => {
-      vi.mocked(summarizeChunk).mockImplementation(
-        async (_p, _m, chunk) => `summary for ${chunk}`
-      );
-      const { ctx, warns, calls, getContextWindowTokens } = importContext([
-        'import',
-        'ss1',
-        '--from',
-        '9',
-      ]);
-      const handled = await createSwarmSessionCommand(
-        BASE_URL,
-        'current',
-        CONFIG,
-        getContextWindowTokens
-      ).handler(ctx);
-
-      expect(handled).toBe(true);
-      expect(warns.join('\n')).toContain('--from 9 is out of range');
-      expect(calls.length).toBe(0);
-      expect(summarizeChunk).not.toHaveBeenCalled();
+      const deps = vi.mocked(runSessionImport).mock.calls[0]?.[0];
+      await expect(deps!.getContextWindowTokens()).resolves.toBe(1234);
+      expect(getContextWindowTokens).toHaveBeenCalledTimes(1);
     });
 
     it('falls back to session.contextWindowTokens when no resolver is injected', async () => {
-      vi.mocked(summarizeChunk).mockImplementation(
-        async (_p, _m, _chunk, budget) => `budget ${budget}`
-      );
-      const { ctx, logs } = importContext(['import', 'ss1']);
-      const handled = await createSwarmSessionCommand(
-        BASE_URL,
-        'current',
-        CONFIG
-      ).handler(ctx);
+      const { ctx } = makeContext({ args: ['import', 'ss1'] });
+      await createSwarmSessionCommand(BASE_URL, 'current', CONFIG).handler(ctx);
 
-      expect(handled).toBe(true);
-      // Default config context window is 32768 → floor(32768 * 12%) = 3932.
-      expect(logs.join('\n')).toContain('(3932 tokens each)');
+      const deps = vi.mocked(runSessionImport).mock.calls[0]?.[0];
+      await expect(deps!.getContextWindowTokens()).resolves.toBe(32768);
     });
   });
 });

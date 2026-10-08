@@ -61,6 +61,7 @@ async function captureContextCommand(options?: {
     },
     request: <T>() => undefined as T | undefined,
     runWorkflow: async () => ({ toolResult: '{}' }),
+    getCliFlags: () => ({}),
     requestElicitation: () => undefined,
   };
 
@@ -196,6 +197,7 @@ describe('/context command', () => {
       offer: () => {},
       request: <T>() => undefined as T | undefined,
       runWorkflow: async () => ({ toolResult: '{}' }),
+      getCliFlags: () => ({}),
       requestElicitation: () => undefined,
     };
     await llmPlugin.register(registration);

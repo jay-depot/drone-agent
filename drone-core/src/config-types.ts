@@ -255,6 +255,15 @@ export type DroneWakelockConfig = {
   enabled: boolean;
 };
 
+export type DroneHerdrConfig = {
+  /** Master toggle for reporting agent state to the Herdr terminal multiplexer. */
+  enabled: boolean;
+  /** argv[0] of the Herdr resume command; must be a plain name on PATH. */
+  resumeCommand: string;
+  /** Herdr `--agent` label (the name shown in the Herdr sidebar). */
+  agentLabel: string;
+};
+
 export type DroneLogConfig = {
   enabled: boolean;
 };
@@ -457,6 +466,7 @@ export type DroneAgentConfig = {
   compaction: DroneCompactionConfig;
   memory: DroneMemoryConfig;
   wakelock: DroneWakelockConfig;
+  herdr: DroneHerdrConfig;
   log: DroneLogConfig;
   terminal: DroneTerminalConfig;
   promptFile: DronePromptFileConfig;
@@ -483,6 +493,7 @@ export type PartialDroneAgentConfig = Partial<{
   compaction: Partial<DroneCompactionConfig>;
   memory: Partial<DroneMemoryConfig>;
   wakelock: Partial<DroneWakelockConfig>;
+  herdr: Partial<DroneHerdrConfig>;
   log: Partial<DroneLogConfig>;
   promptFile: Partial<DronePromptFileConfig>;
   terminal: Partial<DroneTerminalConfig>;
@@ -528,6 +539,7 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
     'compaction',
     'memory',
     'wakelock',
+    'herdr',
     'log',
     'terminal',
     'search',
@@ -671,6 +683,11 @@ export function createDefaultAgentConfig(
     },
     wakelock: {
       enabled: true,
+    },
+    herdr: {
+      enabled: true,
+      resumeCommand: 'drone-agent',
+      agentLabel: 'drone-agent',
     },
     log: {
       enabled: true,

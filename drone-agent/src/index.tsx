@@ -7,6 +7,7 @@ import {
 } from 'drone-core';
 import { stdout as output } from 'node:process';
 import { createBuiltInPlugins } from './plugins/index.js';
+import { runStartupSessionImport } from './startup-import.js';
 import {
   discoverExternalPlugins,
   promptForPluginTrust,
@@ -117,6 +118,12 @@ async function main(): Promise<void> {
     sessionManager,
     ...createLlmGetters(engineRef),
     resolveContextWindow: () => budgetService.resolveContextWindow(),
+    runHooks: hookName => getEngine().runHooks(hookName),
+    herdrDeps: {
+      modelOverride: invocation.options.modelOverride,
+      beaconHost: invocation.options.beaconHost,
+      beaconPort: invocation.options.beaconPort,
+    },
     swarmConfig: {
       sessionId: invocation.options.sessionId,
       beaconHost: invocation.options.beaconHost,
@@ -205,6 +212,7 @@ async function main(): Promise<void> {
     logger,
     logToStderr: invocation.options.outputJson,
     debugFlags,
+    pluginFlags: invocation.options.pluginFlags,
     referenceCapability: reference,
     runtimeOptions: {
       subagentId: invocation.options.subagentId,
@@ -371,6 +379,18 @@ async function main(): Promise<void> {
   await engine.runHooks('onPluginsLoaded');
   await engine.runHooks('onSessionStart');
 
+  // ── --swarm.session-import <sessionId> ──────────────────────────────
+  // Recreate an old swarm session's context into this session before the
+  // first turn. Runs here (before the host mounts and before any turn) so
+  // it neither races the first LLM call nor emits events the TUI would miss
+  // (the App only subscribes on mount). The terse summary is buffered and
+  // seeded into the TUI log; non-TUI hosts surface it via the logger.
+  const startupEntries = await runStartupSessionImport(
+    pluginId => engine.getCapability(pluginId),
+    logger,
+    invocation.options.pluginFlags
+  );
+
   // ── --model invocation-scoped override ─────────────────────────────
   // Applied AFTER onPluginsLoaded so the broker has already activated from
   // llm.active; the override wins for this invocation and is never persisted.
@@ -506,6 +526,7 @@ async function main(): Promise<void> {
         model,
         logger,
         initialWorkflow: { name: canonicalName, args },
+        initialEntries: startupEntries,
       });
       await tui.waitUntilExit();
     }

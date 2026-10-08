@@ -64,6 +64,7 @@ function createCapture(
     offer: () => {},
     request: <T>(pluginId: string) => capabilities[pluginId] as T | undefined,
     runWorkflow: async () => ({}),
+    getCliFlags: () => ({}),
     requestElicitation: () => undefined,
     mountTool: () => undefined,
     unmountTool: () => {},

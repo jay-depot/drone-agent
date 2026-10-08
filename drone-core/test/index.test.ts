@@ -4,6 +4,7 @@ import {
   deepMerge,
   createConsoleLogger,
   createDefaultAgentConfig,
+  parseConfigWithSchema,
   filterByGlobPatterns,
   getCanonicalToolName,
   matchGlob,
@@ -102,6 +103,29 @@ describe('createDefaultAgentConfig', () => {
       anchors: { tags: [], boostPerTag: 0.08, boostTitle: 0.05 },
       window: { maxQueryTokens: 6000, maxQuerySegments: 3 },
     });
+  });
+
+  it('defaults herdr to enabled with the drone-agent resume command', () => {
+    const config = createDefaultAgentConfig();
+    expect(config.herdr).toEqual({
+      enabled: true,
+      resumeCommand: 'drone-agent',
+      agentLabel: 'drone-agent',
+    });
+  });
+
+  it('accepts a partial herdr section through the schema', () => {
+    const parsed = parseConfigWithSchema(
+      { herdr: { enabled: false, agentLabel: 'my-agent' } },
+      'test'
+    );
+    expect(parsed.herdr).toEqual({ enabled: false, agentLabel: 'my-agent' });
+  });
+
+  it('rejects a non-boolean herdr.enabled through the schema', () => {
+    expect(() =>
+      parseConfigWithSchema({ herdr: { enabled: 'yes' } }, 'test')
+    ).toThrow();
   });
 });
 

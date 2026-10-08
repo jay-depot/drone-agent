@@ -9,12 +9,14 @@
 import { useCallback, useRef, useState } from 'react';
 import type { ChatEntry } from '../types.js';
 
-export function useChatLog(): {
+export function useChatLog(initialEntries?: ChatEntry[]): {
   entries: ChatEntry[];
   appendEntry: (entry: Omit<ChatEntry, 'id'>) => void;
   log: (text: string, kind?: ChatEntry['kind']) => void;
 } {
-  const [entries, setEntries] = useState<ChatEntry[]>([]);
+  const [entries, setEntries] = useState<ChatEntry[]>(() => [
+    ...(initialEntries ?? []),
+  ]);
   const entryIdCounter = useRef<number>(0);
 
   const appendEntry = useCallback(

@@ -476,6 +476,7 @@ describe('createDronePluginEngine', () => {
       offer: () => {},
       request: <T>() => undefined as T | undefined,
       runWorkflow: async () => ({}),
+      getCliFlags: () => ({}),
       requestElicitation: () => undefined,
       mountTool: () => undefined,
       unmountTool: () => {},
@@ -620,6 +621,35 @@ describe('createDronePluginEngine', () => {
     expect(received).toBe(provider);
     expect(engine.getCapability('producer')).toBe(provider);
     expect(engine.getCapability('consumer')).toBeUndefined();
+  });
+
+  it('rejects a plugin that offers a capability twice (single-slot registry)', async () => {
+    let offerError: unknown = null;
+    const plugins: DronePlugin[] = [
+      createTestPlugin({
+        id: 'double-offerer',
+        register: ({ offer }) => {
+          offer({ first: true });
+          try {
+            offer({ second: true });
+          } catch (err) {
+            offerError = err;
+          }
+        },
+      }),
+    ];
+
+    const engine = createDronePluginEngine({
+      plugins,
+      config: createDefaultAgentConfig(),
+      logger: silentLogger(),
+    });
+    await engine.initialize();
+    expect((offerError as Error).message).toMatch(
+      /Plugin double-offerer offered a capability twice/
+    );
+    // The first offer survives — the second did not silently clobber it.
+    expect(engine.getCapability('double-offerer')).toEqual({ first: true });
   });
 
   it('returns help snippets only from enabled plugins', async () => {

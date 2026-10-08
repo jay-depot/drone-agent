@@ -337,6 +337,11 @@ describe('promptFilePlugin', () => {
         },
         memory: { enabled: false },
         wakelock: { enabled: false },
+        herdr: {
+          enabled: false,
+          resumeCommand: 'drone-agent',
+          agentLabel: 'drone-agent',
+        },
         log: { enabled: false },
         terminal: {
           enabled: false,
@@ -396,6 +401,7 @@ describe('promptFilePlugin', () => {
       offer: () => {},
       request: () => undefined,
       runWorkflow: async () => ({ toolResult: '{}' }),
+      getCliFlags: () => ({}),
       requestElicitation: () => undefined,
       ...overrides,
     };

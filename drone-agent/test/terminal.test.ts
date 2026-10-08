@@ -439,6 +439,11 @@ describe('terminalPlugin', () => {
         },
         memory: { enabled: false },
         wakelock: { enabled: false },
+        herdr: {
+          enabled: false,
+          resumeCommand: 'drone-agent',
+          agentLabel: 'drone-agent',
+        },
         log: { enabled: false },
         terminal: {
           enabled: true,
@@ -504,6 +509,7 @@ describe('terminalPlugin', () => {
       offer: () => {},
       request: () => undefined,
       runWorkflow: async () => ({ toolResult: '{}' }),
+      getCliFlags: () => ({}),
       requestElicitation: () => undefined,
     };
 

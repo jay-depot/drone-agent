@@ -168,4 +168,10 @@ export type DroneTuiOptions = {
    * false → the host may exit (the App exits itself in that case).
    */
   onWorkflowComplete?: (info: { continueSession: boolean }) => void;
+  /**
+   * Pre-rendered chat-log entries committed on mount. Used by the host to
+   * surface startup work that ran before the App subscribed to conversation
+   * events (e.g. a `--swarm.session-import` summary).
+   */
+  initialEntries?: ChatEntry[];
 };

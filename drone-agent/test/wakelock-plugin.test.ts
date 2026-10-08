@@ -79,6 +79,7 @@ function makeRegistration(overrides?: {
           }
         : undefined,
     runWorkflow: async () => ({ toolResult: '{}' }),
+    getCliFlags: () => ({}),
     requestElicitation: () => undefined,
   };
 

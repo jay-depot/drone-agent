@@ -159,6 +159,7 @@ describe('ollama chat user-message injection', () => {
       },
       request: () => undefined,
       runWorkflow: async () => ({ toolResult: '{}' }),
+      getCliFlags: () => ({}),
       requestElicitation: () => undefined,
     } as never);
     if (!driver) {
@@ -528,6 +529,7 @@ describe('ollama DroneLlmError conversion', () => {
       },
       request: () => undefined,
       runWorkflow: async () => ({ toolResult: '{}' }),
+      getCliFlags: () => ({}),
       requestElicitation: () => undefined,
     } as never);
     if (!driver) {

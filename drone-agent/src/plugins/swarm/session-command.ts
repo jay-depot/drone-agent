@@ -4,27 +4,7 @@ import type {
   DroneLlmCapability,
   DroneSlashCommandContext,
 } from 'drone-core';
-import {
-  fetchTranscript,
-  injectChunk,
-  splitTranscriptIntoChunks,
-  summarizeChunk,
-} from './session-import.js';
-
-/** Defaults applied when `swarm.sessionImport` config is absent. */
-const DEFAULT_MAX_CHUNKS = 5;
-const DEFAULT_CHUNK_TOKEN_BUDGET_PERCENT = 12;
-
-function normalizeConfig(config: DroneSessionImportConfig): {
-  maxChunks: number;
-  chunkTokenBudgetPercent: number;
-} {
-  return {
-    maxChunks: config.maxChunks ?? DEFAULT_MAX_CHUNKS,
-    chunkTokenBudgetPercent:
-      config.chunkTokenBudgetPercent ?? DEFAULT_CHUNK_TOKEN_BUDGET_PERCENT,
-  };
-}
+import { runSessionImport } from './session-import.js';
 
 /**
  * Config-only fallback when no host resolver was injected. Mirrors the
@@ -118,14 +98,9 @@ async function handleImport(
   config: DroneSessionImportConfig,
   getContextWindowTokens?: () => Promise<number>
 ): Promise<boolean> {
-  const { maxChunks, chunkTokenBudgetPercent } = normalizeConfig(config);
   const sessionId = ctx.args[1];
   if (!sessionId) {
     ctx.logger.warn('Usage: /swarm-session import <sessionId>');
-    return true;
-  }
-  if (sessionId === currentSessionId) {
-    ctx.logger.warn('Cannot import the current session into itself.');
     return true;
   }
 
@@ -139,76 +114,20 @@ async function handleImport(
     }
   }
 
-  const llm = ctx.engine.getCapability<DroneLlmCapability>('llm');
-  if (!llm) {
-    ctx.logger.warn('LLM provider broker is not available.');
-    return true;
-  }
-  if (!ctx.sessionManager) {
-    ctx.logger.warn('Session manager is not available in this host.');
-    return true;
-  }
-
-  let transcript: string;
-  try {
-    transcript = await fetchTranscript(baseUrl, sessionId);
-  } catch (err) {
-    ctx.logger.warn(`Failed to fetch transcript: ${err}`);
-    return true;
-  }
-
-  const chunks = splitTranscriptIntoChunks(transcript, maxChunks);
-  const contextWindowTokens = await (
-    getContextWindowTokens ?? defaultGetContextWindowTokens
-  )(ctx);
-  const tokenBudget = Math.max(
-    1,
-    Math.floor(contextWindowTokens * (chunkTokenBudgetPercent / 100))
-  );
-
-  const provider = llm.getActiveProvider();
-  const model = llm.getModel();
-
-  if (from > chunks.length) {
-    ctx.logger.warn(
-      `--from ${from} is out of range: session ${sessionId} was split into ${chunks.length} chunk(s).`
-    );
-    return true;
-  }
-
-  ctx.logger.info(
-    `Importing session ${sessionId} in ${chunks.length} chunk(s) (${tokenBudget} tokens each), resuming from chunk ${from}...`
-  );
-
-  for (let i = from - 1; i < chunks.length; i++) {
-    let summary: string;
-    try {
-      summary = await summarizeChunk(provider, model, chunks[i], tokenBudget);
-    } catch (err) {
-      ctx.logger.warn(
-        `Failed to summarize chunk ${i + 1}: ${err}\n` +
-          `Import aborted: imported chunks ${from}..${i} of ${chunks.length}. ` +
-          `Chunks ${i + 1}..${chunks.length} were NOT imported.\n` +
-          `Resume with: /swarm-session import ${sessionId} --from ${i + 1}`
-      );
-      return true;
-    }
-    injectChunk(ctx.sessionManager, summary, sessionId, i, chunks.length);
-    ctx.logger.info(`Imported chunk ${i + 1}/${chunks.length}.`);
-
-    // Give compaction a chance to fire between chunks so the imported
-    // context stays under the safety-trim budget.
-    if (i < chunks.length - 1) {
-      try {
-        await ctx.engine.runHooks('onAfterToolCall');
-      } catch (err) {
-        ctx.logger.warn(`onAfterToolCall hook error (non-fatal): ${err}`);
-      }
-    }
-  }
-
-  ctx.logger.info(
-    `Imported chunks ${from}..${chunks.length} from session ${sessionId}.`
+  await runSessionImport(
+    {
+      baseUrl,
+      llm: ctx.engine.getCapability<DroneLlmCapability>('llm'),
+      sessionManager: ctx.sessionManager,
+      logger: ctx.logger,
+      config,
+      currentSessionId,
+      getContextWindowTokens: () =>
+        (getContextWindowTokens ?? defaultGetContextWindowTokens)(ctx),
+      runAfterToolCallHooks: () => ctx.engine.runHooks('onAfterToolCall'),
+    },
+    sessionId,
+    { from }
   );
   return true;
 }

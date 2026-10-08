@@ -9,12 +9,16 @@ import type { DebugFlagRegistry } from 'drone-core';
 import type {
   DroneConversationEvent,
   DroneContextWindowInfo,
+  DroneLlmCapability,
   DronePlugin,
   DronePersonaCapability,
+  DroneSessionImportCapability,
   DroneSkillsCapability,
+  DroneSlashCommandSessionManager,
   DroneToolDefinition,
   DroneSwarmCapability,
 } from 'drone-core';
+import { runSessionImport, type SessionImportDeps } from './session-import.js';
 import type { SwarmConfig } from './config.js';
 import {
   DEFAULT_BEACON_HOST,
@@ -53,7 +57,38 @@ export type { SwarmConfig } from './config.js';
  */
 export type SwarmPluginDeps = {
   resolveContextWindow?: () => Promise<DroneContextWindowInfo>;
+  /** Session manager for the startup `--swarm.session-import` path. */
+  sessionManager?: DroneSlashCommandSessionManager;
+  /** Run engine hooks (invoked between chunks by the startup import). */
+  runHooks?: (hookName: 'onAfterToolCall') => Promise<void>;
 };
+
+/**
+ * Assemble the context-free dependencies `runSessionImport` needs from the
+ * swarm plugin's own handles. Shared by the `/swarm-session import` slash
+ * command and the `--swarm.session-import` startup capability.
+ */
+function buildSessionImportDeps(
+  registration: import('drone-core').DronePluginRegistration,
+  deps: SwarmPluginDeps | undefined,
+  baseUrl: string,
+  currentSessionId: string,
+  config: import('drone-core').DroneSessionImportConfig,
+  getContextWindowTokens: () => Promise<number>
+): SessionImportDeps {
+  return {
+    baseUrl,
+    llm: registration.request<DroneLlmCapability>('llm'),
+    sessionManager: deps?.sessionManager,
+    logger: registration.logger,
+    config,
+    currentSessionId,
+    getContextWindowTokens,
+    runAfterToolCallHooks: async () => {
+      await deps?.runHooks?.('onAfterToolCall');
+    },
+  };
+}
 
 /**
  * The swarm plugin connects to a drone-beacon and provides
@@ -161,9 +196,28 @@ export function createSwarmPlugin(
       });
 
       // ── Offer swarm capability ─────────────────────────────────────────
-      const swarmCap: DroneSwarmCapability = {
+      // The engine's capability registry is ONE SLOT PER PLUGIN ID: a second
+      // `offer()` silently clobbers the first. So the swarm plugin offers a
+      // single object that carries both the beacon/agent accessors and the
+      // session-import entry point (used by the Herdr resume path and the
+      // `--swarm.session-import` startup import). `runImport` closes over
+      // the config/getter declared below; it only runs after register()
+      // returns, so the bindings are initialized by then.
+      const swarmCap: DroneSwarmCapability & DroneSessionImportCapability = {
         getBeaconUrl: () => baseUrl,
         getAgentId: () => sessionId,
+        runImport: targetSessionId =>
+          runSessionImport(
+            buildSessionImportDeps(
+              registration,
+              deps,
+              baseUrl,
+              sessionId,
+              sessionImportConfig,
+              getContextWindowTokens
+            ),
+            targetSessionId
+          ),
       };
       registration.offer(swarmCap);
       registration.logger.info('Offered DroneSwarmCapability');
@@ -295,14 +349,15 @@ export function createSwarmPlugin(
         maxChunks: 5,
         chunkTokenBudgetPercent: 12,
       };
+      const getContextWindowTokens = resolveContextWindow
+        ? async () => (await resolveContextWindow()).contextWindowTokens
+        : async () => registration.getConfig().session.contextWindowTokens;
       registration.registerSlashCommand(
         createSwarmSessionCommand(
           baseUrl,
           sessionId,
           sessionImportConfig,
-          resolveContextWindow
-            ? async () => (await resolveContextWindow()).contextWindowTokens
-            : undefined
+          getContextWindowTokens
         )
       );
 

@@ -178,6 +178,7 @@ The following subsystems have dedicated documentation in `docs/agents/`:
 - **Swarm Plugin** (`docs/agents/swarm-plugin.md`) — Beacon/coordinator integration for swarm-wide personas, skills, and config; the `# Swarm Status` header fragment (local beacon + coordinator + beacon roster, cached), the reserved-`swarm-identity` `# Swarm Identity` fragment authored from the coordinator UI's Identity page (`PUT`/`DELETE /api/fragments/:id` + the `fragmentsChanged` reverse-channel nudge), and the shared `drone-swarm-common` fragment limits module (reserved ids have their own budget and never expire)
 - **External Plugin Loading** (`docs/agents/external-plugin-loading.md`) — User and project-scope plugin discovery, trust model, engine integration
 - **MCP Plugin** (`docs/agents/mcp-plugin.md`) — Deferred list/mount pattern for tool loading, `ToolMountingCache`, server descriptions, persona filtering
+- **Herdr Plugin** (`docs/agents/herdr-plugin.md`) — Reports agent state (`idle`/`working`) and a session resume command to the Herdr terminal multiplexer; the resume command rides a new startup session-import (`--swarm.session-import`) and a minimal plugin CLI-flag facility (ADR 239)
 
 ## Working on the Project
 
