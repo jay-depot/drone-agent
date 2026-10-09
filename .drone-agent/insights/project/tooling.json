@@ -26,5 +26,9 @@
   {
     "timestamp": "2026-10-07T04:04:29.863Z",
     "insight": "`pnpm run lint` runs Prettier repo-wide, and the repo is NOT Prettier-clean at HEAD. On 2026-10-07 (branch fix/apply-diff-concurrency) a single `pnpm run lint` reformatted 218 unrelated files — every ADR under docs/adr/ (YAML frontmatter `related:` lists reflowed), drone-{beacon,coordinator}/README.md, and pnpm-lock.yaml — on a tree that was verifiably git-clean before the run. So: (a) `prettier --check docs/adr/index.md` fails at HEAD, confirming the drift is pre-existing, not introduced by any one change; (b) the AGENTS.md instruction \"run lint, then re-read your files\" is insufficient — a lint run silently creates a 200+ file staging surface, and a naive `git commit -a` would sweep it into the commit. Mitigation used: after lint, diff against an explicit allowlist of intended paths and `git checkout --` everything else. Worth a dedicated repo-wide `prettier --write` cleanup commit at some point so lint stops manufacturing churn."
+  },
+  {
+    "timestamp": "2026-10-09T02:00:11.992Z",
+    "insight": "The self-improvement insight record tool currently fails on this host with `Invalid targetType \"undefined\"` even when targetType is explicitly passed (2026-10-09); the tool schema the host reports omits the parameter. Workaround: append {timestamp, insight} entries directly to .drone-agent/insights/project/<target>.json matching the existing 2-space-indented array format. Verify the roundtrip (json.dumps(data, indent=2) equals the raw file) before rewriting so the diff stays minimal."
   }
 ]
