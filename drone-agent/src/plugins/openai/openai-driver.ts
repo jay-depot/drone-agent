@@ -223,6 +223,7 @@ export function createOpenAiProvider(
         );
       }
 
+      let preReadErrorBody: string | undefined;
       if (!response.ok && options.toolRoutingRetry) {
         const retry = await maybeToolRoutingRetry(
           response,
@@ -232,16 +233,24 @@ export function createOpenAiProvider(
           debug
         );
         if (retry !== undefined) {
-          response = retry.response;
+          if ('errorText' in retry) {
+            preReadErrorBody = retry.errorText;
+          } else {
+            response = retry.response;
+          }
         }
       }
 
       if (!response.ok) {
         let errorBody: string;
-        try {
-          errorBody = await response.text();
-        } catch {
-          errorBody = '(could not read response body)';
+        if (preReadErrorBody !== undefined) {
+          errorBody = preReadErrorBody;
+        } else {
+          try {
+            errorBody = await response.text();
+          } catch {
+            errorBody = '(could not read response body)';
+          }
         }
         if (debug) {
           console.error(
@@ -349,17 +358,22 @@ async function maybeToolRoutingRetry(
   ) => OpenAiChatRequest,
   doFetch: (body: OpenAiChatRequest) => Promise<Response>,
   debug?: boolean
-): Promise<{ response: Response; body: OpenAiChatRequest } | undefined> {
+): Promise<
+  | { response: Response; body: OpenAiChatRequest }
+  | { errorText: string }
+  | undefined
+> {
   let errorBody: OpenRouterErrorBody = {};
+  let errorText: string | undefined;
   try {
-    const errorText = await failedResponse.text();
+    errorText = await failedResponse.text();
     errorBody = JSON.parse(errorText) as OpenRouterErrorBody;
   } catch {
-    // errorText stays as-is if JSON parse fails
+    // body unreadable or non-JSON: sniff cannot match, fall through
   }
 
   if (!isToolRoutingError(failedResponse.status, errorBody)) {
-    return undefined;
+    return errorText === undefined ? undefined : { errorText };
   }
 
   const retryBody = buildBody(request, { require_parameters: true });

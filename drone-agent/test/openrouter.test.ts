@@ -264,8 +264,44 @@ describe('openrouter plugin', () => {
           },
         ],
       })
-    ).rejects.toThrow('OpenRouter API error (429)');
+    ).rejects.toThrow('rate limit exceeded');
 
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces the real error body when the tool-routing sniff declines', async () => {
+    const capture = createRegistrationCapture();
+    capture.config.openrouter.apiKey = 'test-openrouter-key';
+    capture.config.openrouter.baseUrl = 'https://openrouter.ai/api/v1';
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            message: 'This model requires more context: prompt exceeds limit',
+            code: 400,
+          },
+        }),
+        { status: 400, headers: { 'content-type': 'application/json' } }
+      )
+    );
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    await openrouterPlugin.register(capture.registration);
+    const provider = capture.getProviderViaDriver();
+
+    const error = await provider
+      .chat({
+        model: 'openai/gpt-4o',
+        messages: [{ role: 'user', content: 'Hello' }],
+      })
+      .catch((e: unknown) => e as Error);
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toContain('prompt exceeds limit');
+    expect(error.message).not.toContain('(could not read response body)');
+    expect((error as { body?: string }).body).toContain('prompt exceeds limit');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

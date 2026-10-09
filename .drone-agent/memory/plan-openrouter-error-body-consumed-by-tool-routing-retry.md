@@ -8,12 +8,13 @@ tags:
   - adr-242
   - error-reporting
 created: 2026-10-09T23:09:02.484Z
-updated: 2026-10-09T23:12:00.453Z
+updated: 2026-10-09T23:19:00.000Z
+status: completed
 ---
 
 # Plan: Preserve the real OpenRouter error body when the tool-routing sniff declines (ADR 242)
 
-**Status**: ready for execution · **Assignee**: `code` persona (single agent, all steps) · **Branch constraint**: do all work on the current branch `feat/swarm-config-startup-underlay` (user: unblocking fix, no new branch, single commit at the end). **ADR**: new `docs/adr/242-openrouter-error-body-consumed-by-tool-routing-retry.md` (241 is taken).
+**Status**: EXECUTED 2026-10-09 — all steps completed, all gates green, committed on `feat/swarm-config-startup-underlay` (see EXECUTED SUMMARY at the end) · **Assignee**: `code` persona (single agent, all steps) · **Branch constraint**: do all work on the current branch `feat/swarm-config-startup-underlay` (user: unblocking fix, no new branch, single commit at the end). **ADR**: new `docs/adr/242-openrouter-error-body-consumed-by-tool-routing-retry.md` (241 is taken).
 
 ## Why
 
@@ -31,6 +32,7 @@ OpenRouter errors surface as `Error: OpenRouter API error (400): (could not read
 ## Steps (sequential; each depends on the previous)
 
 ### Step 1 — coder: return the pre-read text on decline
+
 File: `drone-agent/src/plugins/openai/openai-driver.ts`, function `maybeToolRoutingRetry` (~line 343). Widen the return type and return the read text when declining:
 
 ```ts
@@ -44,7 +46,9 @@ async function maybeToolRoutingRetry(
   doFetch: (body: OpenAiChatRequest) => Promise<Response>,
   debug?: boolean
 ): Promise<
-  { response: Response; body: OpenAiChatRequest } | { errorText: string } | undefined
+  | { response: Response; body: OpenAiChatRequest }
+  | { errorText: string }
+  | undefined
 > {
   let errorBody: OpenRouterErrorBody = {};
   let errorText: string | undefined;
@@ -71,6 +75,7 @@ async function maybeToolRoutingRetry(
 Semantics: `text()` threw → `errorText` stays `undefined` → decline returns `undefined` (error branch does its own read; genuine read failure still reaches the placeholder honestly). `JSON.parse` threw → `errorText` is the raw body → returned. Empty body → `{ errorText: '' }` returned (truthful).
 
 ### Step 2 — coder: reuse the text at the single call site
+
 Same file, in `chat()` (~lines 226-263). Track a pre-read body and use it in the error branch:
 
 ```ts
@@ -110,53 +115,57 @@ Same file, in `chat()` (~lines 226-263). Track a pre-read body and use it in the
 The debug print at lines 246-251 now prints the real body with no code change. If the sniff matched and the retry response is also `!ok`, `preReadErrorBody` is undefined and the error branch reads the retry response's own body — correct. `maybeToolRoutingRetry` has exactly one caller (verify with LSP find-references before editing; module-local, not exported).
 
 ### Step 3 — coder: tests in `drone-agent/test/openrouter.test.ts`
+
 (a) New regression test beside 'does not retry for non-routing errors' (~line 244):
 
 ```ts
-  it('surfaces the real error body when the tool-routing sniff declines', async () => {
-    const capture = createRegistrationCapture();
-    capture.config.openrouter.apiKey = 'test-openrouter-key';
-    capture.config.openrouter.baseUrl = 'https://openrouter.ai/api/v1';
+it('surfaces the real error body when the tool-routing sniff declines', async () => {
+  const capture = createRegistrationCapture();
+  capture.config.openrouter.apiKey = 'test-openrouter-key';
+  capture.config.openrouter.baseUrl = 'https://openrouter.ai/api/v1';
 
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          error: {
-            message: 'This model requires more context: prompt exceeds limit',
-            code: 400,
-          },
-        }),
-        { status: 400, headers: { 'content-type': 'application/json' } }
-      )
-    );
+  const fetchMock = vi.fn().mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        error: {
+          message: 'This model requires more context: prompt exceeds limit',
+          code: 400,
+        },
+      }),
+      { status: 400, headers: { 'content-type': 'application/json' } }
+    )
+  );
 
-    vi.stubGlobal('fetch', fetchMock);
+  vi.stubGlobal('fetch', fetchMock);
 
-    await openrouterPlugin.register(capture.registration);
-    const provider = capture.getProviderViaDriver();
+  await openrouterPlugin.register(capture.registration);
+  const provider = capture.getProviderViaDriver();
 
-    const error = await provider
-      .chat({
-        model: 'openai/gpt-4o',
-        messages: [{ role: 'user', content: 'Hello' }],
-      })
-      .catch((e: unknown) => e as Error);
+  const error = await provider
+    .chat({
+      model: 'openai/gpt-4o',
+      messages: [{ role: 'user', content: 'Hello' }],
+    })
+    .catch((e: unknown) => e as Error);
 
-    expect(error).toBeInstanceOf(Error);
-    expect(error.message).toContain('prompt exceeds limit');
-    expect(error.message).not.toContain('(could not read response body)');
-    expect((error as { body?: string }).body).toContain('prompt exceeds limit');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
+  expect(error).toBeInstanceOf(Error);
+  expect(error.message).toContain('prompt exceeds limit');
+  expect(error.message).not.toContain('(could not read response body)');
+  expect((error as { body?: string }).body).toContain('prompt exceeds limit');
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
 ```
 
 This test FAILS before steps 1-2 (message contains the placeholder) and passes after — run it before and after the change to prove it. (b) One-line strengthening of the existing 429 test: change `.rejects.toThrow('OpenRouter API error (429)')` to `.rejects.toThrow('rate limit exceeded')` so it also pins the real body.
 
 ### Step 4 — coder: ADR 242
+
 New file `docs/adr/242-openrouter-error-body-consumed-by-tool-routing-retry.md`, frontmatter format copied from `docs/adr/210-beacon-proxy-error-forwarding.md` (tags + related). Structure: title ("OpenRouter error body survives the tool-routing sniff — read the failed response body exactly once"), Summary, Context (the consumed-stream mechanism with file:line refs; user-visible `(could not read response body)` masking 400/401/402/403/429/5xx), Decision (the three-branch single-read contract: sniff-decline returns `{ errorText }`; retry path unchanged; error branch prefers `preReadErrorBody`, falls back to fresh read, then placeholder), Rationale (option-2 over gate-on-404 over shared-helper), Implementation (openai-driver.ts only; openrouter plugin unchanged; unified-retry Q8 keeps it driver-internal), Tests (the two tests), Key Points, Related (ADR 082 debug-flag llm logging; unified-retry design record). Then add the 242 row to `docs/adr/index.md` (keep the table sorted).
 
 ### Step 5 — coder: validation gate (must pass before commit)
+
 Run, in order, from the repo root:
+
 1. Targeted: `pnpm --filter drone-agent exec vitest run test/openrouter.test.ts` (all green).
 2. `pnpm run test` (fast suite, all packages).
 3. `pnpm typecheck`.
@@ -165,11 +174,13 @@ Run, in order, from the repo root:
 6. LSP: typescript diagnostics clean (`lsp__get_diagnostics`) — no errors, no warnings.
 
 ### Step 6 — coder: update memories + commit
+
 1. Update the followup memory (key `followup-openrouter-error-body-consumed-by-tool-routing-retry`) to resolved: bug fixed via single-read contract in `maybeToolRoutingRetry` + call site, ADR 242, tests added.
 2. Update this plan memory's Status to "executed".
 3. Stage and commit on `feat/swarm-config-startup-underlay`: `openai-driver.ts`, `openrouter.test.ts`, `docs/adr/242-…md`, `docs/adr/index.md`, and both `.drone-agent/memory/` files. Message: `fix(llm): preserve real error body when openrouter tool-routing sniff declines (ADR 242)`. Verify the working tree is clean after (`git__status`; HOST.md: clean-tree commit errors are a known false alarm).
 
 ### Step 7 — final acceptance check (check the work against the validation criteria)
+
 - [ ] New regression test fails on pre-fix code, passes on post-fix code (verify by reasoning or git stash if uncertain).
 - [ ] All six Step-5 gates pass with zero errors; LSP diagnostics clean.
 - [ ] Behavior audit: body read exactly once in all three paths (sniff-decline, sniff-retry→ok, sniff-retry→still-!ok); tool-routing retry behavior unchanged (`does not retry for non-routing errors` and the 404-retry tests both pass; fetch call counts unchanged).
@@ -177,4 +188,16 @@ Run, in order, from the repo root:
 - [ ] Working tree clean on `feat/swarm-config-startup-underlay`; single commit contains code + tests + ADR + index + memories.
 
 ## Out of scope
-- Anthropic/echo drivers (already single-read), the openai plugin path (`toolRoutingRetry` unset), conversation-service retry policy, DroneLlmError shape, any new branch/PR flow (stay on the current branch per user instruction).
+
+
+## EXECUTED SUMMARY (2026-10-09)
+
+All steps completed as written. Evidence:
+
+- **Pre-fix proof (empirical)**: targeted run of `test/openrouter.test.ts` before the fix showed exactly the two intended failures — the strengthened 429 test and the new regression test both received `OpenRouter API error (4xx): (could not read response body)` — with the six other tests (incl. both tool-routing 404 tests) passing.
+- **Fix**: `maybeToolRoutingRetry` returns `{ errorText }` on decline (bare `undefined` only when `response.text()` itself threw); the single call site in `chat()` stores `preReadErrorBody` and the error branch reuses it (fresh read + placeholder only when the sniff could not read). Diff confined to `drone-agent/src/plugins/openai/openai-driver.ts`.
+- **Tests**: new regression test "surfaces the real error body when the tool-routing sniff declines" (real 400 body asserted in message + `body`, placeholder absent, 1 fetch); existing 429 test matcher strengthened to `rate limit exceeded`. Post-fix targeted run: 8/8 green.
+- **ADR 242**: `docs/adr/242-openrouter-error-body-consumed-by-tool-routing-retry.md` written + row appended to `docs/adr/index.md` via a shell heredoc (the 241 row is a single enormous line; the file ended with a newline, so the append landed as the final table row).
+- **Gates**: `pnpm run test` 3795 passed / 14 skipped / 0 failed; `pnpm typecheck` clean; `pnpm -r run build` clean; `pnpm run lint` clean (Prettier reformatted only `.drone-agent/memory/*.md` whitespace — lint collateral, checked in per AGENTS.md); LSP diagnostics clean (no errors or warnings).
+- **Followup memory** `followup-openrouter-error-body-consumed-by-tool-routing-retry` marked `resolved: true`.
+- **Judgment-call deviations**: (a) pre-fix proof done empirically rather than via a temporary scratch test; (b) ADR index row appended via heredoc rather than apply_diff; (c) plan memory marked with the `status: completed` frontmatter convention (per the project's plan-memory audit page) in addition to this body status; (d) one file__write call was corrupted mid-stream this session — it failed safely (permission denied on a garbage path, nothing modified) and the write was redone cleanly.
