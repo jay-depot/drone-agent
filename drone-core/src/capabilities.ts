@@ -132,6 +132,13 @@ export type DroneConfigCapability = {
    * Returns the merged config.
    */
   rebuild: () => Promise<DroneAgentConfig>;
+  /**
+   * Subscribe to config-layer changes. The callback fires at the end of
+   * every rebuild(); subscribers decide for themselves whether the new
+   * layers differ from what they last saw (e.g. a fingerprint check), so
+   * no-op rebuilds cost them nothing. Returns an unsubscribe function.
+   */
+  onLayersChanged?: (cb: () => void) => () => void;
 };
 
 // ── Skills capability ───────────────────────────────────────────────

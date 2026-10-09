@@ -4,6 +4,8 @@ import {
   DroneLlmError,
   parseModelSelection,
   resolveConfiguredReasoningLevel,
+  type DroneAgentConfig,
+  type DroneConfigCapability,
   type DiscoveredModel,
   type DroneContextWindowInfo,
   type DroneImageContent,
@@ -53,7 +55,9 @@ export const llmPlugin: DronePlugin = {
     description:
       'Broker for LLM protocol drivers. Instantiates one provider per config.providers entry and manages <providerId>/<model> selection.',
     defaultEnabled: true,
-    dependencies: [],
+    // Optional: underlay reactivity is a bonus — the broker works without
+    // the config plugin (no subscription when the capability is absent).
+    dependencies: [{ id: 'config', optional: true }],
   },
   register: async registration => {
     const drivers = new Map<string, LlmProtocolDriver>();
@@ -67,6 +71,11 @@ export const llmPlugin: DronePlugin = {
           fetchedAt: number;
         }
       | undefined;
+    // Session-lifetime fingerprint of the providers ⊕ llm.active slice the
+    // broker last reacted to (subscribe-time baseline + each handled
+    // onLayersChanged). Never logged: it embeds resolved provider secrets.
+    let lastConfigFingerprint: string | undefined;
+    let manualSelection = false;
 
     function instantiateProvider(
       providerId: string
@@ -657,6 +666,7 @@ export const llmPlugin: DronePlugin = {
           precedence: providerPrecedence(id),
         })),
       activateProvider: (providerId: string) => {
+        manualSelection = true;
         const instance = getInstance(providerId);
         if (!instance) {
           throw new Error(
@@ -679,6 +689,7 @@ export const llmPlugin: DronePlugin = {
       },
       getModel: () => currentModel,
       setModel: (model: string) => {
+        manualSelection = true;
         // Full-form selections (<provider>/<model>) switch providers when
         // needed; bare ids set within the active provider as before.
         if (model.includes('/')) {
@@ -742,20 +753,46 @@ export const llmPlugin: DronePlugin = {
     };
     registration.offer(capability);
 
-    function maybeAutoActivate(): void {
-      if (activeProviderId) {
-        return;
-      }
+    // ── Config-layer reactivity (swarm config underlay) ─────────────────
+    // The config plugin fires onLayersChanged at the end of every rebuild()
+    // — at session start when the swarm underlay lands, and mid-session via
+    // the enablePlugin catch-up. The broker reacts by invalidating the
+    // discovery cache (warmed pre-underlay at onPluginsLoaded) and
+    // re-evaluating the active selection, so swarm-configured models and
+    // llm.active pins are usable immediately instead of after the 60s
+    // discovery TTL.
+
+    /**
+     * Fingerprint of the broker-relevant config slice (providers ⊕
+     * llm.active). Compared before reacting so no-op rebuilds cost nothing.
+     * NEVER logged: it embeds resolved provider secrets (apiKeys).
+     */
+    function configFingerprint(): string {
+      const config = registration.getConfig();
+      return JSON.stringify({
+        p: config.providers,
+        a: config.llm?.active ?? null,
+      });
+    }
+
+    /**
+     * Auto-activation shared by startup (maybeAutoActivate) and underlay
+     * reactivity (reactToConfigChange). Activates the resolved llm.active,
+     * falling back to the first configured provider that has a driver.
+     * Returns the activated provider id, or undefined when nothing could
+     * be activated. Success logging is the caller's (distinct messages);
+     * the fallback warn lives here. `logWhenNone` suppresses the
+     * nothing-activatable warn on the reactive path where a removal notice
+     * already explains the state.
+     */
+    function activateFromConfig(logWhenNone: boolean): string | undefined {
       const config = registration.getConfig();
       const active = config.llm.active;
       if (active) {
         const selection = parseModelSelection(active);
         if (selection && getInstance(selection.providerId)) {
           activateFull(selection.providerId, selection.modelLocalId);
-          registration.logger.info(
-            `LLM provider activated: "${activeProviderId}" (model: ${currentModel})`
-          );
-          return;
+          return activeProviderId;
         }
       }
       // Fallback: first configured provider that has a driver.
@@ -765,12 +802,127 @@ export const llmPlugin: DronePlugin = {
           registration.logger.warn(
             `llm.active "${active ?? '(unset)'}" could not be activated; fell back to "${providerId}"`
           );
-          return;
+          return providerId;
         }
       }
-      if (Object.keys(config.providers).length > 0) {
+      if (logWhenNone && Object.keys(config.providers).length > 0) {
         registration.logger.warn(
           'No LLM provider could be activated (missing protocol drivers?). The agent will not be able to chat.'
+        );
+      }
+      return undefined;
+    }
+
+    /**
+     * Re-evaluate the active provider/selection after a config-layer
+     * change. Rules: (1) with no manual selection this session,
+     * auto-activate the resolved llm.active (startup fallback chain when
+     * it does not resolve); (2) after a manual selection (/model,
+     * --model), never auto-switch — notice once and keep serving; (3) an
+     * active provider that vanished from config keeps its cached instance
+     * (chat continuity, no eviction) with a warn.
+     */
+    function reactToConfigChange(config: DroneAgentConfig): void {
+      const nextActive = config.llm.active;
+      const nextSelection = nextActive
+        ? parseModelSelection(nextActive)
+        : undefined;
+      const nextProviderId = nextSelection?.providerId;
+      const nextModel = nextSelection?.modelLocalId;
+
+      if (activeProviderId && !config.providers[activeProviderId]) {
+        registration.logger.warn(
+          `Active provider "${activeProviderId}" is no longer configured; the cached instance keeps serving this session`
+        );
+      }
+
+      if (manualSelection) {
+        if (
+          nextActive &&
+          (nextProviderId !== activeProviderId ||
+            (nextModel !== undefined && nextModel !== currentModel))
+        ) {
+          registration.logger.info(
+            `Swarm config underlay sets llm.active to "${nextActive}" — current selection ${activeProviderId}/${currentModel} kept`
+          );
+        }
+        return;
+      }
+
+      if (nextProviderId && config.providers[nextProviderId]) {
+        if (
+          (nextProviderId !== activeProviderId || nextModel !== currentModel) &&
+          getInstance(nextProviderId)
+        ) {
+          activateFull(nextProviderId, nextModel ?? '');
+          registration.logger.info(
+            `llm.active from config underlay applied: ${activeProviderId}/${currentModel}`
+          );
+        }
+        return;
+      }
+
+      // llm.active unset or unresolvable: fall back like startup, but only
+      // when there is no active selection to keep serving.
+      if (!activeProviderId || !config.providers[activeProviderId]) {
+        const activated = activateFromConfig(false);
+        if (!activated && Object.keys(config.providers).length > 0) {
+          registration.logger.warn(
+            'No LLM provider could be activated (missing protocol drivers?). The agent will not be able to chat.'
+          );
+        }
+      }
+    }
+
+    function handleConfigChange(): void {
+      const previous = lastConfigFingerprint;
+      const fingerprint = configFingerprint();
+      if (fingerprint === previous) {
+        return;
+      }
+      lastConfigFingerprint = fingerprint;
+
+      // Provider-id diff for the change notice (ids only — the fingerprint
+      // itself embeds resolved secrets and is never logged).
+      const before = previous
+        ? new Set(Object.keys(JSON.parse(previous).p ?? {}))
+        : new Set<string>();
+      const config = registration.getConfig();
+      const after = new Set(Object.keys(config.providers));
+      const added = [...after].filter(id => !before.has(id));
+      const removed = [...before].filter(id => !after.has(id));
+      if (added.length > 0 || removed.length > 0) {
+        registration.logger.info(
+          `LLM config changed: providers added [${added.join(', ')}] removed [${removed.join(', ')}]`
+        );
+      }
+
+      invalidateDiscovery();
+      reactToConfigChange(config);
+      // Re-warm the model listing in the background; an immediate /model
+      // still computes fresh on demand (one discovery call, then cached).
+      void buildModelListing().catch(() => {
+        // Non-fatal — listing recomputes on demand.
+      });
+    }
+
+    const configCap = registration.request<DroneConfigCapability>('config');
+    if (configCap?.onLayersChanged) {
+      // Baseline BEFORE any underlay fires: the subscribe-time snapshot is
+      // the pre-underlay state, so the first post-rebuild fire carries the
+      // actual diff.
+      lastConfigFingerprint = configFingerprint();
+      configCap.onLayersChanged(handleConfigChange);
+    }
+
+    function maybeAutoActivate(): void {
+      if (activeProviderId) {
+        return;
+      }
+      const activated = activateFromConfig(true);
+      if (activated && registration.getConfig().llm.active) {
+        registration.logger.info(
+          `LLM provider activated: "${activeProviderId}" (model: ${currentModel})`
         );
       }
     }

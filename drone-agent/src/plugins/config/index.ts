@@ -58,6 +58,7 @@ export type DroneConfigCapability = {
    * the fully merged config.
    */
   rebuild: () => Promise<DroneAgentConfig>;
+  onLayersChanged: (cb: () => void) => () => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -324,6 +325,26 @@ export const configPlugin: DronePlugin = {
     // Re-discovered lazily on first use.
     let cachedLayers: DroneConfigLayer[] | null = null;
 
+    // Layer-change subscribers, fired at the end of every rebuild().
+    // Per-registration closure state (never module scope): each engine
+    // instance gets its own registry, and a registry at module scope
+    // would leak subscribers across engines in tests and multi-instance
+    // hosts.
+    const layerChangeCallbacks: Array<() => void> = [];
+
+    function fireLayerChangeCallbacks(): void {
+      for (const callback of layerChangeCallbacks) {
+        try {
+          callback();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          registration.logger.warn(
+            `onLayersChanged callback failed (non-fatal): ${message}`
+          );
+        }
+      }
+    }
+
     async function getLayers(): Promise<DroneConfigLayer[]> {
       if (!cachedLayers) {
         cachedLayers = await discoverLayers();
@@ -472,6 +493,15 @@ export const configPlugin: DronePlugin = {
       unregisterInjector: injectorId => {
         unregisterInjector(injectorId);
       },
+      onLayersChanged: cb => {
+        layerChangeCallbacks.push(cb);
+        return () => {
+          const idx = layerChangeCallbacks.indexOf(cb);
+          if (idx !== -1) {
+            layerChangeCallbacks.splice(idx, 1);
+          }
+        };
+      },
       getInjectors: () => getInjectors(),
       rebuild: async () => {
         // Precedence order, lowest first: injectors run as the underlay
@@ -501,6 +531,10 @@ export const configPlugin: DronePlugin = {
         shared.llm = rebuilt.llm;
         shared.compaction = rebuilt.compaction;
         shared.session = rebuilt.session;
+        // Layers just changed — wake subscribers (llm broker, budget
+        // service, …) AFTER the shared mutation so they observe the new
+        // values the moment they run. Subscriber errors are non-fatal.
+        fireLayerChangeCallbacks();
         return rebuilt;
       },
     };

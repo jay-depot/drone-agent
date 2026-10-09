@@ -188,6 +188,79 @@ describe('config plugin', () => {
     });
   });
 
+  describe('onLayersChanged', () => {
+    function createEngine(): ReturnType<typeof createDronePluginEngine> {
+      const engine = createDronePluginEngine({
+        plugins: [configPlugin],
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      return engine;
+    }
+
+    it('fires subscribers at the end of rebuild() after the shared mutation', async () => {
+      const { projectDir } = await setupDirs();
+      process.chdir(projectDir);
+      const engine = createEngine();
+      await engine.initialize();
+      const cap = engine.getCapability<DroneConfigCapability>('config')!;
+
+      const seen: string[] = [];
+      cap.onLayersChanged(() => {
+        // The shared config must already carry the underlay when the
+        // subscriber runs (fire-after-mutate contract).
+        seen.push(engine.getConfig().llm.active ?? '(unset)');
+      });
+
+      cap.registerInjector({
+        id: 'beacon',
+        precedence: 75,
+        inject: async () => ({ llm: { active: 'underlay/model' } }),
+      });
+      await cap.rebuild();
+      expect(seen).toEqual(['underlay/model']);
+
+      cap.unregisterInjector('beacon');
+    });
+
+    it('unsubscribe stops the subscriber from firing', async () => {
+      const { projectDir } = await setupDirs();
+      process.chdir(projectDir);
+      const engine = createEngine();
+      await engine.initialize();
+      const cap = engine.getCapability<DroneConfigCapability>('config')!;
+
+      let calls = 0;
+      const unsubscribe = cap.onLayersChanged(() => {
+        calls += 1;
+      });
+      await cap.rebuild();
+      expect(calls).toBe(1);
+      unsubscribe();
+      await cap.rebuild();
+      expect(calls).toBe(1);
+    });
+
+    it('a throwing subscriber is non-fatal and later subscribers still run', async () => {
+      const { projectDir } = await setupDirs();
+      process.chdir(projectDir);
+      const engine = createEngine();
+      await engine.initialize();
+      const cap = engine.getCapability<DroneConfigCapability>('config')!;
+
+      let second = 0;
+      cap.onLayersChanged(() => {
+        throw new Error('subscriber blew up');
+      });
+      cap.onLayersChanged(() => {
+        second += 1;
+      });
+
+      await expect(cap.rebuild()).resolves.toBeDefined();
+      expect(second).toBe(1);
+    });
+  });
+
   describe('config__set', () => {
     it('writes a config value to the project scope by default', async () => {
       const { projectDir } = await setupDirs();

@@ -107,6 +107,7 @@ export class BeaconConfigInjector {
   private warnedUnparseableKeys = new Set<string>();
   private warnedUnresolvedKeys = new Set<string>();
   private readonly warn: (message: string) => void;
+  private lastFetchedRows: Array<{ key: string; updatedAt: number }> = [];
 
   constructor(baseUrl: string, warn: (message: string) => void = () => {}) {
     this.baseUrl = baseUrl;
@@ -122,7 +123,11 @@ export class BeaconConfigInjector {
       const entries = (await response.json()) as Array<{
         key: string;
         value: string;
+        updatedAt?: number;
       }>;
+      this.lastFetchedRows = entries
+        .filter(entry => typeof entry.updatedAt === 'number')
+        .map(entry => ({ key: entry.key, updatedAt: entry.updatedAt! }));
 
       const flat: FlatUnderlayMap = {};
       for (const entry of entries) {
@@ -162,5 +167,10 @@ export class BeaconConfigInjector {
       // On failure, return cached config if available
       return this.cachedConfig;
     }
+  }
+
+  /** Raw rows from the last successful fetch, for underlay-recency logging. */
+  getLastAppliedEntries(): Array<{ key: string; updatedAt: number }> {
+    return [...this.lastFetchedRows];
   }
 }

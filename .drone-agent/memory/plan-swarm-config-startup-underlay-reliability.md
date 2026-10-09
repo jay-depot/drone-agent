@@ -6,8 +6,9 @@ tags:
   - config
   - llm
   - adr-241
+  - executed
 created: 2026-10-09T22:23:10.875Z
-updated: 2026-10-09T22:23:10.875Z
+updated: 2026-10-09T22:41:25.974Z
 ---
 
 # Plan: Swarm config underlay — startup reliability & broker reactivity (ADR 241)
@@ -34,83 +35,27 @@ Coordinator-distributed provider config (coordinator → beacon underlay → age
 - Q4 = react-in-place: handler is sync (fingerprint → invalidateDiscovery → reactivation) + fire-and-forget `void buildModelListing().catch(noop)` re-warm. Session start never blocks on OpenRouter discovery; immediate `/model` computes on demand.
 - Q5 = out of scope (above); observability only: enriched log includes underlay row `updatedAt` recency.
 
-## STEPS (execute in order; single executor)
+## STEPS (executed as written; see EXECUTION SUMMARY below)
 
-### Step 1 — drone-core: optional `onLayersChanged` on `DroneConfigCapability` [coder]
-File: `drone-core/src/capabilities.ts` (`DroneConfigCapability`, ~line 123). Add optional field:
-```ts
-/** Subscribe to config-layer changes. Fires after every rebuild() whose
- *  result differs from the previous rebuild; returns an unsubscribe fn. */
-onLayersChanged?: (cb: () => void) => () => void;
-```
-Optional → additive; no implementer sweep required, but grep test mocks for `DroneConfigCapability` to confirm none break typecheck. Then `pnpm --filter drone-core run build` BEFORE touching dependent packages (they resolve types from built dist/, per project principle).
+### Step 1 — drone-core: optional `onLayersChanged` on `DroneConfigCapability` [DONE]
+### Step 2 — config plugin: registry + fire in rebuild() [DONE]
+### Step 3 — llm broker: subscribe + fingerprint + react [DONE]
+### Step 4 — coordinator: save-time JSON validation [DONE]
+### Step 5 — swarm: enriched session-start log + injector recency [DONE]
+### Step 6 — ADR 241 + docs [DONE]
+### Step 7 — validation sweep [DONE]
 
-### Step 2 — config plugin: registry + fire in rebuild() [coder]
-File: `drone-agent/src/plugins/config/index.ts`. Inside `register()` closure (NOT module scope — prior session hit a module-level injector-registry leak): `const layerChangeCallbacks: Array<() => void> = [];`
-Capability addition:
-```ts
-onLayersChanged: cb => {
-  layerChangeCallbacks.push(cb);
-  return () => {
-    const i = layerChangeCallbacks.indexOf(cb);
-    if (i !== -1) layerChangeCallbacks.splice(i, 1);
-  };
-},
-```
-At the END of `rebuild()` (after shared mutation), fire each callback in its own try/catch, logging non-fatal errors (`registration.logger.warn`).
-RED-first tests in `drone-agent/test/config-plugin.test.ts` (extend existing `DroneConfigCapability` describe): fires on rebuild, unsubscribe stops firing, throwing callback is non-fatal, no fire when nothing changed is NOT this step's concern (fingerprint lives in the llm subscriber, not the config plugin).
+## EXECUTION SUMMARY (2026-10-09, code persona) — PLAN COMPLETE
+Branch `feat/swarm-config-startup-underlay`. All steps executed and validated.
+- **Step 1**: optional `onLayersChanged?: (cb) => () => void` added to `DroneConfigCapability` (`drone-core/src/capabilities.ts`); drone-core built before dependents. Only test reference was the real capability (no mock sweep needed).
+- **Step 2**: per-registration `layerChangeCallbacks` closure + `fireLayerChangeCallbacks()` (try/catch per callback, warn non-fatal) fired at the END of `rebuild()` after the shared mutation; capability `onLayersChanged` register/unregister. 3 tests added to `test/config-plugin.test.ts` (`onLayersChanged` describe: fires-after-mutation, unsubscribe, throwing-subscriber isolation). 27/27 green.
+- **Step 3**: llm broker — `configFingerprint()` = `JSON.stringify({p: providers, a: llm.active ?? null})`; subscribe-time baseline pre-underlay; `handleConfigChange()` (equal → return; else provider-id-diff notice, `invalidateDiscovery()`, `reactToConfigChange()`, fire-and-forget `buildModelListing()` re-warm); `reactToConfigChange()` implements the three Q3 rules with `manualSelection` set only in capability `setModel`/`activateProvider`; startup fallback loop extracted into shared `activateFromConfig(logWhenNone)`. NEW `test/llm-underlay-reactivity.test.ts` (7 tests: stale-listing invalidation, auto-activate underlay pin, manual-selection kept + single notice, vanished-provider continuity, no-op silence, unsubscribe). **EN-ROUTE FIX**: the plugin engine THROWS on `registration.request('config')` when the id is undeclared — real-engine suites (beancounter) caught `Plugin llm requested undeclared capability config`; fixed by adding `dependencies: [{ id: 'config', optional: true }]` to the llm plugin metadata. Regression suites green (57 tests across 6 llm files).
+- **Step 4**: coordinator `PUT /config/:key` rejects a `providers.*` value that is not a JSON object (400 `must be a JSON object: <parse error>`); empty-string sentinel exempt; non-provider keys untouched. 5 new tests in `drone-coordinator/test/routes/config.test.ts` (valid object, trailing comma 400 + not stored, array 400, llm.active unvalidated, secret sentinel preserved). 29/29 green.
+- **Step 5**: `BeaconConfigInjector.getLastAppliedEntries()` (raw rows of last successful fetch, `updatedAt`-filtered, preserved on fetch failure) + enriched single session-start log line (providers + declared model counts, resolved `llm.active`, `underlay rows fetched Ns ago (M rows)`). 2 new tests in `test/swarm/config-injector.test.ts`. 16/16 green.
+- **Step 6**: `docs/adr/241-swarm-config-underlay-reactivity.md` (context, D1 onLayersChanged, D2 fingerprint, D3 activation rules, D4 save-time validation, D5 visibility, D6 out-of-scope) + index row appended + `docs/agents/swarm-plugin.md` new "Underlay reactivity (ADR 241)" section replacing the stale "no live mid-session re-apply" sentence.
+- **Step 7**: `pnpm -r run build` zero errors (all 8 packages); `pnpm lint` exit 0 (prettier reformatted in place); LSP diagnostics clean; fast suite **3794 passed / 0 failed / 14 skipped** (3808).
+- Manual smoke handed to user (plan Step 7 item 5): verify `/model` lists openrouter immediately at session start with the swarm pin, and that the coordinator UI now rejects a trailing-comma providers value with the 400 message.
+- Insights logged: persona `code` (engine dependency-declaration gate on `registration.request`), persona `plan` (probe-first diagnosis + discriminating user experiments).
 
-### Step 3 — llm broker: subscribe + fingerprint + react [coder]
-File: `drone-agent/src/plugins/llm/index.ts`.
-(a) In `register()`: `const configCap = registration.request<DroneConfigCapability>('config'); if (configCap?.onLayersChanged) configCap.onLayersChanged(handleConfigChange);` (absent capability → current behavior unchanged).
-(b) `function configFingerprint(): string` — reads `registration.getConfig()`, returns `JSON.stringify({ p: config.providers, a: config.llm?.active ?? null })`. Baseline captured at subscribe time (pre-underlay).
-(c) `handleConfigChange()`: compute fp; if equal to `lastFingerprint` return; store; then `invalidateDiscovery()` (sync), `reactToConfigChange()` (sync), `void buildModelListing().catch(() => {})` (re-warm). Log a one-line diff: `LLM config changed: providers added [x] removed [y]` (ids only).
-(d) `reactToConfigChange()` per Q3 rules. State: `let manualSelection = false;` set true in capability `setModel()` and `activateProvider()` only. Reuse `activateFull()`, `getInstance()`, existing fallback loop from `maybeAutoActivate()`.
-(e) Extract the fallback loop from `maybeAutoActivate()` into a shared helper if needed to avoid duplication (project rule: ruthless about duplicated code).
-RED-first tests in NEW `drone-agent/test/llm-underlay-reactivity.test.ts` (mock-registration pattern from `test/llm-provider-switching.test.ts` + `test/openrouter.test.ts`; echo or fake driver):
-1. config change invalidates stale listing (listing reflects new provider immediately on next buildModelListing)
-2. underlay llm.active auto-activates when no manual selection
-3. manual `/model` selection kept + one notice when llm.active differs
-4. vanished active provider kept (instance still resolvable) + warn once
-5. identical rebuild (same fingerprint) → no invalidation, no logs
-6. unsubscribe stops reactivity
-
-### Step 4 — coordinator: save-time JSON validation [coder]
-File: `drone-coordinator/src/routes/config.ts`, PUT handler, after the allowlist check and BEFORE write-only sentinel logic; only when `typeof value === 'string' && key.startsWith('providers.')`:
-```ts
-let parsed: unknown;
-try { parsed = JSON.parse(value); } catch (err) { parsed = err; }
-if (parsed instanceof Error || typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-  return reply.code(400).send({ error: `Config key "${key}" must be a JSON object: ${parsed instanceof Error ? parsed.message : 'value is not a JSON object'}` });
-}
-```
-UI needs no change — the add/edit dialog already surfaces 400s via `extractApiError`.
-RED-first tests in `drone-coordinator/test/routes/config.test.ts`: valid JSON 200; trailing comma → 400 with message; JSON array → 400; non-providers keys unaffected; write-only secret sentinel path unaffected.
-
-### Step 5 — swarm: enriched session-start log + injector recency [coder]
-File `drone-agent/src/plugins/swarm/config.ts`: add `getLastAppliedEntries(): Array<{ key: string; updatedAt: number }>` to `BeaconConfigInjector` (records the raw rows from the last successful fetch; empty when none).
-File `drone-agent/src/plugins/swarm/hooks.ts` (`onSessionStart`, ~line 300): after `rebuild()`, replace the current log line with one enriched line, e.g.:
-`Swarm config underlay applied: providers: openrouter (12 models), ollama (1); llm.active: openrouter/x; underlay rows fetched 12s ago`
-(provider names + declared model counts from `rebuilt.providers`; `llm.active` resolved value; newest row age from the injector; omit provider/row parts gracefully when absent). Keep single info line. Tests: extend `drone-agent/test/swarm/config-injector.test.ts` for `getLastAppliedEntries`; hooks logging covered by injector test + manual smoke.
-
-### Step 6 — ADR 241 + docs [coder]
-- NEW `docs/adr/241-swarm-config-underlay-reactivity.md`: context (60s stale listing; swarm llm.active ignored; silent unparseable-row drop; trailing-comma incident), decisions (Q1–Q5 above, all spelled out), consequences (mid-session enablePlugin rebuilds now reactive; secrets never logged via fingerprint; beacon freshness unchanged).
-- Append row to `docs/adr/index.md`.
-- Update `docs/agents/swarm-plugin.md` config section: replace the "no live mid-session re-apply" sentence with: underlay applies at session start via `rebuild()`; the llm broker reacts immediately (listing + activation); mid-session plugin-enabling catch-up also applies + reacts; ordinary mid-session config changes still wait for the next session start.
-
-### Step 7 — validation sweep [reviewer/tester]
-1. `pnpm --filter drone-core run build` then `pnpm -r run build` — zero errors
-2. `pnpm lint` — zero (prettier will reformat; re-read files after)
-3. LSP diagnostics — clean across drone-core, drone-agent, drone-coordinator
-4. `pnpm test` (fast suite) — green; new tests enumerated in steps 2–4 green
-5. Manual smoke (user): with valid coordinator `providers.openrouter` + `llm.active` pin → start agent → `/model` lists openrouter immediately, active selection honored; save a trailing-comma value → coordinator UI shows the 400 error message.
-
-## VALIDATION CRITERIA (plan-complete when ALL hold)
-- LSP clean (no exceptions); `pnpm lint` and `pnpm -r run build` zero errors; fast test suite green.
-- All new tests pass: config-plugin (onLayersChanged ×4), llm-underlay-reactivity (×6), coordinator config route (×5), swarm config-injector (getLastAppliedEntries).
-- No behavior change when swarm plugin/config capability absent (local-only agents).
-- Secrets never appear in any log line (fingerprint value never logged; enriched line names providers only).
-- ADR 241 + index + swarm-plugin.md updated; branch committed with .drone-agent artifacts per AGENTS.md.
-
-## OUT OF SCOPE (explicit)
+## OUT OF SCOPE (explicit, unchanged)
 Beacon-freshness agent→beacon re-pull request; BeaconConfigInjector fetch timeout; full-C TUI notice/fragment; mid-session live re-apply of non-underlay config; legacy `secret:true` row behavior changes.

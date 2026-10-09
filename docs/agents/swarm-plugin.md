@@ -84,8 +84,20 @@ and are never retained by the beacon: the beacon holds secret-bearing entries
 in a memory-only overlay (`containsSecrets`), keeps them out of `beacon_config`
 SQLite, and wipes them on process exit. A beacon compromise at rest therefore
 yields zero secret material.
+
+### Underlay reactivity (ADR 241)
+
 Changes propagate on the next sync (≤ ~5 minutes) and are applied at the next
-agent session start; there is no live mid-session re-apply. Spawn-env
+agent session start, or mid-session when a plugin-enable catch-up re-runs the
+session-start hooks. At apply time the config plugin fires
+`onLayersChanged` (new optional method on `DroneConfigCapability`); the llm
+broker subscribes and reacts immediately — the model-listing cache is
+invalidated and re-warmed, so `/model` never serves a stale pre-underlay
+listing, and the active selection is re-evaluated: a swarm-pinned `llm.active`
+auto-activates unless a manual selection was already made this session (a
+manual choice is kept with a one-time log notice). Ordinary config changes
+still wait for the next session start; the underlay is not re-read
+mid-session on its own. Spawn-env
 asymmetry: coordinator-relayed spawns run with the beacon host's environment
 (the shared spawner passes the beacon process's `process.env` plus additive
 `config.env`), so a spawned agent resolves `${VAR}` templates against the
