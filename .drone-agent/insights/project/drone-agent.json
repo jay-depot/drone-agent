@@ -782,5 +782,9 @@
   {
     "timestamp": "2026-10-09T02:00:11.988Z",
     "insight": "When clearing pnpm audit advisories, `pnpm -r update <pkg>` (the PR #84 playbook) can silently refuse to lift lockfile-pinned vulnerable transitives while still churning ~4400 lines of unrelated lockfile (babel/rollup/caniuse/nanoid cohort + YAML format rewrite). In the 2026-10-08 sweep all 8 bumpable packages needed pnpm-workspace.yaml overrides instead. Diagnose via `pnpm why <pkg>` after the update: if the pinned version persists with \"Found N versions\" unchanged, abandon re-resolution (git checkout -- pnpm-lock.yaml), go straight to overrides, and expect a minimal package-level diff."
+  },
+  {
+    "timestamp": "2026-10-09T23:21:48.484Z",
+    "insight": "Project: the shared OpenAI driver's `toolRoutingRetry` sniff (openai-driver.ts) now follows a single-read contract — a helper that reads a response body to classify it must return what it read on decline ({ errorText }) rather than bare undefined, or it destroys the only copy of the error detail for the downstream error path. Regression tests for API-error surfacing must assert real body content (status-prefix matchers pass even when the body is lost). Recorded at ADR 242 (2026-10-09); anthropic/echo drivers already single-read; OpenAI plugin path unaffected (no toolRoutingRetry)."
   }
 ]
