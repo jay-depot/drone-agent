@@ -142,6 +142,7 @@ export interface WikiPageMeta {
   pitch?: string;
   wordCount: number;
   linkCount: number;
+  agentReadCount?: number;
   createdAt: string;
   updatedAt: string;
 }

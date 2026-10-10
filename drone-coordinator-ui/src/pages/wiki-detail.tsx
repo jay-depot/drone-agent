@@ -167,6 +167,10 @@ export default function WikiDetailPage() {
                 {new Date(page.updatedAt).toLocaleString()}
               </p>
             </div>
+            <div>
+              <span className="text-muted-foreground">Agent Reads</span>
+              <p className="mt-0.5">{page.agentReadCount ?? 0}</p>
+            </div>
           </div>
 
           {page.tags.length > 0 && (
