@@ -798,5 +798,13 @@
   {
     "timestamp": "2026-10-10T06:31:42.208Z",
     "insight": "Planning: `swarm.memory` is absent from BOTH the TypeBox `swarm` schema (config-schema.ts:338-359) and `KNOWN_CONFIG_KEYS`/`UNDERLAY_ALLOWLIST` (config-keys.ts). Consequence: it cannot be set via `config.set` validation and cannot be distributed by the coordinator as a config underlay. Any new agent-side RAG/search tuning knob inherits the same limitation. Flagged during the ragSource plan as a likely gap."
+  },
+  {
+    "timestamp": "2026-10-10T06:50:18.073Z",
+    "insight": "The swarm-memory retriever now fans out to TWO beacon routes: `GET /wiki/semantic-search` (per query input) and `GET /agents/:id/search` (per query-input × ragSource dir). A workspace request MUST send the RAW configured `search.paths[].path`, not a pre-resolved one — the beacon resolves it with `path.resolve` at both registration and query time, and the route authorizes by `startsWith` against registered dirs. Sending a differently-normalized path can 403."
+  },
+  {
+    "timestamp": "2026-10-10T06:50:18.076Z",
+    "insight": "Adding a nested `Promise.all([Promise.all(a), Promise.all(b)])` inside an async method adds a microtask tick before the result is cached. Any test that polls for a side effect (e.g. `vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))`) can now observe the call BEFORE the cache is populated and flake. Poll for the observable end state (rendered content), not the intermediate call count."
   }
 ]
