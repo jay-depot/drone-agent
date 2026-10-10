@@ -29,6 +29,7 @@ import type {
   DroneToolDescriptor,
   DroneToolExecutionContext,
 } from 'drone-core';
+import { coerceOrphanToolMessages } from '../shared/tool-message-integrity.js';
 import {
   DEFAULT_RETRY_CONFIG,
   isContextWindowExceeded,
@@ -1739,7 +1740,7 @@ function prepareRequestMessages(
   messages: DroneChatMessage[],
   targetHasVision: boolean
 ): DroneChatMessage[] {
-  return messages.map(message => {
+  return coerceOrphanToolMessages(messages).map(message => {
     if (!message.images || message.images.length === 0) {
       return message;
     }

@@ -5,6 +5,7 @@ import type {
   DroneSessionImportConfig,
   DroneSlashCommandSessionManager,
 } from 'drone-core';
+import { appendSyntheticToolExchange } from '../../shared/synthetic-tool-exchange.js';
 
 /**
  * System prompt for summarizing an imported session chunk. Unlike
@@ -146,19 +147,16 @@ export function injectChunk(
   index: number,
   total: number
 ): void {
-  const toolCallId = `session-import-${index}`;
-  sessionManager.appendAssistantMessage('', [
-    {
-      id: toolCallId,
-      name: SESSION_IMPORT_TOOL,
-      arguments: {
-        sessionId,
-        chunk: index + 1,
-        totalChunks: total,
-      },
+  appendSyntheticToolExchange(sessionManager, {
+    toolName: SESSION_IMPORT_TOOL,
+    toolCallId: `session-import-${index}`,
+    arguments: {
+      sessionId,
+      chunk: index + 1,
+      totalChunks: total,
     },
-  ]);
-  sessionManager.appendToolResult(SESSION_IMPORT_TOOL, summary, toolCallId);
+    content: summary,
+  });
 }
 
 /** Defaults applied when `swarm.sessionImport` config is absent. */

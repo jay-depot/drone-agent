@@ -9,11 +9,12 @@ tags:
   - adr-243
 created: 2026-10-10T00:52:44.821Z
 updated: 2026-10-10T00:52:54.628Z
+status: completed
 ---
 
 # Plan: Fix orphan tool message from `/skills recall` (OpenRouter 400) + defensive seam (ADR 243)
 
-**Status**: READY FOR EXECUTION · **Assignee**: `code` persona (single agent, all steps) · **Branch**: current branch `feat/swarm-config-startup-underlay` — blocker fix, NO new branch, single commit at the end. **ADR**: new `docs/adr/243-orphan-tool-message-pairing.md` (242 is taken).
+**Status**: EXECUTED 2026-10-10 — all steps completed, all gates green, committed on `feat/swarm-config-startup-underlay` (see EXECUTED SUMMARY at the end). **Assignee**: `code` persona (single agent, all steps) · **Branch**: current branch `feat/swarm-config-startup-underlay` — blocker fix, NO new branch, single commit at the end. **ADR**: new `docs/adr/243-orphan-tool-message-pairing.md` (242 is taken).
 
 ## Why
 
@@ -44,7 +45,7 @@ This appends a `role:'tool'` session message with **no `toolCallId`** and **no p
 1. **Fix shape = C (both).** Fix the root cause AND add a defensive seam. Rationale: matches ADR 242's "fix the real thing" precedent and the project's sweep-every-consumer principle; the failure mode is a permanent 400, so a cheap guard is worth it.
 2. **Root-cause fix = A1 (paired synthetic tool exchange).** `/skills recall` appends an assistant message carrying a synthetic `skills__recall` tool-call **with an id**, then the tool result with the **matching id** — the `session-import` precedent. Extract a shared helper so both sites share one pairing invariant. (Rejected: append-as-user — changes semantics + surfaces in scrollback; synthesize-id-only — still orphan, still rejected by OpenAI validators.)
 3. **Defensive seam = B1 (coerce orphan `tool` → `user`), presentation-only.** Content-preserving; a `user` turn is valid on every provider (the echo driver already does this). The seam must NOT mutate the stored session (scrollback/logs/compaction untouched). (Rejected: drop-the-orphan — silently loses the skill body; pair-repair — inserts messages, more complex.)
-4. **Detection = narrow, preceding-match.** A `role:'tool'` message is orphan when its `toolCallId` is missing/empty **or** no *preceding* assistant message declares a `tool_calls` entry with that id. Only the orphan-`tool` direction; no dangling-assistant-`tool_calls` handling (pairing holds elsewhere — assistant call + its results live in the same session turn).
+4. **Detection = narrow, preceding-match.** A `role:'tool'` message is orphan when its `toolCallId` is missing/empty **or** no _preceding_ assistant message declares a `tool_calls` entry with that id. Only the orphan-`tool` direction; no dangling-assistant-`tool_calls` handling (pairing holds elsewhere — assistant call + its results live in the same session turn).
 5. **Shared append helper** at `drone-agent/src/shared/synthetic-tool-exchange.ts`, used by BOTH `skills/index.ts` and `swarm/session-import.ts`.
 6. **Seam placement = inside `prepareRequestMessages`.** It is the single chokepoint both LLM send sites already call — the main tool loop (`conversation-service.ts:1141`) and the `/btw` aside (`conversation-service.ts:1606`). The detection logic lives in an exported pure `coerceOrphanToolMessages` (unit-testable) that `prepareRequestMessages` calls as its first step.
 
@@ -126,7 +127,10 @@ import { appendSyntheticToolExchange } from '../../shared/synthetic-tool-exchang
 Replace the bare `appendToolResult` call (line 443) so the recall branch reads:
 
 ```ts
-const result = await ctx.engine.executeTool('skills__recall', { id, all: true });
+const result = await ctx.engine.executeTool('skills__recall', {
+  id,
+  all: true,
+});
 const raw = toToolResultContent(result);
 const skill = JSON.parse(raw);
 
@@ -176,7 +180,10 @@ export function coerceOrphanToolMessages(
         if (tc.id) declaredIds.add(tc.id);
       }
     }
-    if (msg.role === 'tool' && (!msg.toolCallId || !declaredIds.has(msg.toolCallId))) {
+    if (
+      msg.role === 'tool' &&
+      (!msg.toolCallId || !declaredIds.has(msg.toolCallId))
+    ) {
       out.push({ ...msg, role: 'user' });
       continue;
     }
@@ -216,11 +223,12 @@ This covers BOTH send sites (main loop `:1141`, `/btw` aside `:1606`) via the on
 (a) **`drone-agent/test/synthetic-tool-exchange.test.ts`** (new) — unit tests for `appendSyntheticToolExchange`: appends exactly two messages; the assistant message has `toolCalls[0].id === toolCallId`; the tool message has matching `toolCallId`; arguments default to `{}`.
 
 (b) **`drone-agent/test/tool-message-integrity.test.ts`** (new) — unit tests for `coerceOrphanToolMessages`:
-   - valid pair (assistant tool-call `id:'c1'` + tool `toolCallId:'c1'`) is unchanged;
-   - orphan tool with no id → becomes `role:'user'`, content preserved;
-   - orphan tool with an id matching no preceding assistant call → becomes `role:'user'`;
-   - a tool message whose matching assistant call appears AFTER it → coerced (preceding-match, not global);
-   - empty list and no-tool lists pass through; input array not mutated.
+
+- valid pair (assistant tool-call `id:'c1'` + tool `toolCallId:'c1'`) is unchanged;
+- orphan tool with no id → becomes `role:'user'`, content preserved;
+- orphan tool with an id matching no preceding assistant call → becomes `role:'user'`;
+- a tool message whose matching assistant call appears AFTER it → coerced (preceding-match, not global);
+- empty list and no-tool lists pass through; input array not mutated.
 
 (c) **`drone-agent/test/conversation-service.test.ts`** (or the existing image-describer harness file) — one end-to-end seam test in the D11 style (drive a real `h.send()` and inspect the captured `provider.chat()` request, as in `conversation-service-image-describer.test.ts:407-462`): seed the session with an orphan `role:'tool'` message, send a prompt, assert the outbound request contains **no** `role:'tool'` message lacking `tool_call_id` (the orphan arrived as `role:'user'`).
 
@@ -271,3 +279,14 @@ Run, in order, from the repo root:
 4. **Types**: `pnpm typecheck` passes.
 5. **Tests**: `pnpm run test` (fast suite) passes, including the new unit + end-to-end regression tests; the pre-existing `session-import` and `skills-plugin` tests stay green.
 6. **Behavioral**: after `/skills recall <id>` the session contains a paired `skills__recall` exchange; a request assembled from a session containing an orphan `tool` message contains no orphan on the wire; OpenRouter's `tool_call_id` 400 can no longer be produced by this path.
+
+## EXECUTED SUMMARY (2026-10-10)
+
+All steps completed as written. Evidence:
+
+- **Root cause (confirmed)**: `/skills recall` appended a bare `role:'tool'` session message (no `toolCallId`, no preceding assistant tool-call) — an orphan re-sent on every request; the OpenAI-family serializer omitted `tool_call_id`, so OpenRouter's strict validation rejected it (400) permanently. Only OpenRouter broke (anthropic injects a fallback id; echo rewrites tool→user).
+- **Fix (both, decision C)**: (1) new shared `appendSyntheticToolExchange` (`drone-agent/src/shared/synthetic-tool-exchange.ts`) appends a **paired** assistant tool-call + matching tool result; `/skills recall` uses it with `toolCallId: skills-recall-${randomUUID()}`, and `swarm/session-import.ts`'s `injectChunk` was migrated to it (behavior byte-identical — same id format/args). (2) new pure `coerceOrphanToolMessages` (`drone-agent/src/shared/tool-message-integrity.ts`) coerces any orphan `tool` message to `role:'user'` (content preserved, narrow preceding-match detection), called as the first step of `prepareRequestMessages` in `conversation-service.ts` — the single chokepoint for both LLM send sites (main loop + `/btw` aside); presentation-only, stored session untouched.
+- **Tests**: new `test/synthetic-tool-exchange.test.ts` (2), new `test/tool-message-integrity.test.ts` (6); seam e2e added to `test/conversation-service-image-describer.test.ts`; paired-recall regression added to `test/skills-plugin.test.ts`. Pre-fix proof done empirically via `git stash` of the two root-cause files: both new regression tests failed on reverted code (`expected undefined to be truthy`; `expected -1 to be >= 0`) and pass post-fix.
+- **ADR 243**: `docs/adr/243-orphan-tool-message-pairing.md` written + row appended to `docs/adr/index.md` (via heredoc; the file ended with `|\n`, so the append landed as the final table row).
+- **Gates (all green)**: targeted vitest 37/37; `pnpm run test` 3805 passed / 14 skipped / 0 failed; `pnpm typecheck` clean; `pnpm -r run build` clean; `pnpm run lint` clean (exit 0); LSP diagnostics clean.
+- **Judgment-call deviations**: (a) typecheck caught implicit-`any` params in the new skills-test sessionManager shim lambdas (the `as unknown as` cast erased param types) — fixed with explicit `string`/`DroneToolCall[]`/`string`/`string`/`string` annotations plus a `DroneToolCall` type import; (b) pre-fix proof done by `git stash`-reverting the two source files rather than a scratch test; (c) ADR index row appended via shell heredoc rather than `apply_diff`; (d) incidental prettier EOF-newline collateral in `.drone-agent/memory/*.md` + `insights/project/drone-agent.json` folded into the commit per AGENTS.md.

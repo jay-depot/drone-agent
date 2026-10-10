@@ -189,7 +189,6 @@ Run, in order, from the repo root:
 
 ## Out of scope
 
-
 ## EXECUTED SUMMARY (2026-10-09)
 
 All steps completed as written. Evidence:
