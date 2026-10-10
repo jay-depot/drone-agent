@@ -22,6 +22,7 @@ const MAX_VISIBLE_TAGS = 3;
 const COL_TAGS = 'w-[180px]';
 const COL_DATE = 'w-[96px] text-center';
 const COL_WORDS = 'w-[104px]';
+const COL_READS = 'w-[104px]';
 const COL_SOURCES = 'w-[132px] text-center';
 const COL_ACTIONS = 'w-[92px] text-right';
 
@@ -35,6 +36,7 @@ const COLUMNS: {
   { key: 'created', label: 'Created', className: COL_DATE },
   { key: 'updated', label: 'Updated', className: COL_DATE },
   { key: 'words', label: 'Word Count', className: COL_WORDS },
+  { key: 'reads', label: 'Agent Reads', className: COL_READS },
   { key: 'sources', label: 'Source Sessions', className: COL_SOURCES },
 ];
 
@@ -128,6 +130,9 @@ export default function WikiPageTable({
             </TableCell>
             <TableCell className={`${COL_WORDS} text-xs text-muted-foreground`}>
               {page.wordCount}
+            </TableCell>
+            <TableCell className={`${COL_READS} text-xs text-muted-foreground`}>
+              {page.agentReadCount ?? 0}
             </TableCell>
             <TableCell
               className={`${COL_SOURCES} text-xs text-muted-foreground`}

@@ -1,6 +1,7 @@
 import type { WikiPageMeta } from '@/lib/types';
 
-export type WikiSortKey = 'title' | 'created' | 'updated' | 'words' | 'sources';
+export type WikiSortKey =
+  'title' | 'created' | 'updated' | 'words' | 'reads' | 'sources';
 export type SortDir = 'asc' | 'desc';
 
 const SORT_KEYS: readonly WikiSortKey[] = [
@@ -8,6 +9,7 @@ const SORT_KEYS: readonly WikiSortKey[] = [
   'created',
   'updated',
   'words',
+  'reads',
   'sources',
 ];
 
@@ -58,6 +60,8 @@ function compareByKey(
       return a.updatedAt.localeCompare(b.updatedAt);
     case 'words':
       return a.wordCount - b.wordCount;
+    case 'reads':
+      return (a.agentReadCount ?? 0) - (b.agentReadCount ?? 0);
     case 'sources':
       return a.sources.length - b.sources.length;
   }

@@ -230,3 +230,30 @@ describe('WikiDetailPage source session links', () => {
     expect(screen.getByText('Wiki list')).toBeInTheDocument();
   });
 });
+
+describe('WikiDetailPage agent read count', () => {
+  beforeEach(() => {
+    localStorageMock.clear();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('shows the Agent Reads value in the information card', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ ...pageWithPitch, agentReadCount: 7 }),
+      })) as unknown as typeof fetch
+    );
+
+    renderDetail();
+
+    await screen.findByText('Agent Reads');
+    expect(screen.getByText('7')).toBeTruthy();
+  });
+});

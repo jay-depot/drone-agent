@@ -52,7 +52,7 @@ describe('WikiPageTable', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders the six columns with a plain Tags header', () => {
+  it('renders the seven columns with a plain Tags header', () => {
     renderTable([page({ title: 'Alpha' })]);
 
     for (const header of [
@@ -60,6 +60,7 @@ describe('WikiPageTable', () => {
       'Created',
       'Updated',
       'Word Count',
+      'Agent Reads',
       'Source Sessions',
     ]) {
       expect(
@@ -98,12 +99,12 @@ describe('WikiPageTable', () => {
     }
 
     // Body cells line up under the centered headers (0=Title, 1=Tags,
-    // 2=Created, 3=Updated, 4=Word Count, 5=Sources).
+    // 2=Created, 3=Updated, 4=Word Count, 5=Agent Reads, 6=Sources).
     const bodyRow = screen.getAllByRole('row')[1];
     const cells = within(bodyRow).getAllByRole('cell');
     expect(cells[2].className).toContain('text-center');
     expect(cells[3].className).toContain('text-center');
-    expect(cells[5].className).toContain('text-center');
+    expect(cells[6].className).toContain('text-center');
     expect(cells[0].className).not.toContain('text-center');
   });
 
@@ -128,6 +129,12 @@ describe('WikiPageTable', () => {
     renderTable([page({ wordCount: 123 })]);
 
     expect(screen.getByText('123')).toBeTruthy();
+  });
+
+  it('renders the agent read count', () => {
+    renderTable([page({ agentReadCount: 42 })]);
+
+    expect(screen.getByText('42')).toBeTruthy();
   });
 
   it('invokes onSort with the column key when a header is clicked', async () => {

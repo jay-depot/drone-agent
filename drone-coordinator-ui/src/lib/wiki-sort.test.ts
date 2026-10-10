@@ -18,12 +18,19 @@ function page(overrides: Partial<WikiPageMeta> = {}): WikiPageMeta {
 }
 
 const pages: WikiPageMeta[] = [
-  page({ id: 'b', title: 'Beta', wordCount: 300, sources: ['s1'] }),
+  page({
+    id: 'b',
+    title: 'Beta',
+    wordCount: 300,
+    sources: ['s1'],
+    agentReadCount: 5,
+  }),
   page({
     id: 'a',
     title: 'alpha',
     wordCount: 100,
     sources: ['s1', 's2'],
+    // agentReadCount omitted → treated as 0 by the 'reads' comparator.
     createdAt: '2026-03-01T00:00:00.000Z',
     updatedAt: '2026-02-01T00:00:00.000Z',
   }),
@@ -32,6 +39,7 @@ const pages: WikiPageMeta[] = [
     title: 'Gamma',
     wordCount: 200,
     sources: [],
+    agentReadCount: 2,
     createdAt: '2026-02-01T00:00:00.000Z',
     updatedAt: '2026-03-01T00:00:00.000Z',
   }),
@@ -89,6 +97,11 @@ describe('sortWikiPages', () => {
       'b',
       'c',
     ]);
+  });
+
+  it('sorts by agent read count numerically, defaulting a missing count to 0', () => {
+    expect(ids(sortWikiPages(pages, 'reads', 'asc'))).toEqual(['a', 'c', 'b']);
+    expect(ids(sortWikiPages(pages, 'reads', 'desc'))).toEqual(['b', 'c', 'a']);
   });
 
   it('never mutates the input array', () => {
