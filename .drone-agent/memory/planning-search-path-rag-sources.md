@@ -32,20 +32,20 @@ folder's files become an **additional candidate source** for the swarm-memory RA
 
 ## 2. Decisions made (all confirmed with the user)
 
-| # | Decision | Choice |
-|---|----------|--------|
-| D1 | Scope | Extend the existing **dense-only** RAG (Ollama `nomic-embed-text:v1.5`, 768d, `1-cosine` via sqlite-vec). **No** lexical/BM25/FTS stage. "Hybrid" here means advertise+recall (suggest + recall instructions), NOT whole-document injection. |
-| D2 | Architecture | **Agent-side fan-out.** The retriever additionally calls the *existing* stateless beacon route `GET /agents/:id/search` once per (query-input × ragSource dir), merges file hits into the **same** candidate pool as wiki entries, then one global sort + `slice(topK)`. **No new beacon route.** |
-| D3 | Gating | `ragSource` is **self-contained**. The search plugin registers/indexes `ragSource: true` paths even when `search.enabled: false`. `search.enabled` governs only the interactive `search__text` tool. |
-| D4 | Fan-out shape | Per (query-input × dir); `maxResults = topK` per request; **no per-source cap**; pass each path's `exclude` globs. |
-| D5 | Entry shape | **Discriminated union** `SwarmMemoryEntry` with `kind: 'wiki' \| 'file'`; two bullet shapes; kind-aware recall instructions; file snippet capped at `MAX_PITCH_CHARS` (400). |
-| D6 | Thresholds | Reuse `swarm.memory.minScore` for file hits (same model ⇒ comparable scores). **No new config knob.** |
-| D7 | Anchors | Extend anchor matching symmetrically: for file entries, treat the **file path as the "title"** so an anchor substring match applies `boostTitle`; files have no tags so `boostPerTag` does not apply to them. |
-| D8 | Plugin enablement | Silent, **info-log-only** (matches existing convention). No new startup warning. Document that the `search` plugin must be enabled for registration/indexing to happen. |
-| D9 | Config source | The **swarm** plugin reads `registration.getConfig().search?.paths` directly and filters `ragSource === true`. **No new capability.** |
-| D10 | Fragment advertising | Register the `search-indexed-directories` header fragment **only when `search.enabled: true`**. Do **not** add a new gate to `handleSemanticSearch`. |
-| D11 | File path rendering | Render the **absolute** file path (recall-correct: `file__read` requires an absolute path). Reverses an earlier relative-path idea. |
-| D12 | ADR/docs | New ADR `docs/adr/245-search-path-rag-sources.md`; update project wiki `[[concepts/semantic-search]]` + `[[concepts/memory-pipeline]]`; update `AGENTS.md`; save this plan as project memory `planning-search-path-rag-sources`. |
+| #   | Decision             | Choice                                                                                                                                                                                                                                                                                            |
+| --- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Scope                | Extend the existing **dense-only** RAG (Ollama `nomic-embed-text:v1.5`, 768d, `1-cosine` via sqlite-vec). **No** lexical/BM25/FTS stage. "Hybrid" here means advertise+recall (suggest + recall instructions), NOT whole-document injection.                                                      |
+| D2  | Architecture         | **Agent-side fan-out.** The retriever additionally calls the _existing_ stateless beacon route `GET /agents/:id/search` once per (query-input × ragSource dir), merges file hits into the **same** candidate pool as wiki entries, then one global sort + `slice(topK)`. **No new beacon route.** |
+| D3  | Gating               | `ragSource` is **self-contained**. The search plugin registers/indexes `ragSource: true` paths even when `search.enabled: false`. `search.enabled` governs only the interactive `search__text` tool.                                                                                              |
+| D4  | Fan-out shape        | Per (query-input × dir); `maxResults = topK` per request; **no per-source cap**; pass each path's `exclude` globs.                                                                                                                                                                                |
+| D5  | Entry shape          | **Discriminated union** `SwarmMemoryEntry` with `kind: 'wiki' \| 'file'`; two bullet shapes; kind-aware recall instructions; file snippet capped at `MAX_PITCH_CHARS` (400).                                                                                                                      |
+| D6  | Thresholds           | Reuse `swarm.memory.minScore` for file hits (same model ⇒ comparable scores). **No new config knob.**                                                                                                                                                                                             |
+| D7  | Anchors              | Extend anchor matching symmetrically: for file entries, treat the **file path as the "title"** so an anchor substring match applies `boostTitle`; files have no tags so `boostPerTag` does not apply to them.                                                                                     |
+| D8  | Plugin enablement    | Silent, **info-log-only** (matches existing convention). No new startup warning. Document that the `search` plugin must be enabled for registration/indexing to happen.                                                                                                                           |
+| D9  | Config source        | The **swarm** plugin reads `registration.getConfig().search?.paths` directly and filters `ragSource === true`. **No new capability.**                                                                                                                                                             |
+| D10 | Fragment advertising | Register the `search-indexed-directories` header fragment **only when `search.enabled: true`**. Do **not** add a new gate to `handleSemanticSearch`.                                                                                                                                              |
+| D11 | File path rendering  | Render the **absolute** file path (recall-correct: `file__read` requires an absolute path). Reverses an earlier relative-path idea.                                                                                                                                                               |
+| D12 | ADR/docs             | New ADR `docs/adr/245-search-path-rag-sources.md`; update project wiki `[[concepts/semantic-search]]` + `[[concepts/memory-pipeline]]`; update `AGENTS.md`; save this plan as project memory `planning-search-path-rag-sources`.                                                                  |
 
 ## 3. Key facts established during exploration
 
@@ -64,7 +64,7 @@ folder's files become an **additional candidate source** for the swarm-memory RA
 
 ## 4. Implementation steps
 
-### Step 1 — drone-core: add the `ragSource` field *(agent: coder)*
+### Step 1 — drone-core: add the `ragSource` field _(agent: coder)_
 
 **File: `drone-core/src/config-types.ts`** — extend `DroneSearchPath` (after `path`):
 
@@ -96,7 +96,7 @@ ragSource: Type.Optional(
 ),
 ```
 
-### Step 2 — search plugin: register ragSource paths independent of `search.enabled` *(agent: coder)*
+### Step 2 — search plugin: register ragSource paths independent of `search.enabled` _(agent: coder)_
 
 **File: `drone-agent/src/plugins/search/index.ts`**, `onPluginsLoaded` (`:152-241`).
 
@@ -146,17 +146,20 @@ if (searchEnabled) {
 ```
 
 Notes:
+
 - Keep the existing success/`indexed` info log.
 - Do **not** change `handleSemanticSearch` (D10) — it still only requires the swarm capability.
 
-### Step 3 — swarm plugin: read `ragSource` paths from config *(agent: coder)*
+### Step 3 — swarm plugin: read `ragSource` paths from config _(agent: coder)_
 
 **File: `drone-agent/src/plugins/swarm/index.ts`** (wiring at `:225-266`).
 
 ```ts
 import type { RagSourcePath } from './memory-retrieval.js';
 
-const ragSourcePaths: RagSourcePath[] = (registration.getConfig().search?.paths ?? [])
+const ragSourcePaths: RagSourcePath[] = (
+  registration.getConfig().search?.paths ?? []
+)
   .filter(p => p.ragSource === true)
   .map(p => ({ path: p.path, exclude: p.exclude }));
 
@@ -172,7 +175,7 @@ const memoryRetriever = new SwarmMemoryRetriever({
 
 Read-once at `register()` time, consistent with how `memoryConfig` is read today. (`search.paths` is not underlay-allowed, so it cannot change via the coordinator.)
 
-### Step 4 — retriever: fan out to the workspace route and merge *(agent: coder)*
+### Step 4 — retriever: fan out to the workspace route and merge _(agent: coder)_
 
 **File: `drone-agent/src/plugins/swarm/memory-retrieval.ts`**
 
@@ -344,7 +347,7 @@ for (const entry of cache.entries) {
 }
 ```
 
-### Step 5 — fragment reword *(agent: coder)*
+### Step 5 — fragment reword _(agent: coder)_
 
 **File: `drone-agent/src/plugins/swarm/memory-fragment.ts`** — rewrite `render()`:
 
@@ -383,7 +386,7 @@ return lines.join('\n');
 
 Also fix the stale module doc comment (`# Swarm Memory (wiki)` / "header fragment" → `# Swarm Memory` / footer).
 
-### Step 6 — tests *(agent: tester, then coder for fixes)*
+### Step 6 — tests _(agent: tester, then coder for fixes)_
 
 - **`drone-core/test/`** — schema accepts `ragSource: true`; default config has no `ragSource` (undefined).
 - **`drone-agent/test/search.test.ts`** — (a) with `search.enabled: false` and a `ragSource: true` path, `onPluginsLoaded` PUTs **only** that path; (b) the `search-indexed-directories` fragment is **not** registered when `search.enabled: false`; (c) with `search.enabled: true`, all paths are PUT and the fragment **is** registered.
@@ -392,7 +395,7 @@ Also fix the stale module doc comment (`# Swarm Memory (wiki)` / "header fragmen
 - **`drone-agent/test/plugins/swarm/slash-swarm-memory.test.ts`** — update fixtures to the union; add a file-entry status assertion.
 - **`drone-agent/test/plugins/swarm/memory-trigger.test.ts`** — unchanged behavior, but confirm it still passes with the union.
 
-### Step 7 — ADR + docs *(agent: coder)*
+### Step 7 — ADR + docs _(agent: coder)_
 
 - **New `docs/adr/245-search-path-rag-sources.md`** — record D1–D12, the two-route fan-out, the raw-path resolution subtlety, the `boostTitle` fallback alignment, and the alternatives rejected (beacon-side merge; a new capability; relative-path rendering).
 - **`docs/adr/index.md`** — add the row.

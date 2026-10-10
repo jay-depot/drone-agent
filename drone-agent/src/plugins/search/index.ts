@@ -152,10 +152,20 @@ export const searchPlugin: DronePlugin = {
     registration.hooks.onPluginsLoaded(async () => {
       const config = registration.getConfig();
       const searchConfig = config.search;
+      const allPaths = searchConfig?.paths ?? [];
+      const ragSourcePaths = allPaths.filter(p => p.ragSource === true);
+      const searchEnabled = searchConfig?.enabled === true;
 
-      if (!searchConfig?.enabled) {
+      // Register when interactive search is on (all paths) OR when any path
+      // is a RAG source (only those paths). ragSource is self-contained: it
+      // does not require search.enabled.
+      const pathsToRegister = searchEnabled ? allPaths : ragSourcePaths;
+
+      if (pathsToRegister.length === 0) {
         registration.logger.info(
-          'search plugin loaded (semantic search disabled by config)'
+          searchEnabled
+            ? 'search: no search paths configured; skipping beacon registration'
+            : 'search plugin loaded (semantic search disabled by config)'
         );
         return;
       }
@@ -171,15 +181,6 @@ export const searchPlugin: DronePlugin = {
         return;
       }
 
-      // Register search paths with the beacon
-      const directories = searchConfig.paths ?? [];
-      if (directories.length === 0) {
-        registration.logger.info(
-          'search: no search paths configured; skipping beacon registration'
-        );
-        return;
-      }
-
       const beaconUrl = swarmCap.getBeaconUrl();
       const agentId = swarmCap.getAgentId();
 
@@ -189,7 +190,7 @@ export const searchPlugin: DronePlugin = {
           {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ paths: directories }),
+            body: JSON.stringify({ paths: pathsToRegister }),
           }
         );
 
@@ -209,29 +210,32 @@ export const searchPlugin: DronePlugin = {
           `search: registered ${result.paths.length} path(s) with beacon (indexed: ${result.indexed})`
         );
 
-        // Register a prompt fragment so the model knows which directories
-        // are indexed for semantic search.
-        const dirList = directories.map(d => `  - ${d.path}`).join('\n');
-        registration.registerPromptFragment({
-          key: 'search-indexed-directories',
-          phase: 'header',
-          render: async () =>
-            `# Search Index\n` +
-            `The following directories are indexed for semantic (vector) search — query them by\n` +
-            `meaning rather than exact text:\n` +
-            `${dirList}\n` +
-            `\n` +
-            `When to use \`search__text\` with \`mode: "semantic"\` vs regex:\n` +
-            `- Use semantic when searching by concept, behavior, or intent (e.g. "where is\n` +
-            `  session expiry handled", "code that validates config") or when you don't know\n` +
-            `  the exact identifier/wording used in the code.\n` +
-            `- Use regex (default) when you know the exact symbol, string, or pattern.\n` +
-            `- If a regex search returns zero results or an overwhelming number, retry the\n` +
-            `  intent semantically.\n` +
-            `Semantic results return file, score, and a content snippet (no line numbers);\n` +
-            `read the file with \`file__read\` for full context. Lower \`minScore\` (e.g. 0.3) if\n` +
-            `too few results; raise it to filter noise.\n`,
-        });
+        // Advertise the interactive semantic-search directories to the model
+        // only when interactive search is enabled. A passive RAG source does
+        // not turn on the tool's advertisement.
+        if (searchEnabled) {
+          const dirList = pathsToRegister.map(d => `  - ${d.path}`).join('\n');
+          registration.registerPromptFragment({
+            key: 'search-indexed-directories',
+            phase: 'header',
+            render: async () =>
+              `# Search Index\n` +
+              `The following directories are indexed for semantic (vector) search — query them by\n` +
+              `meaning rather than exact text:\n` +
+              `${dirList}\n` +
+              `\n` +
+              `When to use \`search__text\` with \`mode: "semantic"\` vs regex:\n` +
+              `- Use semantic when searching by concept, behavior, or intent (e.g. "where is\n` +
+              `  session expiry handled", "code that validates config") or when you don't know\n` +
+              `  the exact identifier/wording used in the code.\n` +
+              `- Use regex (default) when you know the exact symbol, string, or pattern.\n` +
+              `- If a regex search returns zero results or an overwhelming number, retry the\n` +
+              `  intent semantically.\n` +
+              `Semantic results return file, score, and a content snippet (no line numbers);\n` +
+              `read the file with \`file__read\` for full context. Lower \`minScore\` (e.g. 0.3) if\n` +
+              `too few results; raise it to filter noise.\n`,
+          });
+        }
       } catch (err) {
         registration.logger.warn(
           `search: failed to connect to beacon for search path registration: ${err}`
