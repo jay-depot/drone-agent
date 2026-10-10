@@ -135,6 +135,7 @@ pnpm start
 
 - `GET /wiki` - List all wiki pages
 - `GET /wiki/:pageId` - Get a specific wiki page (markdown + frontmatter)
+- `POST /wiki/:pageId/read` - Increment a page's agent read count (called by the beacon on agent reads)
 - `PUT /wiki/:pageId` - Create or update a wiki page
 - `DELETE /wiki/:pageId` - Delete a wiki page
 - `GET /wiki/search?q=...` - Search wiki pages
