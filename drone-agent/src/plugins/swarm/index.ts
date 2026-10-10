@@ -39,7 +39,10 @@ import {
 } from './tools-coordinator-trust.js';
 import { createSwarmSessionCommand } from './session-command.js';
 import { registerHooks } from './hooks.js';
-import { SwarmMemoryRetriever } from './memory-retrieval.js';
+import {
+  SwarmMemoryRetriever,
+  type RagSourcePath,
+} from './memory-retrieval.js';
 import { ConversationWindowTracker } from './memory-window.js';
 import { createSwarmMemoryFragment } from './memory-fragment.js';
 import { createSwarmMemoryCommand } from './slash-swarm-memory.js';
@@ -228,6 +231,14 @@ export function createSwarmPlugin(
       const memoryConfig = registration.getConfig().swarm.memory ?? {
         enabled: false,
       };
+      // Workspace folders opted into RAG via `search.paths[].ragSource`. Read
+      // once at register() time; `search.paths` is not underlay-allowed, so it
+      // cannot change mid-session.
+      const ragSourcePaths: RagSourcePath[] = (
+        registration.getConfig().search?.paths ?? []
+      )
+        .filter(p => p.ragSource === true)
+        .map(p => ({ path: p.path, exclude: p.exclude }));
       const runtimeInfo = registration.request<{
         debugFlags?: DebugFlagRegistry;
         emitEvent?: (event: DroneConversationEvent) => void;
@@ -239,6 +250,7 @@ export function createSwarmPlugin(
       const memoryRetriever = new SwarmMemoryRetriever({
         capability: swarmCap,
         config: memoryConfig,
+        ragSourcePaths,
         logger: registration.logger,
         debugFlags: runtimeInfo?.debugFlags,
         emitNotice: content =>

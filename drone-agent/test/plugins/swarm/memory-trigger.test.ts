@@ -219,19 +219,20 @@ describe('swarm-memory retrieval trigger (userMessage)', () => {
       kind: 'userMessage',
       content: 'how do fragments expire',
     });
-    // The refresh is fire-and-forget; flush the async work.
-    await vi.waitFor(async () => {
-      expect(searchCalls()).toHaveLength(1);
-    });
-
     const memoryFragment = capture.registeredFragments.find(
       f => f.key === 'swarm-memory'
     );
     expect(memoryFragment).toBeDefined();
-    const body = await memoryFragment!.render();
-    expect(body).not.toBe(false);
-    expect(body as string).toContain('# Swarm Memory');
-    expect(body as string).toContain('Fragment Guide');
-    expect(body as string).toContain('TTL sweep');
+
+    // The refresh is fire-and-forget; poll until the cache is populated
+    // (a call-count check alone can observe the fetch before it resolves).
+    await vi.waitFor(async () => {
+      const body = await memoryFragment!.render();
+      expect(body).not.toBe(false);
+      expect(body as string).toContain('# Swarm Memory');
+      expect(body as string).toContain('Fragment Guide');
+      expect(body as string).toContain('TTL sweep');
+    });
+    expect(searchCalls()).toHaveLength(1);
   });
 });
