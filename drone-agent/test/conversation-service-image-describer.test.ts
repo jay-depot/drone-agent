@@ -532,3 +532,35 @@ describe('conversation-service per-message image count cap', () => {
     );
   });
 });
+
+describe('conversation-service orphan tool-message coercion (request seam)', () => {
+  it('coerces an orphan tool message to a user message on the wire', async () => {
+    const h = await setup({
+      chatResponses: [{ message: 'done' }],
+      llmOverrides: { hasVision: false },
+      logEnabled: false,
+    });
+    // Simulate a session poisoned by a bare tool result (no tool_call_id and
+    // no preceding assistant tool-call) — the /skills recall failure mode.
+    h.sessionManager.appendToolResult('skills__recall', 'orphan skill body');
+    await h.send('next question');
+
+    const lastChat = h.provider.__chatMock.mock.calls.at(-1)?.[0];
+    const messages = lastChat.messages as Array<{
+      role: string;
+      content: string;
+      toolCallId?: string;
+    }>;
+    // No tool message lacking a tool_call_id may reach the provider.
+    for (const msg of messages) {
+      if (msg.role === 'tool') {
+        expect(msg.toolCallId).toBeTruthy();
+      }
+    }
+    // The orphan content survives, coerced into a user turn.
+    const coerced = messages.find(
+      m => m.role === 'user' && m.content.includes('orphan skill body')
+    );
+    expect(coerced).toBeDefined();
+  });
+});

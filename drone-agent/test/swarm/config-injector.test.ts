@@ -303,3 +303,63 @@ describe('BeaconConfigInjector.inject', () => {
     vi.restoreAllMocks();
   });
 });
+
+describe('BeaconConfigInjector.getLastAppliedEntries', () => {
+  afterEach(() => {
+    delete process.env[TEST_ENV_KEY];
+    vi.restoreAllMocks();
+  });
+
+  it('returns the raw rows from the last successful fetch', async () => {
+    const updatedAt = Date.now();
+    vi.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          { key: 'llm.active', value: '"a/b"', updatedAt },
+          {
+            key: 'providers.openrouter',
+            value: '{"protocol":"openrouter"}',
+            updatedAt: updatedAt - 5_000,
+          },
+        ]),
+        { status: 200 }
+      )
+    );
+    const injector = new BeaconConfigInjector('http://localhost:3457');
+
+    expect(injector.getLastAppliedEntries()).toEqual([]);
+    await injector.inject();
+    expect(injector.getLastAppliedEntries()).toEqual([
+      { key: 'llm.active', updatedAt },
+      {
+        key: 'providers.openrouter',
+        updatedAt: updatedAt - 5_000,
+      },
+    ]);
+  });
+
+  it('omits rows without updatedAt and keeps the previous set when a fetch fails', async () => {
+    vi.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            { key: 'llm.active', value: '"a/b"' },
+            { key: 'providers.swarmtest', value: '{}', updatedAt: 1234 },
+          ]),
+          { status: 200 }
+        )
+      )
+      .mockRejectedValue(new Error('ECONNREFUSED'));
+    const injector = new BeaconConfigInjector('http://localhost:3457');
+
+    await injector.inject();
+    expect(injector.getLastAppliedEntries()).toEqual([
+      { key: 'providers.swarmtest', updatedAt: 1234 },
+    ]);
+
+    await injector.inject();
+    expect(injector.getLastAppliedEntries()).toEqual([
+      { key: 'providers.swarmtest', updatedAt: 1234 },
+    ]);
+  });
+});

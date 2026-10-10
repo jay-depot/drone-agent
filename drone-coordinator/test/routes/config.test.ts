@@ -176,6 +176,83 @@ describe('CoordinatorConfig Routes', () => {
     expect(JSON.parse(res.body).error).toContain('JSON string');
   });
 
+  it('PUT /api/config/:key accepts a valid providers JSON object', async () => {
+    upsertSecret({ name: 'OPENROUTER_KEY', value: 'sk-or-v1-test' });
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/config/providers.openrouter',
+      payload: {
+        value: JSON.stringify({
+          protocol: 'openrouter',
+          baseUrl: 'https://openrouter.ai/api/v1',
+          apiKey: '${secret:OPENROUTER_KEY}',
+        }),
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(getCoordinatorConfig('providers.openrouter')).toBeDefined();
+  });
+
+  it('PUT /api/config/:key rejects an unparseable providers value with 400', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/config/providers.openrouter',
+      payload: {
+        value: `{
+  "protocol": "openrouter",
+  "apiKey": "sk-or-v1-abc",
+}`,
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    const body = JSON.parse(res.body) as { error: string };
+    expect(body.error).toContain('must be a JSON object');
+    // The agent drops unparseable underlay rows silently; nothing may be
+    // stored that the swarm cannot consume.
+    expect(getCoordinatorConfig('providers.openrouter')).toBeUndefined();
+  });
+
+  it('PUT /api/config/:key rejects a providers JSON array with 400', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/config/providers.openrouter',
+      payload: { value: JSON.stringify([{ protocol: 'openrouter' }]) },
+    });
+    expect(res.statusCode).toBe(400);
+    const body = JSON.parse(res.body) as { error: string };
+    expect(body.error).toContain('not a JSON object');
+  });
+
+  it('PUT /api/config/:key leaves non-providers keys unvalidated', async () => {
+    // llm.active stores a bare JSON string; the providers.* object rule
+    // must not apply to other allowlisted keys.
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/config/llm.active',
+      payload: { value: JSON.stringify('openrouter/gpt-5.3-codex') },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('PUT /api/config/:key keeps the write-only secret sentinel for providers rows', async () => {
+    upsertCoordinatorConfig({
+      key: 'providers.legacy',
+      value: JSON.stringify({ apiKey: 'sk-legacy' }),
+      secret: true,
+    });
+    // Omitted value on an existing secret row means "keep current" — the
+    // JSON validation must not reject the empty sentinel.
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/config/providers.legacy',
+      payload: { description: 'rotate later' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(getCoordinatorConfig('providers.legacy')!.value).toBe(
+      JSON.stringify({ apiKey: 'sk-legacy' })
+    );
+  });
+
   it('DELETE /api/config/:key deletes an entry', async () => {
     upsertCoordinatorConfig({ key: 'llm.active', value: '"a"' });
     const res = await app.inject({

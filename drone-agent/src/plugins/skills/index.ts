@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   DRONE_REFERENCE_CAPABILITY_ID,
   insertSortedByPrecedence,
@@ -7,6 +8,7 @@ import {
   toToolResultContent,
 } from 'drone-core';
 import { SkillsRecallBlock } from '../../tui/components/SkillsRecallBlock.js';
+import { appendSyntheticToolExchange } from '../../shared/synthetic-tool-exchange.js';
 import { SkillsListBlock } from '../../tui/components/SkillsListBlock.js';
 import { SkillsCreateBlock } from '../../tui/components/SkillsCreateBlock.js';
 import type {
@@ -439,8 +441,16 @@ export const skillsPlugin: DronePlugin = {
           const raw = toToolResultContent(result);
           const skill = JSON.parse(raw);
 
-          // Append to conversation context as synthetic tool result
-          ctx.sessionManager?.appendToolResult('skills__recall', raw);
+          // Append to conversation context as a synthetic, correctly-paired
+          // tool-call/result so the OpenAI-family wire format stays valid.
+          if (ctx.sessionManager) {
+            appendSyntheticToolExchange(ctx.sessionManager, {
+              toolName: 'skills__recall',
+              toolCallId: `skills-recall-${randomUUID()}`,
+              arguments: { id },
+              content: raw,
+            });
+          }
 
           // Tell the user it worked (not the full body)
           const skillDef = getSkillById(id.trim().toLowerCase());

@@ -75,6 +75,38 @@ export default function configRoutes(app: FastifyInstance) {
       });
     }
     const { value, secret, description } = request.body ?? {};
+
+    // providers.* entries are whole-entry units the agent parses as JSON —
+    // reject unparseable or non-object values at save time so an authoring
+    // mistake (e.g. a trailing comma) cannot ship a silently-dropped row to
+    // every agent. Other allowlisted keys carry scalars and are untouched.
+    if (
+      typeof value === 'string' &&
+      value.trim() !== '' &&
+      key.startsWith('providers.')
+    ) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(value);
+      } catch (err) {
+        parsed = err;
+      }
+      if (
+        parsed instanceof Error ||
+        typeof parsed !== 'object' ||
+        parsed === null ||
+        Array.isArray(parsed)
+      ) {
+        return reply.code(400).send({
+          error: `Config key "${key}" must be a JSON object: ${
+            parsed instanceof Error
+              ? parsed.message
+              : 'value is not a JSON object'
+          }`,
+        });
+      }
+    }
+
     const existing = db.getCoordinatorConfig(key);
 
     // Reject references to stored secrets that do not (yet) exist.

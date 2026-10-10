@@ -7,7 +7,10 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createDefaultAgentConfig, toToolResultContent } from 'drone-core';
+import type { DroneToolCall } from 'drone-core';
 import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
+import { createSessionManager } from '../src/runtime/session-manager.js';
+import { coerceOrphanToolMessages } from '../src/shared/tool-message-integrity.js';
 import { skillsPlugin } from '../src/plugins/skills/index.js';
 import { skillProviderProjectPlugin } from '../src/plugins/skill-provider-project/index.js';
 
@@ -400,6 +403,81 @@ describe('skill remark field visibility', () => {
         );
         expect(confirmation).toBeDefined();
         expect(confirmation).toContain(` — ${REMARK}`);
+      } finally {
+        process.cwd = originalCwd;
+      }
+    });
+  });
+});
+
+describe('/skills recall appends a correctly-paired synthetic tool exchange', () => {
+  it('pairs the assistant tool-call with the recall result', async () => {
+    await withProjectDir(async projectDir => {
+      const originalCwd = process.cwd;
+      process.cwd = () => projectDir;
+      try {
+        const config = createDefaultAgentConfig();
+        config.enabledPlugins = ['skills', 'skill-provider-project'];
+        const engine = createDronePluginEngine({
+          plugins: [skillsPlugin, skillProviderProjectPlugin],
+          config,
+        });
+        await engine.initialize();
+
+        const skillsDir = path.join(projectDir, '.drone-agent', 'skills');
+        await mkdir(skillsDir, { recursive: true });
+        await writeFile(
+          path.join(skillsDir, 'demo.md'),
+          SKILL_MD('demo'),
+          'utf-8'
+        );
+        await engine.executeTool('skills__list', { reload: true });
+
+        const sessionManager = createSessionManager();
+        const infoLines: string[] = [];
+        const logger = {
+          info: (msg: string | unknown) => infoLines.push(String(msg)),
+          warn: (msg: string | unknown) => infoLines.push(String(msg)),
+          error: (msg: string | unknown) => infoLines.push(String(msg)),
+          debug: () => {},
+        };
+        const handled = await engine.dispatchSlashCommand(
+          '/skills recall demo',
+          {
+            logger,
+            engine,
+            sessionManager: {
+              appendUserMessage: (m: string) =>
+                sessionManager.appendUserMessage(m),
+              appendAssistantMessage: (c: string, tc?: DroneToolCall[]) =>
+                sessionManager.appendAssistantMessage(c, tc),
+              appendToolResult: (n: string, c: string, id?: string) =>
+                sessionManager.appendToolResult(n, c, id),
+            },
+          } as unknown as Parameters<
+            NonNullable<typeof engine.dispatchSlashCommand>
+          >[1]
+        );
+        expect(handled).toBe(true);
+
+        const messages = sessionManager.getMessages();
+        const assistantIdx = messages.findIndex(
+          m =>
+            m.role === 'assistant' &&
+            m.toolCalls?.some(tc => tc.name === 'skills__recall')
+        );
+        expect(assistantIdx).toBeGreaterThanOrEqual(0);
+        const call = messages[assistantIdx].toolCalls?.find(
+          tc => tc.name === 'skills__recall'
+        );
+        expect(call?.id).toBeTruthy();
+        const toolMsg = messages[assistantIdx + 1];
+        expect(toolMsg.role).toBe('tool');
+        expect(toolMsg.toolCallId).toBe(call?.id);
+
+        // The appended exchange must never be coerced at the wire seam.
+        const coerced = coerceOrphanToolMessages(messages);
+        expect(coerced[assistantIdx + 1].role).toBe('tool');
       } finally {
         process.cwd = originalCwd;
       }

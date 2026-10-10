@@ -1,7 +1,6 @@
 ---
 key: followup-braces-advisory-no-fix-released
-tags:
-  []
+tags: []
 created: 2026-10-09T02:00:30.414Z
 updated: 2026-10-09T02:00:30.414Z
 ---

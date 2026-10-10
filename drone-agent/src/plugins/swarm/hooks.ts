@@ -310,9 +310,32 @@ export function registerHooks(
     }
     try {
       const rebuilt = await configCap.rebuild();
-      const providerCount = Object.keys(rebuilt.providers ?? {}).length;
+      const providerNames = Object.keys(rebuilt.providers ?? {});
+      const providerSummary = providerNames
+        .map(name => {
+          const declaredModels = Object.keys(
+            rebuilt.providers?.[name]?.models ?? {}
+          ).length;
+          return `${name} (${declaredModels} models)`;
+        })
+        .join(', ');
+      const rows = beaconConfigInjector.getLastAppliedEntries();
+      let rowAge = '';
+      if (rows.length > 0) {
+        const newest = Math.max(...rows.map(row => row.updatedAt));
+        const ageSeconds = Math.max(
+          0,
+          Math.round((Date.now() - newest) / 1000)
+        );
+        rowAge = `; underlay rows fetched ${ageSeconds}s ago (${rows.length} rows)`;
+      }
+      const active = rebuilt.llm?.active ?? rebuilt.llm?.provider;
       registration.logger.info(
-        `Applied swarm config underlay at session start (active: ${rebuilt.llm?.active ?? rebuilt.llm?.provider}, providers: ${providerCount})`
+        `Swarm config underlay applied at session start: ${
+          providerNames.length > 0
+            ? `providers: ${providerSummary}`
+            : 'no providers'
+        }; llm.active: ${active ?? '(unset)'}${rowAge}`
       );
     } catch (err) {
       registration.logger.warn(`Failed to apply swarm config underlay: ${err}`);
