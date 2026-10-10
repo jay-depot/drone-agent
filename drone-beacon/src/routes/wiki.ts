@@ -23,6 +23,16 @@ function withOrigin<T extends object>(
   return { ...page, origin };
 }
 
+/**
+ * Best-effort: tell the coordinator an agent read this coordinator-origin
+ * page. Never awaited — a coordinator outage must not break an agent read.
+ */
+function bumpCoordinatorReadCount(pageId: string): void {
+  proxyWikiToCoordinator('POST', `/wiki/${encodeURIComponent(pageId)}/read`).catch(
+    () => {}
+  );
+}
+
 export default function wikiRoutes(app: FastifyInstance) {
   // List all wiki pages (beacon + coordinator), each tagged with its origin.
   app.get('/wiki', async () => {
@@ -62,6 +72,7 @@ export default function wikiRoutes(app: FastifyInstance) {
         if (!result) {
           return reply.code(404).send({ error: 'Wiki page not found' });
         }
+        bumpCoordinatorReadCount(request.params.pageId);
         return withOrigin(result, 'coordinator');
       }
 
@@ -84,6 +95,9 @@ export default function wikiRoutes(app: FastifyInstance) {
       }
       if (!localPage && !coordinatorVersion) {
         return reply.code(404).send({ error: 'Wiki page not found' });
+      }
+      if (coordinatorVersion) {
+        bumpCoordinatorReadCount(request.params.pageId);
       }
       return {
         pageId: request.params.pageId,

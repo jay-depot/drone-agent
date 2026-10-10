@@ -425,3 +425,102 @@ describe('wiki delete scope semantics', () => {
     expect(triggerWikiReindex).not.toHaveBeenCalled();
   });
 });
+
+describe('wiki agent read count accounting', () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    await setupDb();
+    const kbDir = await mkdtemp(path.join(os.tmpdir(), 'wiki-kb-count-'));
+    setKnowledgeBaseDir(kbDir);
+    proxyWikiToCoordinator.mockReset();
+    app = await buildTestApp();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    await teardownDb();
+  });
+
+  function readCountCalls(): unknown[][] {
+    return proxyWikiToCoordinator.mock.calls.filter(
+      ([method]) => method === 'POST'
+    );
+  }
+
+  it('?scope=coordinator read bumps the coordinator read count', async () => {
+    mockCoordinatorWithDualPage();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/wiki/dual-page?scope=coordinator',
+    });
+    expect(res.statusCode).toBe(200);
+    await vi.waitFor(() => {
+      expect(proxyWikiToCoordinator).toHaveBeenCalledWith(
+        'POST',
+        '/wiki/dual-page/read'
+      );
+    });
+  });
+
+  it('no-scope read bumps the count exactly once when a coordinator version exists', async () => {
+    await writePage(
+      'dual-page',
+      'Dual Page',
+      'beacon',
+      '# Dual\n\nBeacon body.'
+    );
+    mockCoordinatorWithDualPage();
+
+    const res = await app.inject({ method: 'GET', url: '/wiki/dual-page' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.versions).toHaveLength(2);
+
+    await vi.waitFor(() => {
+      expect(readCountCalls()).toHaveLength(1);
+    });
+    expect(readCountCalls()[0]).toEqual(['POST', '/wiki/dual-page/read']);
+  });
+
+  it('no-scope read does not bump when only a beacon version exists', async () => {
+    await writePage('solo-page', 'Solo', 'beacon', '# Solo\n\nOnly here.');
+    proxyWikiToCoordinator.mockResolvedValue(null);
+
+    const res = await app.inject({ method: 'GET', url: '/wiki/solo-page' });
+    expect(res.statusCode).toBe(200);
+    expect(readCountCalls()).toHaveLength(0);
+  });
+
+  it('?scope=beacon read does not bump any count', async () => {
+    await writePage(
+      'dual-page',
+      'Dual Page',
+      'beacon',
+      '# Dual\n\nBeacon body.'
+    );
+    mockCoordinatorWithDualPage();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/wiki/dual-page?scope=beacon',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(readCountCalls()).toHaveLength(0);
+  });
+
+  it('list and keyword search do not bump any count', async () => {
+    await writePage(
+      'dual-page',
+      'Dual Page',
+      'beacon',
+      '# Dual\n\nBeacon body.'
+    );
+    mockCoordinatorWithDualPage();
+
+    await app.inject({ method: 'GET', url: '/wiki' });
+    await app.inject({ method: 'GET', url: '/wiki/search?q=dual' });
+
+    expect(readCountCalls()).toHaveLength(0);
+  });
+});
