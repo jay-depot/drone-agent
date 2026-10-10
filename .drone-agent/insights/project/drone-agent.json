@@ -790,5 +790,13 @@
   {
     "timestamp": "2026-10-10T01:00:55.522Z",
     "insight": "Message-integrity invariant: a synthetic `role:'tool'` session message is only wire-valid when paired with a preceding assistant message declaring a `tool_calls` entry whose id matches its `toolCallId`. Appending a bare tool result (no id, no assistant half) creates an ORPHAN that persists in the session and is re-sent on EVERY subsequent request, so a single bad append produces a permanent failure — not a one-off. Strict OpenAI-compat providers (OpenRouter) reject it with `400 ... tool messages must include a non-empty string tool_call_id`; lenient adapters hide it (anthropic injects a random fallback id at anthropic-adapter.ts, echo rewrites tool→user). The `/skills recall` handler (skills/index.ts) was the one producer that skipped the assistant half. Fix pattern: shared `appendSyntheticToolExchange` (src/shared/synthetic-tool-exchange.ts) pairs both halves; plus a presentation-only `coerceOrphanToolMessages` (src/shared/tool-message-integrity.ts) called first inside `prepareRequestMessages` (the single chokepoint for both LLM send sites — main tool loop + `/btw` aside) coerces any remaining orphan tool msg to `user` (content preserved, stored session untouched). Recorded at ADR 243 (2026-10-10)."
+  },
+  {
+    "timestamp": "2026-10-10T06:31:42.205Z",
+    "insight": "Planning: the beacon's workspace search route (`GET /agents/:id/search`) resolves the `path` query param with `path.resolve` and authorizes it with `startsWith` against registered dirs, and `PUT /agents/:id/search-paths` resolves paths beacon-side before persisting. So a client must send the RAW configured path (not a pre-resolved one) or the authorization check can fail on a different-but-equivalent path string. Worth documenting for any future feature that calls these routes."
+  },
+  {
+    "timestamp": "2026-10-10T06:31:42.208Z",
+    "insight": "Planning: `swarm.memory` is absent from BOTH the TypeBox `swarm` schema (config-schema.ts:338-359) and `KNOWN_CONFIG_KEYS`/`UNDERLAY_ALLOWLIST` (config-keys.ts). Consequence: it cannot be set via `config.set` validation and cannot be distributed by the coordinator as a config underlay. Any new agent-side RAG/search tuning knob inherits the same limitation. Flagged during the ragSource plan as a likely gap."
   }
 ]
