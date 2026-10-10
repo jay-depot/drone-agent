@@ -20,6 +20,12 @@ export type DroneWikiPageMeta = {
   wordCount: number;
   /** Count of outgoing [[wikilinks]]; never written to frontmatter. */
   linkCount: number;
+  /**
+   * Coordinator-side accounting: number of agent body-reads of this page.
+   * Merged in by the coordinator's wiki routes; absent on beacon-origin
+   * metadata and on any response that does not come from the coordinator.
+   */
+  agentReadCount?: number;
   /** ISO-8601 timestamp of creation. */
   createdAt: string;
   /** ISO-8601 timestamp of last update. */

@@ -136,4 +136,97 @@ describe('Wiki Routes', () => {
     expect(body).toHaveLength(1);
     expect(body[0].id).toBe('foo');
   });
+
+  it('POST /api/wiki/:pageId/read increments the agent read count', async () => {
+    const first = await ctx.app.inject({
+      method: 'POST',
+      url: '/api/wiki/counted-page/read',
+    });
+    expect(first.statusCode).toBe(200);
+    expect(JSON.parse(first.body).agentReadCount).toBe(1);
+
+    const second = await ctx.app.inject({
+      method: 'POST',
+      url: '/api/wiki/counted-page/read',
+    });
+    expect(second.statusCode).toBe(200);
+    expect(JSON.parse(second.body).agentReadCount).toBe(2);
+  });
+
+  it('GET /api/wiki includes agentReadCount (0 before any read)', async () => {
+    await ctx.app.inject({
+      method: 'PUT',
+      url: '/api/wiki/list-page',
+      payload: { title: 'List Page', content: 'body' },
+    });
+
+    const res = await ctx.app.inject({ method: 'GET', url: '/api/wiki' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as Array<{ agentReadCount: number }>;
+    expect(body[0].agentReadCount).toBe(0);
+  });
+
+  it('GET /api/wiki/:pageId carries the merged agent read count', async () => {
+    await ctx.app.inject({
+      method: 'PUT',
+      url: '/api/wiki/detail-page',
+      payload: { title: 'Detail Page', content: 'body' },
+    });
+    await ctx.app.inject({ method: 'POST', url: '/api/wiki/detail-page/read' });
+    await ctx.app.inject({ method: 'POST', url: '/api/wiki/detail-page/read' });
+
+    const res = await ctx.app.inject({
+      method: 'GET',
+      url: '/api/wiki/detail-page',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).agentReadCount).toBe(2);
+  });
+
+  it('GET /api/wiki list reflects incremented counts', async () => {
+    await ctx.app.inject({
+      method: 'PUT',
+      url: '/api/wiki/listed-counted',
+      payload: { title: 'Listed Counted', content: 'body' },
+    });
+    await ctx.app.inject({
+      method: 'POST',
+      url: '/api/wiki/listed-counted/read',
+    });
+
+    const res = await ctx.app.inject({ method: 'GET', url: '/api/wiki' });
+    const body = JSON.parse(res.body) as Array<{
+      id: string;
+      agentReadCount: number;
+    }>;
+    expect(body.find(p => p.id === 'listed-counted')?.agentReadCount).toBe(1);
+  });
+
+  it('DELETE /api/wiki/:pageId cascades the metadata row', async () => {
+    await ctx.app.inject({
+      method: 'PUT',
+      url: '/api/wiki/cascade-page',
+      payload: { title: 'Cascade Page', content: 'body' },
+    });
+    await ctx.app.inject({ method: 'POST', url: '/api/wiki/cascade-page/read' });
+    await ctx.app.inject({ method: 'POST', url: '/api/wiki/cascade-page/read' });
+
+    const del = await ctx.app.inject({
+      method: 'DELETE',
+      url: '/api/wiki/cascade-page',
+    });
+    expect(del.statusCode).toBe(200);
+
+    // Recreate the same page id; the count must be gone (back to 0).
+    await ctx.app.inject({
+      method: 'PUT',
+      url: '/api/wiki/cascade-page',
+      payload: { title: 'Cascade Page', content: 'body again' },
+    });
+    const res = await ctx.app.inject({
+      method: 'GET',
+      url: '/api/wiki/cascade-page',
+    });
+    expect(JSON.parse(res.body).agentReadCount).toBe(0);
+  });
 });

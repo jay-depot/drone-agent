@@ -131,3 +131,9 @@ export {
   deleteSecret,
 } from './secrets.js';
 export type { StoredSecret } from './secrets.js';
+export {
+  incrementWikiReadCount,
+  getWikiReadCount,
+  getWikiReadCounts,
+  deleteWikiPageMetadata,
+} from './wiki-page-metadata.js';
