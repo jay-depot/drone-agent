@@ -1,7 +1,6 @@
 ---
 key: plan-wiki-agent-read-count
-tags:
-  []
+tags: []
 created: 2026-10-10T04:59:54.392Z
 updated: 2026-10-10T04:59:54.392Z
 ---
@@ -22,33 +21,33 @@ updated: 2026-10-10T04:59:54.392Z
 
 ## Design decisions (locked)
 
-| # | Decision |
-|---|---|
-| D1 | New coordinator SQLite table **`wiki_page_metadata`** (`page_id` PK, `read_count`, `last_read_at`), created additively. New module `db/wiki-page-metadata.ts`. |
-| D2 | Increment fires at the **beacon's** `GET /wiki/:pageId` for **coordinator-origin** versions only, pushed fire-and-forget to a new coordinator `POST /api/wiki/:pageId/read`. |
-| D3 | **Only** body reads count. List/search/lint/reindex/semantic-search do **not**. Repeat reads count each time. No-scope read returning both versions = **1**. |
-| D4 | Optional `agentReadCount?: number` on `DroneWikiPageMeta`; **coordinator routes** merge it in from the table. Shared storage stays count-free. |
-| D5 | Coordinator `DELETE /api/wiki/:pageId` **cascade-deletes** the metadata row. No prune sweep, no tombstones. |
-| D6 | UI: column label **`Agent Reads`** between `Word Count` and `Source Sessions`; sortable (`'reads'` key); detail-page grid cell. **No** filter toggle this iteration. |
-| D7 | Route `POST /api/wiki/:pageId/read`, unconditional atomic upsert, no existence check. Beacon call is unawaited and best-effort. |
+| #   | Decision                                                                                                                                                                     |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | New coordinator SQLite table **`wiki_page_metadata`** (`page_id` PK, `read_count`, `last_read_at`), created additively. New module `db/wiki-page-metadata.ts`.               |
+| D2  | Increment fires at the **beacon's** `GET /wiki/:pageId` for **coordinator-origin** versions only, pushed fire-and-forget to a new coordinator `POST /api/wiki/:pageId/read`. |
+| D3  | **Only** body reads count. List/search/lint/reindex/semantic-search do **not**. Repeat reads count each time. No-scope read returning both versions = **1**.                 |
+| D4  | Optional `agentReadCount?: number` on `DroneWikiPageMeta`; **coordinator routes** merge it in from the table. Shared storage stays count-free.                               |
+| D5  | Coordinator `DELETE /api/wiki/:pageId` **cascade-deletes** the metadata row. No prune sweep, no tombstones.                                                                  |
+| D6  | UI: column label **`Agent Reads`** between `Word Count` and `Source Sessions`; sortable (`'reads'` key); detail-page grid cell. **No** filter toggle this iteration.         |
+| D7  | Route `POST /api/wiki/:pageId/read`, unconditional atomic upsert, no existence check. Beacon call is unawaited and best-effort.                                              |
 
 ## Execution order & dependencies
 
-| Step | Agent | Depends on | Deliverable |
-|---|---|---|---|
-| 1 | coder | — | Coordinator DB schema + `wiki-page-metadata.ts` module (+ unit tests) |
-| 2 | coder | — | `agentReadCount?` on `DroneWikiPageMeta` in `drone-core`; rebuild |
-| 3 | coder | 1, 2 | Coordinator wiki routes: merge counts, `POST …/read`, cascade delete (+ route tests) |
-| 4 | coder | 3 | Beacon `GET /wiki/:pageId` fire-and-forget increment (+ beacon tests) |
-| 5 | coder | 2, 3 | Coordinator UI: type, table column, sort, detail cell (+ UI tests) |
-| 6 | coder | 1–5 | ADR `244` + README endpoint note + swarm-wiki hub page refresh |
-| 7 | reviewer | 1–6 | **Final validation** against the criteria below |
+| Step | Agent    | Depends on | Deliverable                                                                          |
+| ---- | -------- | ---------- | ------------------------------------------------------------------------------------ |
+| 1    | coder    | —          | Coordinator DB schema + `wiki-page-metadata.ts` module (+ unit tests)                |
+| 2    | coder    | —          | `agentReadCount?` on `DroneWikiPageMeta` in `drone-core`; rebuild                    |
+| 3    | coder    | 1, 2       | Coordinator wiki routes: merge counts, `POST …/read`, cascade delete (+ route tests) |
+| 4    | coder    | 3          | Beacon `GET /wiki/:pageId` fire-and-forget increment (+ beacon tests)                |
+| 5    | coder    | 2, 3       | Coordinator UI: type, table column, sort, detail cell (+ UI tests)                   |
+| 6    | coder    | 1–5        | ADR `244` + README endpoint note + swarm-wiki hub page refresh                       |
+| 7    | reviewer | 1–6        | **Final validation** against the criteria below                                      |
 
 ---
 
-### Step 1 — Coordinator DB: schema + module  *(agent: coder)*
+### Step 1 — Coordinator DB: schema + module _(agent: coder)_
 
-**1a.** In `drone-coordinator/src/db/init.ts`, add to the big `db.exec(\`…\`)` block (e.g. right after the `fragments` table):
+**1a.** In `drone-coordinator/src/db/init.ts`, add to the big `db.exec(\`…\`)`block (e.g. right after the`fragments` table):
 
 ```sql
 CREATE TABLE IF NOT EXISTS wiki_page_metadata (
@@ -125,7 +124,7 @@ export {
 
 ---
 
-### Step 2 — `drone-core` type  *(agent: coder)*
+### Step 2 — `drone-core` type _(agent: coder)_
 
 In `drone-core/src/wiki-types.ts`, add to `DroneWikiPageMeta` (after `linkCount`):
 
@@ -144,7 +143,7 @@ In `drone-core/src/wiki-types.ts`, add to `DroneWikiPageMeta` (after `linkCount`
 
 ---
 
-### Step 3 — Coordinator wiki routes  *(agent: coder)*
+### Step 3 — Coordinator wiki routes _(agent: coder)_
 
 In `drone-coordinator/src/routes/wiki.ts`, add `import * as db from '../db/index.js';` at the top, then:
 
@@ -162,19 +161,19 @@ app.get<{ Querystring: { tag?: string } }>('/wiki', async request => {
 **3b. Merge count on the detail** — replace the `return page;` in `GET /wiki/:pageId`:
 
 ```ts
-      return { ...page, agentReadCount: db.getWikiReadCount(request.params.pageId) };
+return { ...page, agentReadCount: db.getWikiReadCount(request.params.pageId) };
 ```
 
 **3c. New read endpoint** (place next to the other `/wiki/:pageId` routes):
 
 ```ts
-  app.post<{ Params: { pageId: string } }>(
-    '/wiki/:pageId/read',
-    async request => {
-      const agentReadCount = db.incrementWikiReadCount(request.params.pageId);
-      return { agentReadCount };
-    }
-  );
+app.post<{ Params: { pageId: string } }>(
+  '/wiki/:pageId/read',
+  async request => {
+    const agentReadCount = db.incrementWikiReadCount(request.params.pageId);
+    return { agentReadCount };
+  }
+);
 ```
 
 **3d. Cascade delete** — in `DELETE /wiki/:pageId`, after `const deleted = await deletePage(pageId);` confirms deletion and before `return { success: true };`, add `db.deleteWikiPageMetadata(pageId);`.
@@ -187,7 +186,7 @@ app.get<{ Querystring: { tag?: string } }>('/wiki', async request => {
 
 ---
 
-### Step 4 — Beacon increment  *(agent: coder)*
+### Step 4 — Beacon increment _(agent: coder)_
 
 In `drone-beacon/src/routes/wiki.ts`, add a helper near the top (imports already include `proxyWikiToCoordinator`):
 
@@ -225,7 +224,7 @@ Do **not** add it to the `?scope=beacon` branch, to `GET /wiki`, `GET /wiki/sear
 
 ---
 
-### Step 5 — Coordinator UI  *(agent: coder)*
+### Step 5 — Coordinator UI _(agent: coder)_
 
 **5a.** `drone-coordinator-ui/src/lib/types.ts` — add to `WikiPageMeta` (after `linkCount`):
 
@@ -252,21 +251,22 @@ add `const COL_READS = 'w-[104px]';` beside the other width consts; insert into 
 and the matching body cell **between** the word-count and sources cells:
 
 ```tsx
-            <TableCell className={`${COL_READS} text-xs text-muted-foreground`}>
-              {page.agentReadCount ?? 0}
-            </TableCell>
+<TableCell className={`${COL_READS} text-xs text-muted-foreground`}>
+  {page.agentReadCount ?? 0}
+</TableCell>
 ```
 
 **5d.** `drone-coordinator-ui/src/pages/wiki-detail.tsx` — in the Information card's `grid grid-cols-2` block, add a cell after `Updated`:
 
 ```tsx
-            <div>
-              <span className="text-muted-foreground">Agent Reads</span>
-              <p className="mt-0.5">{page.agentReadCount ?? 0}</p>
-            </div>
+<div>
+  <span className="text-muted-foreground">Agent Reads</span>
+  <p className="mt-0.5">{page.agentReadCount ?? 0}</p>
+</div>
 ```
 
 **Tests (+):**
+
 - `src/components/wiki-page-table.test.tsx` — the header test's list gains `'Agent Reads'`; the centering test's **body cell index for Source Sessions changes from `5` to `6`** (new column inserted before it); add a test that renders `agentReadCount` and asserts the value shows.
 - `src/lib/wiki-sort.test.ts` — add a case sorting by `'reads'` (asserts order incl. the `?? 0` default for pages missing the field).
 - `src/pages/wiki-detail.test.tsx` — add an assertion that the Information card shows `Agent Reads` with the expected value.
@@ -275,7 +275,7 @@ and the matching body cell **between** the word-count and sources cells:
 
 ---
 
-### Step 6 — Documentation  *(agent: coder)*
+### Step 6 — Documentation _(agent: coder)_
 
 **6a.** Write `docs/adr/244-wiki-agent-read-count.md` (next free number; 243 is current latest). Use the existing ADR format (see e.g. `docs/adr/216-coordinator-ui-wiki-table-and-filters.md`). Record: the file-store-vs-table finding, the `wiki_page_metadata` table, the beacon-chokepoint increment with its rationale (excludes the indexer + human UI), the fire-and-forget best-effort contract, the optional merged `agentReadCount` field, cascade delete, and the accepted wart (drone-swarm CLI reads through the coordinator are not counted).
 
@@ -287,7 +287,7 @@ and the matching body cell **between** the word-count and sources cells:
 
 ---
 
-### Step 7 — Final validation  *(agent: reviewer)*
+### Step 7 — Final validation _(agent: reviewer)_
 
 Check the whole change against the criteria below; do not mark the plan done until every line passes. Report each gate's result explicitly.
 
@@ -311,3 +311,31 @@ Check the whole change against the criteria below; do not mark the plan done unt
    - A no-scope read returning both a beacon and a coordinator version increments by exactly `1`.
 7. **Docs:** `docs/adr/244-wiki-agent-read-count.md` exists and matches the shipped design; README lists the new endpoint.
 8. **No dead code / no stray comments** introduced (per AGENTS.md); file sizes within limits.
+
+---
+
+## COMPLETION SUMMARY (2026-10-10, branch `feat/swarm-rag-accounting`)
+
+**Status: all 7 steps executed; all validation criteria pass.**
+
+### What shipped
+- **Step 1** — new coordinator table `wiki_page_metadata(page_id PK, read_count, last_read_at)` in `drone-coordinator/src/db/init.ts`; new module `drone-coordinator/src/db/wiki-page-metadata.ts` (`incrementWikiReadCount`, `getWikiReadCount`, `getWikiReadCounts`, `deleteWikiPageMetadata`), re-exported from `db/index.ts`. New `drone-coordinator/test/wiki-page-metadata.test.ts` (7 tests).
+- **Step 2** — optional `agentReadCount?: number` on `DroneWikiPageMeta` (`drone-core/src/wiki-types.ts`); `pnpm -r run build` re-run.
+- **Step 3** — `drone-coordinator/src/routes/wiki.ts`: list + detail merge counts; new `POST /api/wiki/:pageId/read` (atomic upsert); `DELETE` cascades the row. 5 new route tests.
+- **Step 4** — `drone-beacon/src/routes/wiki.ts`: `bumpCoordinatorReadCount()` fires fire-and-forget `POST /wiki/:pageId/read` at exactly the two coordinator-origin success points (`?scope=coordinator` + no-scope-when-present). 5 new beacon tests.
+- **Step 5** — coordinator UI: `agentReadCount?` on `WikiPageMeta` (`lib/types.ts`); `'reads'` sort key (`lib/wiki-sort.ts`); **Agent Reads** column between Word Count and Source Sessions (`components/wiki-page-table.tsx`); detail Information-card cell (`pages/wiki-detail.tsx`). Tests updated/added (sort, table header+value+cells, detail).
+- **Step 6** — `docs/adr/244-wiki-agent-read-count.md` + ADR index entry; `drone-coordinator/README.md` wiki endpoint list; swarm-wiki hub page `coordinator-wiki-storage-schema-rest` refreshed (new §5 on the read count).
+
+### Validation results
+1. **LSP** — clean (no errors/warnings).
+2. **Build** — `pnpm -r run build` zero errors.
+3. **Lint** — `pnpm run lint` zero errors (prettier reformatted a few files cosmetically; re-verified).
+4. **Fast tests** — `pnpm run test`: **3822 passed | 14 skipped** (286 files, 3 skipped). (Pre-existing, unrelated `sessions.test.tsx` timer notice in the UI suite is not caused by this work — file untouched, all tests pass.)
+5. **Coverage** — present at all four layers (see steps above).
+6. **Spot-checks** — confirmed by grep/inspection: increment call sites exist only at the 2 beacon coordinator-origin branches; `incrementWikiReadCount` is called only in the `POST /read` route; `GET /api/wiki/:pageId` only *reads* the count; the beacon `WikiIndexer` calls the coordinator directly (never through the beacon route), so sweeps do not inflate counts.
+7. **Docs** — ADR 244 written and matching the shipped design; README lists the new endpoint.
+8. **Hygiene** — no dead code / stray comments introduced; files within size limits.
+
+### Notes
+- No deviations from the plan. The plan's naming guess for the ADR (`244`, next free after `243`) was correct.
+- Commits on the feature branch: plan artifact → steps 1–3 → step 4 → step 5 → step 6 (docs).

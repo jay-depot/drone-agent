@@ -28,9 +28,10 @@ function withOrigin<T extends object>(
  * page. Never awaited — a coordinator outage must not break an agent read.
  */
 function bumpCoordinatorReadCount(pageId: string): void {
-  proxyWikiToCoordinator('POST', `/wiki/${encodeURIComponent(pageId)}/read`).catch(
-    () => {}
-  );
+  proxyWikiToCoordinator(
+    'POST',
+    `/wiki/${encodeURIComponent(pageId)}/read`
+  ).catch(() => {});
 }
 
 export default function wikiRoutes(app: FastifyInstance) {

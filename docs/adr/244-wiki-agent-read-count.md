@@ -1,5 +1,16 @@
 ---
-tags: [decision, coordinator, wiki, accounting, read-count, rest, beacon, coordinator-ui, adr]
+tags:
+  [
+    decision,
+    coordinator,
+    wiki,
+    accounting,
+    read-count,
+    rest,
+    beacon,
+    coordinator-ui,
+    adr,
+  ]
 related:
   [
     decisions/243-orphan-tool-message-pairing.md,

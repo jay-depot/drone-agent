@@ -208,8 +208,14 @@ describe('Wiki Routes', () => {
       url: '/api/wiki/cascade-page',
       payload: { title: 'Cascade Page', content: 'body' },
     });
-    await ctx.app.inject({ method: 'POST', url: '/api/wiki/cascade-page/read' });
-    await ctx.app.inject({ method: 'POST', url: '/api/wiki/cascade-page/read' });
+    await ctx.app.inject({
+      method: 'POST',
+      url: '/api/wiki/cascade-page/read',
+    });
+    await ctx.app.inject({
+      method: 'POST',
+      url: '/api/wiki/cascade-page/read',
+    });
 
     const del = await ctx.app.inject({
       method: 'DELETE',

@@ -1,6 +1,7 @@
 import type { WikiPageMeta } from '@/lib/types';
 
-export type WikiSortKey = 'title' | 'created' | 'updated' | 'words' | 'reads' | 'sources';
+export type WikiSortKey =
+  'title' | 'created' | 'updated' | 'words' | 'reads' | 'sources';
 export type SortDir = 'asc' | 'desc';
 
 const SORT_KEYS: readonly WikiSortKey[] = [
