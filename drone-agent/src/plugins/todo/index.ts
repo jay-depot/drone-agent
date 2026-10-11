@@ -158,14 +158,15 @@ export const todoPlugin: DronePlugin = {
 
     registerPortableContextContributor(registration, {
       id: 'todo',
-      export: () => ({ items, nextId }),
+      // Snapshot the items: the exported value is retained in memory until it
+      // is serialized, so it must not alias the live list.
+      export: () => ({ items: items.map(item => ({ ...item })), nextId }),
       import: data => {
         const restored = data as { items?: TodoItem[]; nextId?: number };
         if (!Array.isArray(restored.items)) return;
+        const restoredItems = restored.items.map(item => ({ ...item }));
         items.length = 0;
-        for (const item of restored.items) {
-          items.push({ ...item });
-        }
+        items.push(...restoredItems);
         if (typeof restored.nextId === 'number') {
           nextId = restored.nextId;
         }
