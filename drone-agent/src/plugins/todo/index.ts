@@ -1,6 +1,11 @@
 import { isRecord } from '../../shared/type-guards.js';
+import { registerPortableContextContributor } from '../../shared/portable-context-contributor.js';
 import { TodoBlock } from './TodoBlock.js';
-import type { DronePlugin, DroneSlashCommandContext } from 'drone-core';
+import {
+  DRONE_PORTABLE_CONTEXT_CAPABILITY_ID,
+  type DronePlugin,
+  type DroneSlashCommandContext,
+} from 'drone-core';
 
 type TodoStatus = 'pending' | 'in_progress' | 'completed';
 
@@ -143,10 +148,29 @@ export const todoPlugin: DronePlugin = {
     description:
       'Maintains a lightweight in-session todo list for planning and execution.',
     defaultEnabled: false,
+    dependencies: [
+      { id: DRONE_PORTABLE_CONTEXT_CAPABILITY_ID, optional: true },
+    ],
   },
   register: async registration => {
     const items: TodoItem[] = [];
     let nextId = 1;
+
+    registerPortableContextContributor(registration, {
+      id: 'todo',
+      export: () => ({ items, nextId }),
+      import: data => {
+        const restored = data as { items?: TodoItem[]; nextId?: number };
+        if (!Array.isArray(restored.items)) return;
+        items.length = 0;
+        for (const item of restored.items) {
+          items.push({ ...item });
+        }
+        if (typeof restored.nextId === 'number') {
+          nextId = restored.nextId;
+        }
+      },
+    });
 
     registration.registerPromptFragment({
       key: 'todo-current-list',

@@ -1,4 +1,8 @@
-import type { DronePlugin } from 'drone-core';
+import {
+  DRONE_PORTABLE_CONTEXT_CAPABILITY_ID,
+  type DronePlugin,
+} from 'drone-core';
+import { registerPortableContextContributor } from '../shared/portable-context-contributor.js';
 import { NotepadBlock } from '../tui/components/NotepadBlock.js';
 
 type NotepadState = {
@@ -13,11 +17,23 @@ export const notepadPlugin: DronePlugin = {
     description:
       'Maintains a session notepad that is included in the system prompt.',
     defaultEnabled: false,
+    dependencies: [
+      { id: DRONE_PORTABLE_CONTEXT_CAPABILITY_ID, optional: true },
+    ],
   },
   register: async registration => {
     const state: NotepadState = {
       currentNotepad: null,
     };
+
+    registerPortableContextContributor(registration, {
+      id: 'notepad',
+      export: () => ({ currentNotepad: state.currentNotepad }),
+      import: data => {
+        const restored = data as { currentNotepad?: string | null };
+        state.currentNotepad = restored.currentNotepad ?? null;
+      },
+    });
 
     registration.registerPromptFragment({
       key: 'notepad-static',

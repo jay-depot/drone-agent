@@ -1,4 +1,9 @@
-import type { DronePlugin, DroneSlashCommandContext } from 'drone-core';
+import {
+  DRONE_PORTABLE_CONTEXT_CAPABILITY_ID,
+  type DronePlugin,
+  type DroneSlashCommandContext,
+} from 'drone-core';
+import { registerPortableContextContributor } from '../shared/portable-context-contributor.js';
 
 type FocusState = {
   currentFocus: string | null;
@@ -12,11 +17,23 @@ export const focusPlugin: DronePlugin = {
     description:
       'Maintains a session focus that is included in the system prompt.',
     defaultEnabled: false,
+    dependencies: [
+      { id: DRONE_PORTABLE_CONTEXT_CAPABILITY_ID, optional: true },
+    ],
   },
   register: async registration => {
     const state: FocusState = {
       currentFocus: null,
     };
+
+    registerPortableContextContributor(registration, {
+      id: 'focus',
+      export: () => ({ currentFocus: state.currentFocus }),
+      import: data => {
+        const restored = data as { currentFocus?: string | null };
+        state.currentFocus = restored.currentFocus ?? null;
+      },
+    });
 
     registration.registerPromptFragment({
       key: 'focus-current',

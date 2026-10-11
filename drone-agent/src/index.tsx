@@ -8,6 +8,7 @@ import {
 import { stdout as output } from 'node:process';
 import { createBuiltInPlugins } from './plugins/index.js';
 import { runStartupSessionImport } from './startup-import.js';
+import { runStartupCheckpointRestore } from './startup-checkpoint.js';
 import {
   discoverExternalPlugins,
   promptForPluginTrust,
@@ -390,6 +391,21 @@ async function main(): Promise<void> {
     logger,
     invocation.options.pluginFlags
   );
+
+  // ── --checkpoint.restore <name> ────────────────────────────────
+  // Restore a portable-context checkpoint before the first turn. Runs after
+  // session-import; since the target session is empty, no recycle hooks fire.
+  const checkpointEntries = await runStartupCheckpointRestore(
+    pluginId => engine.getCapability(pluginId),
+    logger,
+    invocation.options.pluginFlags
+  );
+  if (checkpointEntries) {
+    startupEntries?.push(...checkpointEntries);
+    if (!startupEntries) {
+      logger.info(checkpointEntries.map(e => e.text).join('\n'));
+    }
+  }
 
   // ── --model invocation-scoped override ─────────────────────────────
   // Applied AFTER onPluginsLoaded so the broker has already activated from
