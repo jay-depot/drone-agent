@@ -66,7 +66,7 @@ Everything is a plugin. Each plugin implements `DronePlugin` with a `register(re
 - **Offer capabilities** via `registration.offer(...)` — expose an API to other plugins
 - **Request capabilities** via `registration.request<T>(pluginId)` — consume another plugin's API
 - **Register help snippets** via `registration.registerHelp(...)`
-- **Hook into lifecycle events** via `registration.hooks.onPluginsLoaded(...)`, `onSessionStart(...)`, `onBeforePrompt(...)`, `onAfterToolCall(...)`, `onShutdown(...)`, `onSessionClear(...)`, `onSessionSafetyTrimWillRun(...)`, `onSessionSafetyTrimApplied(...)`, `onConversationEvent(...)`
+- **Hook into lifecycle events** via `registration.hooks.onPluginsLoaded(...)`, `onSessionStart(...)`, `onBeforePrompt(...)`, `onAfterToolCall(...)`, `onShutdown(...)`, `onSessionClear(...)`, `onSessionRecycle(...)`, `onSessionSafetyTrimWillRun(...)`, `onSessionSafetyTrimApplied(...)`, `onConversationEvent(...)`
 
 The plugin engine (`runtime/plugin-engine.ts`) manages all of this. The built-in plugins are listed in `plugins/index.ts`.
 
@@ -181,6 +181,7 @@ The following subsystems have dedicated documentation in `docs/agents/`:
 - **External Plugin Loading** (`docs/agents/external-plugin-loading.md`) — User and project-scope plugin discovery, trust model, engine integration
 - **MCP Plugin** (`docs/agents/mcp-plugin.md`) — Deferred list/mount via the runtime-level `ToolRegistry` + engine `runtime__*` meta-tools (all MCP tools registered unmounted), per-server `__list`/`__get` resource/prompt helpers, LLM-generated server descriptions surfaced by the `# MCP Servers` header + `<system-reminder>` footer fragments, persona filtering at the runtime seam
 - **Herdr Plugin** (`docs/agents/herdr-plugin.md`) — Reports agent state (`idle`/`working`) and a session resume command to the Herdr terminal multiplexer; the resume command rides a new startup session-import (`--swarm.session-import`) and a minimal plugin CLI-flag facility (ADR 239)
+- **Portable Context** (`docs/agents/portable-context.md`) — Engine-seeded `portable-context` capability: versioned JSON serialization of a session's context (turns + tool catalog + `pluginData`) and a continuation path that restores it as a brand-new session (recycle → restore → remount → disclosure). First consumers: the opt-in `checkpoint` plugin (`/checkpoint`, `--checkpoint.restore`) and the `--output-json` NDJSON `exportContext`/`importContext` commands (ADR 246/247)
 
 ## Working on the Project
 
