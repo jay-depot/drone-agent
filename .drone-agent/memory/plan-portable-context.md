@@ -1,8 +1,8 @@
 ---
 key: plan-portable-context
-tags:
-  []
+tags: []
 created: 2026-10-11T20:16:50.825Z
+status: completed
 updated: 2026-10-11T22:11:14.122Z
 ---
 
@@ -15,17 +15,21 @@ Status: READY FOR EXECUTION. All design decisions finalized in a grilling sessio
 Portable context must be drivable over the `--output-json` stdin NDJSON protocol (`runJsonListenMode`, `drone-agent/src/interactive.ts` ~L232), so the gateway (next iteration) can export/import a context over the child-process wire without a plugin.
 
 **New input events** (extend the `InputEvent` union in `interactive.ts`):
+
 ```ts
 | { type: 'exportContext' }
 | { type: 'importContext'; context: DronePortableContextExport }
 ```
+
 **New output events** (extend the `OutputEvent` union in `output-handlers.ts`):
+
 ```ts
 | { type: 'contextExport'; ok: true; context: DronePortableContextExport }
 | { type: 'contextExport'; ok: false; error: string }
 | { type: 'contextImport'; ok: true; warnings: string[]; unavailableTools: string[] }
 | { type: 'contextImport'; ok: false; error: string }
 ```
+
 - These are **control commands on the same stdin stream** — NOT turns. They must NOT call `onBeforePrompt`/`onAfterToolCall` and must NOT emit `turnComplete`. They are handled BEFORE the `event.type !== 'chat'` rejection branch.
 - `exportContext` → call the engine-seeded `portable-context` capability's `exportContext()`; emit `contextExport`. No plugin required (capability is engine-seeded).
 - `importContext` → `portable-context` capability's `importContext(event.context)`; emit `contextImport` with `ok/warnings/unavailableTools`. Import DOES run the full orchestration (recycle → restore → remount → disclosure) — it mutates the session exactly like `/checkpoint restore`. Failures (bad `context`, version mismatch, missing capability) → `{ type: 'contextImport', ok: false, error }`, never a crash.
@@ -36,10 +40,11 @@ Portable context must be drivable over the `--output-json` stdin NDJSON protocol
 
 ## 1. Summary — what and why
 
-Build **portable context**: a standardized, versioned JSON serialization of a session's *context* (not its identity), plus a *continuation* path that restores it as a brand-new session. The first consumer is an opt-in `checkpoint` plugin that saves/restores named context snapshots under `./.drone-agent/checkpoints`.
+Build **portable context**: a standardized, versioned JSON serialization of a session's _context_ (not its identity), plus a _continuation_ path that restores it as a brand-new session. The first consumer is an opt-in `checkpoint` plugin that saves/restores named context snapshots under `./.drone-agent/checkpoints`.
 
 A portable context contains:
-- **All session turns**, faithful, with compaction summaries preserved inline (`kind: 'summary'`). Every *other* system message (system prompt, runtime-flags, footer fragments) is omitted — those are regenerated per request and never live in the session manager. Summaries are the only `role:'system'` messages that survive.
+
+- **All session turns**, faithful, with compaction summaries preserved inline (`kind: 'summary'`). Every _other_ system message (system prompt, runtime-flags, footer fragments) is omitted — those are regenerated per request and never live in the session manager. Summaries are the only `role:'system'` messages that survive.
 - **The full tool catalog** (all registered tools) plus each tool's `mounted` state.
 - **An open `pluginData` map** keyed by plugin id — arbitrary JSON contributed by plugins via an export callback.
 
@@ -56,20 +61,24 @@ Continuation restores turns, **recycles the session** (fresh session id — swar
 ## 3. Architecture overview
 
 - **Engine-seeded capability** `portable-context` (`DRONE_PORTABLE_CONTEXT_CAPABILITY_ID = 'portable-context'`), created and `capabilities.set` **before** plugin registration — mirroring the `reference` capability. Contributors reach it by declaring `{ id: DRONE_PORTABLE_CONTEXT_CAPABILITY_ID, optional: true }` in their plugin metadata and calling `registration.request<DronePortableContextCapability>(DRONE_PORTABLE_CONTEXT_CAPABILITY_ID)`.
-- **Session recycle = the clear boundary.** `clearSession` is the session boundary *and* the session-id generator. Fixed engine-owned order (no plugin depends on hook registration order):
+- **Session recycle = the clear boundary.** `clearSession` is the session boundary _and_ the session-id generator. Fixed engine-owned order (no plugin depends on hook registration order):
   1. `runHooks('onSessionClear', { sessionId: oldId })` — outgoing session **intact** (turns present, old id).
   2. `conversation.clearSession()` — drain queues/steers/reminders, reset guardrail counters, empty turns.
   3. Engine **mints a fresh `currentSessionId`**.
   4. `runHooks('onSessionRecycle', { sessionId: newId, previousSessionId: oldId })` — new session empty; swarm re-registers under the new id.
   - **Empty gate:** steps 1/3/4 run only when the outgoing session has ≥1 turn. If empty, run only the mechanical clear (step 2). This subsumes "skip recycle when the import target is empty".
-- **Engine owns `currentSessionId`** (host-seeded: `--session-id` → `DRONE_SESSION_ID` → `agent-<Date.now()>` fallback, moved out of the swarm plugin). Exposed via `_runtime.getSessionId()`. The swarm plugin *reads* it instead of minting privately; recycle mints a fresh one.
+- **Engine owns `currentSessionId`** (host-seeded: `--session-id` → `DRONE_SESSION_ID` → `agent-<Date.now()>` fallback, moved out of the swarm plugin). Exposed via `_runtime.getSessionId()`. The swarm plugin _reads_ it instead of minting privately; recycle mints a fresh one.
 
 ## 4. Schema (v1)
 
 `drone-core/src/portable-context-types.ts` (new):
 
 ```ts
-import type { DroneSessionMessage, DroneSessionTurn, DroneToolJsonSchema } from './index.js'; // adjust to existing modules
+import type {
+  DroneSessionMessage,
+  DroneSessionTurn,
+  DroneToolJsonSchema,
+} from './index.js'; // adjust to existing modules
 
 export const DRONE_PORTABLE_CONTEXT_CAPABILITY_ID = 'portable-context';
 export const MIN_CONTEXT_SCHEMA_VERSION = 1;
@@ -102,13 +111,22 @@ export type DronePortableContextExport = {
   pluginData: Record<string, unknown>;
 };
 
-export type DronePortableContextExportContext = { turns: readonly DroneSessionTurn[] };
-export type DronePortableContextImportContext = { turns: readonly DroneSessionTurn[] };
+export type DronePortableContextExportContext = {
+  turns: readonly DroneSessionTurn[];
+};
+export type DronePortableContextImportContext = {
+  turns: readonly DroneSessionTurn[];
+};
 
 export type DronePortableContextContributor = {
   id: string; // the pluginData key (plugin id)
-  export: (ctx: DronePortableContextExportContext) => unknown | Promise<unknown>;
-  import?: (data: unknown, ctx: DronePortableContextImportContext) => void | Promise<void>;
+  export: (
+    ctx: DronePortableContextExportContext
+  ) => unknown | Promise<unknown>;
+  import?: (
+    data: unknown,
+    ctx: DronePortableContextImportContext
+  ) => void | Promise<void>;
 };
 
 export type DronePortableContextImportResult = {
@@ -121,11 +139,14 @@ export type DronePortableContextCapability = {
   unregisterContributor: (id: string) => void;
   getContributors: () => DronePortableContextContributor[];
   exportContext: () => Promise<DronePortableContextExport>;
-  importContext: (data: DronePortableContextExport) => Promise<DronePortableContextImportResult>;
+  importContext: (
+    data: DronePortableContextExport
+  ) => Promise<DronePortableContextImportResult>;
 };
 ```
 
 **Serialization rules**
+
 - Turn `id`s are dropped on export (messages have no id). On import, turns are re-created with fresh `randomUUID()` ids.
 - Summaries stay inline in `turns`; export in order (head summary block preserved by natural ordering).
 - **Images are exported verbatim** (full `DroneImageContent` incl. base64 `data` + `description`).
@@ -137,12 +158,15 @@ Export from drone-core: add `export * from './portable-context-types.js';` to `d
 ## 5. Phases
 
 ### Phase 0 — ADRs (docs)
+
 - `docs/adr/246-portable-context.md`: capability home + engine-seeding rationale, schema v1, versioning constants, contributor API, the clear-boundary recycle contract, empty-gate, images-verbatim, no-core-consumer, the NDJSON stdin/wire commands (§0).
 - `docs/adr/247-checkpoint-plugin.md`: checkpoint command surface, storage layout, auto-checkpoint templates, `--checkpoint.restore` dotted flag, soft import failures.
 - Agent: `code` (or `plan`). No code deps.
 
 ### Phase 1 — drone-core types (foundation)
+
 Files:
+
 - NEW `drone-core/src/portable-context-types.ts` (schemas above).
 - `drone-core/src/index.ts` — export the new module.
 - `drone-core/src/plugin-system.ts`
@@ -154,7 +178,10 @@ Files:
   - New payload types:
     ```ts
     export type DroneSessionClearPayload = { sessionId: string };
-    export type DroneSessionRecyclePayload = { sessionId: string; previousSessionId: string };
+    export type DroneSessionRecyclePayload = {
+      sessionId: string;
+      previousSessionId: string;
+    };
     ```
     (Keep `onSessionClear`'s payload optional so existing zero-arg callbacks/subscribers stay valid.)
   - `onSessionRecycle` is a **standard hook** (leave it in `DroneStandardHookName`; do NOT add to the Exclude list).
@@ -173,7 +200,9 @@ Files:
 - Agent: `code`. Depends on Phase 0 (ADR refs optional).
 
 ### Phase 2 — engine foundation + NDJSON stdin commands + mock sweep
+
 Files:
+
 - `drone-agent/src/runtime/plugin-engine.ts`
   - **Engine options:** add `sessionManager?: DroneSessionManager;` and `clearConversation?: () => void;` to `CreateDronePluginEngineOptions`; store both.
   - **Session id:** add engine option `sessionId?: string;` (host-seeded). Keep a mutable `let currentSessionId = sessionId ?? \`agent-${Date.now()}\``.
@@ -184,12 +213,16 @@ Files:
     async function clearSession(): Promise<void> {
       const turns = sessionManager?.getTurns() ?? [];
       const hadTurns = turns.length > 0;
-      if (hadTurns) await runHooks('onSessionClear', { sessionId: currentSessionId });
+      if (hadTurns)
+        await runHooks('onSessionClear', { sessionId: currentSessionId });
       clearConversation?.();
       if (hadTurns) {
         const previousSessionId = currentSessionId;
         currentSessionId = `agent-${Date.now()}`;
-        await runHooks('onSessionRecycle', { sessionId: currentSessionId, previousSessionId });
+        await runHooks('onSessionRecycle', {
+          sessionId: currentSessionId,
+          previousSessionId,
+        });
       }
     }
     ```
@@ -199,9 +232,15 @@ Files:
     capabilities.set(
       DRONE_PORTABLE_CONTEXT_CAPABILITY_ID,
       createPortableContextCapability({
-        sessionManager, listAllTools: () => toolRegistry.listAll(), listMountedTools: () => toolRegistry.listMounted(),
-        mountTool: name => toolRegistry.mount(name), runHooks, clearSession,
-        getSessionId: () => currentSessionId, emitEvent: dispatchConversationEvent, logger,
+        sessionManager,
+        listAllTools: () => toolRegistry.listAll(),
+        listMountedTools: () => toolRegistry.listMounted(),
+        mountTool: name => toolRegistry.mount(name),
+        runHooks,
+        clearSession,
+        getSessionId: () => currentSessionId,
+        emitEvent: dispatchConversationEvent,
+        logger,
       })
     );
     ```
@@ -212,21 +251,38 @@ Files:
 - Agent: `code` (impl) + `worker` (sweep). Depends on Phase 1.
 
 ### Phase 3 — portable-context capability implementation
+
 Files:
+
 - NEW `drone-agent/src/runtime/portable-context/capability.ts` — `createPortableContextCapability(deps)` implementing:
   - `registerContributor/unregisterContributor/getContributors` (Map keyed by `contributor.id`; last write wins, mirror reference-kind style).
   - `exportContext()`:
     ```ts
     const turns = sessionManager.getTurns();
-    const session = { sourceSessionId: deps.getSessionId(), turns: turns.map(t => ({ kind: t.kind, messages: t.messages })) };
+    const session = {
+      sourceSessionId: deps.getSessionId(),
+      turns: turns.map(t => ({ kind: t.kind, messages: t.messages })),
+    };
     const mounted = new Set(deps.listMountedTools().map(t => t.name));
-    const tools = deps.listAllTools().map(t => ({ ...t, mounted: mounted.has(t.name) }));
+    const tools = deps
+      .listAllTools()
+      .map(t => ({ ...t, mounted: mounted.has(t.name) }));
     const pluginData = {};
     for (const c of contributors.values()) {
-      try { const v = await c.export({ turns }); if (v !== undefined) pluginData[c.id] = v; }
-      catch (e) { logger.warn(`portable-context export failed for ${c.id}: ${e}`); }
+      try {
+        const v = await c.export({ turns });
+        if (v !== undefined) pluginData[c.id] = v;
+      } catch (e) {
+        logger.warn(`portable-context export failed for ${c.id}: ${e}`);
+      }
     }
-    return { version: CURRENT_CONTEXT_SCHEMA_VERSION, createdAt: new Date().toISOString(), session, tools, pluginData };
+    return {
+      version: CURRENT_CONTEXT_SCHEMA_VERSION,
+      createdAt: new Date().toISOString(),
+      session,
+      tools,
+      pluginData,
+    };
     ```
   - `importContext(data)`:
     1. Version check (`MIN..MAX`); throw on mismatch (no mutation).
@@ -245,19 +301,24 @@ Files:
 - Agent: `code`. Depends on Phase 2.
 
 ### Phase 4 — contributors (`todo`, `focus`, `notepad`, `persona`)
+
 Each plugin adds `{ id: DRONE_PORTABLE_CONTEXT_CAPABILITY_ID, optional: true }` to `metadata.dependencies`, then in `register()`:
+
 ```ts
 const pc = registration.request<DronePortableContextCapability>(DRONE_PORTABLE_CONTEXT_CAPABILITY_ID);
 pc?.registerContributor({ id: '<pluginId>', export: () => ({...}), import: data => {...} });
 ```
+
 - `drone-agent/src/plugins/todo/index.ts` — export `{ items, nextId }`; import: clear `items`, push restored, set `nextId`.
 - `drone-agent/src/plugins/focus.ts` — export `{ currentFocus }`; import: set `state.currentFocus`.
 - `drone-agent/src/plugins/notepad.ts` — export `{ currentNotepad }`; import: set `state.currentNotepad`.
-- `drone-agent/src/plugins/persona/index.ts` — export `{ personaId: activePersona?.id ?? null }`; import: if non-null, call the existing activation path (`activatePersona`/`selectPersona(id)`), which re-premounts the persona's tools and emits `personaChanged`. (Scope is not stored on the definition; restore resolves by provider precedence — document this in ADR 246.) NOTE: this ordering matters — persona re-premount happens *before* Phase 3 step 5's additive remount, so the additive remount only adds back truly-missing tools.
+- `drone-agent/src/plugins/persona/index.ts` — export `{ personaId: activePersona?.id ?? null }`; import: if non-null, call the existing activation path (`activatePersona`/`selectPersona(id)`), which re-premounts the persona's tools and emits `personaChanged`. (Scope is not stored on the definition; restore resolves by provider precedence — document this in ADR 246.) NOTE: this ordering matters — persona re-premount happens _before_ Phase 3 step 5's additive remount, so the additive remount only adds back truly-missing tools.
 - Agent: `code`. Depends on Phase 2.
 
 ### Phase 5 — `checkpoint` plugin
+
 Files:
+
 - NEW `drone-agent/src/plugins/checkpoint/index.ts` — `DronePlugin` (`id: 'checkpoint'`, `defaultEnabled: false`, dependency `{ id: DRONE_PORTABLE_CONTEXT_CAPABILITY_ID, optional: true }`).
   - Read `registration.request<DronePortableContextCapability>(DRONE_PORTABLE_CONTEXT_CAPABILITY_ID)`.
   - Offer `DroneCheckpointCapability` = `{ runStartupRestore }`.
@@ -281,7 +342,9 @@ Files:
 - Agent: `code`. Depends on Phases 1, 2, 3.
 
 ### Phase 6 — swarm full re-cycle (highest risk)
+
 Files:
+
 - `drone-agent/src/plugins/swarm/index.ts`
   - Read session id from `_runtime.getSessionId()` instead of `userSwarmConfig.sessionId ?? config.sessionId ?? agent-<ts>`.
   - Replace `getAgentId: () => sessionId` with `() => ctx.sessionId`.
@@ -299,6 +362,7 @@ Files:
 - Agent: `code`. Depends on Phase 2. Sequence LAST (after core + checkpoint proven).
 
 ### Phase 7 — tests
+
 - Unit: `portable-context` export/import round-trip; version reject; unknown/missing pluginData; tools mounted-flags; tool remount additive + unavailable list; continuation disclosure turn content; empty-target gate skips recycle.
 - Engine: `clearSession()` boundary order (`onSessionClear` → clear → mint → `onSessionRecycle`), empty gate, session-id mint.
 - **NDJSON stdin (§0):** feed `{type:'exportContext'}` → assert a `contextExport` line with `ok:true` and a valid `context`; feed `{type:'importContext', context}` → assert `contextImport` `ok:true`, session mutated, and NO `turnComplete` emitted for either; bad `context`/version → `ok:false` with `error`.
@@ -309,12 +373,14 @@ Files:
 - Agent: `tester` (+ `code` for fixes). Depends on Phases 2–6.
 
 ### Phase 8 — documentation
+
 - `docs/agents/portable-context.md` — the capability, schema, contributor API, recycle contract, AND the §0 NDJSON stdin/wire commands.
 - Update `AGENTS.md` hook list (add `onSessionRecycle`) + plugin table (add `checkpoint`).
 - Update project wiki index/modules pages (drone-agent, drone-agent-plugins, and the json-listen-mode/ndjson wire page) + ADR stubs; keep `[[decisions/246…]]`/`[[decisions/247…]]` stubs.
 - Agent: `code`. Depends on Phases 0–7.
 
 ### Phase 9 — final validation (REQUIRED)
+
 Run and pass all gates in §6. Agent: `review`.
 
 ## 6. Validation criteria (all MUST pass)
@@ -360,3 +426,38 @@ Run and pass all gates in §6. Agent: `review`.
   ```
 - D14 version constants `MIN/MAX_CONTEXT_SCHEMA_VERSION`; unknown/missing pluginData handling.
 - D16 NDJSON stdin/wire support: `{type:'exportContext'}` / `{type:'importContext', context}` input; `contextExport` / `contextImport` output; control commands (no turn semantics, no `turnComplete`); runJsonListenMode only; engine-seeded capability so no plugin required. (See §0.)
+
+
+---
+
+## Execution Summary — COMPLETE (2026-10-11, branch `feat/portable-context`)
+
+All 9 phases executed; every validation gate passes.
+
+### Commits
+- `64f593cf` — P0 ADRs + P1 drone-core types + P2 engine foundation/NDJSON/mock sweep + P3 capability.
+- `dd47a78c` — P4 contributors + P5 checkpoint plugin.
+- `be5065a7` — P6 swarm full re-cycle.
+- `84160cae` / `153acd4f` — P7 tests + agent doc.
+- `ed29e359` — P8 docs (AGENTS.md, ADR index, wiki).
+- `27f92d12` — lint fix (unused import) + prettier reformat.
+
+### What landed
+- **P1 (drone-core)**: `portable-context-types.ts` (schema v1, `MIN/MAX/CURRENT_CONTEXT_SCHEMA_VERSION=1`, contributor + capability types); `onSessionClear` payload + standard `onSessionRecycle` hook (+ `DroneSessionClearPayload`/`DroneSessionRecyclePayload`); `DroneCheckpointCapability`; `DroneCheckpointConfig` + defaults + schema + merge spec.
+- **P2 (engine/wire)**: `engine.clearSession()` boundary (onSessionClear (session intact) → mechanical clear → mint → onSessionRecycle), empty-gated; engine-owned `currentSessionId` + `_runtime.getSessionId()` + `engine.getSessionId()`; `sessionManager`/`clearConversation`/`sessionId` engine options; `/clear` routed through the boundary; `portable-context` capability seeded BEFORE plugin registration; NDJSON `exportContext`/`importContext` control commands → `contextExport`/`contextImport` (no turn semantics, no `turnComplete`); ~53-site `onSessionRecycle` mock sweep (tsconfig.test.json is the ground truth).
+- **P3**: `runtime/portable-context/capability.ts` + `sessionManager.appendTurns` (fresh ids).
+- **P4**: contributors via `shared/portable-context-contributor.ts` — todo (snapshot, not a live alias), focus, notepad, persona (re-activates by id → re-premounts before the additive remount).
+- **P5**: `checkpoint` plugin (`/checkpoint create|restore|delete|rename|list`; restore queued), atomic store (`./.drone-agent/checkpoints`, `sanitizeName`, tmp+rename), auto-end/auto-round checkpoints, `DroneCheckpointCapability.runStartupRestore`; `startup-checkpoint.ts` + `--checkpoint.restore` wiring.
+- **P6 (swarm)**: reads `_runtime.getSessionId()`; `recycleSwarmSession` (re-POST /agents, re-register, close+reconnect WS); `buildWsUrl`; `onSessionRecycle` hook; `/swarm-session` reads the live id via a thunk.
+- **P7**: `portable-context*.test.ts` (capability, engine boundary, NDJSON, contributors), `checkpoint-plugin.test.ts`, `swarm/recycle.test.ts`.
+- **P8**: `docs/agents/portable-context.md`; AGENTS.md hook list + subsystem entry; ADR index rows; wiki ADR stubs + cross-links + json-listen-mode section.
+
+### Validation (Phase 9) — all pass
+- LSP clean; `pnpm -r run build` clean; `pnpm run lint` clean (prettier applied); `pnpm run typecheck` clean (incl. `tsconfig.test.json`).
+- `pnpm run test` — **3876 passed / 14 skipped**.
+- Feature checks covered by the new tests (round-trip, version reject + no mutation, recycle order, empty gate, `--checkpoint.restore`, `/checkpoint` surface, NDJSON commands, swarm new id + re-registration).
+- `/swarm-session import` regression — `session-import.test.ts` (19) + `session-command.test.ts` (9) all pass.
+
+### Notable corrections during execution
+- The todo contributor's first `export` returned the live `items` array, so an in-process export→import round-trip cleared the array it was reading; fixed by snapshotting (`items.map(i => ({...i}))`). **Contributors must return snapshots, never live aliases.**
+- ADR 247 records that the user-spec `--checkpoint-restore` was reconciled to the dotted `--checkpoint.restore` (the plugin-flag facility only parses `--<pluginId>.<flag>`).
