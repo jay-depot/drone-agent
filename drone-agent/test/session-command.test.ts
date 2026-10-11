@@ -253,7 +253,11 @@ describe('createSwarmSessionCommand', () => {
 
     it('falls back to session.contextWindowTokens when no resolver is injected', async () => {
       const { ctx } = makeContext({ args: ['import', 'ss1'] });
-      await createSwarmSessionCommand(BASE_URL, () => 'current', CONFIG).handler(ctx);
+      await createSwarmSessionCommand(
+        BASE_URL,
+        () => 'current',
+        CONFIG
+      ).handler(ctx);
 
       const deps = vi.mocked(runSessionImport).mock.calls[0]?.[0];
       await expect(deps!.getContextWindowTokens()).resolves.toBe(32768);

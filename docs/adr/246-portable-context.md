@@ -36,7 +36,7 @@ related:
 
 ## Context
 
-Nothing serializes a live session's context. The log plugin writes turns (sans system messages) to `~/.drone-agent/logs/`, but that is an audit artifact, not a restorable snapshot. `/swarm-session import` ([146](146-swarm-session-import.md)) recreates the context of an *old swarm* session by summarizing its transcript, but it does not capture a live session's own turns, its mounted-tool state, or plugin-owned session state (todo list, focus, notepad, active persona). There was no way to snapshot a session and resume it later, in another process, or on another machine.
+Nothing serializes a live session's context. The log plugin writes turns (sans system messages) to `~/.drone-agent/logs/`, but that is an audit artifact, not a restorable snapshot. `/swarm-session import` ([146](146-swarm-session-import.md)) recreates the context of an _old swarm_ session by summarizing its transcript, but it does not capture a live session's own turns, its mounted-tool state, or plugin-owned session state (todo list, focus, notepad, active persona). There was no way to snapshot a session and resume it later, in another process, or on another machine.
 
 Two design constraints shaped the solution:
 
@@ -62,7 +62,7 @@ type DronePortableContextExport = {
 };
 ```
 
-The export contains **all session turns, faithfully**, including compaction summaries inline (`kind: 'summary'`). Every **other** system message (system prompt, runtime flags, header/footer fragments) is omitted — those are regenerated per request and never live in the session manager, so no filtering is required; the summaries are the *only* `role: 'system'` messages that survive. Turn ids are dropped on export and re-minted (`randomUUID()`) on import. **Images are exported verbatim** — full `DroneImageContent` including base64 `data` and `description` — because a checkpoint is a snapshot, and a re-described image is not the same context. `/swarm-session import`'s summaries need no special handling: they already live in the session as ordinary turns, so they ride into an export for free.
+The export contains **all session turns, faithfully**, including compaction summaries inline (`kind: 'summary'`). Every **other** system message (system prompt, runtime flags, header/footer fragments) is omitted — those are regenerated per request and never live in the session manager, so no filtering is required; the summaries are the _only_ `role: 'system'` messages that survive. Turn ids are dropped on export and re-minted (`randomUUID()`) on import. **Images are exported verbatim** — full `DroneImageContent` including base64 `data` and `description` — because a checkpoint is a snapshot, and a re-described image is not the same context. `/swarm-session import`'s summaries need no special handling: they already live in the session as ordinary turns, so they ride into an export for free.
 
 **3. Version constants.** `MIN_CONTEXT_SCHEMA_VERSION = 1`, `MAX_CONTEXT_SCHEMA_VERSION = 1`, `CURRENT_CONTEXT_SCHEMA_VERSION = 1` in `drone-core`. Import accepts a payload iff `MIN ≤ version ≤ MAX`; otherwise it rejects with a clear error and **does not mutate the session**. Future versions bump the numbers.
 
@@ -71,8 +71,13 @@ The export contains **all session turns, faithfully**, including compaction summ
 ```ts
 type DronePortableContextContributor = {
   id: string; // the pluginData key (plugin id)
-  export: (ctx: { turns: readonly DroneSessionTurn[] }) => unknown | Promise<unknown>;
-  import?: (data: unknown, ctx: { turns: readonly DroneSessionTurn[] }) => void | Promise<void>;
+  export: (ctx: {
+    turns: readonly DroneSessionTurn[];
+  }) => unknown | Promise<unknown>;
+  import?: (
+    data: unknown,
+    ctx: { turns: readonly DroneSessionTurn[] }
+  ) => void | Promise<void>;
 };
 ```
 
@@ -94,7 +99,7 @@ type DronePortableContextContributor = {
 1. Version check (reject on mismatch, no mutation).
 2. `clearSession()` (the boundary; self-gates on empty).
 3. Inject restored turns via a new `sessionManager.appendTurns(turns)` (each turn gets a fresh `randomUUID()` id).
-4. Restore contributors (per-contributor try/catch → warnings; unknown keys warned, missing keys skipped). **Persona re-activation runs here**, so its tool re-premount happens *before* step 5's additive remount.
+4. Restore contributors (per-contributor try/catch → warnings; unknown keys warned, missing keys skipped). **Persona re-activation runs here**, so its tool re-premount happens _before_ step 5's additive remount.
 5. Remount tools **additively** (never unmount): for each `tools[]` entry with `mounted === true` that still exists in the registry, `mountTool(name)`; names not in the registry are collected into `unavailableTools`. Runtime meta-tools and the fresh persona premount are left intact.
 6. Append the **continuation disclosure** as a stored user turn — a persistent `<system-reminder>` turn (not a fading one-turn notice; the model keeps retrying non-existent tools otherwise):
 
@@ -107,10 +112,11 @@ type DronePortableContextContributor = {
    ```
 
    The missing-tools list is the diff of `checkpoint.tools[]` (`mounted: true`) against the current registry.
+
 7. Emit a non-stored `notice` conversation event, so the user sees the restore in the chat log.
 8. Return `{ warnings, unavailableTools }`.
 
-**8. NDJSON stdin/wire commands.** Portable context is drivable over the `--output-json` stdin NDJSON protocol (`runJsonListenMode`) so the gateway can export/import over the child-process wire without a plugin. New **input** events `{ type: 'exportContext' }` and `{ type: 'importContext'; context }`; new **output** events `contextExport` (`{ ok: true; context }` / `{ ok: false; error }`) and `contextImport` (`{ ok: true; warnings; unavailableTools }` / `{ ok: false; error }`). These are **control commands on the same stdin stream — not turns**: they never call `onBeforePrompt`/`onAfterToolCall` and never emit `turnComplete`; they are handled *before* the `event.type !== 'chat'` rejection branch. `exportContext` calls the engine-seeded capability's `exportContext()`; `importContext` calls `importContext(event.context)` and runs the full orchestration (recycle → restore → remount → disclosure), exactly like `/checkpoint restore`. Any failure (bad `context`, version mismatch, missing capability) surfaces as `{ ok: false, error }`, never a crash. Scope is **`runJsonListenMode` only** — `runSwarmListenMode` reads no stdin and the swarm WS path is untouched.
+**8. NDJSON stdin/wire commands.** Portable context is drivable over the `--output-json` stdin NDJSON protocol (`runJsonListenMode`) so the gateway can export/import over the child-process wire without a plugin. New **input** events `{ type: 'exportContext' }` and `{ type: 'importContext'; context }`; new **output** events `contextExport` (`{ ok: true; context }` / `{ ok: false; error }`) and `contextImport` (`{ ok: true; warnings; unavailableTools }` / `{ ok: false; error }`). These are **control commands on the same stdin stream — not turns**: they never call `onBeforePrompt`/`onAfterToolCall` and never emit `turnComplete`; they are handled _before_ the `event.type !== 'chat'` rejection branch. `exportContext` calls the engine-seeded capability's `exportContext()`; `importContext` calls `importContext(event.context)` and runs the full orchestration (recycle → restore → remount → disclosure), exactly like `/checkpoint restore`. Any failure (bad `context`, version mismatch, missing capability) surfaces as `{ ok: false, error }`, never a crash. Scope is **`runJsonListenMode` only** — `runSwarmListenMode` reads no stdin and the swarm WS path is untouched.
 
 **9. Checkpoint's startup restore fires before the first turn, on an empty session.** `--checkpoint.restore <name>` runs after `--swarm.session-import` and before the first turn; the target session is empty, so the import's recycle step is a no-op (empty gate) and no `onSessionClear`/`onSessionRecycle` fires.
 

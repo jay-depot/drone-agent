@@ -25,7 +25,9 @@ type DronePortableContextCapability = {
   unregisterContributor(id: string): void;
   getContributors(): DronePortableContextContributor[];
   exportContext(): Promise<DronePortableContextExport>;
-  importContext(data: DronePortableContextExport): Promise<DronePortableContextImportResult>;
+  importContext(
+    data: DronePortableContextExport
+  ): Promise<DronePortableContextImportResult>;
 };
 ```
 
@@ -33,15 +35,18 @@ type DronePortableContextCapability = {
 
 ```ts
 type DronePortableContextExport = {
-  version: number;           // MIN/MAX/CURRENT_CONTEXT_SCHEMA_VERSION === 1
-  createdAt: string;         // ISO
+  version: number; // MIN/MAX/CURRENT_CONTEXT_SCHEMA_VERSION === 1
+  createdAt: string; // ISO
   session: {
     sourceSessionId?: string;
     turns: Array<{ kind?: 'summary'; messages: DroneSessionMessage[] }>;
   };
   tools: Array<{
-    name: string; description: string;
-    inputSchema?: DroneToolJsonSchema; defaultHidden?: boolean; mounted: boolean;
+    name: string;
+    description: string;
+    inputSchema?: DroneToolJsonSchema;
+    defaultHidden?: boolean;
+    mounted: boolean;
   }>;
   pluginData: Record<string, unknown>; // keyed by plugin id
 };
@@ -50,14 +55,14 @@ type DronePortableContextExport = {
 **Serialization rules:**
 
 - **All session turns** are exported faithfully. Compaction summaries stay
-  inline (`kind: 'summary'`). Every *other* system message (system prompt,
+  inline (`kind: 'summary'`). Every _other_ system message (system prompt,
   runtime flags, header/footer fragments) is omitted — those are regenerated
   per request and never live in the session manager.
 - **Turn ids are not serialized**; import re-mints them with `randomUUID()`.
 - **Images are exported verbatim** (full `DroneImageContent` including base64
   `data` and any `description`).
 - The version is accepted iff `MIN_CONTEXT_SCHEMA_VERSION ≤ version ≤
-  MAX_CONTEXT_SCHEMA_VERSION`; otherwise the import rejects with a clear error
+MAX_CONTEXT_SCHEMA_VERSION`; otherwise the import rejects with a clear error
   and **does not mutate the session**.
 
 ## Contributor API
@@ -67,8 +72,13 @@ A plugin contributes a slice of `pluginData`:
 ```ts
 type DronePortableContextContributor = {
   id: string; // the pluginData key (plugin id)
-  export: (ctx: { turns: readonly DroneSessionTurn[] }) => unknown | Promise<unknown>;
-  import?: (data: unknown, ctx: { turns: readonly DroneSessionTurn[] }) => void | Promise<void>;
+  export: (ctx: {
+    turns: readonly DroneSessionTurn[];
+  }) => unknown | Promise<unknown>;
+  import?: (
+    data: unknown,
+    ctx: { turns: readonly DroneSessionTurn[] }
+  ) => void | Promise<void>;
 };
 ```
 
@@ -83,7 +93,7 @@ The initial contributors are `todo`, `focus`, `notepad`, and `persona`. Disk-bac
 assets (`memory`, `skills`, `macros`) get no contributor — they are already
 persistent. The persona contributor restores by id; **scope is not stored on the
 definition**, so restore resolves by provider precedence. Persona re-activation
-runs *before* the additive remount, so the additive pass only adds back tools the
+runs _before_ the additive remount, so the additive pass only adds back tools the
 persona does not own.
 
 Declare the dependency and register in `register()`:
@@ -178,7 +188,7 @@ wire **without a plugin** (the capability is engine-seeded).
 
 These are **control commands on the same stdin stream — not turns**: they never
 run `onBeforePrompt`/`onAfterToolCall` and never emit `turnComplete`; they are
-handled *before* the `event.type !== 'chat'` rejection branch. `importContext`
+handled _before_ the `event.type !== 'chat'` rejection branch. `importContext`
 runs the full orchestration (recycle → restore → remount → disclosure), exactly
 like `/checkpoint restore`. Any failure surfaces as `{ ok: false, error }`, never
 a crash. Scope is `runJsonListenMode` only — `runSwarmListenMode` reads no stdin.
@@ -188,13 +198,13 @@ a crash. Scope is `runJsonListenMode` only — `runSwarmListenMode` reads no std
 `defaultEnabled: false`. Storage: `./.drone-agent/checkpoints/<name>.json`
 (atomic tmp+rename writes; names validated to `[A-Za-z0-9._-]`).
 
-| Command | Behavior |
-| ------- | -------- |
-| `/checkpoint create [name]` | Save a checkpoint (default name: filesystem-safe ISO timestamp) |
-| `/checkpoint restore <name>` | Restore into a fresh session (**queued** while the LLM is busy) |
-| `/checkpoint delete <name>` | Delete a checkpoint |
-| `/checkpoint rename <old> <new>` | Rename a checkpoint |
-| `/checkpoint list` | List checkpoints |
+| Command                          | Behavior                                                        |
+| -------------------------------- | --------------------------------------------------------------- |
+| `/checkpoint create [name]`      | Save a checkpoint (default name: filesystem-safe ISO timestamp) |
+| `/checkpoint restore <name>`     | Restore into a fresh session (**queued** while the LLM is busy) |
+| `/checkpoint delete <name>`      | Delete a checkpoint                                             |
+| `/checkpoint rename <old> <new>` | Rename a checkpoint                                             |
+| `/checkpoint list`               | List checkpoints                                                |
 
 CLI flag: **`--checkpoint.restore <name>`** (the dotted plugin-flag convention;
 auto-enables the plugin). It runs after `--swarm.session-import` and before the

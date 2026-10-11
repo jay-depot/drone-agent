@@ -103,7 +103,10 @@ describe('portable-context contributors', () => {
     const capture = await register(focusPlugin);
     const contributor = capture.contributors.get('focus');
     if (!contributor) throw new Error('no focus contributor');
-    await contributor.import?.({ currentFocus: 'ship the thing' }, { turns: [] });
+    await contributor.import?.(
+      { currentFocus: 'ship the thing' },
+      { turns: [] }
+    );
     expect(await contributor.export({ turns: [] })).toEqual({
       currentFocus: 'ship the thing',
     });

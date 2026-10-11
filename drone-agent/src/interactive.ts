@@ -275,13 +275,15 @@ export async function runJsonListenMode(
       // run the prompt hooks and never emit `turnComplete`. Handled before
       // the chat-only rejection branch below.
       if (event.type === 'exportContext' || event.type === 'importContext') {
-        const capability =
-          engine.getCapability<DronePortableContextCapability>(
-            DRONE_PORTABLE_CONTEXT_CAPABILITY_ID
-          );
+        const capability = engine.getCapability<DronePortableContextCapability>(
+          DRONE_PORTABLE_CONTEXT_CAPABILITY_ID
+        );
         if (!capability) {
           ndjsonHandler({
-            kind: event.type === 'exportContext' ? 'contextExport' : 'contextImport',
+            kind:
+              event.type === 'exportContext'
+                ? 'contextExport'
+                : 'contextImport',
             ok: false,
             error: 'portable-context capability is unavailable',
           });

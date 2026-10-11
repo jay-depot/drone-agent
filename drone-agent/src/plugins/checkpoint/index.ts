@@ -41,7 +41,9 @@ export const checkpointPlugin: DronePlugin = {
     description:
       'Save and restore named portable-context snapshots under ./.drone-agent/checkpoints.',
     defaultEnabled: false,
-    dependencies: [{ id: DRONE_PORTABLE_CONTEXT_CAPABILITY_ID, optional: true }],
+    dependencies: [
+      { id: DRONE_PORTABLE_CONTEXT_CAPABILITY_ID, optional: true },
+    ],
   },
   register: async registration => {
     const capability = registration.request<DronePortableContextCapability>(
@@ -53,7 +55,10 @@ export const checkpointPlugin: DronePlugin = {
 
     let roundOrdinal = 0;
 
-    async function writeAutoCheckpoint(prefix: string, sessionId: string): Promise<void> {
+    async function writeAutoCheckpoint(
+      prefix: string,
+      sessionId: string
+    ): Promise<void> {
       if (!capability) return;
       try {
         const data = await capability.exportContext();
@@ -64,11 +69,16 @@ export const checkpointPlugin: DronePlugin = {
         registration.logger.info(`checkpoint: wrote ${name}`);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        registration.logger.warn(`checkpoint: auto-checkpoint failed: ${message}`);
+        registration.logger.warn(
+          `checkpoint: auto-checkpoint failed: ${message}`
+        );
       }
     }
 
-    async function restore(name: string, ctx: DroneSlashCommandContext): Promise<void> {
+    async function restore(
+      name: string,
+      ctx: DroneSlashCommandContext
+    ): Promise<void> {
       if (!capability) {
         ctx.logger.error(
           '/checkpoint restore: portable-context capability unavailable'
@@ -86,7 +96,9 @@ export const checkpointPlugin: DronePlugin = {
         const result = await capability.importContext(data);
         const lines = [`Restored checkpoint "${name}".`];
         if (result.unavailableTools.length > 0) {
-          lines.push(`Unavailable tools: ${result.unavailableTools.join(', ')}`);
+          lines.push(
+            `Unavailable tools: ${result.unavailableTools.join(', ')}`
+          );
         }
         for (const warning of result.warnings) {
           lines.push(`Warning: ${warning}`);
@@ -111,7 +123,9 @@ export const checkpointPlugin: DronePlugin = {
 
         if (subcommand === '' || subcommand === 'create') {
           if (!capability) {
-            ctx.logger.error('/checkpoint: portable-context capability unavailable');
+            ctx.logger.error(
+              '/checkpoint: portable-context capability unavailable'
+            );
             return true;
           }
           const target = name ?? defaultCheckpointName();
@@ -196,12 +210,17 @@ export const checkpointPlugin: DronePlugin = {
     });
 
     registration.registerHelp('/checkpoint create [name]  Save a checkpoint');
-    registration.registerHelp('/checkpoint restore <name> Restore a checkpoint');
+    registration.registerHelp(
+      '/checkpoint restore <name> Restore a checkpoint'
+    );
     registration.registerHelp('/checkpoint list          List checkpoints');
 
     registration.hooks.onSessionClear(async payload => {
       if (!config.autoOnSessionEnd) return;
-      await writeAutoCheckpoint('auto-end', payload?.sessionId ?? getSessionId());
+      await writeAutoCheckpoint(
+        'auto-end',
+        payload?.sessionId ?? getSessionId()
+      );
     });
 
     registration.hooks.onShutdown(async () => {
@@ -240,7 +259,9 @@ export const checkpointPlugin: DronePlugin = {
           const result = await capability.importContext(data);
           const parts = [`Restored checkpoint "${name}" at startup.`];
           if (result.unavailableTools.length > 0) {
-            parts.push(`Unavailable tools: ${result.unavailableTools.join(', ')}`);
+            parts.push(
+              `Unavailable tools: ${result.unavailableTools.join(', ')}`
+            );
           }
           return { ok: true, summary: parts.join(' ') };
         } catch (err) {

@@ -22,7 +22,12 @@ export type OutputEvent =
    */
   | { kind: 'contextExport'; ok: true; context: DronePortableContextExport }
   | { kind: 'contextExport'; ok: false; error: string }
-  | { kind: 'contextImport'; ok: true; warnings: string[]; unavailableTools: string[] }
+  | {
+      kind: 'contextImport';
+      ok: true;
+      warnings: string[];
+      unavailableTools: string[];
+    }
   | { kind: 'contextImport'; ok: false; error: string };
 
 /**

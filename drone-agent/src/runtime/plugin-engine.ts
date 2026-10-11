@@ -6,7 +6,6 @@ import {
   type DroneAfterToolCallPayload,
   type DroneChatMessage,
   type DroneReferenceCapability,
-  type DronePortableContextCapability,
   DRONE_REFERENCE_CAPABILITY_ID,
   DRONE_PORTABLE_CONTEXT_CAPABILITY_ID,
   getCanonicalToolName,
@@ -66,7 +65,9 @@ type HookBuckets = {
   onBeforePrompt: Array<() => Promise<void>>;
   onAfterToolCall: Array<HookCallback>;
   onSessionClear: Array<(payload: DroneSessionClearPayload) => Promise<void>>;
-  onSessionRecycle: Array<(payload: DroneSessionRecyclePayload) => Promise<void>>;
+  onSessionRecycle: Array<
+    (payload: DroneSessionRecyclePayload) => Promise<void>
+  >;
   onShutdown: Array<() => Promise<void>>;
 };
 
@@ -833,7 +834,8 @@ export function createDronePluginEngine({
         onAfterToolCall: callback => hookBuckets.onAfterToolCall.push(callback),
         onConversationEvent: callback => conversationEventHooks.push(callback),
         onSessionClear: callback => hookBuckets.onSessionClear.push(callback),
-        onSessionRecycle: callback => hookBuckets.onSessionRecycle.push(callback),
+        onSessionRecycle: callback =>
+          hookBuckets.onSessionRecycle.push(callback),
         onShutdown: callback => hookBuckets.onShutdown.push(callback),
         onSessionSafetyTrimWillRun: callback =>
           sessionSafetyTrimWillRunHooks.push(callback),

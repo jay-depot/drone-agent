@@ -33,7 +33,7 @@ Portable context ([246](246-portable-context.md)) is inert until something calls
 
 ## Decision
 
-**1. Plugin shape.** `drone-agent/src/plugins/checkpoint/index.ts` exports `checkpointPlugin: DronePlugin` with `id: 'checkpoint'`, `defaultEnabled: false`, and dependency `{ id: DRONE_PORTABLE_CONTEXT_CAPABILITY_ID, optional: true }`. It calls `registration.request<DronePortableContextCapability>(DRONE_PORTABLE_CONTEXT_CAPABILITY_ID)` and, when present, registers a contributor-free consumer (it only *calls* the capability). It also **offers** `DroneCheckpointCapability = { runStartupRestore: () => Promise<{ ok: boolean; summary: string }> }` for the startup path. Added to `staticBuiltInPlugins`.
+**1. Plugin shape.** `drone-agent/src/plugins/checkpoint/index.ts` exports `checkpointPlugin: DronePlugin` with `id: 'checkpoint'`, `defaultEnabled: false`, and dependency `{ id: DRONE_PORTABLE_CONTEXT_CAPABILITY_ID, optional: true }`. It calls `registration.request<DronePortableContextCapability>(DRONE_PORTABLE_CONTEXT_CAPABILITY_ID)` and, when present, registers a contributor-free consumer (it only _calls_ the capability). It also **offers** `DroneCheckpointCapability = { runStartupRestore: () => Promise<{ ok: boolean; summary: string }> }` for the startup path. Added to `staticBuiltInPlugins`.
 
 **2. Command surface.** A `/checkpoint` slash command:
 

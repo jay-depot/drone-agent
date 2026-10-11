@@ -31,8 +31,7 @@ function makeHarness(options?: {
   const capability = createPortableContextCapability({
     sessionManager,
     listAllTools: () => allTools,
-    listMountedTools: () =>
-      allTools.filter(t => mounted.has(t.name)),
+    listMountedTools: () => allTools.filter(t => mounted.has(t.name)),
     mountTool: name => {
       mounted.add(name);
       return {};
@@ -182,7 +181,9 @@ describe('portable-context capability', () => {
       pluginData: { unknown: { x: 1 } },
     };
     const result = await h.capability.importContext(exported);
-    expect(result.warnings).toContain('unknown pluginData key ignored: unknown');
+    expect(result.warnings).toContain(
+      'unknown pluginData key ignored: unknown'
+    );
     expect(importSpy).not.toHaveBeenCalled();
   });
 

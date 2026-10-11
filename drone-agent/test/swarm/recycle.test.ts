@@ -83,9 +83,7 @@ describe('recycleSwarmSession', () => {
   beforeEach(() => {
     FakeWebSocket.instances = [];
     vi.stubGlobal('WebSocket', FakeWebSocket);
-    fetchMock = vi
-      .fn()
-      .mockResolvedValue({ ok: true, json: async () => ({}) });
+    fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
     vi.stubGlobal('fetch', fetchMock);
   });
 

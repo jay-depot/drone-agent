@@ -34,7 +34,9 @@ export type DroneSessionManager = {
    * Used by portable-context import; turn ids are never carried across a
    * checkpoint.
    */
-  appendTurns: (turns: Array<{ kind?: 'summary'; messages: DroneSessionMessage[] }>) => void;
+  appendTurns: (
+    turns: Array<{ kind?: 'summary'; messages: DroneSessionMessage[] }>
+  ) => void;
   clearSession: () => void;
 };
 

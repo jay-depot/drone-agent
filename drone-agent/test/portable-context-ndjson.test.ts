@@ -39,7 +39,9 @@ function makeEngine(importImpl?: (data: unknown) => Promise<unknown>) {
   return {
     engine: {
       getCapability: (id: string) =>
-        id === 'portable-context' ? { exportContext, importContext } : undefined,
+        id === 'portable-context'
+          ? { exportContext, importContext }
+          : undefined,
       onConversationEvent: () => () => {},
       runHooks,
     },

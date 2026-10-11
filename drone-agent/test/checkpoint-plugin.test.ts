@@ -9,7 +9,10 @@ import {
   type DronePortableContextExport,
   type DroneSlashCommandContext,
 } from 'drone-core';
-import { checkpointPlugin, defaultCheckpointName } from '../src/plugins/checkpoint/index.js';
+import {
+  checkpointPlugin,
+  defaultCheckpointName,
+} from '../src/plugins/checkpoint/index.js';
 import {
   checkpointDir,
   deleteCheckpoint,
@@ -75,7 +78,9 @@ describe('checkpoint store', () => {
 
 type Capture = {
   registration: DronePluginRegistration;
-  slash: { handler: (ctx: DroneSlashCommandContext) => Promise<boolean> } | null;
+  slash: {
+    handler: (ctx: DroneSlashCommandContext) => Promise<boolean>;
+  } | null;
   getSlash: () => Capture['slash'];
   startHooks: {
     clear?: (payload?: { sessionId: string }) => Promise<void>;

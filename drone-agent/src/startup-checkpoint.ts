@@ -30,7 +30,8 @@ export async function runStartupCheckpointRestore(
 
   const capability = getCapability<DroneCheckpointCapability>('checkpoint');
   if (!capability) {
-    const text = '--checkpoint.restore: checkpoint plugin is unavailable; skipping restore';
+    const text =
+      '--checkpoint.restore: checkpoint plugin is unavailable; skipping restore';
     logger.warn(text);
     return message(text);
   }

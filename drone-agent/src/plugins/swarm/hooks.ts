@@ -125,7 +125,9 @@ export async function recycleSwarmSession(
       }
     }
   } catch (err) {
-    registration.logger.warn(`Swarm recycle: agent re-registration failed: ${err}`);
+    registration.logger.warn(
+      `Swarm recycle: agent re-registration failed: ${err}`
+    );
   }
 
   await registerSwarmSession(ctx);

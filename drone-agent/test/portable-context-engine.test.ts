@@ -54,8 +54,10 @@ describe('engine.clearSession session boundary', () => {
 
   it('passes ids to the recycle hook and mints a new one', async () => {
     const sessionManager = createSessionManager();
-    const recyclePayloads: Array<{ sessionId: string; previousSessionId: string }> =
-      [];
+    const recyclePayloads: Array<{
+      sessionId: string;
+      previousSessionId: string;
+    }> = [];
     const engine = createDronePluginEngine({
       plugins: [
         createTestPlugin({

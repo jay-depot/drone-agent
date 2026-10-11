@@ -95,7 +95,9 @@ export function createPortableContextCapability(
 
   async function exportContext(): Promise<DronePortableContextExport> {
     const turns = deps.sessionManager.getTurns();
-    const mountedNames = new Set(deps.listMountedTools().map(tool => tool.name));
+    const mountedNames = new Set(
+      deps.listMountedTools().map(tool => tool.name)
+    );
     const tools = deps
       .listAllTools()
       .map(tool => toolSnapshot(tool, mountedNames));
@@ -190,7 +192,11 @@ export function createPortableContextCapability(
 
     const sourceSessionId = data.session.sourceSessionId ?? 'unknown';
     deps.sessionManager.appendUserMessage(
-      buildContinuationDisclosure(sourceSessionId, data.createdAt, unavailableTools)
+      buildContinuationDisclosure(
+        sourceSessionId,
+        data.createdAt,
+        unavailableTools
+      )
     );
     deps.emitEvent({
       kind: 'notice',
