@@ -112,6 +112,8 @@ Config files live in `.drone-agent/config.json` at each scope. The config loader
 
 Key config sections: `enabledPlugins`, `systemPrompt`, `activePersona`, `llm`, `ollama`, `openrouter`, `session`, `lsp`, `mcp`, `compaction`, `memory`, `log`, `promptFile`, `swarm`.
 
+`search.paths[]` entries accept an optional `ragSource?: boolean` (default false). When true, that folder's workspace-file semantic index also feeds the proactive swarm-memory RAG (`swarm.memory`) as an extra candidate source — file hits compete with wiki entries for the same `swarm.memory.topK` slots (no extra slots). The `search` plugin must be enabled for the folder to be registered/indexed. See ADR 245.
+
 ### TUI Architecture
 
 The TUI is built with Ink 5.x (React for CLIs). It renders a five-region layout: chat log (scrollable via `<Static>`), tail region (live-updating in-flight content), mid panel (widgets), input line (custom multiline), optional elicitation prompt, and status bar. The TUI deliberately avoids the alternate screen buffer.

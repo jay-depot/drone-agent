@@ -302,6 +302,12 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
         Type.Array(
           Type.Object({
             path: Type.String(),
+            ragSource: Type.Optional(
+              Type.Boolean({
+                description:
+                  'Include this folder in swarm-memory RAG retrieval. File hits compete with wiki entries for the same swarm.memory.topK slots. Default false.',
+              })
+            ),
             embeddingProvider: Type.Optional(Type.String()),
             includeHidden: Type.Optional(
               Type.Boolean({

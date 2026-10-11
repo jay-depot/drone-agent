@@ -52,6 +52,7 @@ describe('/swarm-memory slash command', () => {
     });
     retriever.setCacheForTest([
       {
+        kind: 'wiki',
         pageId: 'p1',
         origin: 'beacon',
         title: 'Page One',
@@ -66,6 +67,30 @@ describe('/swarm-memory slash command', () => {
     const report = info.join('\n');
     expect(report).toContain('ON');
     expect(report).toContain('p1');
+    expect(report).toContain('1 entries');
+  });
+
+  it('status reports file entries by path', async () => {
+    const retriever = new SwarmMemoryRetriever({
+      capability,
+      config: baseConfig(),
+      logger: { warn: vi.fn(), info: vi.fn() },
+    });
+    retriever.setCacheForTest([
+      {
+        kind: 'file',
+        filePath: '/proj/src/a.ts',
+        score: 0.66,
+        snippet: 'snip',
+      },
+    ]);
+    const command = createSwarmMemoryCommand(retriever);
+    const info: string[] = [];
+    await command.handler(makeCtx(['status'], info));
+    const report = info.join('\n');
+    expect(report).toContain('ON');
+    expect(report).toContain('/proj/src/a.ts');
+    expect(report).toContain('0.66');
     expect(report).toContain('1 entries');
   });
 

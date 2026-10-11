@@ -2,6 +2,14 @@
 
 export type DroneSearchPath = {
   path: string;
+  /**
+   * When true, this folder's workspace-file semantic index becomes an
+   * additional candidate source for the swarm-memory RAG (`swarm.memory`).
+   * File hits compete with wiki entries for the same `swarm.memory.topK`
+   * slots — no extra slots are reserved. Requires the `search` plugin to be
+   * enabled (it performs the beacon registration). Default false.
+   */
+  ragSource?: boolean;
   embeddingProvider?: string;
   /**
    * Intended future functionality — not yet honored. `.git` and `node_modules`

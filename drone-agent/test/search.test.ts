@@ -577,3 +577,97 @@ describe('search plugin — prompt surface', () => {
     expect(text).toContain('minScore');
   });
 });
+
+// ── ragSource registration ──────────────────────────────────────────
+
+describe('search plugin — ragSource registration', () => {
+  /** Registers the plugin with a beacon capability and captures the PUT body. */
+  async function runRegistration(
+    config: ReturnType<typeof createDefaultAgentConfig>
+  ) {
+    const { registration, fragments, runOnPluginsLoaded } =
+      captureRegistration();
+    await searchPlugin.register(registration);
+
+    registration.getConfig = () => config;
+    registration.request = <T>() =>
+      ({
+        getBeaconUrl: () => 'http://beacon.test:3457',
+        getAgentId: () => 'agent-under-test',
+      }) as T;
+
+    let putBody: { paths: unknown[] } | undefined;
+    const fetchMock = vi.fn(async (_url: string, init?: { body?: string }) => {
+      putBody = JSON.parse(init?.body ?? '{}') as { paths: unknown[] };
+      return new Response(JSON.stringify({ indexed: true, paths: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await runOnPluginsLoaded();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    return { fragments, fetchMock, putBody: () => putBody };
+  }
+
+  it('registers only ragSource paths when search is disabled', async () => {
+    const config = createDefaultAgentConfig();
+    config.search = {
+      enabled: false,
+      paths: [{ path: '/proj/a' }, { path: '/proj/b', ragSource: true }],
+    };
+
+    const { fetchMock, putBody } = await runRegistration(config);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(putBody()?.paths).toEqual([{ path: '/proj/b', ragSource: true }]);
+  });
+
+  it('does not register the fragment when search is disabled', async () => {
+    const config = createDefaultAgentConfig();
+    config.search = {
+      enabled: false,
+      paths: [{ path: '/proj/b', ragSource: true }],
+    };
+
+    const { fragments } = await runRegistration(config);
+
+    expect(fragments.get('search-indexed-directories')).toBeUndefined();
+  });
+
+  it('makes no beacon call when search is disabled and no path is a ragSource', async () => {
+    const config = createDefaultAgentConfig();
+    config.search = {
+      enabled: false,
+      paths: [{ path: '/proj/a' }],
+    };
+
+    const { fetchMock } = await runRegistration(config);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('registers all paths and the fragment when search is enabled', async () => {
+    const config = createDefaultAgentConfig();
+    config.search = {
+      enabled: true,
+      paths: [{ path: '/proj/a' }, { path: '/proj/b', ragSource: true }],
+    };
+
+    const { fragments, putBody } = await runRegistration(config);
+
+    expect(putBody()?.paths).toEqual([
+      { path: '/proj/a' },
+      { path: '/proj/b', ragSource: true },
+    ]);
+
+    const fragment = fragments.get('search-indexed-directories');
+    expect(fragment).toBeDefined();
+    const text = String(await fragment!.render());
+    expect(text).toContain('/proj/a');
+    expect(text).toContain('/proj/b');
+  });
+});

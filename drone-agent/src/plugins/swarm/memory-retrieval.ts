@@ -4,15 +4,31 @@ import type { DroneSwarmCapability, DroneSwarmMemoryConfig } from 'drone-core';
 import { buildQueryInputs } from './memory-query.js';
 import type { WindowParts } from './memory-window.js';
 
-/** One injected wiki entry after merge/boost/filter. */
-export interface SwarmMemoryEntry {
-  pageId: string;
-  origin: 'beacon' | 'coordinator';
-  title: string;
-  tags: string[];
-  score: number;
-  pitch: string;
-}
+/**
+ * One injected RAG entry after merge/boost/filter. `wiki` entries come from
+ * the beacon's merged wiki corpus; `file` entries come from workspace folders
+ * opted in via `search.paths[].ragSource`. Both kinds compete for the same
+ * `swarm.memory.topK` slots.
+ */
+export type SwarmMemoryEntry =
+  | {
+      kind: 'wiki';
+      pageId: string;
+      origin: 'beacon' | 'coordinator';
+      title: string;
+      tags: string[];
+      score: number;
+      pitch: string;
+    }
+  | {
+      kind: 'file';
+      filePath: string;
+      score: number;
+      snippet: string;
+    };
+
+/** A workspace folder opted into swarm-memory RAG via `search.paths[].ragSource`. */
+export type RagSourcePath = { path: string; exclude?: string[] };
 
 export interface SwarmMemoryCache {
   hash: string;
@@ -37,10 +53,26 @@ export interface SearchRouteResponse {
   results: SearchRouteResult[];
 }
 
+export interface WorkspaceSearchResult {
+  file: string;
+  chunkIndex: number;
+  content: string;
+  score: number;
+}
+
+export interface WorkspaceSearchResponse {
+  query: string;
+  resultCount: number;
+  truncated: boolean;
+  results: WorkspaceSearchResult[];
+}
+
 export interface SwarmMemoryRetrieverDeps {
   /** Swarm connection. Optional: absent until the beacon link is live; the retriever stays inert. */
   capability?: DroneSwarmCapability | null;
   config: DroneSwarmMemoryConfig;
+  /** Workspace folders opted into RAG via `search.paths[].ragSource`. */
+  ragSourcePaths?: RagSourcePath[];
   debugFlags?: { isEnabled(name: string): boolean };
   logger?: { warn(...args: unknown[]): void; info(...args: unknown[]): void };
   /** Optional one-line status surface (e.g. the TUI chat log via a notice event). */
@@ -58,7 +90,9 @@ function formatCacheReport(cache: SwarmMemoryCache | null): string {
   ];
   for (const entry of cache.entries) {
     lines.push(
-      `  - ${entry.title} · ${entry.pageId} (${entry.origin}) · ${entry.score.toFixed(2)}`
+      entry.kind === 'wiki'
+        ? `  - ${entry.title} · ${entry.pageId} (${entry.origin}) · ${entry.score.toFixed(2)}`
+        : `  - ${entry.filePath} · ${entry.score.toFixed(2)}`
     );
   }
   return lines.join('\n');
@@ -76,15 +110,18 @@ function truncatePitch(text: string): string {
 }
 
 /**
- * Client for the beacon's stateless `GET /wiki/semantic-search` route, with
- * hash-debounced caching and per-document max-score merging across query
- * inputs. The prompt fragment reads the cache ONLY — this class is the sole
- * network participant. `enabled:false` (or a missing swarm connection) makes
- * every method a no-op with zero network calls.
+ * Client for the beacon's stateless `GET /wiki/semantic-search` route (wiki
+ * corpus) and `GET /agents/:id/search` route (workspace folders opted in via
+ * `search.paths[].ragSource`), with hash-debounced caching and per-document
+ * max-score merging across query inputs and both kinds. The prompt fragment
+ * reads the cache ONLY — this class is the sole network participant.
+ * `enabled:false` (or a missing swarm connection) makes every method a no-op
+ * with zero network calls.
  */
 export class SwarmMemoryRetriever {
   private capability: DroneSwarmCapability | null;
   private config: DroneSwarmMemoryConfig;
+  private ragSourcePaths: RagSourcePath[];
   private debugFlags?: SwarmMemoryRetrieverDeps['debugFlags'];
   private logger: NonNullable<SwarmMemoryRetrieverDeps['logger']>;
   private emitNotice: (content: string) => void;
@@ -96,6 +133,7 @@ export class SwarmMemoryRetriever {
   constructor(deps: SwarmMemoryRetrieverDeps) {
     this.capability = deps.capability ?? null;
     this.config = deps.config;
+    this.ragSourcePaths = deps.ragSourcePaths ?? [];
     this.debugFlags = deps.debugFlags;
     this.emitNotice = deps.emitNotice ?? (() => {});
     this.logger = deps.logger ?? {
@@ -229,32 +267,59 @@ export class SwarmMemoryRetriever {
 
   private async retrieve(inputs: string[]): Promise<SwarmMemoryEntry[]> {
     const base = this.capability!.getBeaconUrl();
-    const params = new URLSearchParams({
-      maxResults: String(this.config.topK ?? 5),
-    });
+    const agentId = this.capability!.getAgentId();
+    const topK = this.config.topK ?? 5;
     const minScore = this.config.minScore ?? 0.35;
-    params.set('minScore', String(minScore));
 
-    const responses = await Promise.all(
-      inputs.map(async q => {
-        const searchParams = new URLSearchParams(params);
-        searchParams.set('q', q);
+    const wikiRequests = inputs.map(async q => {
+      const searchParams = new URLSearchParams({
+        q,
+        maxResults: String(topK),
+        minScore: String(minScore),
+      });
+      const res = await this.fetchImpl(
+        `${base}/wiki/semantic-search?${searchParams.toString()}`
+      );
+      if (!res.ok) {
+        throw new Error(`semantic search failed: ${res.status}`);
+      }
+      return (await res.json()) as SearchRouteResponse;
+    });
+
+    const fileRequests = inputs.flatMap(q =>
+      this.ragSourcePaths.map(async dir => {
+        const searchParams = new URLSearchParams({
+          q,
+          maxResults: String(topK),
+          minScore: String(minScore),
+          // Send the RAW configured path: the beacon resolves it with
+          // path.resolve at both registration and query time, so the
+          // authorization check (startsWith) matches.
+          path: dir.path,
+        });
+        for (const e of dir.exclude ?? []) searchParams.append('exclude', e);
         const res = await this.fetchImpl(
-          `${base}/wiki/semantic-search?${searchParams.toString()}`
+          `${base}/agents/${agentId}/search?${searchParams.toString()}`
         );
         if (!res.ok) {
-          throw new Error(`semantic search failed: ${res.status}`);
+          throw new Error(`workspace search failed: ${res.status}`);
         }
-        return (await res.json()) as SearchRouteResponse;
+        return (await res.json()) as WorkspaceSearchResponse;
       })
     );
 
-    // Merge per-document MAX score across all query inputs.
+    const [wikiResponses, fileResponses] = await Promise.all([
+      Promise.all(wikiRequests),
+      Promise.all(fileRequests),
+    ]);
+
+    // Merge per-document MAX score across all query inputs and both kinds.
     const byKey = new Map<string, SwarmMemoryEntry>();
-    for (const response of responses) {
+    for (const response of wikiResponses) {
       for (const result of response.results) {
-        const key = `${result.pageId}\u0000${result.origin}`;
+        const key = `wiki\u0000${result.pageId}\u0000${result.origin}`;
         const entry: SwarmMemoryEntry = {
+          kind: 'wiki',
           pageId: result.pageId,
           origin: result.origin,
           title: result.title,
@@ -268,27 +333,52 @@ export class SwarmMemoryRetriever {
         }
       }
     }
-
-    // Additive configurable anchor boosts.
-    const anchors = this.config.anchors;
-    if (anchors && anchors.tags.length > 0) {
-      const boostPerTag = anchors.boostPerTag ?? 0.08;
-      const boostTitle = anchors.boostTitle ?? 0;
-      const lowered = anchors.tags.map(t => t.toLowerCase());
-      for (const entry of byKey.values()) {
-        const titleLower = entry.title.toLowerCase();
-        const tagsLower = (entry.tags ?? []).map(t => t.toLowerCase());
-        for (const anchor of lowered) {
-          const tagHit = tagsLower.includes(anchor);
-          const titleHit = titleLower.includes(anchor);
-          if (tagHit) entry.score += boostPerTag;
-          if (titleHit) entry.score += boostTitle;
+    for (const response of fileResponses) {
+      for (const result of response.results) {
+        const key = `file\u0000${result.file}`;
+        const entry: SwarmMemoryEntry = {
+          kind: 'file',
+          filePath: result.file,
+          score: result.score,
+          snippet: truncatePitch(result.content),
+        };
+        const existing = byKey.get(key);
+        if (!existing || entry.score > existing.score) {
+          byKey.set(key, entry);
         }
       }
     }
 
-    return [...byKey.values()]
-      .sort((a, b) => b.score - a.score)
-      .slice(0, this.config.topK ?? 5);
+    this.applyAnchorBoosts(byKey);
+
+    return [...byKey.values()].sort((a, b) => b.score - a.score).slice(0, topK);
+  }
+
+  /**
+   * Additive configurable anchor boosts. Wiki entries match anchors against
+   * their tags (per-tag boost) and title (title boost). File entries have no
+   * tags, so their path stands in for the title to keep anchor matching
+   * symmetric across kinds.
+   */
+  private applyAnchorBoosts(byKey: Map<string, SwarmMemoryEntry>): void {
+    const anchors = this.config.anchors;
+    if (!anchors || anchors.tags.length === 0) return;
+    const boostPerTag = anchors.boostPerTag ?? 0.08;
+    const boostTitle = anchors.boostTitle ?? 0.05;
+    const lowered = anchors.tags.map(t => t.toLowerCase());
+    for (const entry of byKey.values()) {
+      const titleLower =
+        entry.kind === 'wiki'
+          ? entry.title.toLowerCase()
+          : entry.filePath.toLowerCase();
+      const tagsLower =
+        entry.kind === 'wiki' ? entry.tags.map(t => t.toLowerCase()) : [];
+      for (const anchor of lowered) {
+        const tagHit = tagsLower.includes(anchor);
+        const titleHit = titleLower.includes(anchor);
+        if (tagHit) entry.score += boostPerTag;
+        if (titleHit) entry.score += boostTitle;
+      }
+    }
   }
 }

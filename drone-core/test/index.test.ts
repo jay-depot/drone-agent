@@ -127,6 +127,40 @@ describe('createDefaultAgentConfig', () => {
       parseConfigWithSchema({ herdr: { enabled: 'yes' } }, 'test')
     ).toThrow();
   });
+
+  it('leaves search.paths[].ragSource undefined by default', () => {
+    const config = createDefaultAgentConfig();
+    expect(config.search.paths).toEqual([]);
+  });
+
+  it('accepts a boolean search.paths[].ragSource through the schema', () => {
+    const parsed = parseConfigWithSchema(
+      {
+        search: {
+          paths: [
+            { path: '/a', ragSource: true },
+            { path: '/b', ragSource: false },
+            { path: '/c' },
+          ],
+        },
+      },
+      'test'
+    );
+    expect(parsed.search?.paths).toEqual([
+      { path: '/a', ragSource: true },
+      { path: '/b', ragSource: false },
+      { path: '/c' },
+    ]);
+  });
+
+  it('rejects a non-boolean search.paths[].ragSource through the schema', () => {
+    expect(() =>
+      parseConfigWithSchema(
+        { search: { paths: [{ path: '/a', ragSource: 'yes' }] } },
+        'test'
+      )
+    ).toThrow();
+  });
 });
 
 describe('applyAgentConfigLayer', () => {

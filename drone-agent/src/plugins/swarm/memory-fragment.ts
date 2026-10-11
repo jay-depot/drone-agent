@@ -10,17 +10,14 @@ function pitchOf(text: string): string {
 }
 
 /**
- * Renders each entry's pitch as `— {pitch}`. The pitch is sourced from the
- * wiki page's stored `pitch` schema field when present (field-first), falling
- * back to the best-scoring vector chunk for pages written without one.
- */
-
-/**
- * The `# Swarm Memory (wiki)` header fragment: an advertise+recall index of
- * wiki entries relevant to the current conversation. Reads the retriever's
- * cache ONLY — never the network — so it stays cheap and synchronous at
- * prompt-build time. Returns false (hidden entirely) while disabled or
- * before the first retrieval returns.
+ * The `# Swarm Memory` footer fragment: an advertise+recall index of the
+ * knowledge sources relevant to the current conversation. Wiki entries are
+ * rendered from the page's stored `pitch` schema field when present
+ * (field-first), falling back to the best-scoring vector chunk; workspace
+ * file entries are rendered from the best-matching chunk's snippet. Reads the
+ * retriever's cache ONLY — never the network — so it stays cheap and
+ * synchronous at prompt-build time. Returns false (hidden entirely) while
+ * disabled or before the first retrieval returns.
  */
 export function createSwarmMemoryFragment(
   retriever: SwarmMemoryRetriever
@@ -36,22 +33,31 @@ export function createSwarmMemoryFragment(
       const lines: string[] = [
         '# Swarm Memory',
         '',
-        'The following entries in swarm memory may be relevant to this conversation:',
+        'The following knowledge sources may be relevant to this conversation:',
         '',
       ];
       for (const entry of cache.entries) {
-        const pitch = pitchOf(entry.pitch);
-        lines.push(
-          `- id: \`${entry.pageId}\` (${entry.origin}) · Title: ${entry.title} · score: ${entry.score.toFixed(2)}${pitch ? ` — ${pitch}` : ''}`
-        );
+        if (entry.kind === 'wiki') {
+          const pitch = pitchOf(entry.pitch);
+          lines.push(
+            `- wiki \`${entry.pageId}\` (${entry.origin}) · Title: ${entry.title} · score: ${entry.score.toFixed(2)}${pitch ? ` — ${pitch}` : ''}`
+          );
+        } else {
+          const snippet = pitchOf(entry.snippet);
+          lines.push(
+            `- file \`${entry.filePath}\` · score: ${entry.score.toFixed(2)}${snippet ? ` — ${snippet}` : ''}`
+          );
+        }
       }
       lines.push('');
       lines.push(
         '---',
-        'If a suggested page is relevant, call `swarm__wiki_read` to load its full contents.',
+        'If a suggested wiki page is relevant, call `swarm__wiki_read` to load its full contents.',
+        'If a suggested file is relevant, read it with `file__read`.',
         '',
-        'Pages are built from past session history and can contain useful context around ',
-        'continuing work, revisiting previous decisions, and avoiding repeated mistakes.'
+        'These sources come from past session history and indexed project files, and can ',
+        'contain useful context around continuing work, revisiting previous decisions, and ',
+        'avoiding repeated mistakes.'
       );
       return lines.join('\n');
     },
