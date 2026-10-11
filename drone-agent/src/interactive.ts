@@ -9,6 +9,9 @@ import type {
   ConversationEvent,
   ConversationEventHandler,
 } from './runtime/conversation-service.js';
+import type { DronePortableContextExport } from 'drone-core';
+import { DRONE_PORTABLE_CONTEXT_CAPABILITY_ID } from 'drone-core';
+import type { DronePortableContextCapability } from 'drone-core';
 import type { createDronePluginEngine } from './runtime/plugin-engine.js';
 import type { createConsoleLogger, DroneLlmCapability } from 'drone-core';
 import type { createSessionManager } from './runtime/session-manager.js';
@@ -35,7 +38,13 @@ export type InputEvent =
        * as a system reminder (never entered into session history).
        */
       systemReminder?: string;
-    };
+    }
+  /**
+   * Portable-context control commands. These are NOT turns: they never run
+   * `onBeforePrompt`/`onAfterToolCall` and never emit `turnComplete`.
+   */
+  | { type: 'exportContext' }
+  | { type: 'importContext'; context: DronePortableContextExport };
 
 function getPersonaCapability(
   engine: CreateDronePluginEngine
@@ -259,6 +268,47 @@ export async function runJsonListenMode(
         event = JSON.parse(trimmed) as InputEvent;
       } catch {
         ndjsonHandler({ kind: 'error', message: `Invalid JSON: ${trimmed}` });
+        continue;
+      }
+
+      // Portable-context control commands. These are not turns: they never
+      // run the prompt hooks and never emit `turnComplete`. Handled before
+      // the chat-only rejection branch below.
+      if (event.type === 'exportContext' || event.type === 'importContext') {
+        const capability =
+          engine.getCapability<DronePortableContextCapability>(
+            DRONE_PORTABLE_CONTEXT_CAPABILITY_ID
+          );
+        if (!capability) {
+          ndjsonHandler({
+            kind: event.type === 'exportContext' ? 'contextExport' : 'contextImport',
+            ok: false,
+            error: 'portable-context capability is unavailable',
+          });
+          continue;
+        }
+        if (event.type === 'exportContext') {
+          try {
+            const context = await capability.exportContext();
+            ndjsonHandler({ kind: 'contextExport', ok: true, context });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            ndjsonHandler({ kind: 'contextExport', ok: false, error: message });
+          }
+        } else {
+          try {
+            const result = await capability.importContext(event.context);
+            ndjsonHandler({
+              kind: 'contextImport',
+              ok: true,
+              warnings: result.warnings,
+              unavailableTools: result.unavailableTools,
+            });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            ndjsonHandler({ kind: 'contextImport', ok: false, error: message });
+          }
+        }
         continue;
       }
 

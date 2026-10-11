@@ -263,6 +263,13 @@ export type DroneWakelockConfig = {
   enabled: boolean;
 };
 
+export type DroneCheckpointConfig = {
+  /** Write an `auto-end-*` checkpoint when a session ends (clear or shutdown). */
+  autoOnSessionEnd: boolean;
+  /** Write an `auto-round-*` checkpoint after each completed round. */
+  autoOnRoundComplete: boolean;
+};
+
 export type DroneHerdrConfig = {
   /** Master toggle for reporting agent state to the Herdr terminal multiplexer. */
   enabled: boolean;
@@ -474,6 +481,7 @@ export type DroneAgentConfig = {
   compaction: DroneCompactionConfig;
   memory: DroneMemoryConfig;
   wakelock: DroneWakelockConfig;
+  checkpoint: DroneCheckpointConfig;
   herdr: DroneHerdrConfig;
   log: DroneLogConfig;
   terminal: DroneTerminalConfig;
@@ -501,6 +509,7 @@ export type PartialDroneAgentConfig = Partial<{
   compaction: Partial<DroneCompactionConfig>;
   memory: Partial<DroneMemoryConfig>;
   wakelock: Partial<DroneWakelockConfig>;
+  checkpoint: Partial<DroneCheckpointConfig>;
   herdr: Partial<DroneHerdrConfig>;
   log: Partial<DroneLogConfig>;
   promptFile: Partial<DronePromptFileConfig>;
@@ -547,6 +556,7 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
     'compaction',
     'memory',
     'wakelock',
+    'checkpoint',
     'herdr',
     'log',
     'terminal',
@@ -691,6 +701,10 @@ export function createDefaultAgentConfig(
     },
     wakelock: {
       enabled: true,
+    },
+    checkpoint: {
+      autoOnSessionEnd: false,
+      autoOnRoundComplete: false,
     },
     herdr: {
       enabled: true,

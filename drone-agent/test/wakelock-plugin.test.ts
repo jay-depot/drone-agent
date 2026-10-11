@@ -64,6 +64,7 @@ function makeRegistration(overrides?: {
         onConversationEvent = cb;
       },
       onSessionClear: () => {},
+      onSessionRecycle: () => {},
       onShutdown: (cb: () => Promise<void>) => {
         onShutdown = cb;
       },

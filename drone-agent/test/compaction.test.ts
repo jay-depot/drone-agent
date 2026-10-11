@@ -76,6 +76,7 @@ type HookBucket = {
   onAfterToolCall: Array<() => Promise<void>>;
   onConversationEvent: Array<(event: DroneConversationEvent) => Promise<void>>;
   onSessionClear: Array<() => Promise<void>>;
+  onSessionRecycle: Array<() => Promise<void>>;
   onShutdown: Array<() => Promise<void>>;
   onSessionSafetyTrimWillRun: Array<
     (payload: DroneSessionSafetyTrimPayload) => Promise<void>
@@ -117,6 +118,7 @@ async function captureRegistration(
     onBeforePrompt: [],
     onAfterToolCall: [],
     onSessionClear: [],
+    onSessionRecycle: [],
     onShutdown: [],
     onSessionSafetyTrimWillRun: [],
     onSessionSafetyTrimApplied: [],
@@ -195,6 +197,7 @@ async function captureRegistration(
       onAfterToolCall: cb => hooks.onAfterToolCall.push(cb),
       onConversationEvent: cb => hooks.onConversationEvent.push(cb),
       onSessionClear: cb => hooks.onSessionClear.push(cb),
+      onSessionRecycle: () => {},
       onShutdown: cb => hooks.onShutdown.push(cb),
       onSessionSafetyTrimWillRun: cb =>
         hooks.onSessionSafetyTrimWillRun.push(cb),
@@ -304,6 +307,7 @@ describe('createCompactionPlugin', () => {
         onBeforePrompt: [],
         onAfterToolCall: [],
         onSessionClear: [],
+        onSessionRecycle: [],
         onShutdown: [],
         onSessionSafetyTrimWillRun: [],
         onSessionSafetyTrimApplied: [],
@@ -333,6 +337,7 @@ describe('createCompactionPlugin', () => {
           onAfterToolCall: cb => hooks.onAfterToolCall.push(cb),
           onConversationEvent: cb => hooks.onConversationEvent.push(cb),
           onSessionClear: cb => hooks.onSessionClear.push(cb),
+          onSessionRecycle: () => {},
           onShutdown: cb => hooks.onShutdown.push(cb),
           onSessionSafetyTrimWillRun: cb =>
             hooks.onSessionSafetyTrimWillRun.push(cb),

@@ -60,6 +60,7 @@ function captureGitTools(): Map<
       onAfterToolCall: () => {},
       onConversationEvent: () => {},
       onSessionClear: () => {},
+      onSessionRecycle: () => {},
       onShutdown: () => {},
       onSessionSafetyTrimWillRun: () => {},
       onSessionSafetyTrimApplied: () => {},

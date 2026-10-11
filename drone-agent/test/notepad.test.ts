@@ -37,6 +37,7 @@ function createMockRegistration(): {
       onConversationEvent: () => {},
       onShutdown: () => {},
       onSessionClear: () => {},
+      onSessionRecycle: () => {},
       onSessionSafetyTrimWillRun: () => {},
       onSessionSafetyTrimApplied: () => {},
     },

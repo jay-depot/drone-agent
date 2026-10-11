@@ -48,6 +48,7 @@ function createCapture(
         conversationEventHooks.push(cb);
       },
       onSessionClear: () => {},
+      onSessionRecycle: () => {},
       onShutdown: () => {},
       onSessionSafetyTrimWillRun: () => {},
       onSessionSafetyTrimApplied: () => {},

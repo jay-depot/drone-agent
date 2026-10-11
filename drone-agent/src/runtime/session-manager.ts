@@ -29,6 +29,12 @@ export type DroneSessionManager = {
     content: string,
     opts?: { kind?: 'summary' }
   ) => DroneSessionTurn;
+  /**
+   * Append restored turns verbatim, each with a fresh `randomUUID()` id.
+   * Used by portable-context import; turn ids are never carried across a
+   * checkpoint.
+   */
+  appendTurns: (turns: Array<{ kind?: 'summary'; messages: DroneSessionMessage[] }>) => void;
   clearSession: () => void;
 };
 
@@ -162,6 +168,15 @@ export function createSessionManager(): DroneSessionManager {
       }
       turns.splice(insertIndex, 0, turn);
       return turn;
+    },
+    appendTurns: restoredTurns => {
+      for (const restored of restoredTurns) {
+        turns.push({
+          id: randomUUID(),
+          messages: restored.messages.map(message => ({ ...message })),
+          kind: restored.kind,
+        });
+      }
     },
     clearSession: () => {
       turns.length = 0;

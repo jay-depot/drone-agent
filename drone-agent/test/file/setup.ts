@@ -82,6 +82,7 @@ export function captureRegistration(): {
       onAfterToolCall: () => {},
       onConversationEvent: () => {},
       onSessionClear: () => {},
+      onSessionRecycle: () => {},
       onShutdown: () => {},
       onSessionSafetyTrimWillRun: () => {},
       onSessionSafetyTrimApplied: () => {},

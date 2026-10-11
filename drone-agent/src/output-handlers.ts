@@ -1,4 +1,5 @@
 import { stdout as output } from 'node:process';
+import type { DronePortableContextExport } from 'drone-core';
 
 /**
  * Event types for structured output (NDJSON protocol).
@@ -13,7 +14,16 @@ export type OutputEvent =
   | { kind: 'return'; result: string; error?: string; subagentId?: string }
   | { kind: 'turnComplete' }
   | { kind: 'notice'; content: string }
-  | { kind: 'aside'; question: string; answer: string };
+  | { kind: 'aside'; question: string; answer: string }
+  /**
+   * Portable-context control outputs. Responses to the `exportContext` /
+   * `importContext` stdin commands; they carry no turn semantics and are
+   * never accompanied by `turnComplete`.
+   */
+  | { kind: 'contextExport'; ok: true; context: DronePortableContextExport }
+  | { kind: 'contextExport'; ok: false; error: string }
+  | { kind: 'contextImport'; ok: true; warnings: string[]; unavailableTools: string[] }
+  | { kind: 'contextImport'; ok: false; error: string };
 
 /**
  * Builds a plain-text event handler for `sendUserMessage` that mirrors what

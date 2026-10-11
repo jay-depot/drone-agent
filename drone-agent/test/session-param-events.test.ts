@@ -23,7 +23,7 @@ function createCapture(
   const conversationEventHooks: Array<
     (event: DroneConversationEvent) => Promise<void> | void
   > = [];
-  const hooks: Record<string, Array<() => Promise<void>>> = {};
+  const hooks: Record<string, Array<(...args: never[]) => Promise<void>>> = {};
 
   const registration: DronePluginRegistration = {
     logger: silentLogger(),
@@ -54,6 +54,9 @@ function createCapture(
       },
       onSessionClear: cb => {
         (hooks.onSessionClear ??= []).push(cb);
+      },
+      onSessionRecycle: cb => {
+        (hooks.onSessionRecycle ??= []).push(cb);
       },
       onShutdown: cb => {
         (hooks.onShutdown ??= []).push(cb);

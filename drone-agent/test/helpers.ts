@@ -43,6 +43,7 @@ export type TestPluginHookOptions = {
   onAfterToolCall?: () => Promise<void> | void;
   onConversationEvent?: (event: DroneConversationEvent) => Promise<void> | void;
   onSessionClear?: () => Promise<void> | void;
+  onSessionRecycle?: () => Promise<void> | void;
   onShutdown?: () => Promise<void> | void;
   onSessionSafetyTrimWillRun?: (
     payload: DroneSessionSafetyTrimPayload
@@ -140,6 +141,12 @@ export function createTestPlugin(options: TestPluginOptions): DronePlugin {
           await cb();
         });
       }
+      if (hooks?.onSessionRecycle) {
+        const cb = hooks.onSessionRecycle;
+        registration.hooks.onSessionRecycle(async () => {
+          await cb();
+        });
+      }
       if (hooks?.onShutdown) {
         const cb = hooks.onShutdown;
         registration.hooks.onShutdown(async () => {
@@ -216,6 +223,8 @@ export function createFakeEngine(
     getHelpSnippets: () => [],
     drainSystemReminders: () => [],
     clearSystemReminders: () => {},
+    clearSession: async () => {},
+    getSessionId: () => 'fake-session',
     queueSystemReminder: () => {},
     getConfig: () => {
       throw new Error('getConfig not implemented in fake engine');
@@ -329,6 +338,8 @@ export function createMockEngine(
     getSlashCommands: () => [],
     drainSystemReminders: () => reminderQueue.drainAll(),
     clearSystemReminders: () => reminderQueue.clear(),
+    clearSession: async () => {},
+    getSessionId: () => 'mock-session',
     queueSystemReminder: (content: string) => reminderQueue.queue(content),
     onConversationEvent: () => () => {},
     registerBuiltinSlashCommand: () => {},

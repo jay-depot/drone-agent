@@ -46,6 +46,7 @@ async function captureBroker(
       onAfterToolCall: () => {},
       onConversationEvent: () => {},
       onSessionClear: () => {},
+      onSessionRecycle: () => {},
       onShutdown: () => {},
       onSessionSafetyTrimWillRun: () => {},
       onSessionSafetyTrimApplied: () => {},

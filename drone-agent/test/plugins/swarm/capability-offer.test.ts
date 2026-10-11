@@ -41,6 +41,7 @@ function createCapture() {
       onAfterToolCall: () => {},
       onConversationEvent: () => {},
       onSessionClear: () => {},
+      onSessionRecycle: () => {},
       onShutdown: cb => {
         onShutdown = cb;
       },

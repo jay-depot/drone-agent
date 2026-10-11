@@ -256,6 +256,7 @@ describe('swarm plugin fragment registration', () => {
         onAfterToolCall: () => {},
         onConversationEvent: () => {},
         onSessionClear: () => {},
+        onSessionRecycle: () => {},
         onShutdown: () => {},
         onSessionSafetyTrimWillRun: () => {},
         onSessionSafetyTrimApplied: () => {},

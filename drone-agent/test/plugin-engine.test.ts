@@ -493,6 +493,7 @@ describe('createDronePluginEngine', () => {
         onAfterToolCall: () => {},
         onConversationEvent: () => Promise.resolve(),
         onSessionClear: () => {},
+        onSessionRecycle: () => {},
         onShutdown: () => {},
         onSessionSafetyTrimWillRun: () => {},
         onSessionSafetyTrimApplied: () => {},

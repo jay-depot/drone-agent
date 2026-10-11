@@ -363,6 +363,7 @@ describe('terminalPlugin', () => {
         systemPrompt: '',
         activePersona: null,
         llm: { provider: 'ollama' },
+        checkpoint: { autoOnSessionEnd: false, autoOnRoundComplete: false },
         providers: {},
         ollama: { host: 'http://127.0.0.1:11434', model: 'llama3.1' },
         openai: {
@@ -503,6 +504,7 @@ describe('terminalPlugin', () => {
           shutdownHook = cb;
         },
         onSessionClear: () => {},
+        onSessionRecycle: () => {},
         onSessionSafetyTrimWillRun: () => {},
         onSessionSafetyTrimApplied: () => {},
       },

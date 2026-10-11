@@ -90,6 +90,7 @@ async function makeHarness(opts: {
       onAfterToolCall: () => {},
       onConversationEvent: () => {},
       onSessionClear: () => {},
+      onSessionRecycle: () => {},
       onShutdown: () => {},
       onSessionSafetyTrimWillRun: () => {},
       onSessionSafetyTrimApplied: () => {},

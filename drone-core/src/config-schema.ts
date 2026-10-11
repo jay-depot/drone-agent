@@ -336,6 +336,10 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
     wakelock: Type.Object({
       enabled: Type.Optional(Type.Boolean()),
     }),
+    checkpoint: Type.Object({
+      autoOnSessionEnd: Type.Optional(Type.Boolean()),
+      autoOnRoundComplete: Type.Optional(Type.Boolean()),
+    }),
     herdr: Type.Object({
       enabled: Type.Optional(Type.Boolean()),
       resumeCommand: Type.Optional(Type.String()),
