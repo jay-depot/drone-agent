@@ -128,8 +128,18 @@ export function createSwarmPlugin(
         userSwarmConfig.beaconPort ?? config.beaconPort ?? DEFAULT_BEACON_PORT;
       const beaconUseHttps =
         userSwarmConfig.beaconUseHttps ?? config.beaconUseHttps ?? false;
+      // The engine owns the session id (host-seeded via --session-id /
+      // DRONE_SESSION_ID); read it from `_runtime` rather than minting. The
+      // plugin-config values stay as a fallback for hosts that predate the
+      // engine-owned id.
+      const engineSessionId = registration
+        .request<{ getSessionId?: () => string }>('runtime')
+        ?.getSessionId?.();
       const sessionId =
-        userSwarmConfig.sessionId ?? config.sessionId ?? `agent-${Date.now()}`;
+        engineSessionId ??
+        userSwarmConfig.sessionId ??
+        config.sessionId ??
+        `agent-${Date.now()}`;
       const protocol = beaconUseHttps ? 'https' : 'http';
       const baseUrl = `${protocol}://${beaconHost}:${beaconPort}`;
       const wsProtocol = beaconUseHttps ? 'wss' : 'ws';
@@ -208,14 +218,14 @@ export function createSwarmPlugin(
       // returns, so the bindings are initialized by then.
       const swarmCap: DroneSwarmCapability & DroneSessionImportCapability = {
         getBeaconUrl: () => baseUrl,
-        getAgentId: () => sessionId,
+        getAgentId: () => ctx.sessionId,
         runImport: targetSessionId =>
           runSessionImport(
             buildSessionImportDeps(
               registration,
               deps,
               baseUrl,
-              sessionId,
+              ctx.sessionId,
               sessionImportConfig,
               getContextWindowTokens
             ),
@@ -367,7 +377,7 @@ export function createSwarmPlugin(
       registration.registerSlashCommand(
         createSwarmSessionCommand(
           baseUrl,
-          sessionId,
+          () => ctx.sessionId,
           sessionImportConfig,
           getContextWindowTokens
         )

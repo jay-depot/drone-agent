@@ -20,6 +20,18 @@ interface FragmentWsPayload {
 }
 
 /**
+ * Build the beacon WebSocket URL for a given agent/session id. Shared by the
+ * initial connect path and the session-recycle reconnect.
+ */
+export function buildWsUrl(
+  baseUrl: string,
+  sessionId: string
+): string {
+  const wsProtocol = baseUrl.startsWith('https') ? 'wss' : 'ws';
+  return `${wsProtocol}://${baseUrl.replace(/^https?:\/\//, '')}/ws?agentId=${sessionId}`;
+}
+
+/**
  * Connect to the beacon WebSocket and set up event handlers.
  */
 export function connectWebSocket(ctx: SwarmContext): void {

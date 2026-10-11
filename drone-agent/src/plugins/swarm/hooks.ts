@@ -13,11 +13,13 @@ import type {
   DroneSelfImprovementCapability,
   DronePersonaCapability,
 } from 'drone-core';
+import type { DronePluginRegistration } from 'drone-core';
 import type { SwarmContext } from './context.js';
 import { reloadFromBeacon } from './providers.js';
-import { connectWebSocket } from './websocket.js';
+import { buildWsUrl, connectWebSocket } from './websocket.js';
 import { BeaconConfigInjector } from './config.js';
 import { refreshSwarmInfo } from './swarm-info.js';
+import { surfacePendingCoordinatorTrust } from './tools-coordinator-trust.js';
 
 // JSON shapes returned by the beacon's /insights and /principles endpoints.
 interface BeaconInsightRecord {
@@ -75,6 +77,64 @@ export async function flushEventBuffer(ctx: SwarmContext): Promise<void> {
   } catch (err) {
     ctx.registration.logger.warn(`Failed to push events: ${err}`);
   }
+}
+
+/**
+ * Full re-cycle on session recycle: re-register the agent with the beacon
+ * under the new id, register the new swarm session, close the stale socket,
+ * and reopen the WebSocket on the new URL. The session id lives on the
+ * mutable `SwarmContext`, so every consumer that reads `ctx.sessionId`
+ * (heartbeat, event buffer, `getAgentId`, tools) follows automatically.
+ */
+export async function recycleSwarmSession(
+  ctx: SwarmContext,
+  registration: DronePluginRegistration,
+  newSessionId: string
+): Promise<void> {
+  const previousSessionId = ctx.sessionId;
+  ctx.sessionId = newSessionId;
+  ctx.wsUrl = buildWsUrl(ctx.baseUrl, newSessionId);
+  ctx.currentCorrelationId = null;
+  ctx.eventBuffer.length = 0;
+  registration.logger.info(
+    `Swarm session recycle: ${previousSessionId} → ${newSessionId}`
+  );
+
+  try {
+    const regRes = await fetch(`${ctx.baseUrl}/agents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: newSessionId, personaId: null }),
+    });
+    if (!regRes.ok) {
+      registration.logger.warn(
+        `Swarm recycle: failed to re-register agent: ${regRes.status}`
+      );
+    } else {
+      const regData = (await regRes.json().catch(() => null)) as {
+        coordinatorTrust?: {
+          fingerprintTrusted: boolean;
+          beaconApproved: boolean;
+          pendingFingerprint: string | null;
+          verificationCode: string | null;
+        };
+      } | null;
+      const trust = regData?.coordinatorTrust;
+      if (trust && (!trust.fingerprintTrusted || !trust.beaconApproved)) {
+        await surfacePendingCoordinatorTrust(ctx.baseUrl, registration);
+      }
+    }
+  } catch (err) {
+    registration.logger.warn(`Swarm recycle: agent re-registration failed: ${err}`);
+  }
+
+  await registerSwarmSession(ctx);
+  if (ctx.ws) {
+    ctx.ws.close();
+    ctx.ws = null;
+  }
+  ctx.wsReconnectAttempts = 0;
+  connectWebSocket(ctx);
 }
 
 /**
@@ -372,5 +432,9 @@ export function registerHooks(
   registration.hooks.onSessionClear(async () => {
     ctx.currentCorrelationId = null;
     ctx.eventBuffer.length = 0;
+  });
+
+  registration.hooks.onSessionRecycle(async payload => {
+    await recycleSwarmSession(ctx, registration, payload.sessionId);
   });
 }
