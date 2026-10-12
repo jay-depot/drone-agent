@@ -10,7 +10,8 @@ tags:
   - mcp
   - migration
 created: 2026-10-12T21:55:00.000Z
-updated: 2026-10-12T21:55:00.000Z
+updated: 2026-10-12T22:27:00.000Z
+status: completed
 ---
 
 # Plan: `enabledPlugins` override map + merge semantics for `lsp.servers` / `mcp.servers`
