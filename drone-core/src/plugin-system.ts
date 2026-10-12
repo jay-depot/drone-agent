@@ -123,9 +123,24 @@ export type DroneStandardHookName = Exclude<
   | 'onConversationEvent'
 >;
 
+export type DronePluginStatus = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  required: boolean;
+  defaultEnabled: boolean;
+};
+
 export type DronePluginRegistration = {
   logger: import('./session-types.js').DroneLogger;
   getConfig: () => DroneAgentConfig;
+  /**
+   * List every registered plugin with its resolved enablement state, as
+   * computed by the engine (defaults → config overrides → `required` →
+   * CLI-flag namespaces). Lets a plugin observe whether another plugin is
+   * active without reaching into the engine.
+   */
+  listPlugins: () => DronePluginStatus[];
   /**
    * This plugin's CLI flags, with the `"<pluginId>."` namespace stripped.
    * Values are the raw strings the user passed, or `true` for flag-only

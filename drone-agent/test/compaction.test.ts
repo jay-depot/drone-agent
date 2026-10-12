@@ -221,6 +221,7 @@ async function captureRegistration(
     runWorkflow: async () => ({ toolResult: '{}' }),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   };
 
   await plugin.register(registration);
@@ -351,6 +352,7 @@ describe('createCompactionPlugin', () => {
         runWorkflow: async () => ({ toolResult: '{}' }),
         getCliFlags: () => ({}),
         requestElicitation: () => undefined,
+        listPlugins: () => [],
       };
       await plugin.register(registration);
       return { registration, hooks, capability };

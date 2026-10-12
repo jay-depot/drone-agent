@@ -266,6 +266,7 @@ describe('swarm plugin fragment registration', () => {
       runWorkflow: async () => ({ toolResult: undefined }),
       getCliFlags: () => ({}),
       requestElicitation: () => undefined,
+      listPlugins: () => [],
     };
     return { registration, promptFragments };
   }

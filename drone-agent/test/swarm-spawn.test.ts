@@ -62,6 +62,7 @@ function createRegistrationCapture(
     runWorkflow: async () => ({ toolResult: undefined }),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   };
 
   return { registration, registeredTools };

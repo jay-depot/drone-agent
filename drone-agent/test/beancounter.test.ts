@@ -54,7 +54,7 @@ async function createEngineWithStubDriver(responder: () => StubChatResponse) {
   config.llm.active = 'stub/stub-model';
   const engine = createTestEngine({
     plugins: [llmPlugin, beancounterPlugin],
-    config: { ...config, enabledPlugins: ['llm', 'beancounter'] },
+    config: { ...config, enabledPlugins: { llm: true, beancounter: true } },
     logger: silentLogger(),
   });
   await engine.initialize();

@@ -40,7 +40,7 @@ async function withProjectDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
 
 async function setupEngine(projectDir: string) {
   const config = createDefaultAgentConfig();
-  config.enabledPlugins = ['skills', 'skill-provider-project'];
+  config.enabledPlugins = { skills: true, 'skill-provider-project': true };
   const engine = createTestEngine({
     plugins: [skillsPlugin, skillProviderProjectPlugin],
     config,

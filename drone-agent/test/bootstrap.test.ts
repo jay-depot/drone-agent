@@ -105,7 +105,7 @@ describe('bootstrap plugin', () => {
         plugins: [bootstrapPlugin],
         config: {
           ...createDefaultAgentConfig(),
-          enabledPlugins: ['bootstrap'],
+          enabledPlugins: { bootstrap: true },
         },
         logger: silentLogger(),
       });
@@ -118,7 +118,7 @@ describe('bootstrap plugin', () => {
         plugins: [bootstrapPlugin],
         config: {
           ...createDefaultAgentConfig(),
-          enabledPlugins: ['bootstrap'],
+          enabledPlugins: { bootstrap: true },
         },
         logger: silentLogger(),
       });

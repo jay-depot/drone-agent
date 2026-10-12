@@ -45,7 +45,10 @@ describe('skills.list tool (with reload)', () => {
       process.cwd = () => projectDir;
       try {
         const config = createDefaultAgentConfig();
-        config.enabledPlugins = ['skills', 'skill-provider-project'];
+        config.enabledPlugins = {
+          skills: true,
+          'skill-provider-project': true,
+        };
         const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
@@ -91,7 +94,10 @@ describe('skills.list tool (with reload)', () => {
       process.cwd = () => projectDir;
       try {
         const config = createDefaultAgentConfig();
-        config.enabledPlugins = ['skills', 'skill-provider-project'];
+        config.enabledPlugins = {
+          skills: true,
+          'skill-provider-project': true,
+        };
         const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
@@ -116,7 +122,10 @@ describe('skills.list tool (with reload)', () => {
       process.cwd = () => projectDir;
       try {
         const config = createDefaultAgentConfig();
-        config.enabledPlugins = ['skills', 'skill-provider-project'];
+        config.enabledPlugins = {
+          skills: true,
+          'skill-provider-project': true,
+        };
         const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
@@ -164,7 +173,10 @@ describe('skills.list tool (with reload)', () => {
       process.cwd = () => projectDir;
       try {
         const config = createDefaultAgentConfig();
-        config.enabledPlugins = ['skills', 'skill-provider-project'];
+        config.enabledPlugins = {
+          skills: true,
+          'skill-provider-project': true,
+        };
         const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
@@ -227,7 +239,10 @@ describe('skill remark field visibility', () => {
       process.cwd = () => projectDir;
       try {
         const config = createDefaultAgentConfig();
-        config.enabledPlugins = ['skills', 'skill-provider-project'];
+        config.enabledPlugins = {
+          skills: true,
+          'skill-provider-project': true,
+        };
         const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
@@ -260,7 +275,10 @@ describe('skill remark field visibility', () => {
       process.cwd = () => projectDir;
       try {
         const config = createDefaultAgentConfig();
-        config.enabledPlugins = ['skills', 'skill-provider-project'];
+        config.enabledPlugins = {
+          skills: true,
+          'skill-provider-project': true,
+        };
         const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
@@ -293,7 +311,10 @@ describe('skill remark field visibility', () => {
       process.cwd = () => projectDir;
       try {
         const config = createDefaultAgentConfig();
-        config.enabledPlugins = ['skills', 'skill-provider-project'];
+        config.enabledPlugins = {
+          skills: true,
+          'skill-provider-project': true,
+        };
         const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
@@ -328,7 +349,10 @@ describe('skill remark field visibility', () => {
       process.cwd = () => projectDir;
       try {
         const config = createDefaultAgentConfig();
-        config.enabledPlugins = ['skills', 'skill-provider-project'];
+        config.enabledPlugins = {
+          skills: true,
+          'skill-provider-project': true,
+        };
         const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
@@ -361,7 +385,10 @@ describe('skill remark field visibility', () => {
       process.cwd = () => projectDir;
       try {
         const config = createDefaultAgentConfig();
-        config.enabledPlugins = ['skills', 'skill-provider-project'];
+        config.enabledPlugins = {
+          skills: true,
+          'skill-provider-project': true,
+        };
         const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
@@ -419,7 +446,10 @@ describe('/skills recall appends a correctly-paired synthetic tool exchange', ()
       process.cwd = () => projectDir;
       try {
         const config = createDefaultAgentConfig();
-        config.enabledPlugins = ['skills', 'skill-provider-project'];
+        config.enabledPlugins = {
+          skills: true,
+          'skill-provider-project': true,
+        };
         const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,

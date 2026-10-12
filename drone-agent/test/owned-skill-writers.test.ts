@@ -36,7 +36,9 @@ async function withEngine<T>(
   fn: (engine: ReturnType<typeof createTestEngine>) => Promise<T>
 ): Promise<T> {
   const config = createDefaultAgentConfig();
-  config.enabledPlugins = enabledPlugins;
+  config.enabledPlugins = Object.fromEntries(
+    enabledPlugins.map(id => [id, true])
+  );
   const engine = createTestEngine({ plugins, config });
   await engine.initialize();
   return fn(engine);

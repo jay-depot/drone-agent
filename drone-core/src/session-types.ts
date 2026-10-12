@@ -24,7 +24,7 @@ export type DroneLogger = {
 };
 
 export type DroneToolJsonSchemaProperty = {
-  type: 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array';
+  type?: 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array';
   description?: string;
   enum?: string[];
   properties?: Record<string, DroneToolJsonSchemaProperty>;

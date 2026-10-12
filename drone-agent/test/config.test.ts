@@ -123,6 +123,82 @@ describe('loadAgentConfig', () => {
     );
   });
 
+  it('migrates a legacy enabledPlugins array on disk to map form with a backup', async () => {
+    const { projectDir } = await setupDirs();
+    const userConfigPath = path.join(testHomeDir, '.drone-agent/config.json');
+    // A legacy whitelist spanning the defaults plus one opt-in provider.
+    const legacyList = [
+      'startup',
+      'llm',
+      'ollama',
+      'mcp',
+      'compaction',
+      'macros',
+      'log',
+      'config',
+      'subagent',
+      'exec',
+      'echo',
+    ];
+    await writeJson(userConfigPath, { enabledPlugins: legacyList });
+
+    const resolved = await loadAgentConfig(projectDir);
+
+    // Parsed layers carry the map shape; the opt-in provider is on.
+    expect(resolved.config.enabledPlugins['echo']).toBe(true);
+
+    // The on-disk file was rewritten to map form exactly once.
+    const { readFile, readdir } = await import('node:fs/promises');
+    const rewritten = JSON.parse(await readFile(userConfigPath, 'utf-8'));
+    expect(Array.isArray(rewritten.enabledPlugins)).toBe(false);
+    expect(rewritten.enabledPlugins['echo']).toBe(true);
+
+    const backups = (await readdir(path.dirname(userConfigPath))).filter(
+      name => name.startsWith('config.json.') && name.endsWith('.old')
+    );
+    expect(backups).toHaveLength(1);
+
+    // The advisory notice is surfaced.
+    expect(
+      resolved.warnings?.some(w => w.includes('translated from a list'))
+    ).toBe(true);
+
+    // Idempotent: a second load adds no further backup.
+    await loadAgentConfig(projectDir);
+    const backupsAfter = (await readdir(path.dirname(userConfigPath))).filter(
+      name => name.startsWith('config.json.') && name.endsWith('.old')
+    );
+    expect(backupsAfter).toHaveLength(1);
+  });
+
+  it('yields an unchanged effective plugin set when the legacy list covers the defaults', async () => {
+    const { projectDir } = await setupDirs();
+    const userConfigPath = path.join(testHomeDir, '.drone-agent/config.json');
+    // Every default-enabled plugin id (startup is required, so it is
+    // force-added regardless).
+    const defaultsList = [
+      'startup',
+      'mcp',
+      'compaction',
+      'macros',
+      'log',
+      'config',
+      'llm',
+      'subagent',
+      'exec',
+      'ollama',
+    ];
+    await writeJson(userConfigPath, { enabledPlugins: defaultsList });
+
+    const resolved = await loadAgentConfig(projectDir);
+
+    // The override map marks only the translated ids true — it does not
+    // disable any default the list omitted.
+    expect(Object.values(resolved.config.enabledPlugins)).not.toContain(false);
+    expect(resolved.config.enabledPlugins['startup']).toBe(true);
+    expect(resolved.config.enabledPlugins['llm']).toBe(true);
+  });
+
   it('rejects unsupported LSP transports', async () => {
     const { projectDir } = await setupDirs();
     await writeJson(path.join(projectDir, '.drone-agent/config.json'), {

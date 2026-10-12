@@ -143,7 +143,7 @@ Example project config:
 
 ```json
 {
-  "enabledPlugins": ["lsp"],
+  "enabledPlugins": { "lsp": true },
   "lsp": {
     "enabled": true,
     "diagnosticTokenBudget": 500,
@@ -167,7 +167,7 @@ You can also attach to an existing external server instead of spawning your own:
 
 ```json
 {
-  "enabledPlugins": ["lsp"],
+  "enabledPlugins": { "lsp": true },
   "lsp": {
     "enabled": true,
     "preferExternal": true,

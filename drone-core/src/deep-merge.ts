@@ -17,6 +17,12 @@ export type MergeSpec = {
   replaceNullable?: string[];
   /** Fields where arrays are merged and deduplicated (not replaced). */
   mergeArrays?: string[];
+  /**
+   * Fields whose value is a named-entry map (e.g. `servers: { github: {...} }`).
+   * The layer map is shallow-merged over the base map. A `null` entry deletes
+   * that entry from the base; a `null` whole value clears the map to `{}`.
+   */
+  mergeMaps?: string[];
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -30,6 +36,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * - Fields listed in `replace` are set directly from the overlay.
  * - Fields listed in `replaceNullable` are set directly (null is valid).
  * - Fields listed in `merge` are shallow-merged via spread.
+ * - Fields listed in `mergeMaps` are shallow-merged entry-by-entry; a `null`
+ *   entry deletes that entry, a `null` whole value clears the map to `{}`.
  * - Fields listed in `mergeArrays` have their arrays merged and deduplicated.
  * - Fields listed in `deepMerge` are recursively merged with a nested spec.
  * - Unlisted object values default to shallow spread merge (backward compat).
@@ -53,6 +61,25 @@ export function deepMerge<T extends Record<string, unknown>>(
       (result as Record<string, unknown>)[keyStr] = value;
     } else if (spec.replace?.includes(keyStr)) {
       (result as Record<string, unknown>)[keyStr] = value;
+    } else if (spec.mergeMaps?.includes(keyStr)) {
+      if (value === null) {
+        (result as Record<string, unknown>)[keyStr] = {};
+      } else if (isRecord(value)) {
+        const baseMap = isRecord(base[key])
+          ? (base[key] as Record<string, unknown>)
+          : {};
+        const mergedMap: Record<string, unknown> = { ...baseMap };
+        for (const [entryKey, entryValue] of Object.entries(value)) {
+          if (entryValue === null) {
+            delete mergedMap[entryKey];
+          } else if (entryValue !== undefined) {
+            mergedMap[entryKey] = entryValue;
+          }
+        }
+        (result as Record<string, unknown>)[keyStr] = mergedMap;
+      } else {
+        (result as Record<string, unknown>)[keyStr] = value;
+      }
     } else if (spec.mergeArrays?.includes(keyStr) && Array.isArray(value)) {
       const baseArr = (base[key] ?? []) as unknown[];
       (result as Record<string, unknown>)[keyStr] = [

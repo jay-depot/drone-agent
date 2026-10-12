@@ -77,6 +77,7 @@ async function captureLlmPlugin(
     runWorkflow: async () => ({ toolResult: '{}' }),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   };
 
   await llmPlugin.register(registration);

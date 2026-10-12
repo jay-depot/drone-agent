@@ -83,6 +83,7 @@ function makeRegistration(overrides?: {
     runWorkflow: async () => ({ toolResult: '{}' }),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   };
 
   return {
@@ -250,7 +251,7 @@ describe('wakelock plugin', () => {
     const consoleInfo = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['wakelock'];
+    config.enabledPlugins = { wakelock: true };
     const debugFlags = createDebugFlagRegistry(['wakelock']);
     const engine = createTestEngine({
       plugins: [wakelockPlugin],

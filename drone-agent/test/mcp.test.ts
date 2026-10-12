@@ -205,10 +205,11 @@ async function bootWithServers(
   options: { extraPlugins?: DronePlugin[] } = {}
 ): Promise<ReturnType<typeof createTestEngine>> {
   const config = {
-    enabledPlugins: [
-      'mcp',
-      ...(options.extraPlugins ?? []).map(p => p.metadata.id),
-    ],
+    enabledPlugins: Object.fromEntries(
+      ['mcp', ...(options.extraPlugins ?? []).map(p => p.metadata.id)].map(
+        id => [id, true]
+      )
+    ),
     mcp: {
       enabled: true,
       requestTimeoutMs: 5000,

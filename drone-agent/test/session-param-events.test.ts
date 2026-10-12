@@ -69,6 +69,7 @@ function createCapture(
     runWorkflow: async () => ({}),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
     mountTool: () => undefined,
     unmountTool: () => {},
     unregisterPluginTools: () => {},
@@ -89,7 +90,7 @@ function createCapture(
 /** Enables swarm in the agent config the plugin reads at register(). */
 function swarmConfig() {
   return createDefaultAgentConfig({
-    enabledPlugins: ['swarm'],
+    enabledPlugins: { swarm: true },
   });
 }
 
@@ -216,7 +217,7 @@ describe('focus plugin focusChanged emission', () => {
       plugins: [focusPlugin],
       config: {
         ...createDefaultAgentConfig(),
-        enabledPlugins: ['focus'],
+        enabledPlugins: { focus: true },
       },
       logger: silentLogger(),
     });
@@ -248,7 +249,7 @@ describe('focus plugin focusChanged emission', () => {
       plugins: [focusPlugin],
       config: {
         ...createDefaultAgentConfig(),
-        enabledPlugins: ['focus'],
+        enabledPlugins: { focus: true },
       },
       logger: silentLogger(),
     });
@@ -287,7 +288,7 @@ describe('focus plugin focusChanged emission', () => {
       plugins: [focusPlugin],
       config: {
         ...createDefaultAgentConfig(),
-        enabledPlugins: ['focus'],
+        enabledPlugins: { focus: true },
       },
       logger: silentLogger(),
     });
@@ -324,7 +325,7 @@ describe('focus plugin focusChanged emission', () => {
       plugins: [focusPlugin],
       config: {
         ...createDefaultAgentConfig(),
-        enabledPlugins: ['focus'],
+        enabledPlugins: { focus: true },
       },
       logger: silentLogger(),
     });
@@ -347,7 +348,7 @@ describe('focus plugin focusChanged emission', () => {
       plugins: [focusPlugin],
       config: {
         ...createDefaultAgentConfig(),
-        enabledPlugins: ['focus'],
+        enabledPlugins: { focus: true },
       },
       logger: silentLogger(),
     });
@@ -383,7 +384,7 @@ describe('focus plugin focusChanged emission', () => {
 describe('persona plugin personaChanged emission', () => {
   it('emits personaChanged with from/to when the persona changes', async () => {
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['persona'];
+    config.enabledPlugins = { persona: true };
     const engine = createTestEngine({
       plugins: [personaPlugin],
       config,

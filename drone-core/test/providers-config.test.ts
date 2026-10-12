@@ -42,7 +42,7 @@ describe('providers config schema', () => {
         { providers: { bad: { baseUrl: 'http://x' } } },
         'test'
       )
-    ).toThrow(/protocol/);
+    ).toThrow(/Expected union value|protocol/);
   });
 
   it('rejects invalid autoImport values', () => {

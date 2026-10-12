@@ -162,6 +162,7 @@ describe('ollama chat user-message injection', () => {
       runWorkflow: async () => ({ toolResult: '{}' }),
       getCliFlags: () => ({}),
       requestElicitation: () => undefined,
+      listPlugins: () => [],
     } as never);
     if (!driver) {
       throw new Error('driver not offered');
@@ -533,6 +534,7 @@ describe('ollama DroneLlmError conversion', () => {
       runWorkflow: async () => ({ toolResult: '{}' }),
       getCliFlags: () => ({}),
       requestElicitation: () => undefined,
+      listPlugins: () => [],
     } as never);
     if (!driver) {
       throw new Error('driver not offered');

@@ -44,7 +44,7 @@ async function createPersonaEngine(
   tools: DroneToolDefinition[] = []
 ) {
   const config = createDefaultAgentConfig();
-  config.enabledPlugins = ['persona', 'file'];
+  config.enabledPlugins = { persona: true, file: true };
   const engine = createTestEngine({
     plugins: [
       createTestPlugin({
@@ -104,7 +104,7 @@ describe('persona premount engine', () => {
 
   it('unmounts previous persona tools and mounts new persona tools on switch', async () => {
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['persona', 'file', 'git'];
+    config.enabledPlugins = { persona: true, file: true, git: true };
     const engine = createTestEngine({
       plugins: [
         createTestPlugin({
@@ -200,7 +200,7 @@ describe('persona premount engine', () => {
   it('session-start activation premounts via onSessionStart hook', async () => {
     const tools = [makeTool('read')];
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['persona', 'file'];
+    config.enabledPlugins = { persona: true, file: true };
     config.activePersona = 'coder';
 
     const engine = createTestEngine({
@@ -273,7 +273,7 @@ describe('persona premount engine', () => {
   it('warns for a premounted unknown tool', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['persona', 'file'];
+    config.enabledPlugins = { persona: true, file: true };
 
     const engine = createTestEngine({
       plugins: [
@@ -316,7 +316,7 @@ describe('persona premount engine', () => {
   it('warns for a premounted defaultHidden tool not in allowedTools', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['persona', 'file'];
+    config.enabledPlugins = { persona: true, file: true };
 
     const engine = createTestEngine({
       plugins: [

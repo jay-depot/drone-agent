@@ -73,7 +73,7 @@ describe('getCanonicalToolName', () => {
 describe('createDefaultAgentConfig', () => {
   it('returns a complete config with sensible defaults', () => {
     const config = createDefaultAgentConfig();
-    expect(config.enabledPlugins).toEqual([]);
+    expect(config.enabledPlugins).toEqual({});
     expect(config.activePersona).toBeNull();
     expect(config.ollama.host).toMatch(/^https?:\/\//);
     expect(config.ollama.model).toBeTruthy();
@@ -90,8 +90,8 @@ describe('createDefaultAgentConfig', () => {
     const b = createDefaultAgentConfig();
     expect(a).not.toBe(b);
     expect(a.lsp.servers).not.toBe(b.lsp.servers);
-    a.enabledPlugins.push('mutate-me');
-    expect(b.enabledPlugins).toEqual([]);
+    a.enabledPlugins['mutate-me'] = true;
+    expect(b.enabledPlugins).toEqual({});
   });
 
   it('defaults swarm.memory to disabled with plan defaults', () => {
@@ -173,14 +173,36 @@ describe('applyAgentConfigLayer', () => {
 
   it('replaces scalar fields when present in the layer', () => {
     const layer: PartialDroneAgentConfig = {
-      enabledPlugins: ['file', 'search'],
       systemPrompt: 'Custom prompt',
       activePersona: 'reviewer',
     };
     const merged = applyAgentConfigLayer(base, layer);
-    expect(merged.enabledPlugins).toEqual(['file', 'search']);
     expect(merged.systemPrompt).toBe('Custom prompt');
     expect(merged.activePersona).toBe('reviewer');
+  });
+
+  it('merges enabledPlugins maps per-key', () => {
+    const merged = applyAgentConfigLayer(base, {
+      enabledPlugins: { file: true, search: true },
+    });
+    expect(merged.enabledPlugins).toEqual({ file: true, search: true });
+
+    const overridden = applyAgentConfigLayer(merged, {
+      enabledPlugins: { search: false, git: true },
+    });
+    expect(overridden.enabledPlugins).toEqual({
+      file: true,
+      search: false,
+      git: true,
+    });
+  });
+
+  it('clears all enabledPlugins overrides when the whole value is null', () => {
+    const populated = applyAgentConfigLayer(base, {
+      enabledPlugins: { file: true, git: true },
+    });
+    const cleared = applyAgentConfigLayer(populated, { enabledPlugins: null });
+    expect(cleared.enabledPlugins).toEqual({});
   });
 
   it('allows activePersona to be explicitly cleared with null', () => {
@@ -219,7 +241,7 @@ describe('applyAgentConfigLayer', () => {
     expect(merged.swarm.memory?.window?.maxQueryTokens).toBe(6000);
   });
 
-  it('replaces LSP server map but merges LSP scalar fields', () => {
+  it('merges LSP server maps one level and merges LSP scalar fields', () => {
     const layer: PartialDroneAgentConfig = {
       lsp: {
         enabled: false,
@@ -237,7 +259,7 @@ describe('applyAgentConfigLayer', () => {
     expect(Object.keys(merged.lsp.servers)).toEqual(['ts']);
   });
 
-  it('replaces MCP server map but merges MCP scalar fields', () => {
+  it('merges MCP server maps one level and merges MCP scalar fields', () => {
     const layer: PartialDroneAgentConfig = {
       mcp: {
         retryCount: 5,
@@ -263,6 +285,81 @@ describe('applyAgentConfigLayer', () => {
       lsp: { enabled: false },
     });
     expect(Object.keys(merged.lsp.servers)).toEqual(['x']);
+  });
+
+  it('replaces a same-name server entry while keeping siblings', () => {
+    const populated = applyAgentConfigLayer(base, {
+      lsp: {
+        servers: {
+          ts: { transport: 'stdio', command: 'old-server' },
+          py: { transport: 'stdio', command: 'pyright-langserver' },
+        },
+      },
+    });
+    const merged = applyAgentConfigLayer(populated, {
+      lsp: {
+        servers: {
+          ts: { transport: 'stdio', command: 'new-server', args: ['--stdio'] },
+        },
+      },
+    });
+    expect(Object.keys(merged.lsp.servers)).toEqual(['ts', 'py']);
+    expect((merged.lsp.servers['ts'] as { command?: string }).command).toBe(
+      'new-server'
+    );
+  });
+
+  it('deletes a server entry via a null entry value', () => {
+    const populated = applyAgentConfigLayer(base, {
+      mcp: {
+        servers: {
+          github: {
+            transport: 'streamable_http',
+            url: 'https://example.com/mcp',
+          },
+          filesystem: { transport: 'stdio', command: 'fs-server' },
+        },
+      },
+    });
+    const merged = applyAgentConfigLayer(populated, {
+      mcp: { servers: { github: null } },
+    });
+    expect(Object.keys(merged.mcp.servers)).toEqual(['filesystem']);
+  });
+
+  it('clears the whole server map via a null collection value', () => {
+    const populated = applyAgentConfigLayer(base, {
+      mcp: {
+        servers: { filesystem: { transport: 'stdio', command: 'fs-server' } },
+      },
+    });
+    const cleared = applyAgentConfigLayer(populated, {
+      mcp: { servers: null },
+    });
+    expect(cleared.mcp.servers).toEqual({});
+  });
+
+  it('deletes a provider entry via a null entry value', () => {
+    const populated = applyAgentConfigLayer(base, {
+      providers: {
+        local: { protocol: 'ollama' },
+        remote: { protocol: 'openai' },
+      },
+    });
+    const merged = applyAgentConfigLayer(populated, {
+      providers: { remote: null },
+    });
+    expect(Object.keys(merged.providers)).toEqual(['local']);
+  });
+
+  it('deletes a trustedPlugins entry via a null entry value', () => {
+    const populated = applyAgentConfigLayer(base, {
+      trustedPlugins: { '/a/plugin': 'trusted', '/b/plugin': 'untrusted' },
+    });
+    const merged = applyAgentConfigLayer(populated, {
+      trustedPlugins: { '/b/plugin': null },
+    });
+    expect(merged.trustedPlugins).toEqual({ '/a/plugin': 'trusted' });
   });
 });
 

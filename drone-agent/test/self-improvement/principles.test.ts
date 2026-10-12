@@ -702,7 +702,7 @@ describe('skill principles injection', () => {
     });
 
     const plugins: DronePlugin[] = [selfImprovementPlugin, mockSkillsPlugin];
-    const enabledPlugins = ['self-improvement', 'skills'];
+    const enabledPlugins = { 'self-improvement': true, skills: true };
 
     const engine = createTestEngine({
       plugins,
@@ -766,7 +766,7 @@ describe('skill principles injection', () => {
     });
 
     const plugins: DronePlugin[] = [mockSkillsPlugin];
-    const enabledPlugins = ['skills'];
+    const enabledPlugins = { skills: true };
 
     const engine = createTestEngine({
       plugins,
@@ -859,7 +859,7 @@ describe('skill principles injection', () => {
     });
 
     const plugins: DronePlugin[] = [selfImprovementPlugin, mockSkillsPlugin];
-    const enabledPlugins = ['self-improvement', 'skills'];
+    const enabledPlugins = { 'self-improvement': true, skills: true };
 
     const engine = createTestEngine({
       plugins,

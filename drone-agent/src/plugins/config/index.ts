@@ -121,12 +121,19 @@ function getByPath(obj: Record<string, unknown>, keyPath: string): unknown {
  * Validate that a dot-notation key path is a known config key.
  * Throws if unknown.
  */
+const ENABLED_PLUGINS_PREFIX = 'enabledPlugins.';
+
 function validateConfigKey(key: string): void {
-  if (!KNOWN_CONFIG_KEYS.includes(key)) {
-    throw new Error(
-      `Unknown config key "${key}". Valid keys: ${KNOWN_CONFIG_KEYS.join(', ')}`
-    );
+  if (KNOWN_CONFIG_KEYS.includes(key)) return;
+  if (
+    key.startsWith(ENABLED_PLUGINS_PREFIX) &&
+    key.length > ENABLED_PLUGINS_PREFIX.length
+  ) {
+    return;
   }
+  throw new Error(
+    `Unknown config key "${key}". Valid keys: ${KNOWN_CONFIG_KEYS.join(', ')}`
+  );
 }
 
 /**
@@ -294,12 +301,11 @@ const configSetSchema: DroneToolJsonSchema = {
     key: {
       type: 'string',
       description:
-        'Dot-notation key path (e.g. "ollama.model", "compaction.enabled").',
+        'Dot-notation key path (e.g. "ollama.model", "compaction.enabled", "enabledPlugins.<id>").',
     },
     value: {
-      type: 'object',
       description:
-        'The value to set. Can be a primitive, object, or array depending on the key.',
+        'The value to set. Can be a primitive, boolean, object, or array depending on the key.',
     },
   },
   required: ['key', 'value'],

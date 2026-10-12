@@ -16,6 +16,7 @@ import {
   migrateLegacyProviderConfig,
 } from './provider-migration.js';
 import { persistLegacyProviderMigration } from './provider-migration-persist.js';
+import { persistEnabledPluginsMigration } from './enabled-plugins-migration-persist.js';
 import { enforceProviderScopePolicy } from './provider-scope-policy.js';
 
 export const CONFIG_DIRECTORY_NAME = '.drone-agent';
@@ -181,6 +182,14 @@ export async function loadAgentConfig(
     layers.map(layer => ({ scope: layer.scope, path: layer.path }))
   );
 
+  // Translate any legacy `enabledPlugins` array on disk to the override-map
+  // form, exactly once, with a timestamped backup. The parsed layers already
+  // carry the map shape (parse-time normalization), so the merged config is
+  // correct either way; this makes the on-disk form canonical.
+  const enabledPluginsPersisted = await persistEnabledPluginsMigration(
+    layers.map(layer => ({ scope: layer.scope, path: layer.path }))
+  );
+
   const scopePolicy = enforceProviderScopePolicy(layers);
   if (scopePolicy.errors.length > 0) {
     throw new Error(
@@ -216,6 +225,10 @@ export async function loadAgentConfig(
       ...scopePolicy.warnings,
       ...validation.warnings,
       ...modelRoleWarnings,
+      ...enabledPluginsPersisted.outcome.warnings,
+      ...(enabledPluginsPersisted.notice
+        ? [enabledPluginsPersisted.notice]
+        : []),
     ],
   };
 }

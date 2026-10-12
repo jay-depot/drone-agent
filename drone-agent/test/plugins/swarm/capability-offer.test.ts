@@ -55,6 +55,7 @@ function createCapture() {
     runWorkflow: async () => ({ toolResult: '{}' }),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   };
 
   return { registration, offers, getOnShutdown: () => onShutdown };

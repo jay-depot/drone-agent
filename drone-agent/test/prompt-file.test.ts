@@ -258,7 +258,7 @@ describe('promptFilePlugin', () => {
     const registration: DronePluginRegistration = {
       logger,
       getConfig: () => ({
-        enabledPlugins: [],
+        enabledPlugins: {},
         systemPrompt: '',
         activePersona: null,
         llm: { provider: 'ollama' },
@@ -405,6 +405,7 @@ describe('promptFilePlugin', () => {
       runWorkflow: async () => ({ toolResult: '{}' }),
       getCliFlags: () => ({}),
       requestElicitation: () => undefined,
+      listPlugins: () => [],
       ...overrides,
     };
 

@@ -89,6 +89,7 @@ async function captureWindowCapability(options: {
     runWorkflow: async () => ({ toolResult: '{}' }),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   };
 
   const loadedHooks: Array<() => Promise<void>> = [];
@@ -468,6 +469,7 @@ describe('broker context-window resolution', () => {
       runWorkflow: async () => ({ toolResult: '{}' }),
       getCliFlags: () => ({}),
       requestElicitation: () => undefined,
+      listPlugins: () => [],
     };
 
     await llmPlugin.register(registration);

@@ -28,7 +28,7 @@ async function createEngineWithTodo(): Promise<{
 }> {
   const engine = createTestEngine({
     plugins: [todoPlugin],
-    config: { ...createDefaultAgentConfig(), enabledPlugins: ['todo'] },
+    config: { ...createDefaultAgentConfig(), enabledPlugins: { todo: true } },
     logger: silentLogger(),
   });
   await engine.initialize();

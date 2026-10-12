@@ -60,7 +60,7 @@ describe('createDronePluginEngine', () => {
     expect(calls).toEqual(['a:loaded', 'a:start', 'b:start', 'b:before']);
   });
 
-  it('respects explicit enabledPlugins from config', async () => {
+  it('force-enables an opt-in plugin with a true override', async () => {
     const plugins: DronePlugin[] = [
       createTestPlugin({ id: 'opt-in', defaultEnabled: false }),
       createTestPlugin({ id: 'always', defaultEnabled: true }),
@@ -68,14 +68,79 @@ describe('createDronePluginEngine', () => {
 
     const engine = createTestEngine({
       plugins,
-      config: { ...createDefaultAgentConfig(), enabledPlugins: ['opt-in'] },
+      config: {
+        ...createDefaultAgentConfig(),
+        enabledPlugins: { 'opt-in': true },
+      },
       logger: silentLogger(),
     });
 
     await engine.initialize();
     const statuses = engine.listPlugins();
     expect(statuses.find(p => p.id === 'opt-in')?.enabled).toBe(true);
-    expect(statuses.find(p => p.id === 'always')?.enabled).toBe(false);
+    // The override map is sparse: a default-enabled plugin stays on when the
+    // map says nothing about it.
+    expect(statuses.find(p => p.id === 'always')?.enabled).toBe(true);
+  });
+
+  it('force-disables a default-enabled plugin with a false override', async () => {
+    const plugins: DronePlugin[] = [
+      createTestPlugin({ id: 'on-by-default', defaultEnabled: true }),
+      createTestPlugin({ id: 'opt-in', defaultEnabled: false }),
+    ];
+
+    const engine = createTestEngine({
+      plugins,
+      config: {
+        ...createDefaultAgentConfig(),
+        enabledPlugins: { 'on-by-default': false, 'opt-in': true },
+      },
+      logger: silentLogger(),
+    });
+
+    await engine.initialize();
+    const statuses = engine.listPlugins();
+    expect(statuses.find(p => p.id === 'on-by-default')?.enabled).toBe(false);
+    expect(statuses.find(p => p.id === 'opt-in')?.enabled).toBe(true);
+  });
+
+  it('lets a required plugin override an explicit false', async () => {
+    const plugins: DronePlugin[] = [
+      createTestPlugin({ id: 'required', required: true }),
+    ];
+
+    const engine = createTestEngine({
+      plugins,
+      config: {
+        ...createDefaultAgentConfig(),
+        enabledPlugins: { required: false },
+      },
+      logger: silentLogger(),
+    });
+
+    await engine.initialize();
+    const statuses = engine.listPlugins();
+    expect(statuses.find(p => p.id === 'required')?.enabled).toBe(true);
+  });
+
+  it('lets a CLI flag override an explicit false', async () => {
+    const plugins: DronePlugin[] = [
+      createTestPlugin({ id: 'flagged', defaultEnabled: false }),
+    ];
+
+    const engine = createTestEngine({
+      plugins,
+      config: {
+        ...createDefaultAgentConfig(),
+        enabledPlugins: { flagged: false },
+      },
+      pluginFlags: { flagged: true },
+      logger: silentLogger(),
+    });
+
+    await engine.initialize();
+    const statuses = engine.listPlugins();
+    expect(statuses.find(p => p.id === 'flagged')?.enabled).toBe(true);
   });
 
   it('always enables required plugins even when not in enabledPlugins', async () => {
@@ -88,7 +153,7 @@ describe('createDronePluginEngine', () => {
       plugins,
       config: {
         ...createDefaultAgentConfig(),
-        enabledPlugins: ['optional'],
+        enabledPlugins: { optional: true },
       },
       logger: silentLogger(),
     });
@@ -156,7 +221,7 @@ describe('createDronePluginEngine', () => {
         plugins,
         config: {
           ...createDefaultAgentConfig(),
-          enabledPlugins: ['unknown'],
+          enabledPlugins: { unknown: true },
         },
         logger: silentLogger(),
       })
@@ -475,6 +540,7 @@ describe('createDronePluginEngine', () => {
       runWorkflow: async () => ({}),
       getCliFlags: () => ({}),
       requestElicitation: () => undefined,
+      listPlugins: () => [],
       mountTool: () => undefined,
       unmountTool: () => {},
       unregisterPluginTools: () => {},
