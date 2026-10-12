@@ -8,6 +8,7 @@ import {
 import { stdout as output } from 'node:process';
 import { createBuiltInPlugins } from './plugins/index.js';
 import { runStartupSessionImport } from './startup-import.js';
+import { runStartupCheckpointRestore } from './startup-checkpoint.js';
 import {
   discoverExternalPlugins,
   promptForPluginTrust,
@@ -203,6 +204,7 @@ async function main(): Promise<void> {
   } = {};
   const cancelCurrentRequestRef: { current?: () => void } = {};
   const shutdownSignalRef: { current?: () => void } = {};
+  const clearConversationRef: { current?: () => void } = {};
   const reference = createReferenceCapability({
     maxImageBytes: resolvedConfig.config.session.maxImageSizeBytes,
   });
@@ -214,6 +216,9 @@ async function main(): Promise<void> {
     debugFlags,
     pluginFlags: invocation.options.pluginFlags,
     referenceCapability: reference,
+    sessionManager,
+    clearConversation: () => clearConversationRef.current?.(),
+    sessionId: invocation.options.sessionId,
     runtimeOptions: {
       subagentId: invocation.options.subagentId,
       persona: invocation.options.persona,
@@ -361,6 +366,7 @@ async function main(): Promise<void> {
   resetStuckDetectorsRef.current = conversation.resetStuckDetectors;
   submitUserMessageRef.current = conversation.submitUserMessage;
   cancelCurrentRequestRef.current = conversation.cancelCurrentRequest;
+  clearConversationRef.current = conversation.clearSession;
   const registeredPlugins = await engine.initialize();
 
   // ── Elicitation wiring ──────────────────────────────────────────────
@@ -390,6 +396,21 @@ async function main(): Promise<void> {
     logger,
     invocation.options.pluginFlags
   );
+
+  // ── --checkpoint.restore <name> ────────────────────────────────
+  // Restore a portable-context checkpoint before the first turn. Runs after
+  // session-import; since the target session is empty, no recycle hooks fire.
+  const checkpointEntries = await runStartupCheckpointRestore(
+    pluginId => engine.getCapability(pluginId),
+    logger,
+    invocation.options.pluginFlags
+  );
+  if (checkpointEntries) {
+    startupEntries?.push(...checkpointEntries);
+    if (!startupEntries) {
+      logger.info(checkpointEntries.map(e => e.text).join('\n'));
+    }
+  }
 
   // ── --model invocation-scoped override ─────────────────────────────
   // Applied AFTER onPluginsLoaded so the broker has already activated from

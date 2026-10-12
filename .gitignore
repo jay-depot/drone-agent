@@ -3,3 +3,4 @@ dist/
 *.tsbuildinfo
 LOCAL.md
 .drone-agent/config.json
+.drone-agent/checkpoints/

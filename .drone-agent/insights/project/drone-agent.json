@@ -806,5 +806,17 @@
   {
     "timestamp": "2026-10-10T06:50:18.076Z",
     "insight": "Adding a nested `Promise.all([Promise.all(a), Promise.all(b)])` inside an async method adds a microtask tick before the result is cached. Any test that polls for a side effect (e.g. `vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))`) can now observe the call BEFORE the cache is populated and flake. Poll for the observable end state (rendered content), not the intermediate call count."
+  },
+  {
+    "timestamp": "2026-10-11T22:52:51.372Z",
+    "insight": "Adding a REQUIRED hook to `DronePluginHooks` is a large cross-cutting change driven by the test typechecker, not the runtime: ~35 test files hand-build `DronePluginHooks` literals and must gain the new member. `pnpm run typecheck` (`tsc -p tsconfig.test.json`) is the ground truth for the sweep; the connected TS LSP lags behind bulk edits and can report stale/missing-member diagnostics for minutes. Trust the tsc run over LSP for cross-cutting sweeps, and re-run tsc after each batch. Also: `createTestPlugin`'s `TestPluginHookOptions` helper needed the new hook plumbed through AND its callback payload forwarded (it initially dropped the payload, so a payload-asserting test failed)."
+  },
+  {
+    "timestamp": "2026-10-11T22:52:51.374Z",
+    "insight": "Portable-context contributors must return SNAPSHOTS of in-memory state, never live aliases. The first `todo` contributor's `export` returned the live `items` array; because the capability holds the returned value in memory until serialization, an in-process export→import round-trip cleared the same array it was reading and the restored list was empty. Fixed by `items.map(i => ({...i}))`. Any future snapshot/exporter contributor should copy arrays/objects out of the mutable store."
+  },
+  {
+    "timestamp": "2026-10-12T00:29:05.250Z",
+    "insight": "Optional host-owned engine collaborators with internal noop fallbacks (the deleted `createNoopSessionManager`) hide missing production wiring: `index.tsx` omitted both `sessionManager` and `clearConversation`, and every test passed one explicitly, so the omission was invisible until `/checkpoint create` exported `session.turns = []`. Making the options required plus a shared `createTestEngine` test factory converts this into a compile-time guarantee (`tsc -p tsconfig.test.json`). When adding an engine/plugin option that the host must own, prefer required + a test default-factory over optional + internal fallback."
   }
 ]

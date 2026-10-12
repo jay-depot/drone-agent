@@ -290,6 +290,7 @@ async function getCapability(
       systemPrompt: '',
       activePersona: null,
       llm: { provider: 'ollama' },
+      checkpoint: { autoOnSessionEnd: false, autoOnRoundComplete: false },
       providers: {},
       ollama: { host: '', model: '' },
       openai: {
@@ -422,6 +423,7 @@ async function getCapability(
       onSessionClear: (cb: () => Promise<void>) => {
         onSessionClear = cb;
       },
+      onSessionRecycle: () => {},
       onShutdown: () => {},
       onSessionSafetyTrimWillRun: () => {},
       onSessionSafetyTrimApplied: () => {},

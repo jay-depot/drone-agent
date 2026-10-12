@@ -73,6 +73,7 @@ function registerWithCapture(config: DroneLspConfig, warns: string[]) {
       },
       onConversationEvent: () => {},
       onSessionClear: () => {},
+      onSessionRecycle: () => {},
       onShutdown: () => {},
       onSessionSafetyTrimWillRun: () => {},
       onSessionSafetyTrimApplied: () => {},

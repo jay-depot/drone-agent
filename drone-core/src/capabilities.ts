@@ -50,6 +50,14 @@ export type DroneSessionImportCapability = {
 };
 
 /**
+ * Capability offered by the checkpoint plugin for restoring a named
+ * checkpoint at startup (the `--checkpoint.restore <name>` path).
+ */
+export type DroneCheckpointCapability = {
+  runStartupRestore: () => Promise<{ ok: boolean; summary: string }>;
+};
+
+/**
  * Result of a semantic search operation.
  */
 export type SearchResult = {

@@ -262,6 +262,7 @@ describe('promptFilePlugin', () => {
         systemPrompt: '',
         activePersona: null,
         llm: { provider: 'ollama' },
+        checkpoint: { autoOnSessionEnd: false, autoOnRoundComplete: false },
         providers: {},
         ollama: { host: '', model: '' },
         openai: {
@@ -394,6 +395,7 @@ describe('promptFilePlugin', () => {
         onAfterToolCall: () => {},
         onConversationEvent: () => {},
         onSessionClear: () => {},
+        onSessionRecycle: () => {},
         onShutdown: () => {},
         onSessionSafetyTrimWillRun: () => {},
         onSessionSafetyTrimApplied: () => {},

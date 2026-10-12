@@ -41,6 +41,7 @@ import { focusPlugin } from './focus.js';
 import { wakelockPlugin } from './wakelock/index.js';
 import { beancounterPlugin } from './beancounter.js';
 import { createHerdrPlugin } from './herdr/index.js';
+import { checkpointPlugin } from './checkpoint/index.js';
 
 // Static built-ins — everything except the compaction plugin, which needs
 // access to the live engine and session manager. The CLI calls
@@ -49,6 +50,7 @@ import { createHerdrPlugin } from './herdr/index.js';
 // an optional host-provided context-window resolver.
 const staticBuiltInPlugins: DronePlugin[] = [
   notepadPlugin,
+  checkpointPlugin,
   subagentPlugin, // NEW
   startupPlugin,
   terminalPlugin,

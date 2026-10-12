@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultAgentConfig, type DroneLogger } from 'drone-core';
 import { parseCliInvocation } from '../src/index.js';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
-import { createTestPlugin, silentLogger } from './helpers.js';
+
+import { createTestEngine, createTestPlugin, silentLogger } from './helpers.js';
 
 function captureLogger(): { logger: DroneLogger; warnings: string[] } {
   const warnings: string[] = [];
@@ -79,7 +79,7 @@ describe('parseCliInvocation — plugin-namespaced flags', () => {
 
 describe('createDronePluginEngine — plugin-namespaced flags', () => {
   it('auto-enables a plugin whose id namespaces a flag', async () => {
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [createTestPlugin({ id: 'swarm', defaultEnabled: false })],
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -94,7 +94,7 @@ describe('createDronePluginEngine — plugin-namespaced flags', () => {
 
   it('does not enable a plugin for an unowned namespace', async () => {
     const { logger } = captureLogger();
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [createTestPlugin({ id: 'swarm', defaultEnabled: false })],
       config: createDefaultAgentConfig(),
       logger,
@@ -109,7 +109,7 @@ describe('createDronePluginEngine — plugin-namespaced flags', () => {
 
   it('exposes namespace-stripped flags to the owning plugin', async () => {
     let seen: Record<string, string | true> | undefined;
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [
         createTestPlugin({
           id: 'swarm',
@@ -133,7 +133,7 @@ describe('createDronePluginEngine — plugin-namespaced flags', () => {
 
   it('warns once per unclaimed namespace and does not throw', async () => {
     const { logger, warnings } = captureLogger();
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [createTestPlugin({ id: 'a', defaultEnabled: true })],
       config: createDefaultAgentConfig(),
       logger,
@@ -146,7 +146,7 @@ describe('createDronePluginEngine — plugin-namespaced flags', () => {
 
   it('does not warn when the namespace is claimed', async () => {
     const { logger, warnings } = captureLogger();
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [createTestPlugin({ id: 'a', defaultEnabled: true })],
       config: createDefaultAgentConfig(),
       logger,

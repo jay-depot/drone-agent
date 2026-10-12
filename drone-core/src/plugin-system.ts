@@ -61,6 +61,25 @@ export type DroneAfterToolCallPayload = {
   }>;
 };
 
+/**
+ * Payload delivered to `onSessionClear` callbacks. The outgoing session is
+ * still intact (turns present, old id) when this fires — it is the boundary
+ * snapshot point, before the mechanical clear. Optional so existing zero-arg
+ * callbacks stay valid.
+ */
+export type DroneSessionClearPayload = { sessionId: string };
+
+/**
+ * Payload delivered to `onSessionRecycle` callbacks, which fire after the
+ * session has been cleared and a fresh id minted. `sessionId` is the new id;
+ * `previousSessionId` is the id of the session that just ended. Session-id
+ * owners (e.g. the swarm plugin) re-register under the new id here.
+ */
+export type DroneSessionRecyclePayload = {
+  sessionId: string;
+  previousSessionId: string;
+};
+
 export type DronePluginHooks = {
   onPluginsLoaded: (callback: () => Promise<void>) => void;
   onSessionStart: (callback: () => Promise<void>) => void;
@@ -74,7 +93,12 @@ export type DronePluginHooks = {
     ) => Promise<void>
   ) => void;
   onShutdown: (callback: () => Promise<void>) => void;
-  onSessionClear: (callback: () => Promise<void>) => void;
+  onSessionClear: (
+    callback: (payload?: DroneSessionClearPayload) => Promise<void>
+  ) => void;
+  onSessionRecycle: (
+    callback: (payload: DroneSessionRecyclePayload) => Promise<void>
+  ) => void;
   onSessionSafetyTrimWillRun: (
     callback: (
       payload: import('./session-types.js').DroneSessionSafetyTrimPayload
@@ -426,6 +450,13 @@ export type DroneSlashCommandContext = {
     listMountedTools?: () => import('./session-types.js').DroneToolDescriptor[];
     /** Get the total count of registered tools (for /tools). */
     getRegisteredToolCount?: () => number;
+    /**
+     * The session boundary + id generator (for /clear). Optional — hosts that
+     * do not expose it fall back to `conversation.clearSession`.
+     */
+    clearSession?: () => Promise<void>;
+    /** The engine-owned current session id. */
+    getSessionId?: () => string;
     /** Render prompt fragments (for /systemprompt). */
     renderPromptFragments?: () => Promise<string[]>;
     /** Build header system messages (config prompt + runtime flags + header prompt fragments). */

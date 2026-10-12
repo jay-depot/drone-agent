@@ -7,9 +7,13 @@ import {
   toToolResultContent,
   type DronePlugin,
 } from 'drone-core';
-import { createDronePluginEngine } from '../../src/runtime/plugin-engine.js';
+
 import { selfImprovementPlugin } from '../../src/plugins/self-improvement/index.js';
-import { createTestPlugin, silentLogger } from '../helpers.js';
+import {
+  createTestEngine,
+  createTestPlugin,
+  silentLogger,
+} from '../helpers.js';
 import { principleFilePath, createEngine } from './setup.js';
 
 describe('self-improvement__principle (store action)', () => {
@@ -700,7 +704,7 @@ describe('skill principles injection', () => {
     const plugins: DronePlugin[] = [selfImprovementPlugin, mockSkillsPlugin];
     const enabledPlugins = ['self-improvement', 'skills'];
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins,
       config: { ...createDefaultAgentConfig(), enabledPlugins },
       logger: silentLogger(),
@@ -764,7 +768,7 @@ describe('skill principles injection', () => {
     const plugins: DronePlugin[] = [mockSkillsPlugin];
     const enabledPlugins = ['skills'];
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins,
       config: { ...createDefaultAgentConfig(), enabledPlugins },
       logger: silentLogger(),
@@ -857,7 +861,7 @@ describe('skill principles injection', () => {
     const plugins: DronePlugin[] = [selfImprovementPlugin, mockSkillsPlugin];
     const enabledPlugins = ['self-improvement', 'skills'];
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins,
       config: { ...createDefaultAgentConfig(), enabledPlugins },
       logger: silentLogger(),

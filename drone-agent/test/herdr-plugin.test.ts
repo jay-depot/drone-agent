@@ -64,6 +64,7 @@ function makeRegistration(env: {
         onConversationEvent = cb;
       },
       onSessionClear: () => {},
+      onSessionRecycle: () => {},
       onShutdown: (cb: () => Promise<void>) => {
         onShutdown = cb;
       },

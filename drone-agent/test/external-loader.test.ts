@@ -13,8 +13,8 @@ import {
   saveTrustedPlugin,
   discoverExternalPlugins,
 } from '../src/plugins/external-loader.js';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
-import { silentLogger } from './helpers.js';
+
+import { createTestEngine, silentLogger } from './helpers.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -418,7 +418,7 @@ describe('engine.addExternalPlugin', () => {
       },
     };
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [],
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -449,7 +449,7 @@ describe('engine.addExternalPlugin', () => {
       register: async () => {},
     };
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [externalPlugin],
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -481,7 +481,7 @@ describe('engine.addExternalPlugin', () => {
       },
     };
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [],
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -516,7 +516,7 @@ describe('engine.addExternalPlugin', () => {
       },
     };
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [],
       config: createDefaultAgentConfig(),
       logger: silentLogger(),

@@ -7,9 +7,13 @@ import {
   toToolResultContent,
   type DronePlugin,
 } from 'drone-core';
-import { createDronePluginEngine } from '../../src/runtime/plugin-engine.js';
+
 import { selfImprovementPlugin } from '../../src/plugins/self-improvement/index.js';
-import { createTestPlugin, silentLogger } from '../helpers.js';
+import {
+  createTestEngine,
+  createTestPlugin,
+  silentLogger,
+} from '../helpers.js';
 
 export function insightFilePath(
   projectDir: string,
@@ -99,7 +103,7 @@ export async function createEngine(options?: {
   personaCapability?: unknown;
   skillsCapability?: unknown;
 }): Promise<
-  Omit<ReturnType<typeof createDronePluginEngine>, 'executeTool'> & {
+  Omit<ReturnType<typeof createTestEngine>, 'executeTool'> & {
     executeTool: (
       canonicalName: string,
       input: Record<string, unknown>,
@@ -138,7 +142,7 @@ export async function createEngine(options?: {
     enabledPlugins.push('skills');
   }
 
-  const engine = createDronePluginEngine({
+  const engine = createTestEngine({
     plugins,
     config: { ...createDefaultAgentConfig(), enabledPlugins },
     logger: silentLogger(),

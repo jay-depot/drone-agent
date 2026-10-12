@@ -76,9 +76,13 @@ const clearCommand: DroneSlashCommand = {
   command: '/clear',
   description: 'Clear the session',
   handler: async (ctx: DroneSlashCommandContext) => {
-    // Run onSessionClear hooks first.
-    await ctx.engine.runHooks('onSessionClear');
-    // Then clear the conversation session.
+    // The engine owns the clear boundary: onSessionClear hooks (outgoing
+    // session intact) → mechanical clear → fresh session id → onSessionRecycle.
+    if (ctx.engine.clearSession) {
+      await ctx.engine.clearSession();
+      ctx.logger.info('Session cleared.');
+      return true;
+    }
     if (ctx.conversation?.clearSession) {
       ctx.conversation.clearSession();
       ctx.logger.info('Session cleared.');

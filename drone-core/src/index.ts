@@ -14,6 +14,7 @@
 //   - provider-types.ts   : Provider types for brokers
 //   - image-mime.ts       : Extension → image MIME type detection
 //   - capabilities.ts     : Capability registry types
+//   - portable-context-types.ts : Portable-context serialization types
 //   - plugin-system.ts    : Plugin infrastructure types
 //   - utils.ts            : Utility functions
 //   - runtime-flags.ts    : Runtime flag registry for system prompt injection
@@ -246,6 +247,7 @@ export type {
   IndexResult,
   DroneSwarmCapability,
   DroneSessionImportCapability,
+  DroneCheckpointCapability,
 } from './capabilities.js';
 
 // ── Reference types ──────────────────────────────────────────────────
@@ -261,6 +263,26 @@ export {
   DRONE_REFERENCE_CAPABILITY_ID,
   RESERVED_REFERENCE_KINDS,
 } from './reference-types.js';
+
+// ── Portable-context types ───────────────────────────────────────────
+
+export type {
+  DronePortableContextTool,
+  DronePortableContextSessionTurn,
+  DronePortableContextSession,
+  DronePortableContextExport,
+  DronePortableContextExportContext,
+  DronePortableContextImportContext,
+  DronePortableContextContributor,
+  DronePortableContextImportResult,
+  DronePortableContextCapability,
+} from './portable-context-types.js';
+export {
+  DRONE_PORTABLE_CONTEXT_CAPABILITY_ID,
+  MIN_CONTEXT_SCHEMA_VERSION,
+  MAX_CONTEXT_SCHEMA_VERSION,
+  CURRENT_CONTEXT_SCHEMA_VERSION,
+} from './portable-context-types.js';
 
 // ── Image MIME detection ─────────────────────────────────────────────
 
@@ -296,6 +318,8 @@ export type {
   DroneToolExecutionContext,
   DronePromptFragment,
   DroneAfterToolCallPayload,
+  DroneSessionClearPayload,
+  DroneSessionRecyclePayload,
   DronePluginHooks,
   DroneStandardHookName,
   DronePluginRegistration,

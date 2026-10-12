@@ -3,7 +3,9 @@ import {
   removeById,
   insertWriterSorted,
   toToolResultContent,
+  DRONE_PORTABLE_CONTEXT_CAPABILITY_ID,
 } from 'drone-core';
+import { registerPortableContextContributor } from '../../shared/portable-context-contributor.js';
 import { PersonaListBlock } from '../../tui/components/PersonaListBlock.js';
 import { PersonaSelectBlock } from '../../tui/components/PersonaSelectBlock.js';
 import { PersonaCreateBlock } from '../../tui/components/PersonaCreateBlock.js';
@@ -31,6 +33,9 @@ export const personaPlugin: DronePlugin = {
     description:
       'Broker for persona providers. Manages active persona, selection, and persona management tools.',
     defaultEnabled: false,
+    dependencies: [
+      { id: DRONE_PORTABLE_CONTEXT_CAPABILITY_ID, optional: true },
+    ],
   },
   register: async registration => {
     const config = registration.getConfig();
@@ -317,6 +322,26 @@ export const personaPlugin: DronePlugin = {
     };
 
     registration.offer(capability);
+
+    // Portable-context contributor: restore the active persona by id. Scope is
+    // not stored on the definition, so restore resolves by provider precedence
+    // (ADR 246). Activation re-premounts the persona's tools and emits
+    // personaChanged; this runs BEFORE portable-context's additive remount, so
+    // the additive pass only adds back tools the persona does not own.
+    registerPortableContextContributor(registration, {
+      id: 'persona',
+      export: () => ({ personaId: activePersona?.id ?? null }),
+      import: async data => {
+        const restored = data as { personaId?: string | null };
+        const personaId = restored.personaId ?? null;
+        if (personaId === null) {
+          activePersona = null;
+          notifyChange();
+          return;
+        }
+        await activatePersona(personaId);
+      },
+    });
 
     // -----------------------------------------------------------------------
     // onPluginsLoaded — load personas (activation moved to onSessionStart)

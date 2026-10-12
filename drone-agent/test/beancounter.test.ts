@@ -10,11 +10,11 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
+
 import { beancounterPlugin } from '../src/plugins/beancounter.js';
 import { llmPlugin } from '../src/plugins/llm/index.js';
 import { createDefaultAgentConfig, type DroneLlmCapability } from 'drone-core';
-import { silentLogger } from './helpers.js';
+import { createTestEngine, silentLogger } from './helpers.js';
 
 type MidPanelWidgetShape = {
   id: string;
@@ -52,7 +52,7 @@ async function createEngineWithStubDriver(responder: () => StubChatResponse) {
     },
   };
   config.llm.active = 'stub/stub-model';
-  const engine = createDronePluginEngine({
+  const engine = createTestEngine({
     plugins: [llmPlugin, beancounterPlugin],
     config: { ...config, enabledPlugins: ['llm', 'beancounter'] },
     logger: silentLogger(),

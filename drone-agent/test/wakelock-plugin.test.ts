@@ -2,7 +2,8 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { wakelockPlugin } from '../src/plugins/wakelock/index.js';
 import { createDebugFlagRegistry, createDefaultAgentConfig } from 'drone-core';
 import type { DroneAgentConfig } from 'drone-core';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
+
+import { createTestEngine } from './helpers.js';
 
 // Mock child_process spawn so no real inhibitor process is started.
 const mockSpawn = vi.fn();
@@ -64,6 +65,7 @@ function makeRegistration(overrides?: {
         onConversationEvent = cb;
       },
       onSessionClear: () => {},
+      onSessionRecycle: () => {},
       onShutdown: (cb: () => Promise<void>) => {
         onShutdown = cb;
       },
@@ -250,7 +252,7 @@ describe('wakelock plugin', () => {
     const config = createDefaultAgentConfig();
     config.enabledPlugins = ['wakelock'];
     const debugFlags = createDebugFlagRegistry(['wakelock']);
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [wakelockPlugin],
       config,
       debugFlags,

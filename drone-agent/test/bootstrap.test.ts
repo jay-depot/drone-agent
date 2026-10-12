@@ -3,8 +3,8 @@ import { mkdir, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { createDefaultAgentConfig } from 'drone-core';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
-import { createTestPlugin, silentLogger } from './helpers.js';
+
+import { createTestEngine, createTestPlugin, silentLogger } from './helpers.js';
 import { bootstrapPlugin } from '../src/plugins/bootstrap/index.js';
 import { detectProject } from '../src/plugins/bootstrap/project-detect.js';
 
@@ -101,7 +101,7 @@ describe('bootstrap plugin', () => {
 
   describe('bootstrap plugin registration', () => {
     it('registers the analyze tool', async () => {
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [bootstrapPlugin],
         config: {
           ...createDefaultAgentConfig(),
@@ -114,7 +114,7 @@ describe('bootstrap plugin', () => {
     });
 
     it('registers the project and user workflows', async () => {
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [bootstrapPlugin],
         config: {
           ...createDefaultAgentConfig(),
@@ -150,7 +150,7 @@ describe('bootstrap plugin', () => {
         ],
       });
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [gitPlugin, bootstrapPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),

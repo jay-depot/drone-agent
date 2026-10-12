@@ -7,6 +7,7 @@ import {
   type DroneChatMessage,
   type DroneReferenceCapability,
   DRONE_REFERENCE_CAPABILITY_ID,
+  DRONE_PORTABLE_CONTEXT_CAPABILITY_ID,
   getCanonicalToolName,
   type RuntimeFlagRegistry,
   type DroneAgentConfig,
@@ -15,6 +16,8 @@ import {
   type DroneLogger,
   type DronePlugin,
   type DronePromptFragment,
+  type DroneSessionClearPayload,
+  type DroneSessionRecyclePayload,
   type DroneSessionSafetyTrimPayload,
   type DroneSlashCommand,
   type DroneSlashCommandContext,
@@ -36,6 +39,7 @@ import { createEphemeralConversation } from './ephemeral-conversation.js';
 import { buildKickEnvelope } from './kick-envelope.js';
 import { parseSlashInvocation, stripNowFlag } from './slash-parse.js';
 import { createReferenceCapability } from './reference-expansion/index.js';
+import { createPortableContextCapability } from './portable-context/index.js';
 
 export type RegisteredPluginState = {
   plugin: DronePlugin;
@@ -55,7 +59,17 @@ export type StandardHookName = DroneStandardHookName;
 
 type HookCallback = (payload?: DroneAfterToolCallPayload) => Promise<void>;
 
-type HookBuckets = Record<StandardHookName, Array<HookCallback>>;
+type HookBuckets = {
+  onPluginsLoaded: Array<() => Promise<void>>;
+  onSessionStart: Array<() => Promise<void>>;
+  onBeforePrompt: Array<() => Promise<void>>;
+  onAfterToolCall: Array<HookCallback>;
+  onSessionClear: Array<(payload: DroneSessionClearPayload) => Promise<void>>;
+  onSessionRecycle: Array<
+    (payload: DroneSessionRecyclePayload) => Promise<void>
+  >;
+  onShutdown: Array<() => Promise<void>>;
+};
 
 export type DronePluginEngine = {
   initialize: () => Promise<RegisteredPluginState[]>;
@@ -162,6 +176,20 @@ export type DronePluginEngine = {
    */
   clearSystemReminders: () => void;
   /**
+   * The session boundary + id generator. Runs `onSessionClear` (outgoing
+   * session intact), the mechanical conversation clear, mints a fresh session
+   * id, then runs `onSessionRecycle`. The hook/mint steps are gated on the
+   * outgoing session having ≥1 turn, so an empty clear is mechanical only.
+   * Used by `/clear`, portable-context import, and the NDJSON host commands.
+   */
+  clearSession: () => Promise<void>;
+  /**
+   * The engine-owned current session id (host-seeded, re-minted on recycle).
+   * Session-id owners (the swarm plugin) read this instead of minting their
+   * own. Also exposed to plugins via `_runtime.getSessionId()`.
+   */
+  getSessionId: () => string;
+  /**
    * Queue a one-shot, non-persisted system reminder for the next LLM call.
    * Used by listen-mode hosts to inject a per-turn instruction (e.g. the
    * room "decide whether to respond" prompt) without touching session history.
@@ -228,13 +256,31 @@ export type DronePluginEngine = {
   getBuiltinSlashCommands: () => DroneSlashCommand[];
 };
 
-type CreateDronePluginEngineOptions = {
+export type CreateDronePluginEngineOptions = {
   plugins: DronePlugin[];
   config: DroneAgentConfig;
   logger?: DroneLogger;
   logToStderr?: boolean;
   debugFlags?: DebugFlagRegistry;
   referenceCapability?: DroneReferenceCapability;
+  /**
+   * The engine's session manager. Required for portable-context export/import
+   * (the boundary snapshot reads turns) and for `/clear`'s empty gate.
+   */
+  sessionManager: import('./session-manager.js').DroneSessionManager;
+  /**
+   * Mechanical session clear: drain queues/steers/reminders, reset guardrail
+   * counters, empty the turns. Wired by the host after the conversation
+   * service exists (mutable ref read at call time). Called by
+   * `engine.clearSession()` between the `onSessionClear` hooks and the id mint.
+   */
+  clearConversation: () => void;
+  /**
+   * Host-seeded session id (`--session-id` → `DRONE_SESSION_ID` →
+   * `agent-<Date.now()>` fallback). The engine owns the id from here on and
+   * mints a fresh one on recycle.
+   */
+  sessionId?: string;
   /**
    * Plugin-namespaced CLI flags (`--<pluginId>.<flag>[=<value>]`), parsed by
    * the CLI and consumed by plugins via `registration.getCliFlags()`.
@@ -282,6 +328,7 @@ function createHookBuckets(): HookBuckets {
     onBeforePrompt: [],
     onAfterToolCall: [],
     onSessionClear: [],
+    onSessionRecycle: [],
     onShutdown: [],
   };
 }
@@ -408,6 +455,9 @@ export function createDronePluginEngine({
   logToStderr = false,
   debugFlags = createDebugFlagRegistry(),
   referenceCapability,
+  sessionManager,
+  clearConversation: clearConversationFromHost,
+  sessionId: seededSessionId,
   pluginFlags = {},
   runtimeOptions,
   buildSystemMessages: buildSystemMessagesFromHost,
@@ -430,6 +480,7 @@ export function createDronePluginEngine({
     enabledPluginIds,
     pluginMap
   );
+  let currentSessionId = seededSessionId ?? `agent-${Date.now()}`;
 
   const hookBuckets = createHookBuckets();
   const promptFragments: DronePromptFragment[] = [];
@@ -516,6 +567,36 @@ export function createDronePluginEngine({
       callback(event);
     }
   };
+
+  /**
+   * The session boundary: snapshot hooks → mechanical clear → id mint →
+   * recycle hooks. Steps 1/3/4 run only when the outgoing session had turns,
+   * so an empty clear is purely mechanical (no spurious swarm session).
+   */
+  async function clearSession(): Promise<void> {
+    const turns = sessionManager.getTurns();
+    const hadTurns = turns.length > 0;
+    if (hadTurns) {
+      const payload: DroneSessionClearPayload = {
+        sessionId: currentSessionId,
+      };
+      for (const callback of hookBuckets.onSessionClear) {
+        await callback(payload);
+      }
+    }
+    clearConversationFromHost();
+    if (hadTurns) {
+      const previousSessionId = currentSessionId;
+      currentSessionId = `agent-${Date.now()}`;
+      const payload: DroneSessionRecyclePayload = {
+        sessionId: currentSessionId,
+        previousSessionId,
+      };
+      for (const callback of hookBuckets.onSessionRecycle) {
+        await callback(payload);
+      }
+    }
+  }
 
   // --- Local functions (declared before the return object so they can ---)
   // --- reference each other and be used in the return object)       ---
@@ -740,6 +821,8 @@ export function createDronePluginEngine({
         onAfterToolCall: callback => hookBuckets.onAfterToolCall.push(callback),
         onConversationEvent: callback => conversationEventHooks.push(callback),
         onSessionClear: callback => hookBuckets.onSessionClear.push(callback),
+        onSessionRecycle: callback =>
+          hookBuckets.onSessionRecycle.push(callback),
         onShutdown: callback => hookBuckets.onShutdown.push(callback),
         onSessionSafetyTrimWillRun: callback =>
           sessionSafetyTrimWillRunHooks.push(callback),
@@ -1018,6 +1101,7 @@ export function createDronePluginEngine({
         pluginFlags,
         debugFlags,
         flags: runtimeFlagRegistry,
+        getSessionId: () => currentSessionId,
         resetStuckDetectors: resetStuckDetectorsFromHost,
         submitUserMessage: submitUserMessageFromHost,
         cancelCurrentRequest: cancelCurrentRequestFromHost,
@@ -1036,6 +1120,28 @@ export function createDronePluginEngine({
       capabilities.set(
         DRONE_REFERENCE_CAPABILITY_ID,
         referenceCapability ?? createReferenceCapability()
+      );
+
+      // Seed the portable-context capability BEFORE plugin registration so
+      // contributors (todo/focus/notepad/persona) can register during
+      // register(), and so the NDJSON host commands work with no plugin.
+      capabilities.set(
+        DRONE_PORTABLE_CONTEXT_CAPABILITY_ID,
+        createPortableContextCapability({
+          sessionManager,
+          listAllTools: () => toolRegistry.listAll(),
+          listMountedTools: () => toolRegistry.listMounted(),
+          mountTool: name => toolRegistry.mount(name),
+          isToolRegistered: name => Boolean(toolRegistry.get(name)),
+          clearSession,
+          getSessionId: () => currentSessionId,
+          emitEvent: event => {
+            dispatchConversationEvent(event).catch(err => {
+              logger.error(`portable-context emitEvent failed: ${err}`);
+            });
+          },
+          logger,
+        })
       );
 
       logger.info(`initializing ${sortedPlugins.length} plugin(s)`);
@@ -1068,7 +1174,10 @@ export function createDronePluginEngine({
       hookName: StandardHookName,
       payload?: DroneAfterToolCallPayload
     ) => {
-      for (const callback of hookBuckets[hookName]) {
+      const callbacks = hookBuckets[hookName] as Array<
+        (p?: DroneAfterToolCallPayload) => Promise<void>
+      >;
+      for (const callback of callbacks) {
         try {
           await callback(payload);
         } catch (hookError) {
@@ -1151,6 +1260,8 @@ export function createDronePluginEngine({
     },
     drainSystemReminders: () => systemReminders.drainAll(),
     clearSystemReminders: () => systemReminders.clear(),
+    clearSession,
+    getSessionId: () => currentSessionId,
     queueSystemReminder: (content: string) => systemReminders.queue(content),
     unregisterTool: (canonicalName: string) => {
       unregisterToolImpl(canonicalName);

@@ -137,7 +137,7 @@ async function handleImport(
  */
 export function createSwarmSessionCommand(
   baseUrl: string | undefined,
-  currentSessionId: string,
+  getCurrentSessionId: () => string,
   config: DroneSessionImportConfig,
   getContextWindowTokens?: () => Promise<number>
 ): DroneSlashCommand {
@@ -153,13 +153,13 @@ export function createSwarmSessionCommand(
     handler: async ctx => {
       const subcommand = ctx.args[0] ?? '';
       if (subcommand === 'list') {
-        return handleList(ctx, baseUrl, currentSessionId);
+        return handleList(ctx, baseUrl, getCurrentSessionId());
       }
       if (subcommand === 'import') {
         return handleImport(
           ctx,
           baseUrl,
-          currentSessionId,
+          getCurrentSessionId(),
           config,
           getContextWindowTokens
         );

@@ -70,6 +70,7 @@ describe('config setValue real write path (llm.active regression)', () => {
         onAfterToolCall: () => {},
         onConversationEvent: () => {},
         onSessionClear: () => {},
+        onSessionRecycle: () => {},
         onShutdown: () => {},
         onSessionSafetyTrimWillRun: () => {},
         onSessionSafetyTrimApplied: () => {},

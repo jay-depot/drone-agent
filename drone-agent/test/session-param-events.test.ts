@@ -2,8 +2,8 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { createSwarmPlugin } from '../src/plugins/swarm/index.js';
 import { focusPlugin } from '../src/plugins/focus.js';
 import { personaPlugin } from '../src/plugins/persona/index.js';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
-import { silentLogger } from './helpers.js';
+
+import { createTestEngine, silentLogger } from './helpers.js';
 import {
   createDefaultAgentConfig,
   type DroneConversationEvent,
@@ -23,7 +23,7 @@ function createCapture(
   const conversationEventHooks: Array<
     (event: DroneConversationEvent) => Promise<void> | void
   > = [];
-  const hooks: Record<string, Array<() => Promise<void>>> = {};
+  const hooks: Record<string, Array<(...args: never[]) => Promise<void>>> = {};
 
   const registration: DronePluginRegistration = {
     logger: silentLogger(),
@@ -54,6 +54,9 @@ function createCapture(
       },
       onSessionClear: cb => {
         (hooks.onSessionClear ??= []).push(cb);
+      },
+      onSessionRecycle: cb => {
+        (hooks.onSessionRecycle ??= []).push(cb);
       },
       onShutdown: cb => {
         (hooks.onShutdown ??= []).push(cb);
@@ -209,7 +212,7 @@ describe('db/transcript session-parameter event emission', () => {
 
 describe('focus plugin focusChanged emission', () => {
   it('emits focusChanged when /focus set runs', async () => {
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [focusPlugin],
       config: {
         ...createDefaultAgentConfig(),
@@ -241,7 +244,7 @@ describe('focus plugin focusChanged emission', () => {
   });
 
   it('emits focusChanged with null when /focus clear runs', async () => {
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [focusPlugin],
       config: {
         ...createDefaultAgentConfig(),
@@ -280,7 +283,7 @@ describe('focus plugin focusChanged emission', () => {
   });
 
   it('classifies /focus subcommands with subcommand-aware busyBehavior', async () => {
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [focusPlugin],
       config: {
         ...createDefaultAgentConfig(),
@@ -317,7 +320,7 @@ describe('focus plugin focusChanged emission', () => {
   });
 
   it('strips the universal --now flag and overrides queue -> immediate', async () => {
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [focusPlugin],
       config: {
         ...createDefaultAgentConfig(),
@@ -340,7 +343,7 @@ describe('focus plugin focusChanged emission', () => {
   });
 
   it('dispatch strips --now so it never leaks into handler args', async () => {
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [focusPlugin],
       config: {
         ...createDefaultAgentConfig(),
@@ -381,7 +384,7 @@ describe('persona plugin personaChanged emission', () => {
   it('emits personaChanged with from/to when the persona changes', async () => {
     const config = createDefaultAgentConfig();
     config.enabledPlugins = ['persona'];
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
       logger: silentLogger(),
