@@ -822,5 +822,9 @@
   {
     "timestamp": "2026-10-12T01:00:38.062Z",
     "insight": "portable-context import is not idempotent under repeated export→import→export cycles: importContext appends a PERSISTED continuation-disclosure user turn (\"...was restored from a prior checkpoint...\"), so every save-after-restore nests another disclosure into the session and into the next snapshot. The checkpoint plugin has this bug today (save → restore → save), and the gateway continuity work would multiply it. The correct fix is capability-side, not consumer-side: exportContext must filter out disclosure-bearing turns using a shared marker constant exported from drone-core. Any future host that exports contexts inherits the fix for free; a gateway-only strip would leave checkpoint broken."
+  },
+  {
+    "timestamp": "2026-10-12T01:31:26.659Z",
+    "insight": "drone-gateway tests are NOT type-checked by any standard gate. Root `pnpm typecheck` runs `tsc -p tsconfig.test.json`, whose `include` lists drone-agent/drone-core/drone-beacon/drone-coordinator/drone-swarm/drone-swarm-common but NOT drone-gateway; and `drone-gateway/tsconfig.json` only includes `src/**/*`, not `test/**/*`. So a type error introduced in a drone-gateway test file (e.g. a SpawnBackend fake missing the new required `exportContext`/`importContext`, or a `role: string` literal that must be the `\"system\"|\"user\"|\"assistant\"|\"tool\"` union) passes build + typecheck + lint + vitest green, and only the connected TypeScript LSP surfaces it. When a shared interface like `SpawnBackend` gains a member, the LSP diagnostics for the gateway test files are the ONLY gate that catches stale fakes — run `lsp__get_diagnostics` on every changed gateway test, not just the source files. Consider adding `drone-gateway/{src,test}/**/*.ts` to tsconfig.test.json."
   }
 ]

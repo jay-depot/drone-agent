@@ -1,3 +1,8 @@
+import type {
+  ContextSnapshotStore,
+  OutboundLedgerHandle,
+} from './store/gateway-state-store.js';
+
 // === Service Adapter Interface ===
 
 export interface DroneServiceAdapter {
@@ -5,8 +10,16 @@ export interface DroneServiceAdapter {
   type: string; // "matrix", "telegram", "slack"
   start(): Promise<void>;
   stop(): Promise<void>;
-  sendMessage(conversationId: string, text: string): Promise<void>;
+  /** Returns the platform reference of the posted message, when the platform supplies one. */
+  sendMessage(
+    conversationId: string,
+    text: string
+  ): Promise<string | undefined>;
   onMessage(handler: (message: AdapterMessage) => void): void;
+  /** Built when the adapter has a persistent DB; absent otherwise. */
+  readonly snapshotStore?: ContextSnapshotStore;
+  /** Built when the adapter has a persistent DB; absent otherwise. */
+  readonly outboundLedger?: OutboundLedgerHandle;
 }
 
 export interface AdapterMessage {
@@ -20,6 +33,11 @@ export interface AdapterMessage {
    * adapter (it owns conversation routing); the gateway never inspects the id.
    */
   conversationKind: 'dm' | 'room';
+  /**
+   * Opaque adapter-stamped platform reference for this message (Matrix event
+   * id). Echoed by surfaces; the seam a future reaction/reply feature targets.
+   */
+  platformRef?: string;
 }
 
 // === Control Surface Interface ===

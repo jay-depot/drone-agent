@@ -7,6 +7,8 @@ function mockBackend(type: 'local' | 'coordinator'): SpawnBackend {
     type,
     spawnSession: vi.fn(),
     sendMessage: vi.fn(),
+    exportContext: vi.fn(),
+    importContext: vi.fn(),
     terminateSession: vi.fn(),
   };
 }

@@ -72,9 +72,21 @@ _Avoid_: Mention handler, persona mention, dispatch surface
 The internal message format used by the gateway. Contains the adapter ID, conversation ID, message text, optional sender information (`senderId?`/`senderName?`), and a required `conversationKind: 'dm' | 'room'` set by the adapter (only it knows group-ness). Service adapters translate platform-specific messages into this format.
 _Avoid_: Gateway message, internal message, envelope
 
+**Platform Ref**:
+The opaque adapter-stamped reference to a message on its platform (`AdapterMessage.platformRef`, e.g. a Matrix event id). Stamped inbound by the adapter and returned outbound by `sendMessage` (so a post's own id is known too). **Inert for now** — it rides the **Chat Tag** header and the **Outbound Ledger** entries, and is the seam a future reaction/reply feature targets. Absent refs render as `-`.
+_Avoid_: event id, message id, external id
+
 **Chat Tag**:
-The `[Alice] fix the build` prefix applied to each inbound turn by a spawning surface (via `chat-format.ts`). The name falls back `senderName → senderId → 'unknown'`, and only the first line of a multi-line message is prefixed. Applied in **both rooms and DMs**, with no toggle. Kept in the surface (not the engine) so `swarm-console` still sees raw `swarm.` lines.
+The `[<message-id> from: Alice]` header line applied to each inbound turn by a spawning surface (via `chat-format.ts`), with the body on the following line(s). The name falls back `senderName → senderId → 'unknown'`; the ref falls back to `-` when the **Platform Ref** is absent. Applied in **both rooms and DMs**, with no toggle. Kept in the surface (not the engine) so `swarm-console` still sees raw `swarm.` lines.
 _Avoid_: Speaker prefix, username label, attribution
+
+**Snapshot Store**:
+A per-adapter SQLite store (`gateway-state-store.ts` over the adapter's `dataPath` DB) holding one **Portable Context** snapshot per conversation, latest-wins. A spawning surface exports the agent's context after every completed round and saves it here; on the next spawn (idle/death re-spawn or gateway restart) it restores the snapshot into the fresh agent **before** the first round. This is the continuity path that lets one rolling context run indefinitely (compaction is the counterweight to payload growth). **Absent when the adapter has no `dataPath`** — continuity is then disabled (one startup warning). The stored snapshot is already disclosure-free (the capability strips the continuation reminder on export).
+_Avoid_: checkpoint store, context cache, session DB
+
+**Outbound Ledger**:
+A per-adapter SQLite table (`gateway-state-store.ts`) recording messages the gateway posted on the agent's behalf via the **Injection API** — posts dropped by the adapter's self-echo filter, so the agent would otherwise have a hole in its own history. Rows survive a gateway restart; the next user turn drains **all** pending rows into an inline preamble (own header line + body, carrying the **Platform Ref**) and deletes them **only after** the round succeeds. Agent replies are not recorded (they are already assistant turns in context). **Absent when the adapter has no `dataPath`**.
+_Avoid_: outbox, sent log, message journal
 
 **Message Batcher**:
 The engine's per-conversation coalescer (`batcher.ts`). When a message resolves to an **exact** conversation whose **sole** surface defines `handleBatch`, the message is buffered and the flush timer is (re)armed for the **Batch Debounce**. On flush the buffer is dispatched as **one** turn through the conversation's serial tail, and one merged reply is posted. Every other case (the wildcard, non-batch surfaces, multi-surface conversations) keeps the immediate per-message path.
@@ -149,7 +161,11 @@ _Avoid_: poster, message sender
                                      # sync store (survives restart); the same
                                      # database backs the legacy-crypto
                                      # migration store. Does NOT persist
-                                     # Rust-crypto E2EE keys.
+                                     # Rust-crypto E2EE keys. Also backs the
+                                     # Snapshot Store and Outbound Ledger:
+                                     # persona-assignment continuity is
+                                     # DISABLED when this is unset (one
+                                     # startup warning per adapter).
         encryption?: boolean         # Opt-in E2EE (default false). On Node the
                                      # Rust-crypto keys live in memory only, so
                                      # they are lost on restart.

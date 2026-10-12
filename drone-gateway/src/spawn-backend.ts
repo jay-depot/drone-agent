@@ -1,3 +1,4 @@
+import type { DronePortableContextExport } from 'drone-core';
 import type {
   SpawnSession,
   SpawnBackendType,
@@ -56,6 +57,18 @@ export interface SpawnBackend {
     message: string,
     opts?: SendMessageOptions
   ): Promise<string | null>;
+
+  /**
+   * Export the session's portable context. Local mode only; the coordinator
+   * backend throws (no receive path exists).
+   */
+  exportContext(session: SpawnSession): Promise<DronePortableContextExport>;
+
+  /** Restore a portable context into a freshly spawned session. */
+  importContext(
+    session: SpawnSession,
+    data: DronePortableContextExport
+  ): Promise<void>;
 
   /**
    * Terminate an agent session and clean up resources.

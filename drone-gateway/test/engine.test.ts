@@ -24,6 +24,13 @@ vi.mock('../src/coordinator-client.js', () => ({
   }),
 }));
 
+// Hoisted store slots the mocked Matrix adapter exposes, so a test can control
+// whether the adapter looks like it has a persistent DB.
+const adapterStores = vi.hoisted(() => ({
+  snapshotStore: undefined as unknown,
+  outboundLedger: undefined as unknown,
+}));
+
 // Mock the matrix adapter module so engine can import it without matrix-js-sdk
 vi.mock('../src/adapters/matrix.js', () => ({
   MatrixServiceAdapter: vi.fn().mockImplementation(function (id: string) {
@@ -34,11 +41,14 @@ vi.mock('../src/adapters/matrix.js', () => ({
       stop: vi.fn(),
       sendMessage: vi.fn(),
       onMessage: vi.fn(),
+      snapshotStore: adapterStores.snapshotStore,
+      outboundLedger: adapterStores.outboundLedger,
     };
   }),
 }));
 
 const { GatewayEngine } = await import('../src/engine.js');
+const { logger } = await import('../src/logger.js');
 
 /**
  * Build a GatewayEngine with a registry holding the given backend(s). The
@@ -61,6 +71,8 @@ function makeMockSpawnBackend(): SpawnBackend {
     type: 'local' as const,
     spawnSession: vi.fn(),
     sendMessage: vi.fn(),
+    exportContext: vi.fn(),
+    importContext: vi.fn(),
     terminateSession: vi.fn(),
   };
 }
@@ -77,6 +89,8 @@ function makeRespondingSpawnBackend(
       startedAt: 0,
     })),
     sendMessage: vi.fn(async () => 'PERSONA-RESPONSE'),
+    exportContext: vi.fn(),
+    importContext: vi.fn(),
     terminateSession: vi.fn(),
   };
 }
@@ -162,6 +176,8 @@ describe('GatewayEngine', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSpawnBackend = makeMockSpawnBackend();
+    adapterStores.snapshotStore = undefined;
+    adapterStores.outboundLedger = undefined;
   });
 
   describe('constructor', () => {
@@ -244,6 +260,110 @@ describe('GatewayEngine', () => {
         'No control surface implementation available for type "mystery-surface". ' +
           'Supported types: discard, persona-assignment, swarm-console'
       );
+    });
+
+    it('warns once when a persona surface has no dataPath', async () => {
+      const warn = vi.spyOn(logger, 'warn').mockImplementation(() => logger);
+      const config = makeMinimalConfig({
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            config: {},
+            conversations: new Map([
+              [
+                '!room:server',
+                conv([makeConvSpec('persona-assignment', { personaId: 'me' })]),
+              ],
+            ]),
+          }),
+        ],
+      });
+      const engine = makeEngine(config, mockSpawnBackend);
+      await engine.start();
+
+      const calls = warn.mock.calls.filter(call =>
+        String(call[1]).includes('continuity and outbound ledger are disabled')
+      );
+      expect(calls).toHaveLength(1);
+      warn.mockRestore();
+    });
+
+    it('does not warn when the persona surface has a dataPath', async () => {
+      const warn = vi.spyOn(logger, 'warn').mockImplementation(() => logger);
+      const config = makeMinimalConfig({
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            config: { dataPath: '/tmp/gw.sqlite' },
+            conversations: new Map([
+              [
+                '!room:server',
+                conv([makeConvSpec('persona-assignment', { personaId: 'me' })]),
+              ],
+            ]),
+          }),
+        ],
+      });
+      const engine = makeEngine(config, mockSpawnBackend);
+      await engine.start();
+
+      const calls = warn.mock.calls.filter(call =>
+        String(call[1]).includes('continuity and outbound ledger are disabled')
+      );
+      expect(calls).toHaveLength(0);
+      warn.mockRestore();
+    });
+
+    it('does not warn for an adapter without a persona surface', async () => {
+      const warn = vi.spyOn(logger, 'warn').mockImplementation(() => logger);
+      const config = makeMinimalConfig({
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            config: {},
+            conversations: new Map([
+              ['!room:server', conv([makeConvSpec('discard')])],
+            ]),
+          }),
+        ],
+      });
+      const engine = makeEngine(config, mockSpawnBackend);
+      await engine.start();
+
+      const calls = warn.mock.calls.filter(call =>
+        String(call[1]).includes('continuity and outbound ledger are disabled')
+      );
+      expect(calls).toHaveLength(0);
+      warn.mockRestore();
+    });
+
+    it('passes the adapter outbound ledger into the persona surface context', async () => {
+      const list = vi.fn(() => []);
+      adapterStores.outboundLedger = {
+        append: vi.fn(),
+        list,
+        remove: vi.fn(),
+      };
+      const config = makeMinimalConfig({
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            config: { dataPath: '/tmp/gw.sqlite' },
+            conversations: new Map([
+              [
+                '!room:server',
+                conv([makeConvSpec('persona-assignment', { personaId: 'me' })]),
+              ],
+            ]),
+          }),
+        ],
+      });
+      await startAndDrive(config, makeRespondingSpawnBackend('local'), {
+        conversationId: '!room:server',
+        text: 'hi',
+      });
+
+      expect(list).toHaveBeenCalledWith('!room:server');
     });
   });
 
@@ -489,12 +609,12 @@ describe('GatewayEngine', () => {
       await vi.waitFor(() => expect(order).toHaveLength(4));
 
       // The immediate path tags each turn too, so the labels carry the
-      // '[unknown]' fallback prefix (this fixture has no sender name).
+      // '- from: unknown' fallback prefix (no sender name, no platform ref).
       expect(order).toEqual([
-        'start:[unknown] a',
-        'end:[unknown] a',
-        'start:[unknown] b',
-        'end:[unknown] b',
+        'start:[- from: unknown]\na',
+        'end:[- from: unknown]\na',
+        'start:[- from: unknown]\nb',
+        'end:[- from: unknown]\nb',
       ]);
     });
   });
@@ -554,7 +674,9 @@ describe('GatewayEngine', () => {
       const sendMessage = backend.sendMessage as unknown as ReturnType<
         typeof vi.fn
       >;
-      expect(sendMessage.mock.calls[0][1]).toBe('[Alice] a\n[Bob] b');
+      expect(sendMessage.mock.calls[0][1]).toBe(
+        '[- from: Alice]\na\n[- from: Bob]\nb'
+      );
       await engine.stop();
     });
 
@@ -784,6 +906,53 @@ describe('GatewayEngine', () => {
     it('posts directly to the adapter for an injection target', async () => {
       const { engine, sent } = await startEngine();
       await engine.injectMessage('matrix-1', '!room:server', 'hello');
+      expect(sent).toEqual([{ conversationId: '!room:server', text: 'hello' }]);
+    });
+
+    it('records a ledger row with the platform ref returned by the adapter', async () => {
+      const append = vi.fn();
+      adapterStores.outboundLedger = {
+        append,
+        list: vi.fn(() => []),
+        remove: vi.fn(),
+      };
+      const { engine } = await startEngine();
+      const matrix = (await import('../src/adapters/matrix.js'))
+        .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
+      const adapter = matrix.mock.results.at(-1)?.value as {
+        sendMessage: ReturnType<typeof vi.fn>;
+      };
+      adapter.sendMessage.mockResolvedValue('$posted1');
+
+      await engine.injectMessage('matrix-1', '!room:server', 'hello');
+
+      expect(append).toHaveBeenCalledWith('!room:server', {
+        platformRef: '$posted1',
+        text: 'hello',
+      });
+    });
+
+    it('records a ledger row with no ref when the adapter returns undefined', async () => {
+      const append = vi.fn();
+      adapterStores.outboundLedger = {
+        append,
+        list: vi.fn(() => []),
+        remove: vi.fn(),
+      };
+      const { engine } = await startEngine();
+      await engine.injectMessage('matrix-1', '!room:server', 'hello');
+      expect(append).toHaveBeenCalledWith('!room:server', {
+        platformRef: undefined,
+        text: 'hello',
+      });
+    });
+
+    it('handles a missing ledger handle without throwing', async () => {
+      adapterStores.outboundLedger = undefined;
+      const { engine, sent } = await startEngine();
+      await expect(
+        engine.injectMessage('matrix-1', '!room:server', 'hello')
+      ).resolves.toBeUndefined();
       expect(sent).toEqual([{ conversationId: '!room:server', text: 'hello' }]);
     });
 

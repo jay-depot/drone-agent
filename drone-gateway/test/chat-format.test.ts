@@ -2,37 +2,84 @@ import { describe, expect, it } from 'vitest';
 import {
   NO_RESPONSE_SENTINEL,
   ROOM_INSTRUCTION,
+  OUTBOUND_LEDGER_PREAMBLE,
   formatChatTurn,
+  formatOutboundPost,
   isNoResponse,
 } from '../src/chat-format.js';
 
 describe('formatChatTurn', () => {
-  it('prefixes with the sender name', () => {
+  it('builds a header line with the platform ref then the body', () => {
     expect(
-      formatChatTurn({ senderName: 'Alice', senderId: '@alice:x', text: 'hi' })
-    ).toBe('[Alice] hi');
+      formatChatTurn({
+        senderName: 'Alice',
+        senderId: '@alice:x',
+        platformRef: '$evt1',
+        text: 'hi',
+      })
+    ).toBe('[$evt1 from: Alice]\nhi');
   });
 
   it('falls back to senderId when senderName is absent', () => {
-    expect(formatChatTurn({ senderId: '@alice:x', text: 'hi' })).toBe(
-      '[@alice:x] hi'
-    );
+    expect(
+      formatChatTurn({ senderId: '@alice:x', platformRef: '$evt1', text: 'hi' })
+    ).toBe('[$evt1 from: @alice:x]\nhi');
   });
 
   it('falls back to senderId when senderName is blank', () => {
     expect(
-      formatChatTurn({ senderName: '   ', senderId: '@alice:x', text: 'hi' })
-    ).toBe('[@alice:x] hi');
+      formatChatTurn({
+        senderName: '   ',
+        senderId: '@alice:x',
+        platformRef: '$evt1',
+        text: 'hi',
+      })
+    ).toBe('[$evt1 from: @alice:x]\nhi');
   });
 
-  it("falls back to 'unknown' when both are absent", () => {
-    expect(formatChatTurn({ text: 'hi' })).toBe('[unknown] hi');
+  it("falls back to 'unknown' when both name and id are absent", () => {
+    expect(formatChatTurn({ platformRef: '$evt1', text: 'hi' })).toBe(
+      '[$evt1 from: unknown]\nhi'
+    );
   });
 
-  it('prefixes only the first line of a multi-line message', () => {
+  it("falls back to '-' when there is no platform ref", () => {
+    expect(formatChatTurn({ senderName: 'Alice', text: 'hi' })).toBe(
+      '[- from: Alice]\nhi'
+    );
     expect(
-      formatChatTurn({ senderName: 'Alice', text: 'line one\nline two' })
-    ).toBe('[Alice] line one\nline two');
+      formatChatTurn({ senderName: 'Alice', platformRef: '   ', text: 'hi' })
+    ).toBe('[- from: Alice]\nhi');
+  });
+
+  it('places a multi-line body verbatim under the header line', () => {
+    expect(
+      formatChatTurn({
+        senderName: 'Alice',
+        platformRef: '$evt1',
+        text: 'line one\nline two',
+      })
+    ).toBe('[$evt1 from: Alice]\nline one\nline two');
+  });
+});
+
+describe('formatOutboundPost', () => {
+  it('builds a header line with the platform ref then the body', () => {
+    expect(formatOutboundPost({ platformRef: '$post1', text: 'news' })).toBe(
+      '[$post1 posted by you]\nnews'
+    );
+  });
+
+  it("falls back to '-' when there is no platform ref", () => {
+    expect(formatOutboundPost({ text: 'news' })).toBe(
+      '[- posted by you]\nnews'
+    );
+  });
+});
+
+describe('OUTBOUND_LEDGER_PREAMBLE', () => {
+  it('labels the drained outbound history', () => {
+    expect(OUTBOUND_LEDGER_PREAMBLE).toContain('while you were not running');
   });
 });
 

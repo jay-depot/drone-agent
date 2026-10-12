@@ -90,6 +90,8 @@ describe('registerBuiltInSurfaces', () => {
         startedAt: 0,
       })),
       sendMessage: vi.fn(async () => 'hello back'),
+      exportContext: vi.fn(),
+      importContext: vi.fn(),
       terminateSession: vi.fn(),
       type: 'local' as const,
     };
@@ -122,6 +124,8 @@ describe('registerBuiltInSurfaces', () => {
         startedAt: 0,
       })),
       sendMessage: vi.fn(async () => 'hello back'),
+      exportContext: vi.fn(),
+      importContext: vi.fn(),
       terminateSession: vi.fn(),
       type: 'coordinator' as const,
     };
@@ -150,6 +154,8 @@ describe('registerBuiltInSurfaces', () => {
         throw new Error('boom');
       }),
       sendMessage: vi.fn(),
+      exportContext: vi.fn(),
+      importContext: vi.fn(),
       terminateSession: vi.fn(),
       type: 'local' as const,
     };

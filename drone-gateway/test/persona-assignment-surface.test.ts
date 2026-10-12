@@ -21,6 +21,8 @@ function makeBackend(overrides: Partial<SpawnBackend> = {}): SpawnBackend {
     type: 'local' as const,
     spawnSession: vi.fn(async () => makeSession(`agent-${++counter}`)),
     sendMessage: vi.fn(async () => 'hello back'),
+    exportContext: vi.fn(),
+    importContext: vi.fn(),
     terminateSession: vi.fn(async () => undefined),
     ...overrides,
   };
@@ -116,7 +118,7 @@ describe('createPersonaAssignmentSurface', () => {
 
     await surface.handleMessage(msg('fix the build'));
 
-    expect(sentText(backend)).toBe('[Alice] fix the build');
+    expect(sentText(backend)).toBe('[- from: Alice]\nfix the build');
     expect(sentOpts(backend)).toBeUndefined();
   });
 
@@ -129,8 +131,8 @@ describe('createPersonaAssignmentSurface', () => {
       msg('b', { senderName: undefined, senderId: undefined })
     );
 
-    expect(sentText(backend, 0)).toBe('[@alice:x] a');
-    expect(sentText(backend, 1)).toBe('[unknown] b');
+    expect(sentText(backend, 0)).toBe('[- from: @alice:x]\na');
+    expect(sentText(backend, 1)).toBe('[- from: unknown]\nb');
   });
 
   it('attaches the room instruction for a room conversation', async () => {
@@ -141,7 +143,7 @@ describe('createPersonaAssignmentSurface', () => {
       msg('anyone around?', { conversationKind: 'room' })
     );
 
-    expect(sentText(backend)).toBe('[Alice] anyone around?');
+    expect(sentText(backend)).toBe('[- from: Alice]\nanyone around?');
     expect(sentOpts(backend)).toEqual({ systemReminder: ROOM_INSTRUCTION });
   });
 
@@ -170,7 +172,9 @@ describe('createPersonaAssignmentSurface', () => {
     ]);
 
     expect(backend.sendMessage).toHaveBeenCalledTimes(1);
-    expect(sentText(backend)).toBe('[Alice] first\n[Bob] second');
+    expect(sentText(backend)).toBe(
+      '[- from: Alice]\nfirst\n[- from: Bob]\nsecond'
+    );
     // The room instruction is driven by the FIRST message's kind.
     expect(sentOpts(backend)).toBeUndefined();
   });
@@ -272,5 +276,86 @@ describe('createPersonaAssignmentSurface', () => {
     await surface.dispose?.();
 
     expect(backend.terminateSession).toHaveBeenCalledTimes(1);
+  });
+
+  describe('outbound ledger drain', () => {
+    function makeLedger(
+      entries: Array<{ id: number; platformRef?: string; text: string }>
+    ) {
+      return {
+        append: vi.fn(),
+        list: vi.fn(() => entries.map(e => ({ ...e, createdAt: 0 }))),
+        remove: vi.fn(),
+      };
+    }
+
+    it('prepends the preamble and posts entries, deleting rows on success', async () => {
+      const backend = makeBackend();
+      const ledger = makeLedger([
+        { id: 1, platformRef: '$post1', text: 'news' },
+        { id: 2, text: 'more news' },
+      ]);
+      const surface = makeSurface(backend, { outboundLedger: ledger });
+
+      await surface.handleMessage(msg('hi'));
+
+      expect(sentText(backend)).toBe(
+        'Messages you posted to this conversation while you were not running:\n' +
+          '[$post1 posted by you]\nnews\n' +
+          '[- posted by you]\nmore news\n\n' +
+          '[- from: Alice]\nhi'
+      );
+      expect(ledger.remove).toHaveBeenCalledWith([1, 2]);
+    });
+
+    it('does not delete rows when the turn throws', async () => {
+      const backend = makeBackend({
+        spawnSession: vi.fn(async () => {
+          throw new Error('boom');
+        }),
+      });
+      const ledger = makeLedger([{ id: 1, text: 'news' }]);
+      const surface = makeSurface(backend, { outboundLedger: ledger });
+
+      const result = await surface.handleMessage(msg('hi'));
+
+      expect(result.response).toBe('Error: boom');
+      expect(ledger.remove).not.toHaveBeenCalled();
+    });
+
+    it('leaves the text unchanged when there is no ledger handle', async () => {
+      const backend = makeBackend();
+      const surface = makeSurface(backend);
+      await surface.handleMessage(msg('fix the build'));
+      expect(sentText(backend)).toBe('[- from: Alice]\nfix the build');
+    });
+
+    it('leaves the text unchanged when the ledger is empty', async () => {
+      const backend = makeBackend();
+      const ledger = makeLedger([]);
+      const surface = makeSurface(backend, { outboundLedger: ledger });
+      await surface.handleMessage(msg('hi'));
+      expect(sentText(backend)).toBe('[- from: Alice]\nhi');
+      expect(ledger.remove).not.toHaveBeenCalled();
+    });
+
+    it('drains the preamble once alongside a room batch reminder', async () => {
+      const backend = makeBackend();
+      const ledger = makeLedger([{ id: 7, platformRef: '$p', text: 'brief' }]);
+      const surface = makeSurface(backend, { outboundLedger: ledger });
+
+      await surface.handleBatch?.([
+        msg('first', { conversationKind: 'room' }),
+        msg('second', { senderName: 'Bob', conversationKind: 'room' }),
+      ]);
+
+      expect(sentText(backend)).toBe(
+        'Messages you posted to this conversation while you were not running:\n' +
+          '[$p posted by you]\nbrief\n\n' +
+          '[- from: Alice]\nfirst\n[- from: Bob]\nsecond'
+      );
+      expect(sentOpts(backend)).toEqual({ systemReminder: ROOM_INSTRUCTION });
+      expect(ledger.remove).toHaveBeenCalledWith([7]);
+    });
   });
 });

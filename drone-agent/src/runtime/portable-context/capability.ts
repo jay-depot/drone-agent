@@ -20,6 +20,7 @@ import type {
   DroneToolDescriptor,
 } from 'drone-core';
 import {
+  CONTINUATION_DISCLOSURE_MARKER,
   CURRENT_CONTEXT_SCHEMA_VERSION,
   MAX_CONTEXT_SCHEMA_VERSION,
   MIN_CONTEXT_SCHEMA_VERSION,
@@ -64,7 +65,7 @@ function buildContinuationDisclosure(
 ): string {
   const lines: string[] = [
     '<system-reminder>',
-    `The preceding was restored from a prior checkpoint taken from session ${sourceSessionId} at ${createdAt}.`,
+    `The preceding ${CONTINUATION_DISCLOSURE_MARKER} taken from session ${sourceSessionId} at ${createdAt}.`,
   ];
   if (unavailableTools.length > 0) {
     lines.push('');
@@ -94,7 +95,19 @@ export function createPortableContextCapability(
   const contributors = new Map<string, DronePortableContextContributor>();
 
   async function exportContext(): Promise<DronePortableContextExport> {
-    const turns = deps.sessionManager.getTurns();
+    // Strip continuation-disclosure turns so repeated export → import →
+    // export cycles never accumulate them (the marker is only ever written
+    // by buildContinuationDisclosure, so a genuine turn can never match).
+    const turns = deps.sessionManager
+      .getTurns()
+      .filter(
+        turn =>
+          !turn.messages.some(
+            m =>
+              typeof m.content === 'string' &&
+              m.content.includes(CONTINUATION_DISCLOSURE_MARKER)
+          )
+      );
     const mountedNames = new Set(
       deps.listMountedTools().map(tool => tool.name)
     );

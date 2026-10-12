@@ -131,7 +131,7 @@ export class GatewayEngine {
             .join(', ')}`
         );
         const surfaces = conv.surfaces.map(spec =>
-          this.createControlSurface(spec, convId)
+          this.createControlSurface(spec, convId, adapterConfig.id)
         );
         // Batching is enabled only for an EXACT conversation (never the
         // wildcard) whose sole surface opts in by defining handleBatch.
@@ -155,6 +155,19 @@ export class GatewayEngine {
         byConv.set(convId, record);
       }
       this.controlSurfaces.set(adapterConfig.id, byConv);
+
+      const hasDataPath =
+        typeof adapterConfig.config?.dataPath === 'string' &&
+        (adapterConfig.config.dataPath as string).trim() !== '';
+      const hasPersonaSurface = [...adapterConfig.conversations.values()].some(
+        c => c.surfaces.some(s => s.type === 'persona-assignment')
+      );
+      if (hasPersonaSurface && !hasDataPath) {
+        logger.warn(
+          { adapterId: adapterConfig.id },
+          'persona-assignment continuity and outbound ledger are disabled: this adapter has no "dataPath"'
+        );
+      }
 
       logger.info(
         `Adapter "${adapterConfig.id}" (${adapterConfig.type}) started ` +
@@ -326,7 +339,8 @@ export class GatewayEngine {
     }
     const adapter = this.adapters.get(adapterId);
     if (!adapter) throw new UnknownAdapterError(adapterId);
-    await adapter.sendMessage(conversationId, text);
+    const platformRef = await adapter.sendMessage(conversationId, text);
+    adapter.outboundLedger?.append(conversationId, { platformRef, text });
   }
 
   private async createAdapter(
@@ -349,7 +363,8 @@ export class GatewayEngine {
 
   private createControlSurface(
     spec: ControlSurfaceSpec,
-    conversationId: string
+    conversationId: string,
+    adapterId: string
   ): DroneControlSurface {
     const factory = this.surfaceRegistry.get(spec.type);
     if (!factory) {
@@ -358,7 +373,7 @@ export class GatewayEngine {
           `Supported types: ${this.surfaceRegistry.types().join(', ')}`
       );
     }
-    return factory(spec, conversationId, this.surfaceContext(spec));
+    return factory(spec, conversationId, this.surfaceContext(spec, adapterId));
   }
 
   /**
@@ -398,9 +413,13 @@ export class GatewayEngine {
     return backend;
   }
 
-  private surfaceContext(spec: ControlSurfaceSpec): SurfaceContext {
+  private surfaceContext(
+    spec: ControlSurfaceSpec,
+    adapterId: string
+  ): SurfaceContext {
     const cfg = spec.config ?? {};
     const lifecycle = cfg.lifecycle as { idleTimeoutMs?: number } | undefined;
+    const adapter = this.adapters.get(adapterId);
     return {
       spawnBackend: this.resolveSpawnBackend(spec),
       swarm: this.swarm,
@@ -408,6 +427,8 @@ export class GatewayEngine {
       workingDir: cfg.workingDir as string | undefined,
       idleTimeoutMs: lifecycle?.idleTimeoutMs ?? this.config.idleTimeoutMs,
       debounceMs: resolveDebounceMs(cfg, this.config),
+      snapshotStore: adapter?.snapshotStore,
+      outboundLedger: adapter?.outboundLedger,
     };
   }
 }

@@ -18,6 +18,8 @@ vi.mock('../src/local-spawn-backend.js', () => ({
       type: 'local',
       spawnSession: vi.fn(),
       sendMessage: vi.fn(),
+      exportContext: vi.fn(),
+      importContext: vi.fn(),
       terminateSession: vi.fn(),
     };
   }),
@@ -29,6 +31,8 @@ vi.mock('../src/coordinator-spawn-backend.js', () => ({
       type: 'coordinator',
       spawnSession: vi.fn(),
       sendMessage: vi.fn(),
+      exportContext: vi.fn(),
+      importContext: vi.fn(),
       terminateSession: vi.fn(),
     };
   }),

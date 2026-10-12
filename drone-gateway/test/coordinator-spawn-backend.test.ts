@@ -140,6 +140,34 @@ describe('CoordinatorSpawnBackend', () => {
     });
   });
 
+  describe('context export/import', () => {
+    it('throws a clear error for exportContext', async () => {
+      const session = await backend.spawnSession('conv-1', 'coder', {
+        targetBeaconId: 'beacon-1',
+      });
+      await expect(backend.exportContext(session)).rejects.toThrow(
+        'Context export is not supported in coordinator spawn mode.'
+      );
+    });
+
+    it('throws a clear error for importContext', async () => {
+      const session = await backend.spawnSession('conv-1', 'coder', {
+        targetBeaconId: 'beacon-1',
+      });
+      await expect(
+        backend.importContext(session, {
+          version: 1,
+          createdAt: new Date().toISOString(),
+          session: { turns: [] },
+          tools: [],
+          pluginData: {},
+        })
+      ).rejects.toThrow(
+        'Context import is not supported in coordinator spawn mode.'
+      );
+    });
+  });
+
   describe('sendMessage', () => {
     it('delivers via sendSessionMessage and returns null (no synchronous reply)', async () => {
       mockSpawnAgent.mockResolvedValue({

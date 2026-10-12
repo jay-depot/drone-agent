@@ -41,6 +41,13 @@ vi.mock('../src/store/sqlite-crypto-store.js', () => ({
   SqliteCryptoStore: mockSqliteCryptoStore,
 }));
 
+const mockCreateContextSnapshotStore = vi.fn();
+const mockCreateOutboundLedger = vi.fn();
+vi.mock('../src/store/gateway-state-store.js', () => ({
+  createContextSnapshotStore: mockCreateContextSnapshotStore,
+  createOutboundLedger: mockCreateOutboundLedger,
+}));
+
 const { MatrixServiceAdapter } = await import('../src/adapters/matrix.js');
 
 function makeClientStub() {
@@ -95,6 +102,8 @@ describe('MatrixServiceAdapter', () => {
     mockSendReadReceipt.mockResolvedValue(undefined);
     mockSendHtmlMessage.mockResolvedValue(undefined);
     mockSendMessage.mockResolvedValue(undefined);
+    mockSendHtmlMessage.mockResolvedValue({ event_id: '$sent1' });
+    mockSendMessage.mockResolvedValue({ event_id: '$sent1' });
     mockGetRooms.mockReturnValue([]);
     mockOpenGatewayDb.mockReturnValue({ close: mockDbClose });
     mockSqliteSyncStore.mockImplementation(function () {
@@ -103,6 +112,8 @@ describe('MatrixServiceAdapter', () => {
     mockSqliteCryptoStore.mockImplementation(function () {
       return {};
     });
+    mockCreateContextSnapshotStore.mockReturnValue({ tag: 'snapshot-store' });
+    mockCreateOutboundLedger.mockReturnValue({ tag: 'outbound-ledger' });
   });
 
   describe('constructor', () => {
@@ -273,6 +284,33 @@ describe('MatrixServiceAdapter', () => {
         expect.not.objectContaining({ store: expect.any(Object) })
       );
     });
+
+    it('builds the snapshot store and ledger when dataPath is set', async () => {
+      adapter = new MatrixServiceAdapter('matrix-1', {
+        homeserverUrl: 'https://matrix.org',
+        accessToken: 'syt_token',
+        userId: '@bot:matrix.org',
+        dataPath: '/tmp/test-gateway.sqlite',
+      });
+
+      await adapter.start();
+
+      expect(adapter.snapshotStore).toEqual({ tag: 'snapshot-store' });
+      expect(adapter.outboundLedger).toEqual({ tag: 'outbound-ledger' });
+    });
+
+    it('exposes no stores when dataPath is unset', async () => {
+      adapter = new MatrixServiceAdapter('matrix-1', {
+        homeserverUrl: 'https://matrix.org',
+        accessToken: 'syt_token',
+        userId: '@bot:matrix.org',
+      });
+
+      await adapter.start();
+
+      expect(adapter.snapshotStore).toBeUndefined();
+      expect(adapter.outboundLedger).toBeUndefined();
+    });
   });
 
   describe('message handling', () => {
@@ -313,6 +351,7 @@ describe('MatrixServiceAdapter', () => {
       expect(messages[0].senderId).toBe('@alice:matrix.org');
       expect(messages[0].senderName).toBe('Alice');
       expect(messages[0].conversationKind).toBe('dm');
+      expect(messages[0].platformRef).toBe('$event1');
     });
 
     it('emits AdapterMessage for room timeline events', async () => {
@@ -527,6 +566,38 @@ describe('MatrixServiceAdapter', () => {
 
       // Should send typing off
       expect(mockSendTyping).toHaveBeenCalledWith('!test:matrix.org', false, 0);
+    });
+
+    it('returns the posted event id', async () => {
+      adapter = new MatrixServiceAdapter('matrix-1', {
+        homeserverUrl: 'https://matrix.org',
+        accessToken: 'syt_token',
+        userId: '@bot:matrix.org',
+      });
+
+      await adapter.start();
+
+      const eventId = await adapter.sendMessage(
+        '!test:matrix.org',
+        'Hello **world**'
+      );
+
+      expect(eventId).toBe('$sent1');
+    });
+
+    it('returns undefined when the platform gives no event id', async () => {
+      mockSendHtmlMessage.mockResolvedValue(undefined);
+      adapter = new MatrixServiceAdapter('matrix-1', {
+        homeserverUrl: 'https://matrix.org',
+        accessToken: 'syt_token',
+        userId: '@bot:matrix.org',
+      });
+
+      await adapter.start();
+
+      await expect(
+        adapter.sendMessage('!test:matrix.org', 'hi')
+      ).resolves.toBeUndefined();
     });
 
     it('sends plain text when formattedBody is null', async () => {

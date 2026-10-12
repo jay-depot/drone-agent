@@ -6,6 +6,8 @@ import {
 import type { SpawnBackend } from '../src/spawn-backend.js';
 import type { SurfaceContext } from '../src/surfaces/types.js';
 import type { SpawnSession } from '../src/types.js';
+import type { ContextSnapshotStore } from '../src/store/gateway-state-store.js';
+import type { DronePortableContextExport } from 'drone-core';
 
 function makeSession(id: string): SpawnSession {
   return {
@@ -22,6 +24,8 @@ function makeBackend(overrides: Partial<SpawnBackend> = {}): SpawnBackend {
     type: 'local' as const,
     spawnSession: vi.fn(async () => makeSession(`agent-${++counter}`)),
     sendMessage: vi.fn(async () => 'reply'),
+    exportContext: vi.fn(),
+    importContext: vi.fn(),
     terminateSession: vi.fn(async () => undefined),
     ...overrides,
   };
@@ -33,6 +37,26 @@ function makeCtx(
   overrides: Partial<SurfaceContext> = {}
 ): SurfaceContext {
   return { spawnBackend: backend, swarm: undefined, ...overrides };
+}
+
+function makeExport(marker: string): DronePortableContextExport {
+  return {
+    version: 1,
+    createdAt: '2026-10-12T00:00:00.000Z',
+    session: { sourceSessionId: marker, turns: [] },
+    tools: [],
+    pluginData: {},
+  };
+}
+
+function makeSnapshotStore(
+  snapshot: DronePortableContextExport | null
+): ContextSnapshotStore {
+  return {
+    saveSnapshot: vi.fn(),
+    getSnapshot: vi.fn(() => snapshot),
+    deleteSnapshot: vi.fn(),
+  };
 }
 
 describe('SessionLifecycle', () => {
@@ -259,5 +283,136 @@ describe('SessionLifecycle', () => {
     await Promise.all([p1, p2]);
 
     expect(order).toEqual(['start:a', 'end:a', 'start:b', 'end:b']);
+  });
+
+  describe('snapshot restore', () => {
+    it('imports a stored snapshot before the first round', async () => {
+      const snapshot = makeExport('prev');
+      const store = makeSnapshotStore(snapshot);
+      const order: string[] = [];
+      const backend = makeBackend({
+        importContext: vi.fn(async () => {
+          order.push('import');
+        }),
+        sendMessage: vi.fn(async () => {
+          order.push('send');
+          return 'reply';
+        }),
+        exportContext: vi.fn(async () => makeExport('now')),
+      });
+      const lifecycle = new SessionLifecycle({
+        surfaceType: 'persona-assignment',
+        conversationId: 'conv-1',
+        personaId: 'coder',
+        ctx: makeCtx(backend, { snapshotStore: store }),
+      });
+
+      await lifecycle.send('hi');
+
+      expect(backend.importContext).toHaveBeenCalledWith(
+        expect.objectContaining({ conversationId: 'conv-1' }),
+        snapshot
+      );
+      expect(order.indexOf('import')).toBeLessThan(order.indexOf('send'));
+    });
+
+    it('does not import when no snapshot is stored', async () => {
+      const store = makeSnapshotStore(null);
+      const backend = makeBackend();
+      const lifecycle = new SessionLifecycle({
+        surfaceType: 'persona-assignment',
+        conversationId: 'conv-1',
+        personaId: 'coder',
+        ctx: makeCtx(backend, { snapshotStore: store }),
+      });
+
+      await lifecycle.send('hi');
+
+      expect(backend.importContext).not.toHaveBeenCalled();
+    });
+
+    it('warns and proceeds when importContext throws', async () => {
+      const store = makeSnapshotStore(makeExport('prev'));
+      const backend = makeBackend({
+        importContext: vi.fn(async () => {
+          throw new Error('bad snapshot');
+        }),
+      });
+      const lifecycle = new SessionLifecycle({
+        surfaceType: 'persona-assignment',
+        conversationId: 'conv-1',
+        personaId: 'coder',
+        ctx: makeCtx(backend, { snapshotStore: store }),
+      });
+
+      await expect(lifecycle.send('hi')).resolves.toBe('reply');
+      expect(backend.sendMessage).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('snapshot export', () => {
+    it('saves a snapshot after a successful send', async () => {
+      const context = makeExport('now');
+      const saveSnapshot = vi.fn();
+      const store: ContextSnapshotStore = {
+        saveSnapshot,
+        getSnapshot: vi.fn(() => null),
+        deleteSnapshot: vi.fn(),
+      };
+      const backend = makeBackend({
+        exportContext: vi.fn(async () => context),
+      });
+      const lifecycle = new SessionLifecycle({
+        surfaceType: 'persona-assignment',
+        conversationId: 'conv-1',
+        personaId: 'coder',
+        ctx: makeCtx(backend, { snapshotStore: store }),
+      });
+
+      await lifecycle.send('hi');
+
+      expect(backend.exportContext).toHaveBeenCalledTimes(1);
+      expect(saveSnapshot).toHaveBeenCalledWith('conv-1', context);
+    });
+
+    it('does not save a snapshot when the send and retry both fail', async () => {
+      const saveSnapshot = vi.fn();
+      const store: ContextSnapshotStore = {
+        saveSnapshot,
+        getSnapshot: vi.fn(() => null),
+        deleteSnapshot: vi.fn(),
+      };
+      const backend = makeBackend({
+        sendMessage: vi.fn(async () => {
+          throw new Error('still gone');
+        }),
+        exportContext: vi.fn(async () => makeExport('now')),
+      });
+      const lifecycle = new SessionLifecycle({
+        surfaceType: 'persona-assignment',
+        conversationId: 'conv-1',
+        personaId: 'coder',
+        ctx: makeCtx(backend, { snapshotStore: store }),
+      });
+
+      await expect(lifecycle.send('hi')).rejects.toThrow('still gone');
+      expect(saveSnapshot).not.toHaveBeenCalled();
+      expect(backend.exportContext).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op without a snapshot store', async () => {
+      const backend = makeBackend({
+        exportContext: vi.fn(async () => makeExport('now')),
+      });
+      const lifecycle = new SessionLifecycle({
+        surfaceType: 'persona-assignment',
+        conversationId: 'conv-1',
+        personaId: 'coder',
+        ctx: makeCtx(backend),
+      });
+
+      await lifecycle.send('hi');
+      expect(backend.exportContext).not.toHaveBeenCalled();
+    });
   });
 });

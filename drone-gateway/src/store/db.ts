@@ -40,6 +40,7 @@ export function openGatewayDb(dataPath: string): GatewayDatabase {
 export function initGatewaySchema(db: GatewayDatabase): void {
   createCryptoSchema(db);
   createSyncSchema(db);
+  createGatewayStateSchema(db);
 }
 
 /**
@@ -152,5 +153,34 @@ function createSyncSchema(db: GatewayDatabase): void {
       id INTEGER PRIMARY KEY CHECK (id = 1),
       options TEXT NOT NULL
     );
+  `);
+}
+
+/**
+ * Gateway-state tables: portable-context snapshots (one row per conversation,
+ * latest-wins) and the pending outbound ledger (messages the gateway itself
+ * posted, awaiting delivery in the agent's next turn).
+ *
+ * The snapshot `context` is stored already disclosure-free (the capability
+ * strips the continuation reminder on export); the gateway never rewrites it.
+ */
+function createGatewayStateSchema(db: GatewayDatabase): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS context_snapshots (
+      conversation_id TEXT PRIMARY KEY,
+      context         TEXT NOT NULL,
+      updated_at      INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS pending_outbound (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      conversation_id TEXT NOT NULL,
+      platform_ref    TEXT,
+      text            TEXT NOT NULL,
+      created_at      INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_pending_outbound_conversation
+      ON pending_outbound (conversation_id, id);
   `);
 }

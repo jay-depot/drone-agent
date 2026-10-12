@@ -679,3 +679,27 @@ All of the following MUST hold before Plan A is considered done.
 - **Snapshot growth**: post-round export of a rolling context on a long-lived channel grows the payload. Watch it in production; the debug byte-size log exists for that. Compaction (summary-drop + aggressive threshold) is the intended counterweight — it was called out as a watch item by the requester.
 - **Restore ordering**: `importContext` must run strictly before the first `sendUserMessage`. It does, because both happen inside the lifecycle tail (`ensureSession` precedes the send).
 - **Concurrency**: the ledger is touched by `engine.injectMessage` (outside the tail) and by the surface (inside the lifecycle tail). SQLite serialises the writes; the surface only reads-then-deletes its own rows. No read-modify-write race on shared state.
+
+---
+
+## 8. Execution summary (2026-10-12, branch `feat/gateway-portable-context-adoption`)
+
+**Status: COMPLETE.** All 8 phases executed in order; all validation criteria pass.
+
+**Changes:**
+
+- **Phase 0** (`drone-core`): new `CONTINUATION_DISCLOSURE_MARKER` in `portable-context-types.ts` + barrel export.
+- **Phase 1** (`drone-agent`): `capability.ts` builds the disclosure from the marker and filters marker-bearing turns out of `exportContext`; +2 tests in `test/portable-context.test.ts` (export→import→export strip, 3-cycle non-growth).
+- **Phase 2** (`drone-gateway`): `createGatewayStateSchema` (`context_snapshots`, `pending_outbound`) in `store/db.ts`; new `store/gateway-state-store.ts` (`createContextSnapshotStore`, `createOutboundLedger`); new `test/gateway-state-store.test.ts` (9 tests).
+- **Phase 3**: `SpawnBackend` gains `exportContext`/`importContext`; `LocalSpawnBackend` refactored to one persistent stdout reader per session with a single in-flight request slot (error semantics flipped to reject); `CoordinatorSpawnBackend` throws "unsupported"; `local-spawn-backend.test.ts` + `coordinator-spawn-backend.test.ts` updated.
+- **Phase 4**: `AdapterMessage.platformRef`; `DroneServiceAdapter.sendMessage` returns `string | undefined` + optional `snapshotStore`/`outboundLedger`; Matrix adapter stamps inbound id / returns outbound id / builds the stores in `start()` when `dataPath` set and clears them in `stop()`; `chat-format.ts` gains `formatChatTurn` (header-line shape), `OUTBOUND_LEDGER_PREAMBLE`, `formatOutboundPost`.
+- **Phase 5**: `SurfaceContext` gains the two stores; `createControlSurface(spec, convId, adapterId)` + `surfaceContext(spec, adapterId)`; `injectMessage` records the ledger row after a successful post; one no-`dataPath` warning per adapter.
+- **Phase 6**: `SessionLifecycle.ensureSession` restores a snapshot before the first round; `send()` snapshots after each successful round (primary + retry paths); `persona-assignment` drains the ledger into the turn preamble and deletes rows only on success; `drone-gateway/CONTEXT.md` gains Platform Ref / Chat Tag / Snapshot Store / Outbound Ledger entries + the `dataPath` continuity note.
+- **Phase 7**: `docs/adr/249-gateway-portable-context-continuity-and-outbound-ledger.md` (D1–D16, rejected alternatives, deferred list) + swarm-wiki pointer stub `decisions/249-…`.
+- **Phase 8**: new `test/session-continuity-acceptance.test.ts` (round → snapshot → idle kill → inject → restart → restored context + drained ledger preamble + row deleted + no disclosure in the next export).
+
+**Standards:** `pnpm -r run build` ✅ · `pnpm typecheck` ✅ · `pnpm run lint` ✅ · `pnpm run test` ✅ **3927 passed / 14 skipped (298 files)** · LSP clean on all changed files and workspace-wide.
+
+**Review finding:** drone-gateway test files are NOT covered by `pnpm typecheck` (`tsconfig.test.json` omits `drone-gateway`; `drone-gateway/tsconfig.json` includes only `src/**/*`), so stale `SpawnBackend` fakes and `role: string` literals pass build/typecheck/lint/vitest green; the connected TypeScript LSP is the only gate that catches them. All were fixed and confirmed via `lsp__get_diagnostics`.
+
+**Deferred (unchanged):** Plan B (surface modes) · snapshot prune-on-drop · the `appendContext` NDJSON event · the model-facing message-id instruction · coordinator-mode context export/import.
