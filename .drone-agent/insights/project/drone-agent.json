@@ -818,5 +818,9 @@
   {
     "timestamp": "2026-10-12T00:29:05.250Z",
     "insight": "Optional host-owned engine collaborators with internal noop fallbacks (the deleted `createNoopSessionManager`) hide missing production wiring: `index.tsx` omitted both `sessionManager` and `clearConversation`, and every test passed one explicitly, so the omission was invisible until `/checkpoint create` exported `session.turns = []`. Making the options required plus a shared `createTestEngine` test factory converts this into a compile-time guarantee (`tsc -p tsconfig.test.json`). When adding an engine/plugin option that the host must own, prefer required + a test default-factory over optional + internal fallback."
+  },
+  {
+    "timestamp": "2026-10-12T01:00:38.062Z",
+    "insight": "portable-context import is not idempotent under repeated export→import→export cycles: importContext appends a PERSISTED continuation-disclosure user turn (\"...was restored from a prior checkpoint...\"), so every save-after-restore nests another disclosure into the session and into the next snapshot. The checkpoint plugin has this bug today (save → restore → save), and the gateway continuity work would multiply it. The correct fix is capability-side, not consumer-side: exportContext must filter out disclosure-bearing turns using a shared marker constant exported from drone-core. Any future host that exports contexts inherits the fix for free; a gateway-only strip would leave checkpoint broken."
   }
 ]
