@@ -9,9 +9,9 @@ import {
   type DronePersonaProvider,
   type DroneToolDefinition,
 } from 'drone-core';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
+
 import { personaPlugin } from '../src/plugins/persona/index.js';
-import { createTestPlugin, silentLogger } from './helpers.js';
+import { createTestEngine, createTestPlugin, silentLogger } from './helpers.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -39,13 +39,13 @@ function makeProvider(
   };
 }
 
-async function createTestEngine(
+async function createPersonaEngine(
   personas: DronePersonaDefinition[],
   tools: DroneToolDefinition[] = []
 ) {
   const config = createDefaultAgentConfig();
   config.enabledPlugins = ['persona', 'file'];
-  const engine = createDronePluginEngine({
+  const engine = createTestEngine({
     plugins: [
       createTestPlugin({
         id: 'file',
@@ -75,7 +75,7 @@ async function createTestEngine(
 describe('persona premount engine', () => {
   it('mounts premounted tools on persona activation', async () => {
     const tools = [makeTool('read'), makeTool('list'), makeTool('apply_diff')];
-    const engine = await createTestEngine(
+    const engine = await createPersonaEngine(
       [
         {
           id: 'coder',
@@ -105,7 +105,7 @@ describe('persona premount engine', () => {
   it('unmounts previous persona tools and mounts new persona tools on switch', async () => {
     const config = createDefaultAgentConfig();
     config.enabledPlugins = ['persona', 'file', 'git'];
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [
         createTestPlugin({
           id: 'file',
@@ -155,7 +155,7 @@ describe('persona premount engine', () => {
 
   it('clearing persona unmounts all non-runtime tools', async () => {
     const tools = [makeTool('read')];
-    const engine = await createTestEngine(
+    const engine = await createPersonaEngine(
       [
         {
           id: 'persona-a',
@@ -178,7 +178,7 @@ describe('persona premount engine', () => {
   });
 
   it('runtime__ tools remain mounted across a persona change', async () => {
-    const engine = await createTestEngine([
+    const engine = await createPersonaEngine([
       {
         id: 'persona-a',
         name: 'Persona A',
@@ -203,7 +203,7 @@ describe('persona premount engine', () => {
     config.enabledPlugins = ['persona', 'file'];
     config.activePersona = 'coder';
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [
         createTestPlugin({
           id: 'file',
@@ -241,7 +241,7 @@ describe('persona premount engine', () => {
 
   it('premounting a defaultHidden tool makes it visible via getFilteredTools even when not in allowedTools', async () => {
     const tools = [makeTool('read', true)]; // defaultHidden
-    const engine = await createTestEngine(
+    const engine = await createPersonaEngine(
       [
         {
           id: 'coder',
@@ -275,7 +275,7 @@ describe('persona premount engine', () => {
     const config = createDefaultAgentConfig();
     config.enabledPlugins = ['persona', 'file'];
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [
         createTestPlugin({
           id: 'file',
@@ -318,7 +318,7 @@ describe('persona premount engine', () => {
     const config = createDefaultAgentConfig();
     config.enabledPlugins = ['persona', 'file'];
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [
         createTestPlugin({
           id: 'file',

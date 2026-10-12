@@ -3,9 +3,9 @@ import {
   createDefaultAgentConfig,
   type DroneConversationEvent,
 } from 'drone-core';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
+
 import { createSessionManager } from '../src/runtime/session-manager.js';
-import { createTestPlugin, silentLogger } from './helpers.js';
+import { createTestEngine, createTestPlugin, silentLogger } from './helpers.js';
 
 describe('engine.clearSession session boundary', () => {
   it('runs onSessionClear (session intact) → clear → mint → onSessionRecycle', async () => {
@@ -13,7 +13,7 @@ describe('engine.clearSession session boundary', () => {
     const order: string[] = [];
     let clearObservedTurns = -1;
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [
         createTestPlugin({
           id: 'probe',
@@ -58,7 +58,7 @@ describe('engine.clearSession session boundary', () => {
       sessionId: string;
       previousSessionId: string;
     }> = [];
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [
         createTestPlugin({
           id: 'probe',
@@ -90,7 +90,7 @@ describe('engine.clearSession session boundary', () => {
     const sessionManager = createSessionManager();
     const clearHook = vi.fn();
     const recycleHook = vi.fn();
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [
         createTestPlugin({
           id: 'probe',
@@ -117,7 +117,7 @@ describe('engine.clearSession session boundary', () => {
   });
 
   it('honors a host-seeded session id', async () => {
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [],
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -128,7 +128,7 @@ describe('engine.clearSession session boundary', () => {
   });
 
   it('falls back to agent-<ts> when no id is seeded', async () => {
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [],
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -139,7 +139,7 @@ describe('engine.clearSession session boundary', () => {
 
   it('seeds the portable-context capability before plugin registration', async () => {
     let seenAtRegister: unknown;
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [
         createTestPlugin({
           id: 'probe',
@@ -160,7 +160,7 @@ describe('engine.clearSession session boundary', () => {
 
   it('emits the import notice into the engine event stream', async () => {
     const events: DroneConversationEvent[] = [];
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [],
       config: createDefaultAgentConfig(),
       logger: silentLogger(),

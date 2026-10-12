@@ -8,8 +8,10 @@ import {
   type DronePersonaProvider,
   type DronePlugin,
 } from 'drone-core';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
+
 import { personaPlugin } from '../src/plugins/persona/index.js';
+
+import { createTestEngine } from './helpers.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -59,7 +61,7 @@ describe('--persona CLI flag', () => {
   it('exposes _runtime capability even without subagent plugin enabled', async () => {
     const config = createDefaultAgentConfig();
     config.enabledPlugins = ['persona'];
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
       runtimeOptions: {
@@ -78,7 +80,7 @@ describe('--persona CLI flag', () => {
   it('activates persona from --persona flag via onSessionStart', async () => {
     const config = createDefaultAgentConfig();
     config.enabledPlugins = ['persona'];
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
       runtimeOptions: {
@@ -114,7 +116,7 @@ describe('--persona CLI flag', () => {
   it('activates persona from --persona flag even when provider registers after onPluginsLoaded', async () => {
     const config = createDefaultAgentConfig();
     config.enabledPlugins = ['persona'];
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
       runtimeOptions: {
@@ -153,7 +155,7 @@ describe('--persona CLI flag', () => {
     const config = createDefaultAgentConfig();
     config.enabledPlugins = ['persona'];
     config.activePersona = 'planner';
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
       // No runtimeOptions.persona
@@ -186,7 +188,7 @@ describe('--persona CLI flag', () => {
     const config = createDefaultAgentConfig();
     config.enabledPlugins = ['persona'];
     config.activePersona = 'planner';
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
       runtimeOptions: {
@@ -220,7 +222,7 @@ describe('--persona CLI flag', () => {
   it('throws when an explicit --persona id is not found', async () => {
     const config = createDefaultAgentConfig();
     config.enabledPlugins = ['persona'];
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
       runtimeOptions: {
@@ -252,7 +254,7 @@ describe('--persona CLI flag', () => {
   it('names the swarm-plugin fix when the explicit persona misses and swarm is disabled', async () => {
     const config = createDefaultAgentConfig();
     config.enabledPlugins = ['persona'];
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
       runtimeOptions: { persona: 'nonexistent' },
@@ -270,7 +272,7 @@ describe('--persona CLI flag', () => {
     const previous = process.env.DRONE_PERSONA;
     process.env.DRONE_PERSONA = 'nonexistent';
     try {
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [personaPlugin],
         config,
         // No runtimeOptions.persona — the env fallback applies.
@@ -299,7 +301,7 @@ describe('--persona CLI flag', () => {
     const config = createDefaultAgentConfig();
     config.enabledPlugins = ['persona'];
     config.activePersona = 'nonexistent';
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
     });
@@ -322,7 +324,7 @@ describe('--persona CLI flag', () => {
   it('uses the swarm-present branch when swarm is enabled', async () => {
     const config = createDefaultAgentConfig();
     config.enabledPlugins = ['persona', 'swarm'];
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [personaPlugin, swarmStub],
       config,
       runtimeOptions: { persona: 'nonexistent' },

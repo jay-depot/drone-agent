@@ -10,9 +10,11 @@ import {
   createDefaultAgentConfig,
   type DroneSkillsCapability,
 } from 'drone-core';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
+
 import { skillsPlugin } from '../src/plugins/skills/index.js';
 import { skillProviderProjectPlugin } from '../src/plugins/skill-provider-project/index.js';
+
+import { createTestEngine } from './helpers.js';
 
 const SKILL_MD = (id: string) =>
   `---
@@ -39,7 +41,7 @@ async function withProjectDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
 async function setupEngine(projectDir: string) {
   const config = createDefaultAgentConfig();
   config.enabledPlugins = ['skills', 'skill-provider-project'];
-  const engine = createDronePluginEngine({
+  const engine = createTestEngine({
     plugins: [skillsPlugin, skillProviderProjectPlugin],
     config,
   });

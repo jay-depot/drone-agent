@@ -8,11 +8,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createDefaultAgentConfig, toToolResultContent } from 'drone-core';
 import type { DroneToolCall } from 'drone-core';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
+
 import { createSessionManager } from '../src/runtime/session-manager.js';
 import { coerceOrphanToolMessages } from '../src/shared/tool-message-integrity.js';
 import { skillsPlugin } from '../src/plugins/skills/index.js';
 import { skillProviderProjectPlugin } from '../src/plugins/skill-provider-project/index.js';
+
+import { createTestEngine } from './helpers.js';
 
 const SKILL_MD = (id: string) =>
   `---
@@ -44,7 +46,7 @@ describe('skills.list tool (with reload)', () => {
       try {
         const config = createDefaultAgentConfig();
         config.enabledPlugins = ['skills', 'skill-provider-project'];
-        const engine = createDronePluginEngine({
+        const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
         });
@@ -90,7 +92,7 @@ describe('skills.list tool (with reload)', () => {
       try {
         const config = createDefaultAgentConfig();
         config.enabledPlugins = ['skills', 'skill-provider-project'];
-        const engine = createDronePluginEngine({
+        const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
         });
@@ -115,7 +117,7 @@ describe('skills.list tool (with reload)', () => {
       try {
         const config = createDefaultAgentConfig();
         config.enabledPlugins = ['skills', 'skill-provider-project'];
-        const engine = createDronePluginEngine({
+        const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
         });
@@ -163,7 +165,7 @@ describe('skills.list tool (with reload)', () => {
       try {
         const config = createDefaultAgentConfig();
         config.enabledPlugins = ['skills', 'skill-provider-project'];
-        const engine = createDronePluginEngine({
+        const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
         });
@@ -226,7 +228,7 @@ describe('skill remark field visibility', () => {
       try {
         const config = createDefaultAgentConfig();
         config.enabledPlugins = ['skills', 'skill-provider-project'];
-        const engine = createDronePluginEngine({
+        const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
         });
@@ -259,7 +261,7 @@ describe('skill remark field visibility', () => {
       try {
         const config = createDefaultAgentConfig();
         config.enabledPlugins = ['skills', 'skill-provider-project'];
-        const engine = createDronePluginEngine({
+        const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
         });
@@ -292,7 +294,7 @@ describe('skill remark field visibility', () => {
       try {
         const config = createDefaultAgentConfig();
         config.enabledPlugins = ['skills', 'skill-provider-project'];
-        const engine = createDronePluginEngine({
+        const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
         });
@@ -327,7 +329,7 @@ describe('skill remark field visibility', () => {
       try {
         const config = createDefaultAgentConfig();
         config.enabledPlugins = ['skills', 'skill-provider-project'];
-        const engine = createDronePluginEngine({
+        const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
         });
@@ -360,7 +362,7 @@ describe('skill remark field visibility', () => {
       try {
         const config = createDefaultAgentConfig();
         config.enabledPlugins = ['skills', 'skill-provider-project'];
-        const engine = createDronePluginEngine({
+        const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
         });
@@ -418,7 +420,7 @@ describe('/skills recall appends a correctly-paired synthetic tool exchange', ()
       try {
         const config = createDefaultAgentConfig();
         config.enabledPlugins = ['skills', 'skill-provider-project'];
-        const engine = createDronePluginEngine({
+        const engine = createTestEngine({
           plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
         });

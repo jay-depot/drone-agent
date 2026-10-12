@@ -8,8 +8,10 @@ import {
   toToolResultContent,
   type DronePersonaProvider,
 } from 'drone-core';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
+
 import { personaPlugin } from '../src/plugins/persona/index.js';
+
+import { createTestEngine } from './helpers.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -49,7 +51,7 @@ describe('persona.select tool — graceful error handling', () => {
   it('returns a graceful error with available personas when selecting an unknown id', async () => {
     const config = createDefaultAgentConfig();
     config.enabledPlugins = ['persona'];
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
     });
@@ -88,7 +90,7 @@ describe('persona.select tool — graceful error handling', () => {
   it('still works for a valid persona id', async () => {
     const config = createDefaultAgentConfig();
     config.enabledPlugins = ['persona'];
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
     });
@@ -118,7 +120,7 @@ describe('persona.select tool — graceful error handling', () => {
   it('returns graceful error with "(none)" when no personas are loaded', async () => {
     const config = createDefaultAgentConfig();
     config.enabledPlugins = ['persona'];
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
     });

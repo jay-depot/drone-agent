@@ -1,7 +1,6 @@
 ---
 key: plan-fix-portable-context-host-wiring
-tags:
-  []
+tags: []
 created: 2026-10-12T00:20:55.058Z
 updated: 2026-10-12T00:20:55.058Z
 ---
@@ -71,6 +70,7 @@ sessionManager: sessionManager ?? createNoopSessionManager(),
 ### Step 3 — `drone-agent/test/helpers.ts` (agent: `code`; depends on Step 1)
 
 Add imports and the helper:
+
 ```ts
 import { createSessionManager } from '../src/runtime/session-manager.js';
 import {
@@ -95,6 +95,7 @@ export function createTestEngine(
   });
 }
 ```
+
 (Keep the existing `createFakeEngine`/`createMockEngine` unchanged — they return engine literals, not construction options.)
 
 ### Step 4 — Migrate test construction sites (agent: `worker`; depends on Step 3)
@@ -111,7 +112,7 @@ Ground truth for the site list: `rg -n 'createDronePluginEngine\(' drone-agent/t
 
 Add a file (e.g. `drone-agent/test/engine-host-wiring.test.ts`) that guards the exact production path:
 
-1. **Turns survive the engine's export.** Build with `createTestEngine`; `appendUserMessage('hello')` on the *same* manager passed in; get `engine.getCapability('portable-context')`; assert `(await cap.exportContext()).session.turns.length === 1` and `session.sourceSessionId` equals the seeded id.
+1. **Turns survive the engine's export.** Build with `createTestEngine`; `appendUserMessage('hello')` on the _same_ manager passed in; get `engine.getCapability('portable-context')`; assert `(await cap.exportContext()).session.turns.length === 1` and `session.sourceSessionId` equals the seeded id.
 2. **Host-seeded session id flows through.** Seed `sessionId: 'host-id'`; assert `engine.getSessionId() === 'host-id'` and the export's `sourceSessionId === 'host-id'`.
 3. **`engine.clearSession()` clears + mints.** With a real `clearConversation: () => sessionManager.clearSession()` and a non-empty session, assert turns empty, id changed, and `onSessionClear` saw the intact session (order `clear-hook → mechanical-clear → recycle-hook`). (This duplicates the intent of `portable-context-engine.test.ts`; if that file already covers it, consolidate rather than duplicate.)
 

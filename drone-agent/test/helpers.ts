@@ -1,4 +1,5 @@
 import { SystemReminderQueue } from '../src/runtime/system-reminders.js';
+import { createSessionManager } from '../src/runtime/session-manager.js';
 import { vi } from 'vitest';
 import {
   createConsoleLogger,
@@ -15,6 +16,36 @@ import {
   type DroneToolDefinition,
   type DroneWorkflow,
 } from 'drone-core';
+import {
+  createDronePluginEngine,
+  type CreateDronePluginEngineOptions,
+  type DronePluginEngine,
+} from '../src/runtime/plugin-engine.js';
+
+/**
+ * Build the plugin engine the way the CLI does, defaulting the two required
+ * host-owned session-boundary collaborators so tests never hand-roll them.
+ * Caller overrides win — a test needing a specific session manager or a real
+ * clearConversation passes its own.
+ */
+export function createTestEngine(
+  options: Omit<
+    CreateDronePluginEngineOptions,
+    'sessionManager' | 'clearConversation'
+  > &
+    Partial<
+      Pick<
+        CreateDronePluginEngineOptions,
+        'sessionManager' | 'clearConversation'
+      >
+    >
+): DronePluginEngine {
+  return createDronePluginEngine({
+    sessionManager: createSessionManager(),
+    clearConversation: () => {},
+    ...options,
+  });
+}
 
 /**
  * Returns a logger that swallows output, for noisy test runs.

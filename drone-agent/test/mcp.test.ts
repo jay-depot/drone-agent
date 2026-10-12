@@ -34,9 +34,11 @@ import {
   type DronePlugin,
   type DroneToolDescriptor,
 } from 'drone-core';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
+
 import { mcpPlugin } from '../src/plugins/mcp/index.js';
 import { startFakeMcpServer } from './mcp-fake-server.js';
+
+import { createTestEngine } from './helpers.js';
 
 // ESM module namespaces are not spyable, so `os.homedir` is redirected via a
 // module mock. The MCP plugin's cache reads must land in a temp dir or they
@@ -69,14 +71,14 @@ vi.mock('node:child_process', async () => {
 });
 
 type Running = {
-  engine: ReturnType<typeof createDronePluginEngine>;
+  engine: ReturnType<typeof createTestEngine>;
 };
 
 /**
  * Mount MCP resource/prompt tools for a given server so they appear in listTools().
  */
 async function mountMcpResourceTools(
-  engine: ReturnType<typeof createDronePluginEngine>,
+  engine: ReturnType<typeof createTestEngine>,
   serverId: string
 ): Promise<void> {
   const tools = [`mcp__${serverId}__list`, `mcp__${serverId}__get`];
@@ -171,25 +173,23 @@ async function seedCacheFile(
 }
 
 async function headerFragments(
-  engine: ReturnType<typeof createDronePluginEngine>
+  engine: ReturnType<typeof createTestEngine>
 ): Promise<string> {
   return (await engine.renderPromptFragmentsByPhase('header')).join('\n\n');
 }
 
 async function footerFragments(
-  engine: ReturnType<typeof createDronePluginEngine>
+  engine: ReturnType<typeof createTestEngine>
 ): Promise<string> {
   return (await engine.renderPromptFragmentsByPhase('footer')).join('\n\n');
 }
 
-function toolNames(
-  engine: ReturnType<typeof createDronePluginEngine>
-): string[] {
+function toolNames(engine: ReturnType<typeof createTestEngine>): string[] {
   return engine.listTools().map(t => t.name);
 }
 
 function statusOf(
-  engine: ReturnType<typeof createDronePluginEngine>,
+  engine: ReturnType<typeof createTestEngine>,
   id: string
 ): Promise<Record<string, unknown>> {
   return engine.executeTool('mcp__server_status', {}).then(raw => {
@@ -203,7 +203,7 @@ function statusOf(
 async function bootWithServers(
   servers: Record<string, unknown>,
   options: { extraPlugins?: DronePlugin[] } = {}
-): Promise<ReturnType<typeof createDronePluginEngine>> {
+): Promise<ReturnType<typeof createTestEngine>> {
   const config = {
     enabledPlugins: [
       'mcp',
@@ -222,7 +222,7 @@ async function bootWithServers(
     },
   } as unknown as DroneAgentConfig;
 
-  const engine = createDronePluginEngine({
+  const engine = createTestEngine({
     plugins: [mcpPlugin, ...(options.extraPlugins ?? [])],
     config,
   });

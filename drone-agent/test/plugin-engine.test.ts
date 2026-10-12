@@ -10,12 +10,9 @@ import {
   type DroneToolDescriptor,
   type DroneToolDefinition,
 } from 'drone-core';
-import {
-  createDronePluginEngine,
-  getDefaultEnabledPluginIds,
-} from '../src/runtime/plugin-engine.js';
+import { getDefaultEnabledPluginIds } from '../src/runtime/plugin-engine.js';
 import { startupPlugin } from '../src/plugins/startup.js';
-import { createTestPlugin, silentLogger } from './helpers.js';
+import { createTestEngine, createTestPlugin, silentLogger } from './helpers.js';
 
 const RUNTIME_TOOL_COUNT = 3; // runtime__list_tools, runtime__mount_tool, runtime__unmount_tool
 
@@ -48,7 +45,7 @@ describe('createDronePluginEngine', () => {
       }),
     ];
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins,
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -69,7 +66,7 @@ describe('createDronePluginEngine', () => {
       createTestPlugin({ id: 'always', defaultEnabled: true }),
     ];
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins,
       config: { ...createDefaultAgentConfig(), enabledPlugins: ['opt-in'] },
       logger: silentLogger(),
@@ -87,7 +84,7 @@ describe('createDronePluginEngine', () => {
       createTestPlugin({ id: 'optional' }),
     ];
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins,
       config: {
         ...createDefaultAgentConfig(),
@@ -108,7 +105,7 @@ describe('createDronePluginEngine', () => {
       createTestPlugin({ id: 'opt-in', defaultEnabled: false }),
     ];
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins,
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -144,7 +141,7 @@ describe('createDronePluginEngine', () => {
     ];
 
     expect(() =>
-      createDronePluginEngine({
+      createTestEngine({
         plugins,
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -155,7 +152,7 @@ describe('createDronePluginEngine', () => {
   it('throws when enabledPlugins references an unknown plugin', () => {
     const plugins: DronePlugin[] = [createTestPlugin({ id: 'known' })];
     expect(() =>
-      createDronePluginEngine({
+      createTestEngine({
         plugins,
         config: {
           ...createDefaultAgentConfig(),
@@ -179,7 +176,7 @@ describe('createDronePluginEngine', () => {
     ];
 
     expect(() =>
-      createDronePluginEngine({
+      createTestEngine({
         plugins,
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -196,7 +193,7 @@ describe('createDronePluginEngine', () => {
     ];
 
     expect(() =>
-      createDronePluginEngine({
+      createTestEngine({
         plugins,
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -222,7 +219,7 @@ describe('createDronePluginEngine', () => {
       }),
     ];
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins,
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -260,7 +257,7 @@ describe('createDronePluginEngine', () => {
       execute: async () => 'second',
     };
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [
         createTestPlugin({
           id: 'p1',
@@ -292,7 +289,7 @@ describe('createDronePluginEngine', () => {
         execute: async () => 'b',
       };
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [createTestPlugin({ id: 'test', tools: [toolA, toolB] })],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -314,7 +311,7 @@ describe('createDronePluginEngine', () => {
     });
 
     it('silently does nothing for an unknown tool name', async () => {
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [createTestPlugin({ id: 'test' })],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -328,7 +325,7 @@ describe('createDronePluginEngine', () => {
     it('allows re-registering a tool after unregistering it', async () => {
       let registerToolFn: ((tool: DroneToolDefinition) => void) | undefined;
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [
           createTestPlugin({
             id: 'test',
@@ -377,7 +374,7 @@ describe('createDronePluginEngine', () => {
         ((name: string) => DroneToolDefinition | undefined) | undefined;
       let unmountFn: ((name: string) => void) | undefined;
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [
           createTestPlugin({
             id: 'test',
@@ -442,7 +439,7 @@ describe('createDronePluginEngine', () => {
       }),
     ];
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins,
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -539,7 +536,7 @@ describe('createDronePluginEngine', () => {
       }),
     ];
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins,
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -561,7 +558,7 @@ describe('createDronePluginEngine', () => {
       }),
     ];
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins,
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -586,7 +583,7 @@ describe('createDronePluginEngine', () => {
       }),
     ];
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins,
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -613,7 +610,7 @@ describe('createDronePluginEngine', () => {
       }),
     ];
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins,
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -640,7 +637,7 @@ describe('createDronePluginEngine', () => {
       }),
     ];
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins,
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -663,7 +660,7 @@ describe('createDronePluginEngine', () => {
       }),
     ];
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins,
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -690,7 +687,7 @@ describe('createDronePluginEngine', () => {
       }),
     ];
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins,
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -745,7 +742,7 @@ describe('createDronePluginEngine', () => {
         }),
       ];
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins,
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -776,7 +773,7 @@ describe('createDronePluginEngine', () => {
         createTestPlugin({ id: 'always', defaultEnabled: true }),
       ];
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins,
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -790,7 +787,7 @@ describe('createDronePluginEngine', () => {
     it('returns false for an unknown plugin ID', async () => {
       const plugins: DronePlugin[] = [createTestPlugin({ id: 'known' })];
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins,
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -810,7 +807,7 @@ describe('createDronePluginEngine', () => {
         }),
       ];
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins,
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -831,7 +828,7 @@ describe('createDronePluginEngine', () => {
         }),
       ];
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins,
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -860,7 +857,7 @@ describe('createDronePluginEngine', () => {
         }),
       ];
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins,
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -893,7 +890,7 @@ describe('createDronePluginEngine', () => {
         }),
       ];
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins,
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -966,7 +963,7 @@ describe('runtime__list_tools — tool visibility filtering', () => {
   }
 
   async function listToolNames(plugins: DronePlugin[]): Promise<string[]> {
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins,
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -1032,7 +1029,7 @@ describe('--debug tools — tool surface change logging', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const debugFlags = createDebugFlagRegistry(['tools']);
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [createTestPlugin({ id: 'test', tools: [makeTool('alpha')] })],
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -1058,7 +1055,7 @@ describe('--debug tools — tool surface change logging', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const debugFlags = createDebugFlagRegistry();
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [createTestPlugin({ id: 'test', tools: [makeTool('alpha')] })],
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -1078,7 +1075,7 @@ describe('--debug tools — tool surface change logging', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const debugFlags = createDebugFlagRegistry(['tools']);
 
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [
         createTestPlugin({ id: 'late', defaultEnabled: false }),
         createTestPlugin({ id: 'external', defaultEnabled: false }),
@@ -1117,7 +1114,7 @@ describe('--debug tools — tool surface change logging', () => {
     });
 
     // Main-agent mode (no subagentId)
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [plugin],
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -1127,7 +1124,7 @@ describe('--debug tools — tool surface change logging', () => {
     expect(capturedRuntime[0].isSubagent).toBe(false);
 
     // Subagent mode (with subagentId)
-    const subagentEngine = createDronePluginEngine({
+    const subagentEngine = createTestEngine({
       plugins: [plugin],
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -1139,7 +1136,7 @@ describe('--debug tools — tool surface change logging', () => {
     expect(capturedRuntime[1].subagentId).toBe('subagent-test-123');
   });
   it('queueSystemReminder feeds drainSystemReminders and clearSystemReminders empties it', async () => {
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [],
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -1164,7 +1161,7 @@ describe('workflow run contract (ADR 183)', () => {
   async function makeEngineWithWorkflow(
     workflow: import('drone-core').DroneWorkflow
   ) {
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [createTestPlugin({ id: 'wf', workflows: [workflow] })],
       config: createDefaultAgentConfig(),
       logger: silentLogger(),

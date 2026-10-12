@@ -11,10 +11,12 @@ import {
   type DroneOwnedSkillWriter,
   type DroneSkillsCapability,
 } from 'drone-core';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
+
 import { skillsPlugin } from '../src/plugins/skills/index.js';
 import { personaPlugin } from '../src/plugins/persona/index.js';
 import { personaProviderProjectPlugin } from '../src/plugins/persona-provider-project/index.js';
+
+import { createTestEngine } from './helpers.js';
 
 function stubOwnedWriter(
   scope: DroneOwnedSkillWriter['scope']
@@ -29,13 +31,13 @@ function stubOwnedWriter(
 }
 
 async function withEngine<T>(
-  plugins: Parameters<typeof createDronePluginEngine>[0]['plugins'],
+  plugins: Parameters<typeof createTestEngine>[0]['plugins'],
   enabledPlugins: string[],
-  fn: (engine: ReturnType<typeof createDronePluginEngine>) => Promise<T>
+  fn: (engine: ReturnType<typeof createTestEngine>) => Promise<T>
 ): Promise<T> {
   const config = createDefaultAgentConfig();
   config.enabledPlugins = enabledPlugins;
-  const engine = createDronePluginEngine({ plugins, config });
+  const engine = createTestEngine({ plugins, config });
   await engine.initialize();
   return fn(engine);
 }

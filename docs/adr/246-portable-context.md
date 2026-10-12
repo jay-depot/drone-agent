@@ -134,7 +134,7 @@ type DronePortableContextContributor = {
 
 - The feature is dead code by default: with no contributor and no caller, the capability is inert. The `checkpoint` plugin ([247](247-checkpoint-plugin.md)) and the §8 NDJSON commands are its first consumers.
 - `DronePluginHooks` gains `onSessionClear` (now payload-aware) and `onSessionRecycle`. Because `onSessionRecycle` is a **required** member, every hand-built `DronePluginHooks` literal (≈53 test sites) gains it — the typecheck gate is the ground truth for the sweep.
-- `DronePluginEngine` gains `clearSession()` and the `sessionManager`/`clearConversation` construction options; `/clear` routes through `engine.clearSession()`.
+- `DronePluginEngine` gains `clearSession()` and the `sessionManager`/`clearConversation` construction options; `/clear` routes through `engine.clearSession()`. **Amended by [248](248-engine-host-wiring-required-session-boundary.md):** these two options are now **required**, not optional — the internal noop session-manager fallback was removed after the optional form let `index.tsx` silently omit both (empty checkpoint turns, no-op `/clear`, ignored `--session-id`). The host must supply the live session manager and a `clearConversation` callback; the typechecker enforces it.
 - `DroneSessionManager` gains `appendTurns()`.
 - `/clear` behavior changes: a non-empty clear now mints a fresh session id and fires `onSessionRecycle`; an **empty** clear no longer fires `onSessionClear` (only the mechanical clear runs).
 - The swarm plugin ([247](247-checkpoint-plugin.md) sibling) converts to full re-cycle: it reads `_runtime.getSessionId()`, and its `onSessionRecycle` re-mints the id, re-POSTs `/agents`, re-registers the swarm session, and re-opens the WebSocket.

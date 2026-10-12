@@ -256,7 +256,7 @@ export type DronePluginEngine = {
   getBuiltinSlashCommands: () => DroneSlashCommand[];
 };
 
-type CreateDronePluginEngineOptions = {
+export type CreateDronePluginEngineOptions = {
   plugins: DronePlugin[];
   config: DroneAgentConfig;
   logger?: DroneLogger;
@@ -267,14 +267,14 @@ type CreateDronePluginEngineOptions = {
    * The engine's session manager. Required for portable-context export/import
    * (the boundary snapshot reads turns) and for `/clear`'s empty gate.
    */
-  sessionManager?: import('./session-manager.js').DroneSessionManager;
+  sessionManager: import('./session-manager.js').DroneSessionManager;
   /**
    * Mechanical session clear: drain queues/steers/reminders, reset guardrail
    * counters, empty the turns. Wired by the host after the conversation
    * service exists (mutable ref read at call time). Called by
    * `engine.clearSession()` between the `onSessionClear` hooks and the id mint.
    */
-  clearConversation?: () => void;
+  clearConversation: () => void;
   /**
    * Host-seeded session id (`--session-id` → `DRONE_SESSION_ID` →
    * `agent-<Date.now()>` fallback). The engine owns the id from here on and
@@ -331,19 +331,6 @@ function createHookBuckets(): HookBuckets {
     onSessionRecycle: [],
     onShutdown: [],
   };
-}
-
-/**
- * A no-op session manager for engine constructions that omit one (tests that
- * do not exercise portable-context or the `/clear` empty gate). Export/import
- * over an empty session is inert; `clearSession` still works mechanically.
- */
-function createNoopSessionManager(): import('./session-manager.js').DroneSessionManager {
-  return {
-    getTurns: () => [],
-    appendTurns: () => {},
-    appendUserMessage: () => {},
-  } as unknown as import('./session-manager.js').DroneSessionManager;
 }
 
 export function getDefaultEnabledPluginIds(plugins: DronePlugin[]): string[] {
@@ -587,7 +574,7 @@ export function createDronePluginEngine({
    * so an empty clear is purely mechanical (no spurious swarm session).
    */
   async function clearSession(): Promise<void> {
-    const turns = sessionManager?.getTurns() ?? [];
+    const turns = sessionManager.getTurns();
     const hadTurns = turns.length > 0;
     if (hadTurns) {
       const payload: DroneSessionClearPayload = {
@@ -597,7 +584,7 @@ export function createDronePluginEngine({
         await callback(payload);
       }
     }
-    clearConversationFromHost?.();
+    clearConversationFromHost();
     if (hadTurns) {
       const previousSessionId = currentSessionId;
       currentSessionId = `agent-${Date.now()}`;
@@ -1141,7 +1128,7 @@ export function createDronePluginEngine({
       capabilities.set(
         DRONE_PORTABLE_CONTEXT_CAPABILITY_ID,
         createPortableContextCapability({
-          sessionManager: sessionManager ?? createNoopSessionManager(),
+          sessionManager,
           listAllTools: () => toolRegistry.listAll(),
           listMountedTools: () => toolRegistry.listMounted(),
           mountTool: name => toolRegistry.mount(name),

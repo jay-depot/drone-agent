@@ -9,8 +9,8 @@ import {
 } from '../src/plugins/macros/parser.js';
 import { loadMacros } from '../src/plugins/macros/loader.js';
 import { macrosPlugin } from '../src/plugins/macros/index.js';
-import { silentLogger } from './helpers.js';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
+import { createTestEngine, silentLogger } from './helpers.js';
+
 import { createDefaultAgentConfig } from 'drone-core';
 
 // ---------------------------------------------------------------------------
@@ -437,7 +437,7 @@ describe('macrosPlugin', () => {
         'utf-8'
       );
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [macrosPlugin],
         config: {
           ...createDefaultAgentConfig(),
@@ -460,7 +460,7 @@ describe('macrosPlugin', () => {
     await withTempDir(async dir => {
       vi.spyOn(process, 'cwd').mockReturnValue(dir);
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [macrosPlugin],
         config: {
           ...createDefaultAgentConfig(),
@@ -491,7 +491,7 @@ describe('macrosPlugin', () => {
         'utf-8'
       );
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [macrosPlugin],
         config: {
           ...createDefaultAgentConfig(),
@@ -526,7 +526,7 @@ describe('macrosPlugin', () => {
         'utf-8'
       );
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [macrosPlugin],
         config: {
           ...createDefaultAgentConfig(),
@@ -567,7 +567,7 @@ describe('macrosPlugin', () => {
         'utf-8'
       );
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [macrosPlugin],
         config: {
           ...createDefaultAgentConfig(),
@@ -594,7 +594,7 @@ describe('macrosPlugin', () => {
     await withTempDir(async dir => {
       vi.spyOn(process, 'cwd').mockReturnValue(dir);
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [macrosPlugin],
         config: {
           ...createDefaultAgentConfig(),
@@ -618,7 +618,7 @@ describe('macrosPlugin', () => {
     await withTempDir(async dir => {
       vi.spyOn(process, 'cwd').mockReturnValue(dir);
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [macrosPlugin],
         config: {
           ...createDefaultAgentConfig(),
@@ -650,7 +650,7 @@ describe('macrosPlugin', () => {
         'utf-8'
       );
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [macrosPlugin],
         config: {
           ...createDefaultAgentConfig(),
@@ -700,7 +700,7 @@ describe('macrosPlugin', () => {
         'utf-8'
       );
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [macrosPlugin],
         config: {
           ...createDefaultAgentConfig(),

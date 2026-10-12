@@ -12,11 +12,13 @@ import {
   type DronePersonaCapability,
   type DroneSkillsCapability,
 } from 'drone-core';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
+
 import { personaPlugin } from '../src/plugins/persona/index.js';
 import { skillsPlugin } from '../src/plugins/skills/index.js';
 import { skillProviderProjectPlugin } from '../src/plugins/skill-provider-project/index.js';
 import { personaProviderProjectPlugin } from '../src/plugins/persona-provider-project/index.js';
+
+import { createTestEngine } from './helpers.js';
 
 const PERSONA_MD = (id: string, extra = '') =>
   `---
@@ -61,7 +63,7 @@ async function setupEngine(projectDir: string) {
     'skill-provider-project',
     'persona-provider-project',
   ];
-  const engine = createDronePluginEngine({
+  const engine = createTestEngine({
     plugins: [
       personaPlugin,
       skillsPlugin,
@@ -140,7 +142,7 @@ async function withEngine<T>(
   });
 }
 
-async function listIds(engine: ReturnType<typeof createDronePluginEngine>) {
+async function listIds(engine: ReturnType<typeof createTestEngine>) {
   const res = await engine.executeTool('skills__list', {});
   const parsed = JSON.parse(toToolResultContent(res));
   return (parsed.skills as { id: string }[]).map(s => s.id);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultAgentConfig, type DroneElicitation } from 'drone-core';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
-import { createTestPlugin } from './helpers.js';
+
+import { createTestEngine, createTestPlugin } from './helpers.js';
 
 const noopEl: DroneElicitation = {
   ask: async () => ({}),
@@ -19,7 +19,7 @@ describe('plugin-engine workflow registry', () => {
         },
       ],
     });
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [workflowPlugin],
       config: createDefaultAgentConfig(),
     });
@@ -55,7 +55,7 @@ describe('plugin-engine workflow registry', () => {
         },
       ],
     });
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [a, b],
       config: createDefaultAgentConfig(),
     });
@@ -66,7 +66,7 @@ describe('plugin-engine workflow registry', () => {
   });
 
   it('throws on unknown workflow name', async () => {
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [],
       config: createDefaultAgentConfig(),
     });
@@ -82,7 +82,7 @@ describe('plugin-engine workflow registry', () => {
       id: 'wf',
       workflows: [{ name: 'x', description: 'x', run: async () => ({}) }],
     });
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [plugin],
       config: createDefaultAgentConfig(),
     });
@@ -108,7 +108,7 @@ describe('plugin-engine workflow normalization', () => {
         },
       ],
     });
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [plugin],
       config: createDefaultAgentConfig(),
     });
@@ -189,7 +189,7 @@ describe('plugin-engine workflow context', () => {
         },
       ],
     });
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [plugin],
       config: createDefaultAgentConfig(),
     });
@@ -229,7 +229,7 @@ describe('plugin-engine workflow context', () => {
         },
       ],
     });
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [providerPlugin, workflowPlugin],
       config: createDefaultAgentConfig(),
     });
@@ -254,7 +254,7 @@ describe('plugin-engine workflow context', () => {
         },
       ],
     });
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [plugin],
       config: createDefaultAgentConfig(),
     });
@@ -267,7 +267,7 @@ describe('plugin-engine workflow context', () => {
 
 describe('plugin-engine setElicitation / getElicitation', () => {
   it('setElicitation stores the capability; getElicitation returns it', async () => {
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [],
       config: createDefaultAgentConfig(),
     });
@@ -299,7 +299,7 @@ describe('plugin-engine setElicitation / getElicitation', () => {
         });
       },
     });
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [observer],
       config: createDefaultAgentConfig(),
     });

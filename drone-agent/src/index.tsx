@@ -204,6 +204,7 @@ async function main(): Promise<void> {
   } = {};
   const cancelCurrentRequestRef: { current?: () => void } = {};
   const shutdownSignalRef: { current?: () => void } = {};
+  const clearConversationRef: { current?: () => void } = {};
   const reference = createReferenceCapability({
     maxImageBytes: resolvedConfig.config.session.maxImageSizeBytes,
   });
@@ -215,6 +216,9 @@ async function main(): Promise<void> {
     debugFlags,
     pluginFlags: invocation.options.pluginFlags,
     referenceCapability: reference,
+    sessionManager,
+    clearConversation: () => clearConversationRef.current?.(),
+    sessionId: invocation.options.sessionId,
     runtimeOptions: {
       subagentId: invocation.options.subagentId,
       persona: invocation.options.persona,
@@ -362,6 +366,7 @@ async function main(): Promise<void> {
   resetStuckDetectorsRef.current = conversation.resetStuckDetectors;
   submitUserMessageRef.current = conversation.submitUserMessage;
   cancelCurrentRequestRef.current = conversation.cancelCurrentRequest;
+  clearConversationRef.current = conversation.clearSession;
   const registeredPlugins = await engine.initialize();
 
   // ── Elicitation wiring ──────────────────────────────────────────────

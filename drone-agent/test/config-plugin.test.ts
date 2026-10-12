@@ -3,12 +3,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDefaultAgentConfig, toToolResultContent } from 'drone-core';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
+
 import { configPlugin } from '../src/plugins/config/index.js';
 import type { DroneConfigCapability } from '../src/plugins/config/index.js';
 import { BeaconConfigInjector } from '../src/plugins/swarm/config.js';
 import { deepSet } from '../src/plugins/config/helpers.js';
-import { silentLogger } from './helpers.js';
+import { createTestEngine, silentLogger } from './helpers.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -57,7 +57,7 @@ describe('config plugin', () => {
   });
 
   it('registers config.get, config.set, and config.list_layers tools', async () => {
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [configPlugin],
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -76,7 +76,7 @@ describe('config plugin', () => {
   });
 
   it('offers DroneConfigCapability', async () => {
-    const engine = createDronePluginEngine({
+    const engine = createTestEngine({
       plugins: [configPlugin],
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
@@ -122,7 +122,7 @@ describe('config plugin', () => {
       const { projectDir } = await setupDirs();
       process.chdir(projectDir);
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -143,7 +143,7 @@ describe('config plugin', () => {
       const { projectDir } = await setupDirs();
       process.chdir(projectDir);
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -170,7 +170,7 @@ describe('config plugin', () => {
         ollama: { model: 'custom-model' },
       });
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -189,8 +189,8 @@ describe('config plugin', () => {
   });
 
   describe('onLayersChanged', () => {
-    function createEngine(): ReturnType<typeof createDronePluginEngine> {
-      const engine = createDronePluginEngine({
+    function createEngine(): ReturnType<typeof createTestEngine> {
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -266,7 +266,7 @@ describe('config plugin', () => {
       const { projectDir } = await setupDirs();
       process.chdir(projectDir);
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -295,7 +295,7 @@ describe('config plugin', () => {
       const { projectDir } = await setupDirs();
       process.chdir(projectDir);
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -324,7 +324,7 @@ describe('config plugin', () => {
       const { projectDir } = await setupDirs();
       process.chdir(projectDir);
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -344,7 +344,7 @@ describe('config plugin', () => {
       const { projectDir } = await setupDirs();
       process.chdir(projectDir);
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -365,7 +365,7 @@ describe('config plugin', () => {
       const { projectDir } = await setupDirs();
       process.chdir(projectDir);
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -386,7 +386,7 @@ describe('config plugin', () => {
       const { projectDir } = await setupDirs();
       process.chdir(projectDir);
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -419,7 +419,7 @@ describe('config plugin', () => {
 
       process.chdir(homeDir);
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -442,7 +442,7 @@ describe('config plugin', () => {
       const { projectDir } = await setupDirs();
       process.chdir(projectDir);
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -476,7 +476,7 @@ describe('config plugin', () => {
         ollama: { model: 'project-model' },
       });
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -512,7 +512,7 @@ describe('config plugin', () => {
       const { projectDir } = await setupDirs();
       process.chdir(projectDir);
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -529,7 +529,7 @@ describe('config plugin', () => {
       const { projectDir } = await setupDirs();
       process.chdir(projectDir);
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -547,7 +547,7 @@ describe('config plugin', () => {
       const { projectDir } = await setupDirs();
       process.chdir(projectDir);
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -572,7 +572,7 @@ describe('config plugin', () => {
       const { projectDir } = await setupDirs();
       process.chdir(projectDir);
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -648,7 +648,7 @@ describe('config plugin', () => {
       });
       process.env.TEST_API_KEY = 'sk-test-1234';
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -686,7 +686,7 @@ describe('config plugin', () => {
         llm: { active: 'local/model' },
       });
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -722,7 +722,7 @@ describe('config plugin', () => {
       process.env.TEST_API_KEY = 'sk-test-1234';
       process.env.DRONE_TEST_UNDERLAY_KEY = 'sk-swarm-literal-5678';
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
@@ -777,7 +777,7 @@ describe('config plugin', () => {
       });
       process.env.TEST_API_KEY = 'sk-test-1234';
 
-      const engine = createDronePluginEngine({
+      const engine = createTestEngine({
         plugins: [configPlugin],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),

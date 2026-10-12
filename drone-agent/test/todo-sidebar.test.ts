@@ -8,10 +8,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
+
 import { todoPlugin } from '../src/plugins/todo/index.js';
 import { createDefaultAgentConfig } from 'drone-core';
-import { silentLogger } from './helpers.js';
+import { createTestEngine, silentLogger } from './helpers.js';
 
 type MidPanelWidgetShape = {
   id: string;
@@ -20,13 +20,13 @@ type MidPanelWidgetShape = {
 };
 
 async function createEngineWithTodo(): Promise<{
-  engine: ReturnType<typeof createDronePluginEngine>;
+  engine: ReturnType<typeof createTestEngine>;
   executeTool: (
     name: string,
     input: Record<string, unknown>
   ) => Promise<string | import('drone-core').DroneToolResult>;
 }> {
-  const engine = createDronePluginEngine({
+  const engine = createTestEngine({
     plugins: [todoPlugin],
     config: { ...createDefaultAgentConfig(), enabledPlugins: ['todo'] },
     logger: silentLogger(),
