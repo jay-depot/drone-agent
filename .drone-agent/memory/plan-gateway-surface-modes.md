@@ -536,3 +536,47 @@ Then the standards pass (see validation criteria).
 - The plain-text `@`-mention fallback.
 - A manual "flush now" trigger.
 - Coordinator-mode support (blocked on the coordinator receive path).
+
+---
+
+## Execution summary (2026-10-12)
+
+**Status: EXECUTED.** Branch `feat/gateway-surface-modes` (off Plan A tip `15258dc2`). Commits:
+`9db3ce09` (feature), `2f47bb30` (ADR + glossary + acceptance test). All validation criteria met.
+
+**What shipped (per phase):**
+- **P0** `drone-gateway/src/surfaces/mode.ts` — `SurfaceMode`, `SURFACE_MODES`, `isSurfaceMode`,
+  `DEFAULT_SURFACE_MODE='active'`, `DEFAULT_CATCH_UP_INTERVAL_MS=900_000`. Test `surface-modes.test.ts` (7).
+- **P1** `chat-format.ts` — `OBSERVER_INSTRUCTION`, `MENTION_INSTRUCTION`, `CANCEL_SENTINEL` (`__CANCELLED__`),
+  `isCancelled`, `composeSystemReminder(mode, kind, mentioned)`. `chat-format.test.ts` extended (22).
+- **P2** `AdapterMessage.mentionsBot?` (types.ts); loader `mode` throw + `catchUp.intervalMs` warn-drop
+  (config/load.ts); `SurfaceContext.mode` + `.catchUpIntervalMs` (required); engine `resolveSurfaceMode`,
+  mode-aware `describeSurface` (`persona-assignment(local,observer)`), catch-up log for non-active surfaces.
+  Swept all `SurfaceContext` literals. config-load + engine tests (84).
+- **P3** Matrix adapter `mentionsBot` from `content['m.mentions'].user_ids.includes(config.userId)`. (32).
+- **P4** `persona-assignment.ts` rewritten as the mode machine: in-memory buffer, `takeBuffer()` atomic
+  snapshot-and-clear, shared `ingest()`, `flush()`, per-mode hard reply block, `CANCEL_SENTINEL` filter,
+  discarding-mode `Error:` → warn+drop, surface-local unref'd catch-up `setInterval` (`0` disables). (36).
+- **P5** `docs/adr/250-gateway-surface-modes.md` (D1–D10); `drone-gateway/CONTEXT.md` glossary
+  (Surface Mode, Catch-Up, Catch-Up Cadence, Observation/Mention Instruction, Mention Detection, Mention
+  Lift, Cancel Sentinel) + config-layout `mode`/`catchUp`; Persona Assignment amended.
+- **P6** `test/surface-modes-acceptance.test.ts` — engine-driven observer/passive/active scenarios (3).
+
+**Standards:** build ✅, typecheck ✅, lint ✅, `pnpm run test` 3970 passed / 14 skipped ✅, LSP clean.
+
+**Deviations from the plan (best-judgement fixes):**
+1. **Timer deadlock.** The plan's sketch wrapped the timer flush in `lifecycle.run(() => flush(false))`;
+   that nests two `SessionLifecycle` tails (`flush`→`send`→`lifecycle.run`) and deadlocks. Implemented as
+   `void flush(false)` — `lifecycle.send` already serializes. Recorded in ADR 250 "Alternatives".
+2. **`SurfaceContext` spread taint.** Adding required fields broke every test factory that spread a
+   `Partial<SurfaceContext>`; defaults must be placed **after** the spread (`overrides.x ?? default`) to
+   avoid `T | undefined`. Swept five files.
+3. **Error-path centralisation.** Active-mode thrown errors must still surface as `Error: <msg>` (existing
+   tests), so the try/catch moved into `runTurn` and is mode-aware (active returns the string; discarding
+   modes return `null` and log).
+4. **Loader `mode` check placement.** Kept inside `sanitizeSurfaceConfig` (the plan named it), before the
+   `catchUp` bag.
+
+**Out of scope (unchanged from the plan's deferred list):** emoji reactions; `mention-router`; scheduled
+outbound work; persisted catch-up buffer; plain-text mention fallback; manual flush trigger;
+coordinator-mode support.
