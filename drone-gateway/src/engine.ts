@@ -140,8 +140,7 @@ export class GatewayEngine {
           const surfaceMode = this.resolveSurfaceMode(spec);
           if (surfaceMode === 'active') continue;
           const catchUp = spec.config?.catchUp as
-            | { intervalMs?: number }
-            | undefined;
+            { intervalMs?: number } | undefined;
           const intervalMs =
             catchUp?.intervalMs ?? DEFAULT_CATCH_UP_INTERVAL_MS;
           logger.info(
@@ -463,8 +462,7 @@ export class GatewayEngine {
       snapshotStore: adapter?.snapshotStore,
       outboundLedger: adapter?.outboundLedger,
       mode: this.resolveSurfaceMode(spec),
-      catchUpIntervalMs:
-        catchUp?.intervalMs ?? DEFAULT_CATCH_UP_INTERVAL_MS,
+      catchUpIntervalMs: catchUp?.intervalMs ?? DEFAULT_CATCH_UP_INTERVAL_MS,
     };
   }
 }

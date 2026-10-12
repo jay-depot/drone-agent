@@ -591,7 +591,9 @@ describe('GatewayEngine', () => {
       const described = info.mock.calls.find(call =>
         String(call[1]).includes('surfaces:')
       );
-      expect(String(described?.[1])).toContain('persona-assignment(local,observer)');
+      expect(String(described?.[1])).toContain(
+        'persona-assignment(local,observer)'
+      );
 
       const catchUpLog = info.mock.calls.find(call =>
         String(call[1]).includes('catch-up interval')
@@ -611,7 +613,9 @@ describe('GatewayEngine', () => {
       const described = info.mock.calls.find(call =>
         String(call[1]).includes('surfaces:')
       );
-      expect(String(described?.[1])).toContain('persona-assignment(local,active)');
+      expect(String(described?.[1])).toContain(
+        'persona-assignment(local,active)'
+      );
       // An active surface logs no catch-up line at all.
       const catchUpLog = info.mock.calls.find(call =>
         String(call[1]).includes('catch-up interval')

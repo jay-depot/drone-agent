@@ -104,7 +104,12 @@ describe('registerBuiltInSurfaces', () => {
     const surface = registry.get('persona-assignment')!(
       { type: 'persona-assignment', personaId: 'coder' },
       'conv-1',
-      { spawnBackend, swarm: undefined, mode: 'active', catchUpIntervalMs: 900_000 }
+      {
+        spawnBackend,
+        swarm: undefined,
+        mode: 'active',
+        catchUpIntervalMs: 900_000,
+      }
     );
     const result = await surface.handleMessage({
       adapterId: 'a',
@@ -174,7 +179,12 @@ describe('registerBuiltInSurfaces', () => {
     const surface = registry.get('persona-assignment')!(
       { type: 'persona-assignment', personaId: 'coder' },
       'conv-1',
-      { spawnBackend, swarm: undefined, mode: 'active', catchUpIntervalMs: 900_000 }
+      {
+        spawnBackend,
+        swarm: undefined,
+        mode: 'active',
+        catchUpIntervalMs: 900_000,
+      }
     );
     const result = await surface.handleMessage({
       adapterId: 'a',

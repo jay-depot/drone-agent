@@ -31,9 +31,9 @@ A built-in control surface type (`type: "discard"`) that silently consumes messa
 _Avoid_: Null surface, dev-null, black hole
 
 **Persona Assignment**:
-A lifecycle-managed control surface that routes all messages in a conversation to a specific persona. The gateway spawns an agent with that persona on the conversation's resolved **Spawn Target Beacon** and with the conversation's resolved **Working Directory**, sends the message as a task, and returns the response. The agent is kept alive between turns, terminated after the **Idle Timeout** (and re-spawned lazily on the next message), re-spawned once if `sendMessage` fails because the agent died, and disposed at gateway shutdown. There is no session resume: a re-spawn starts with fresh in-memory context, and continuity comes from the on-disk **Working Directory**.
+A lifecycle-managed control surface that routes all messages in a conversation to a specific persona. The gateway spawns an agent with that persona on the conversation's resolved **Spawn Target Beacon** and with the conversation's resolved **Working Directory**, sends the message as a task, and returns the response. The agent is kept alive between turns, terminated after the **Idle Timeout** (and re-spawned lazily on the next message), re-spawned once if `sendMessage` fails because the agent died, and disposed at gateway shutdown. Continuity comes from the on-disk **Working Directory** plus the **Snapshot Store** (which restores the agent's rolling context into a fresh spawn, local mode only).
 
-Each inbound turn is tagged with the speaker's name (see **Chat Tag**). In a multi-user room the turn also carries a per-turn **Room Instruction** telling the model it may decline to respond; a reply equal to the **No-Response Sentinel** (or a `null` reply) posts nothing. Because it defines `handleBatch`, it is **batch-eligible**: a burst of messages in a single-surface conversation is coalesced and answered once (see **Message Batcher**).
+Its delivery-and-reply behaviour is governed by a per-surface **Surface Mode** (`config.mode`). In `active` (the default) each inbound turn is tagged with the speaker's name (see **Chat Tag**) and answered; in a multi-user room the turn also carries a per-turn **Room Instruction** telling the model it may decline to respond, and a reply equal to the **No-Response Sentinel** (or a `null` reply) posts nothing. In `passive`/`observer` the surface buffers messages and answers them as one **Catch-Up** round (on the **Catch-Up Cadence** timer, or immediately on a mention for `passive`), with a per-mode instruction and a hard, code-enforced reply block. The **Outbound Ledger** drain runs in every mode. Because it defines `handleBatch`, it is **batch-eligible**: a burst of messages in a single-surface conversation is coalesced and answered once (see **Message Batcher**).
 _Avoid_: Persona router, persona mapper, persona binding
 
 **Swarm Console**:
@@ -55,6 +55,34 @@ _Avoid_: cwd, project path, working folder
 **Idle Timeout**:
 How long a spawning surface keeps its agent alive with no completed turn. Resolved as `controlSurfaces[].config.lifecycle.idleTimeoutMs ?? config.idleTimeoutMs` (gateway-wide) ?? a built-in default (300000 ms). `0` disables the timer. The timer resets on each turn **completion** (never mid-turn) and is `unref()`'d so it cannot hold the process open. On expiry the surface terminates the agent and drops the session; the next message lazily re-spawns.
 _Avoid_: keepalive, TTL, expiry
+
+**Surface Mode**:
+A spawning surface's delivery-and-reply axis (`controlSurfaces[].config.mode`): `active` (default; one turn per message, replies posted), `passive` (buffer messages, no per-message turn; a **Catch-Up** runs on the **Catch-Up Cadence** or immediately on an `@`-mention, and only a mention round posts), or `observer` (buffer; catch-up on the cadence only; **never** posts). Mode is a _delivery_ axis, not merely a reply filter — a discarding mode does not run a turn per message. It defaults to `active` and is applied surface-side; an invalid value is a hard load error. The `SurfaceMode` primitive lives in a leaf module (`surfaces/mode.ts`) so it can later govern swarm-managed agents too.
+_Avoid_: reply mode, bot mode
+
+**Catch-Up (Flush)**:
+The act of flushing a `passive`/`observer` surface's buffered inbound window as **one** turn. The buffer is **in-memory** on the surface: it survives an **Idle Timeout** terminate, but not a gateway restart (accepted). A flush drains the buffer **atomically** (snapshot-and-clear), so messages that arrive while a flush is in flight land in the next window. An empty flush is a no-op — no spawn, no turn.
+_Avoid_: backlog replay, digest, drain
+
+**Catch-Up Cadence**:
+How often a `passive`/`observer` surface flushes its buffer (`controlSurfaces[].config.catchUp.intervalMs`), default 900000 ms (15 min); `0` disables the timer. It is a surface-local, `unref()`'d interval armed continuously from construction, **independent** of activity (an empty tick is a no-op; it is not re-armed on activity). Inert in `active`. With defaults the cadence (15 min) exceeds the **Idle Timeout** (5 min), so every observer tick is a cold-spawn + **Snapshot Store** restore — correct because the snapshot/restore continuity exists.
+_Avoid_: poll interval, window, period
+
+**Observation Instruction**:
+The gateway-owned per-turn instruction delivered as a non-persisted system reminder for a silent round (an `observer` turn, and a `passive` conversation's ordinary catch-up). It tells the model it is a silent notetaker that must not reply in chat, and to use its tools to record anything worth remembering. An `active` room turn keeps the **Room Instruction**; a `passive` mention round uses the **Mention Instruction** instead. Selected by `composeSystemReminder(mode, kind, mentioned)` in `chat-format.ts`.
+_Avoid_: observer prompt, silent prompt
+
+**Mention Instruction**:
+The gateway-owned per-turn instruction delivered for a `passive` conversation's **mention** round, telling the model it has been mentioned and must reply to the last message as well as observe. See **Observation Instruction**.
+_Avoid_: reply prompt, at-mention prompt
+
+**Mention Detection**:
+The adapter-side stamping of `AdapterMessage.mentionsBot` — true when an inbound message `@`-mentions the bot's own identity, computed from Matrix `content['m.mentions'].user_ids.includes(config.userId)`. Only the adapter holds `config.userId` and sees raw event content, so detection lives there. v1 is `m.mentions` only (a plain-text fallback is deferred; a missed mention degrades to the normal **Catch-Up Cadence**, not to silence).
+_Avoid_: mention parse, at-detection
+
+**Mention Lift**:
+The behaviour by which a `passive` surface replies on an `@`-mention round while staying silent otherwise (and an `observer` ignores mentions entirely). It is **kind-agnostic** — there is no room/DM guard — so a `passive` **DM** bot replies only if explicitly `@`-mentioned (rare; harmless). A mention-bearing ingest requests an immediate catch-up; the periodic timer is unaffected.
+_Avoid_: mention trigger, mention boost
 
 **Surface Disposal**:
 The optional `dispose(): Promise<void>` a control surface may implement. The engine calls it once for every instantiated surface at `GatewayEngine.stop()`, after adapters stop, so spawning surfaces terminate their live agents instead of leaking them. Implementations are idempotent and do not throw; the engine logs and swallows any failure.
@@ -99,6 +127,10 @@ _Avoid_: batch window, coalesce interval
 **No-Response Sentinel**:
 The exact string `<<NO_RESPONSE>>` an agent replies with to decline to respond. A spawning surface checks the reply with an exact match modulo trim and, on a match, returns `{ response: null, handled: true }` so the engine posts nothing (and logs it distinctly). The sentinel and the **Room Instruction** that names it live together in the gateway (`chat-format.ts`), the single source of truth.
 _Avoid_: silence token, mute marker
+
+**Cancel Sentinel**:
+The exact string `__CANCELLED__` a software-cancelled agent turn returns as its reply. A spawning surface filters it with an exact match modulo trim at the reply-decision site and posts nothing (logging it distinctly), in **every** mode — it must never leak to chat.
+_Avoid_: abort token, cancel marker
 
 **Room Instruction**:
 The gateway-owned per-turn instruction delivered (only in a multi-user room) as a non-persisted system reminder, telling the model to decide whether a reply is warranted and naming the **No-Response Sentinel**. It rides the turn payload as `systemReminder`, which the agent's listen host queues via `queueSystemReminder` (drained as a `<system-reminder>`, never entering session history).
@@ -192,6 +224,13 @@ _Avoid_: poster, message sender
                 batch: { debounceMs: 500 }        # optional; 0 disables the
                                                   # debounce. Single-surface
                                                   # conversations only.
+                mode: "observer",                 # optional; "active" (default)
+                                                  # | "passive" | "observer".
+                                                  # An invalid value is a load
+                                                  # error. See Surface Mode.
+                catchUp: { intervalMs: 900000 }   # optional; catch-up cadence
+                                                  # for passive/observer. 0
+                                                  # disables. Inert in active.
               } },
             { type: "swarm-console" },
             { type: "discard" }

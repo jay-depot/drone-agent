@@ -15,6 +15,7 @@ updated: 2026-10-12T02:15:38.461Z
 ---
 
 ---
+
 name: plan-gateway-surface-modes
 description: Plan B — drone-gateway per-surface `mode` (active | passive | observer) with a catch-up loop and @-mention reply lift
 tags: [plan, drone-gateway, control-surface, surface-modes, persona-assignment, observer, passive, mentions, catch-up-loop]
@@ -32,21 +33,21 @@ wrong for two wanted deployment shapes:
 
 - **A notetaker / observer** — a persona that watches a room, builds memory / wiki /
   todos, but must **never** post in chat.
-- **A passive assistant** — an observer that wakes and *answers* the instant it is
+- **A passive assistant** — an observer that wakes and _answers_ the instant it is
   `@`-mentioned, and is otherwise silent.
 
 This plan adds a per-surface **`config.mode`** with three values:
 
-| Mode | Turns | Replies |
-|---|---|---|
-| `active` (default) | one turn per message (today's behaviour) | posts the reply |
-| `passive` | buffers messages; a turn runs on the catch-up timer **or** immediately on `@`-mention | posts **only** on a mention round |
-| `observer` | buffers messages; a turn runs on the catch-up timer | **never** posts |
+| Mode               | Turns                                                                                 | Replies                           |
+| ------------------ | ------------------------------------------------------------------------------------- | --------------------------------- |
+| `active` (default) | one turn per message (today's behaviour)                                              | posts the reply                   |
+| `passive`          | buffers messages; a turn runs on the catch-up timer **or** immediately on `@`-mention | posts **only** on a mention round |
+| `observer`         | buffers messages; a turn runs on the catch-up timer                                   | **never** posts                   |
 
 Mode is a **delivery-and-reply axis**, not a reply filter: `passive`/`observer` do not
 run a turn per message at all (an observer that ran a turn per message and discarded the
-reply would be a token furnace). "Catch-up" is exactly *flush the surface-side inbound
-buffer as one turn*.
+reply would be a token furnace). "Catch-up" is exactly _flush the surface-side inbound
+buffer as one turn_.
 
 This is **Plan B** of the drone-gateway portable-context work. **Plan A** (ADR 249,
 merged) shipped first and is a hard dependency: the snapshot/restore + outbound-ledger
@@ -55,21 +56,21 @@ coherent. Plan B starts from the Plan A base (branch tip `15258dc2`, ADR 249).
 
 ## Locked decisions (from the grilling)
 
-| # | Decision |
-|---|---|
-| 1 | Mode is a **delivery-and-reply** axis. `active`: turn + reply per message. `passive`: buffer (no turn); flush on mention **or** timer; reply only on a mention round. `observer`: buffer; flush on timer only; never reply. |
-| 2 | A **catch-up = flush the surface-side inbound buffer as one turn**. The buffer is **in-memory** on the surface. It survives an idle-timeout terminate (it is not part of `SessionLifecycle`); it does **not** survive a gateway restart (accepted). No adapter history read exists or is added — the live buffer *is* the history. |
-| 3 | The observer/passive periodic flush is a **surface-local `setInterval`**, `unref()`'d, armed continuously from surface construction. An **empty buffer is a no-op** (no spawn, no turn). Cadence = `config.catchUp.intervalMs`, default **900000** (15 min); `0` disables the timer. There is **no** scheduled *outbound* work (use the injection API). |
-| 4 | **`@`-mention detection lives in the adapter** — only it knows the bot's own identity (`config.userId`) and sees raw event content. New optional `AdapterMessage.mentionsBot?: boolean`, stamped from `content['m.mentions'].user_ids.includes(config.userId)`. **`m.mentions` only** in v1. A plain-text fallback (`@<localpart>` / display name) is a **maybe-later** (fragile; a missed mention degrades to the normal cadence, not to silence). |
-| 5 | The mention lift is **kind-agnostic** — no `conversationKind === 'room'` guard (that guard is *more* code). Consequence: a `passive` **DM** bot replies only if explicitly `@`-mentioned (rare; harmless). Document it. |
-| 7 | `handleBatch` stays **defined in all modes**. `handleMessage` and `handleBatch` both funnel into one shared `ingest(messages)`. The engine's `MessageBatcher` eligibility rules are **unchanged** (its burst-coalescing lifetime is orthogonal to the catch-up buffer). A mention is detected with `messages.some(m => m.mentionsBot)`. A flush drains the buffer **atomically** (snapshot-and-clear) on the `SessionLifecycle` tail; arrivals during a flush land in the next window. |
-| 8 | Reply control is **two layers**: (a) a per-turn instruction from `chat-format.ts`; (b) a **hard, code-enforced** surface block — `observer` and ordinary `passive` catch-ups always return `{response:null, handled:true}` (the turn's tool/memory side effects still happen). Discarding modes **log** `Error:`-shaped replies at `warn` and post nothing. Fold in: filter the `CANCEL_SENTINEL` (`'__CANCELLED__'`) at the reply-decision site. |
-| 10 | `config.mode` ∈ `"active" \| "passive" \| "observer"` (absent ⇒ `active`); `config.catchUp.intervalMs` (non-negative number; absent ⇒ 900000; `0` disables; inert in `active`). An **invalid `mode` value throws** (hard load error, mirroring `targetBeaconId` — a typo must not silently make a notetaker chatty). An invalid `catchUp.intervalMs` is **warned and dropped**. No spawning-surface guard. Defaults applied **surface-side** (via the engine-resolved `SurfaceContext`). Keep the `SurfaceMode` primitive clean — it will be reused for swarm-managed agents. |
-| 11 | Plan A's continuations (ledger drain, snapshot/restore, idle timer) are **mode-agnostic** and run in every mode. Note the cadence arithmetic: with defaults, `idleTimeoutMs` (5 min) < `catchUp.intervalMs` (15 min), so **every** observer tick is a cold-spawn + restore — correct *because* Plan A exists. **Document** the coupling; do **not** auto-couple the two knobs. |
-| 12 | A mention-bearing ingest always **requests a flush**; flushes serialize on the lifecycle tail, so a mention arriving during a flush produces an immediate follow-up turn (not a wait for the timer). The periodic timer is **independent** — it fires on its own cadence and is **not** re-armed on activity. A manual "flush now" trigger is **deferred**. |
+| #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Mode is a **delivery-and-reply** axis. `active`: turn + reply per message. `passive`: buffer (no turn); flush on mention **or** timer; reply only on a mention round. `observer`: buffer; flush on timer only; never reply.                                                                                                                                                                                                                                                                                                                                                   |
+| 2   | A **catch-up = flush the surface-side inbound buffer as one turn**. The buffer is **in-memory** on the surface. It survives an idle-timeout terminate (it is not part of `SessionLifecycle`); it does **not** survive a gateway restart (accepted). No adapter history read exists or is added — the live buffer _is_ the history.                                                                                                                                                                                                                                            |
+| 3   | The observer/passive periodic flush is a **surface-local `setInterval`**, `unref()`'d, armed continuously from surface construction. An **empty buffer is a no-op** (no spawn, no turn). Cadence = `config.catchUp.intervalMs`, default **900000** (15 min); `0` disables the timer. There is **no** scheduled _outbound_ work (use the injection API).                                                                                                                                                                                                                       |
+| 4   | **`@`-mention detection lives in the adapter** — only it knows the bot's own identity (`config.userId`) and sees raw event content. New optional `AdapterMessage.mentionsBot?: boolean`, stamped from `content['m.mentions'].user_ids.includes(config.userId)`. **`m.mentions` only** in v1. A plain-text fallback (`@<localpart>` / display name) is a **maybe-later** (fragile; a missed mention degrades to the normal cadence, not to silence).                                                                                                                           |
+| 5   | The mention lift is **kind-agnostic** — no `conversationKind === 'room'` guard (that guard is _more_ code). Consequence: a `passive` **DM** bot replies only if explicitly `@`-mentioned (rare; harmless). Document it.                                                                                                                                                                                                                                                                                                                                                       |
+| 7   | `handleBatch` stays **defined in all modes**. `handleMessage` and `handleBatch` both funnel into one shared `ingest(messages)`. The engine's `MessageBatcher` eligibility rules are **unchanged** (its burst-coalescing lifetime is orthogonal to the catch-up buffer). A mention is detected with `messages.some(m => m.mentionsBot)`. A flush drains the buffer **atomically** (snapshot-and-clear) on the `SessionLifecycle` tail; arrivals during a flush land in the next window.                                                                                        |
+| 8   | Reply control is **two layers**: (a) a per-turn instruction from `chat-format.ts`; (b) a **hard, code-enforced** surface block — `observer` and ordinary `passive` catch-ups always return `{response:null, handled:true}` (the turn's tool/memory side effects still happen). Discarding modes **log** `Error:`-shaped replies at `warn` and post nothing. Fold in: filter the `CANCEL_SENTINEL` (`'__CANCELLED__'`) at the reply-decision site.                                                                                                                             |
+| 10  | `config.mode` ∈ `"active" \| "passive" \| "observer"` (absent ⇒ `active`); `config.catchUp.intervalMs` (non-negative number; absent ⇒ 900000; `0` disables; inert in `active`). An **invalid `mode` value throws** (hard load error, mirroring `targetBeaconId` — a typo must not silently make a notetaker chatty). An invalid `catchUp.intervalMs` is **warned and dropped**. No spawning-surface guard. Defaults applied **surface-side** (via the engine-resolved `SurfaceContext`). Keep the `SurfaceMode` primitive clean — it will be reused for swarm-managed agents. |
+| 11  | Plan A's continuations (ledger drain, snapshot/restore, idle timer) are **mode-agnostic** and run in every mode. Note the cadence arithmetic: with defaults, `idleTimeoutMs` (5 min) < `catchUp.intervalMs` (15 min), so **every** observer tick is a cold-spawn + restore — correct _because_ Plan A exists. **Document** the coupling; do **not** auto-couple the two knobs.                                                                                                                                                                                                |
+| 12  | A mention-bearing ingest always **requests a flush**; flushes serialize on the lifecycle tail, so a mention arriving during a flush produces an immediate follow-up turn (not a wait for the timer). The periodic timer is **independent** — it fires on its own cadence and is **not** re-armed on activity. A manual "flush now" trigger is **deferred**.                                                                                                                                                                                                                   |
 
 **Explicitly out of scope:** emoji reactions; a `mention-router` (`!persona`) surface;
-scheduled *outbound* work; a persisted catch-up buffer; the plain-text mention fallback; a
+scheduled _outbound_ work; a persisted catch-up buffer; the plain-text mention fallback; a
 manual flush trigger; coordinator-mode support (there is no coordinator receive path — its
 `sendMessage` returns `null`).
 
@@ -125,7 +126,7 @@ Tests (`test/surface-modes.test.ts`): `isSurfaceMode` accepts each member, rejec
 
 ## Phase 1 — `chat-format.ts`: instructions, composer, sentinel filter
 
-Add to `drone-gateway/src/chat-format.ts` (import the *type* only:
+Add to `drone-gateway/src/chat-format.ts` (import the _type_ only:
 `import type { SurfaceMode } from './surfaces/mode.js';`):
 
 ```ts
@@ -195,34 +196,38 @@ The function already builds `rest` from `config`. Add a `mode` branch (throw, li
 Import `isSurfaceMode` and `SURFACE_MODES` from `../surfaces/mode.js`.
 
 ```ts
-  const mode = rest.mode;
-  if (mode !== undefined && !isSurfaceMode(mode)) {
-    throw new Error(
-      `Control surface type "${type}" in "${file}" (conversation "${convId}", ` +
-        `adapter "${adapterId}") has an invalid mode "${String(mode)}" ` +
-        `(expected one of: ${SURFACE_MODES.join(', ')}).`
-    );
-  }
+const mode = rest.mode;
+if (mode !== undefined && !isSurfaceMode(mode)) {
+  throw new Error(
+    `Control surface type "${type}" in "${file}" (conversation "${convId}", ` +
+      `adapter "${adapterId}") has an invalid mode "${String(mode)}" ` +
+      `(expected one of: ${SURFACE_MODES.join(', ')}).`
+  );
+}
 
-  const catchUp = rest.catchUp;
-  if (catchUp !== undefined) {
-    if (typeof catchUp !== 'object' || catchUp === null || Array.isArray(catchUp)) {
-      warn('catchUp is not an object; ignoring');
-      delete rest.catchUp;
-    } else {
-      const bag = { ...(catchUp as Record<string, unknown>) };
-      if (bag.intervalMs !== undefined) {
-        const sanitized = sanitizeNonNegativeNumber(
-          bag.intervalMs,
-          'intervalMs',
-          warn
-        );
-        if (sanitized === undefined) delete bag.intervalMs;
-        else bag.intervalMs = sanitized;
-      }
-      rest.catchUp = bag;
+const catchUp = rest.catchUp;
+if (catchUp !== undefined) {
+  if (
+    typeof catchUp !== 'object' ||
+    catchUp === null ||
+    Array.isArray(catchUp)
+  ) {
+    warn('catchUp is not an object; ignoring');
+    delete rest.catchUp;
+  } else {
+    const bag = { ...(catchUp as Record<string, unknown>) };
+    if (bag.intervalMs !== undefined) {
+      const sanitized = sanitizeNonNegativeNumber(
+        bag.intervalMs,
+        'intervalMs',
+        warn
+      );
+      if (sanitized === undefined) delete bag.intervalMs;
+      else bag.intervalMs = sanitized;
     }
+    rest.catchUp = bag;
   }
+}
 ```
 
 Add the doc comment on `sanitizeSurfaceConfig` to mention `mode` / `catchUp.intervalMs`.
@@ -232,13 +237,13 @@ Add the doc comment on `sanitizeSurfaceConfig` to mention `mode` / `catchUp.inte
 Add (import the type from `./mode.js`):
 
 ```ts
-  /** Mode for spawning surfaces. `active` is the default and the current behaviour. */
-  mode: SurfaceMode;
-  /**
-   * Periodic catch-up cadence (ms) for `observer`/`passive`. `0` disables the
-   * timer. Inert in `active`. Engine-resolved; defaults applied before injection.
-   */
-  catchUpIntervalMs: number;
+/** Mode for spawning surfaces. `active` is the default and the current behaviour. */
+mode: SurfaceMode;
+/**
+ * Periodic catch-up cadence (ms) for `observer`/`passive`. `0` disables the
+ * timer. Inert in `active`. Engine-resolved; defaults applied before injection.
+ */
+catchUpIntervalMs: number;
 ```
 
 ### 2d. Engine — `src/engine.ts`
@@ -246,15 +251,14 @@ Add (import the type from `./mode.js`):
 In `surfaceContext(spec, adapterId)`, resolve and inject:
 
 ```ts
-    const catchUp = cfg.catchUp as { intervalMs?: number } | undefined;
-    const mode = isSurfaceMode(cfg.mode) ? cfg.mode : DEFAULT_SURFACE_MODE;
-    const catchUpIntervalMs =
-      catchUp?.intervalMs ?? DEFAULT_CATCH_UP_INTERVAL_MS;
-    return {
-      // …existing fields…
-      mode,
-      catchUpIntervalMs,
-    };
+const catchUp = cfg.catchUp as { intervalMs?: number } | undefined;
+const mode = isSurfaceMode(cfg.mode) ? cfg.mode : DEFAULT_SURFACE_MODE;
+const catchUpIntervalMs = catchUp?.intervalMs ?? DEFAULT_CATCH_UP_INTERVAL_MS;
+return {
+  // …existing fields…
+  mode,
+  catchUpIntervalMs,
+};
 ```
 
 In `describeSurface`, append the mode for spawning surfaces, e.g.
@@ -284,12 +288,12 @@ In `src/adapters/matrix.ts`, `onTimelineEvent`, after `const content = event.get
 and the body extraction:
 
 ```ts
-    const mentionIds = (
-      content?.['m.mentions'] as { user_ids?: string[] } | undefined
-    )?.user_ids;
-    const mentionsBot = Array.isArray(mentionIds)
-      ? mentionIds.includes(this.config.userId)
-      : false;
+const mentionIds = (
+  content?.['m.mentions'] as { user_ids?: string[] } | undefined
+)?.user_ids;
+const mentionsBot = Array.isArray(mentionIds)
+  ? mentionIds.includes(this.config.userId)
+  : false;
 ```
 
 and add `mentionsBot` to the emitted `AdapterMessage`.
@@ -358,7 +362,10 @@ export const createPersonaAssignmentSurface: SurfaceFactory = (
 
     if (reply === null) return { response: null, handled: true };
     if (isCancelled(reply)) {
-      logger.info({ conversationId, personaId }, 'Agent turn cancelled; posting nothing');
+      logger.info(
+        { conversationId, personaId },
+        'Agent turn cancelled; posting nothing'
+      );
       return { response: null, handled: true };
     }
     if (isNoResponse(reply)) {
@@ -378,7 +385,9 @@ export const createPersonaAssignmentSurface: SurfaceFactory = (
   }
 
   /** Flush the buffered window as one turn (observer cadence, passive cadence, mention). */
-  async function flush(mentioned: boolean): Promise<{ response: string | null; handled: boolean }> {
+  async function flush(
+    mentioned: boolean
+  ): Promise<{ response: string | null; handled: boolean }> {
     const drained = takeBuffer();
     if (drained.length === 0) return { response: null, handled: true };
     try {
@@ -411,7 +420,10 @@ export const createPersonaAssignmentSurface: SurfaceFactory = (
     handleMessage: (msg: AdapterMessage) => ingest([msg]),
     handleBatch: (messages: AdapterMessage[]) => ingest(messages),
     dispose: async () => {
-      if (timer) { clearInterval(timer); timer = null; }
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
       await lifecycle.dispose();
     },
   };
@@ -424,7 +436,7 @@ Implementation notes to preserve:
   death-retry / snapshot. The buffer+flush does not add a second tail; `flush` from the
   timer is wrapped in `lifecycle.run(...)` so it can never overlap an in-flight turn.
   `ingest`'s active path and its passive-mention `flush(true)` both go through `send`'s
-  own `run`, so ordering is already correct. *Do not* double-wrap.
+  own `run`, so ordering is already correct. _Do not_ double-wrap.
 - **A mention flush must run immediately, not on the timer**, and its reply must be
   returned to the engine (so the engine posts it). That is why `flush(true)` is awaited
   inside `ingest` (which is inside the engine's dispatch), whereas the timer calls
@@ -437,6 +449,7 @@ Implementation notes to preserve:
 
 Tests (`test/persona-assignment-surface.test.ts`, extend extensively; use the existing
 `vi.useFakeTimers()` harness):
+
 - `active`: unchanged assertions still pass (tag + room reminder + reply + ledger).
 - `observer`: N messages ⇒ `sendMessage` not called; advance the timer ⇒ exactly one
   `sendMessage`, text joins all N tagged lines, `systemReminder` is `OBSERVER_INSTRUCTION`,
@@ -518,7 +531,7 @@ Then the standards pass (see validation criteria).
 
 - Emoji reactions (the `platformRef` seam already exists; see the reactions sketch).
 - A `mention-router` (`!persona`) control surface.
-- Scheduled *outbound* work (the injection API covers it).
+- Scheduled _outbound_ work (the injection API covers it).
 - A persisted catch-up buffer (survives a gateway restart).
 - The plain-text `@`-mention fallback.
 - A manual "flush now" trigger.
