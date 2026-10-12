@@ -1,8 +1,9 @@
 ---
 key: plan-fix-portable-context-host-wiring
-tags: []
+tags:
+  []
 created: 2026-10-12T00:20:55.058Z
-updated: 2026-10-12T00:20:55.058Z
+updated: 2026-10-12T00:28:52.622Z
 ---
 
 # Plan: Fix checkpoint `session.turns = []` — wire the engine's host session-boundary collaborators
@@ -70,7 +71,6 @@ sessionManager: sessionManager ?? createNoopSessionManager(),
 ### Step 3 — `drone-agent/test/helpers.ts` (agent: `code`; depends on Step 1)
 
 Add imports and the helper:
-
 ```ts
 import { createSessionManager } from '../src/runtime/session-manager.js';
 import {
@@ -95,7 +95,6 @@ export function createTestEngine(
   });
 }
 ```
-
 (Keep the existing `createFakeEngine`/`createMockEngine` unchanged — they return engine literals, not construction options.)
 
 ### Step 4 — Migrate test construction sites (agent: `worker`; depends on Step 3)
@@ -112,7 +111,7 @@ Ground truth for the site list: `rg -n 'createDronePluginEngine\(' drone-agent/t
 
 Add a file (e.g. `drone-agent/test/engine-host-wiring.test.ts`) that guards the exact production path:
 
-1. **Turns survive the engine's export.** Build with `createTestEngine`; `appendUserMessage('hello')` on the _same_ manager passed in; get `engine.getCapability('portable-context')`; assert `(await cap.exportContext()).session.turns.length === 1` and `session.sourceSessionId` equals the seeded id.
+1. **Turns survive the engine's export.** Build with `createTestEngine`; `appendUserMessage('hello')` on the *same* manager passed in; get `engine.getCapability('portable-context')`; assert `(await cap.exportContext()).session.turns.length === 1` and `session.sourceSessionId` equals the seeded id.
 2. **Host-seeded session id flows through.** Seed `sessionId: 'host-id'`; assert `engine.getSessionId() === 'host-id'` and the export's `sourceSessionId === 'host-id'`.
 3. **`engine.clearSession()` clears + mints.** With a real `clearConversation: () => sessionManager.clearSession()` and a non-empty session, assert turns empty, id changed, and `onSessionClear` saw the intact session (order `clear-hook → mechanical-clear → recycle-hook`). (This duplicates the intent of `portable-context-engine.test.ts`; if that file already covers it, consolidate rather than duplicate.)
 
@@ -142,3 +141,29 @@ Run every gate in §4.
    - `createNoopSessionManager` no longer exists (grep clean).
 7. **No dead code / unused vars / fluff comments.** `sessionId` remaining optional is intentional (documented).
 8. Commit any unstaged `.drone-agent` memory/insight/ADR files with the change (project memory is checked in on feature branches; do not commit to `main`).
+
+---
+
+## ✅ COMPLETED (2026-10-12) — executed by persona `code`
+
+All 7 steps executed. Commit `f65777f5` on `feat/portable-context` (31 files, +435/−227).
+
+**Step 1 — `plugin-engine.ts`.** Exported `CreateDronePluginEngineOptions`; made `sessionManager` + `clearConversation` required; deleted `createNoopSessionManager`; capability seed now `sessionManager,`; `clearSession()` uses `sessionManager.getTurns()` and calls `clearConversationFromHost()` unconditionally.
+
+**Step 2 — `index.tsx`.** Added `clearConversationRef`; passed `sessionManager`, `clearConversation: () => clearConversationRef.current?.()`, `sessionId: invocation.options.sessionId`; assigned `clearConversationRef.current = conversation.clearSession` after `createConversationService`.
+
+**Step 3 — `test/helpers.ts`.** Added `createTestEngine(options)`. Deviation from the plan's literal snippet: the parameter type is `Omit<CreateDronePluginEngineOptions, 'sessionManager' | 'clearConversation'> & Partial<Pick<...>>` (the plan's `options: CreateDronePluginEngineOptions` would have required every caller to still pass the two fields, defeating the defaults).
+
+**Step 4 — test sweep.** Migrated 144 `createTestEngine(` call sites across 22 files (scripted). Deviations/additions found while typechecking:
+- `persona-premount.test.ts` had a *pre-existing local* `createTestEngine` helper that collided with the import → renamed the local helper to `createPersonaEngine`.
+- `portable-context-engine.test.ts` kept its explicit `sessionManager`/`clearConversation` overrides (as instructed).
+- `sessionManager: undefined` in macros/session-param-events left untouched (slash-context field).
+- `tsc -p tsconfig.test.json` (the authoritative gate) is clean; LSP diagnostics that appeared to flag errors were stale (pre-fix line numbers).
+
+**Step 5 — `test/engine-host-wiring.test.ts`.** New: (a) turns survive `exportContext()` with the real host manager; (b) host-seeded id flows through `getSessionId()` and the export's `sourceSessionId`; (c) empty session exports empty turns. Skipped the plan's #3 (clear+recycle order) per its own consolidation note — `portable-context-engine.test.ts` already covers order, mint, seeded/fallback ids, and capability seeding.
+
+**Step 6 — docs.** New `docs/adr/248-engine-host-wiring-required-session-boundary.md`; amended ADR 246 Consequences; added 248 to `docs/adr/index.md`; created wiki stub `decisions/248-...md` + added it to the wiki decisions index. `AGENTS.md`/`docs/agents/portable-context.md` did not claim the options were optional, so left unchanged.
+
+**Step 7 — validation (all green):** LSP clean; `pnpm -r run build` clean; `pnpm run lint` clean; `pnpm run typecheck` clean incl. `tsc -p tsconfig.test.json`; `pnpm run test` → 293 files / 3879 tests passed (3 files / 14 tests skipped — integration-gated); feature checks: `createNoopSessionManager` absent from code, options required, index wiring present, plus the 10 new/existing boundary tests pass.
+
+**Follow-up note:** `createTestEngine`'s parameter type duplicates the omit/pick shape; if a third required option is ever added it is added in `plugin-engine.ts` only and `createTestEngine`'s `Omit`/`Pick` must be updated in lockstep (a single edit site).
