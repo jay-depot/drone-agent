@@ -49,6 +49,21 @@ export class SessionLifecycle {
       }
     );
     this.session = session;
+
+    const store = this.opts.ctx.snapshotStore;
+    if (store) {
+      const snapshot = store.getSnapshot(this.opts.conversationId);
+      if (snapshot) {
+        try {
+          await this.opts.ctx.spawnBackend.importContext(session, snapshot);
+        } catch (err) {
+          logger.warn(
+            { err, conversationId: this.opts.conversationId },
+            'Context restore failed; starting with a fresh context'
+          );
+        }
+      }
+    }
     return session;
   }
 
@@ -95,6 +110,7 @@ export class SessionLifecycle {
           opts
         );
         this.armIdleTimer();
+        await this.snapshot();
         return response;
       } catch (err) {
         logger.warn(
@@ -114,9 +130,35 @@ export class SessionLifecycle {
           opts
         );
         this.armIdleTimer();
+        await this.snapshot();
         return response;
       }
     });
+  }
+
+  /**
+   * Export the live context and persist it for this conversation. Runs inside
+   * the lifecycle tail, so exactly one backend request is ever in flight (D15).
+   * A snapshot failure is non-fatal: the turn already succeeded.
+   */
+  private async snapshot(): Promise<void> {
+    const store = this.opts.ctx.snapshotStore;
+    const session = this.session;
+    if (!store || !session) return;
+    try {
+      const context = await this.opts.ctx.spawnBackend.exportContext(session);
+      const bytes = Buffer.byteLength(JSON.stringify(context), 'utf8');
+      store.saveSnapshot(this.opts.conversationId, context);
+      logger.debug(
+        { conversationId: this.opts.conversationId, bytes },
+        'Saved context snapshot'
+      );
+    } catch (err) {
+      logger.warn(
+        { err, conversationId: this.opts.conversationId },
+        'Context snapshot failed'
+      );
+    }
   }
 
   async dispose(): Promise<void> {

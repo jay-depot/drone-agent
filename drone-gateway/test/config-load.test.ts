@@ -463,6 +463,110 @@ describe('loadGatewayConfig conversation parsing', () => {
       ?.surfaces?.[0].config as { batch?: { debounceMs?: number } };
     expect(neg.batch).not.toHaveProperty('debounceMs');
   });
+
+  it('keeps a valid mode and leaves an absent mode absent (default is surface-side)', async () => {
+    writeConversation('matrix', 'mode-ok.json', {
+      conversationId: '!mode-ok:server',
+      controlSurfaces: [
+        {
+          type: 'persona-assignment',
+          personaId: 'me',
+          config: { mode: 'observer' },
+        },
+      ],
+    });
+    writeConversation('matrix', 'mode-absent.json', {
+      conversationId: '!mode-absent:server',
+      controlSurfaces: [
+        { type: 'persona-assignment', personaId: 'me', config: {} },
+      ],
+    });
+    const config = await load();
+    const ok = config.serviceAdapters[0].conversations.get('!mode-ok:server')
+      ?.surfaces?.[0].config as { mode?: string };
+    expect(ok.mode).toBe('observer');
+    const absent = config.serviceAdapters[0].conversations.get(
+      '!mode-absent:server'
+    )?.surfaces?.[0].config as { mode?: string };
+    expect(absent).not.toHaveProperty('mode');
+  });
+
+  it('throws when a surface has an invalid mode', async () => {
+    writeConversation('matrix', 'mode-bad.json', {
+      conversationId: '!mode-bad:server',
+      controlSurfaces: [
+        {
+          type: 'persona-assignment',
+          personaId: 'me',
+          config: { mode: 'Observe' },
+        },
+      ],
+    });
+    await expect(load()).rejects.toThrow('invalid mode');
+  });
+
+  it('keeps a valid catchUp.intervalMs (including 0) and drops an invalid one', async () => {
+    writeConversation('matrix', 'catchup.json', {
+      conversationId: '!catchup:server',
+      controlSurfaces: [
+        {
+          type: 'persona-assignment',
+          personaId: 'me',
+          config: { mode: 'observer', catchUp: { intervalMs: 60000 } },
+        },
+      ],
+    });
+    writeConversation('matrix', 'catchup-zero.json', {
+      conversationId: '!catchup-zero:server',
+      controlSurfaces: [
+        {
+          type: 'persona-assignment',
+          personaId: 'me',
+          config: { mode: 'observer', catchUp: { intervalMs: 0 } },
+        },
+      ],
+    });
+    writeConversation('matrix', 'catchup-neg.json', {
+      conversationId: '!catchup-neg:server',
+      controlSurfaces: [
+        {
+          type: 'persona-assignment',
+          personaId: 'me',
+          config: { mode: 'observer', catchUp: { intervalMs: -1 } },
+        },
+      ],
+    });
+    const config = await load();
+    const ok = config.serviceAdapters[0].conversations.get('!catchup:server')
+      ?.surfaces?.[0].config as { catchUp?: { intervalMs?: number } };
+    expect(ok.catchUp?.intervalMs).toBe(60000);
+    const zero = config.serviceAdapters[0].conversations.get(
+      '!catchup-zero:server'
+    )?.surfaces?.[0].config as { catchUp?: { intervalMs?: number } };
+    expect(zero.catchUp?.intervalMs).toBe(0);
+    const neg = config.serviceAdapters[0].conversations.get(
+      '!catchup-neg:server'
+    )?.surfaces?.[0].config as { catchUp?: { intervalMs?: number } };
+    expect(neg.catchUp).not.toHaveProperty('intervalMs');
+  });
+
+  it('warns about and drops a non-object catchUp', async () => {
+    writeConversation('matrix', 'catchup-bad.json', {
+      conversationId: '!catchup-bad:server',
+      controlSurfaces: [
+        {
+          type: 'persona-assignment',
+          personaId: 'me',
+          config: { mode: 'observer', catchUp: 42 },
+        },
+      ],
+    });
+    const config = await load();
+    const surfaces = config.serviceAdapters[0].conversations.get(
+      '!catchup-bad:server'
+    )?.surfaces;
+    expect(surfaces?.[0].config).not.toHaveProperty('catchUp');
+  });
 });
 
 describe('loadGatewayConfig idleTimeoutMs validation', () => {

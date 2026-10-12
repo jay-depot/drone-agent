@@ -200,4 +200,47 @@ describe('portable-context capability', () => {
     const result = await h.capability.importContext(exported);
     expect(result.warnings).toContain('focus: boom');
   });
+
+  it('strips the continuation disclosure from the next export', async () => {
+    const h = makeHarness();
+    h.sessionManager.appendUserMessage('hello');
+    h.sessionManager.appendAssistantMessage('hi');
+
+    const first = await h.capability.exportContext();
+    // The import appends exactly one disclosure turn to the live session...
+    await h.capability.importContext(first);
+    const live = h.sessionManager.getTurns();
+    expect(
+      live.some(turn =>
+        turn.messages.some(
+          m =>
+            typeof m.content === 'string' &&
+            m.content.includes('was restored from a prior checkpoint')
+        )
+      )
+    ).toBe(true);
+
+    // ...but that turn is absent from the next export.
+    const second = await h.capability.exportContext();
+    const exportedText = JSON.stringify(second);
+    expect(exportedText).not.toContain('was restored from a prior checkpoint');
+    expect(second.session.turns).toHaveLength(first.session.turns.length);
+  });
+
+  it('does not grow across repeated export → import → export cycles', async () => {
+    const h = makeHarness();
+    h.sessionManager.appendUserMessage('hello');
+    h.sessionManager.appendAssistantMessage('hi');
+
+    let exported = await h.capability.exportContext();
+    const baseline = exported.session.turns.length;
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+      await h.capability.importContext(exported);
+      exported = await h.capability.exportContext();
+      expect(exported.session.turns).toHaveLength(baseline);
+      expect(JSON.stringify(exported)).not.toContain(
+        'was restored from a prior checkpoint'
+      );
+    }
+  });
 });

@@ -3,6 +3,7 @@ import { logger } from './logger.js';
 import type { CoordinatorClient } from './coordinator-client.js';
 import type { SpawnBackend } from './spawn-backend.js';
 import type { SpawnSession, SpawnSessionOptions } from './types.js';
+import type { DronePortableContextExport } from 'drone-core';
 
 /**
  * CoordinatorSpawnBackend delegates agent spawning to the coordinator's
@@ -116,6 +117,21 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
     );
 
     return null;
+  }
+
+  async exportContext(_session: SpawnSession): Promise<never> {
+    throw new Error(
+      'Context export is not supported in coordinator spawn mode.'
+    );
+  }
+
+  async importContext(
+    _session: SpawnSession,
+    _data: DronePortableContextExport
+  ): Promise<never> {
+    throw new Error(
+      'Context import is not supported in coordinator spawn mode.'
+    );
   }
 
   async terminateSession(session: SpawnSession): Promise<void> {

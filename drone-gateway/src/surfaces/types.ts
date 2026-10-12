@@ -1,6 +1,11 @@
 import type { ControlSurfaceSpec, DroneControlSurface } from '../types.js';
 import type { SpawnBackend } from '../spawn-backend.js';
 import type { SwarmApi } from '../console/swarm-api.js';
+import type {
+  ContextSnapshotStore,
+  OutboundLedgerHandle,
+} from '../store/gateway-state-store.js';
+import type { SurfaceMode } from './mode.js';
 
 /**
  * Everything a control surface factory is allowed to depend on. Formalizing
@@ -35,6 +40,22 @@ export interface SurfaceContext {
    * multi-surface conversation (batching is single-surface only).
    */
   debounceMs?: number;
+  /** Absent when the adapter has no persistent DB (see D4). */
+  snapshotStore?: ContextSnapshotStore;
+  /** Absent when the adapter has no persistent DB (see D4). */
+  outboundLedger?: OutboundLedgerHandle;
+  /**
+   * Delivery-and-reply mode for spawning surfaces. `active` is the default
+   * and the current behaviour. Engine-resolved; defaults applied before
+   * injection.
+   */
+  mode: SurfaceMode;
+  /**
+   * Periodic catch-up cadence (ms) for `observer`/`passive`. `0` disables the
+   * timer. Inert in `active`. Engine-resolved; defaults applied before
+   * injection.
+   */
+  catchUpIntervalMs: number;
 }
 
 export type SurfaceFactory = (

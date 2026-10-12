@@ -16,6 +16,15 @@ import type {
 
 export const DRONE_PORTABLE_CONTEXT_CAPABILITY_ID = 'portable-context';
 
+/**
+ * Substring that identifies the continuation-disclosure system-reminder a
+ * portable-context import appends to the restored session. Used to build the
+ * reminder AND to strip it back out on export, so repeated
+ * export → import → export cycles never accumulate disclosure turns.
+ */
+export const CONTINUATION_DISCLOSURE_MARKER =
+  'was restored from a prior checkpoint';
+
 /** Lowest schema version this build can import. */
 export const MIN_CONTEXT_SCHEMA_VERSION = 1;
 /** Highest schema version this build can import. */

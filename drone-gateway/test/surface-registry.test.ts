@@ -57,6 +57,8 @@ describe('registerBuiltInSurfaces', () => {
     const surface = factory({ type: 'discard' }, 'conv-1', {
       spawnBackend: {} as never,
       swarm: undefined,
+      mode: 'active',
+      catchUpIntervalMs: 900_000,
     });
     await expect(
       surface.handleMessage({
@@ -77,6 +79,8 @@ describe('registerBuiltInSurfaces', () => {
       factory({ type: 'persona-assignment' }, 'conv-1', {
         spawnBackend: {} as never,
         swarm: undefined,
+        mode: 'active',
+        catchUpIntervalMs: 900_000,
       })
     ).toThrow('persona-assignment control surface requires personaId');
   });
@@ -90,6 +94,8 @@ describe('registerBuiltInSurfaces', () => {
         startedAt: 0,
       })),
       sendMessage: vi.fn(async () => 'hello back'),
+      exportContext: vi.fn(),
+      importContext: vi.fn(),
       terminateSession: vi.fn(),
       type: 'local' as const,
     };
@@ -98,7 +104,12 @@ describe('registerBuiltInSurfaces', () => {
     const surface = registry.get('persona-assignment')!(
       { type: 'persona-assignment', personaId: 'coder' },
       'conv-1',
-      { spawnBackend, swarm: undefined }
+      {
+        spawnBackend,
+        swarm: undefined,
+        mode: 'active',
+        catchUpIntervalMs: 900_000,
+      }
     );
     const result = await surface.handleMessage({
       adapterId: 'a',
@@ -122,6 +133,8 @@ describe('registerBuiltInSurfaces', () => {
         startedAt: 0,
       })),
       sendMessage: vi.fn(async () => 'hello back'),
+      exportContext: vi.fn(),
+      importContext: vi.fn(),
       terminateSession: vi.fn(),
       type: 'coordinator' as const,
     };
@@ -130,7 +143,13 @@ describe('registerBuiltInSurfaces', () => {
     const surface = registry.get('persona-assignment')!(
       { type: 'persona-assignment', personaId: 'coder' },
       'conv-1',
-      { spawnBackend, swarm: undefined, targetBeaconId: 'beacon-9' }
+      {
+        spawnBackend,
+        swarm: undefined,
+        targetBeaconId: 'beacon-9',
+        mode: 'active',
+        catchUpIntervalMs: 900_000,
+      }
     );
     await surface.handleMessage({
       adapterId: 'a',
@@ -150,6 +169,8 @@ describe('registerBuiltInSurfaces', () => {
         throw new Error('boom');
       }),
       sendMessage: vi.fn(),
+      exportContext: vi.fn(),
+      importContext: vi.fn(),
       terminateSession: vi.fn(),
       type: 'local' as const,
     };
@@ -158,7 +179,12 @@ describe('registerBuiltInSurfaces', () => {
     const surface = registry.get('persona-assignment')!(
       { type: 'persona-assignment', personaId: 'coder' },
       'conv-1',
-      { spawnBackend, swarm: undefined }
+      {
+        spawnBackend,
+        swarm: undefined,
+        mode: 'active',
+        catchUpIntervalMs: 900_000,
+      }
     );
     const result = await surface.handleMessage({
       adapterId: 'a',

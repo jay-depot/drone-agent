@@ -5,6 +5,12 @@ import { RoomEvent } from 'matrix-js-sdk';
 import { openGatewayDb } from '../store/db.js';
 import { SqliteCryptoStore } from '../store/sqlite-crypto-store.js';
 import { SqliteSyncStore } from '../store/sqlite-sync-store.js';
+import {
+  createContextSnapshotStore,
+  createOutboundLedger,
+  type ContextSnapshotStore,
+  type OutboundLedgerHandle,
+} from '../store/gateway-state-store.js';
 import type { GatewayDatabase } from '../store/db.js';
 import type { IRoomTimelineData } from 'matrix-js-sdk/lib/models/event-timeline-set.js';
 import type {
@@ -81,6 +87,8 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
   private msgHandler: ((msg: AdapterMessage) => void) | null = null;
   private started = false;
   private db: GatewayDatabase | null = null;
+  snapshotStore?: ContextSnapshotStore;
+  outboundLedger?: OutboundLedgerHandle;
 
   /**
    * Track the last event per conversation for read receipts.
@@ -145,6 +153,8 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
       this.db = openGatewayDb(dataPath);
       clientOpts.store = new SqliteSyncStore(this.db);
       clientOpts.cryptoStore = new SqliteCryptoStore(this.db);
+      this.snapshotStore = createContextSnapshotStore(this.db);
+      this.outboundLedger = createOutboundLedger(this.db);
     }
 
     // Create the Matrix client
@@ -235,6 +245,13 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
     const body: string = (content?.body as string) || '';
     if (!body) return;
 
+    const mentionIds = (
+      content?.['m.mentions'] as { user_ids?: string[] } | undefined
+    )?.user_ids;
+    const mentionsBot = Array.isArray(mentionIds)
+      ? mentionIds.includes(this.config.userId)
+      : false;
+
     if (!room) return;
 
     const roomId = room.roomId;
@@ -266,10 +283,15 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
       senderId: sender,
       senderName,
       conversationKind: isDM ? 'dm' : 'room',
+      platformRef: event.getId(),
+      mentionsBot,
     });
   }
 
-  async sendMessage(conversationId: string, text: string): Promise<void> {
+  async sendMessage(
+    conversationId: string,
+    text: string
+  ): Promise<string | undefined> {
     if (!this.client) {
       throw new Error('Matrix adapter not started');
     }
@@ -307,18 +329,21 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
     const rendered = this.markdownRenderer.render(text);
 
     // Send the message with HTML formatting
+    let eventId: string | undefined;
     try {
       if (rendered.formattedBody) {
-        await this.client.sendHtmlMessage(
+        const res = await this.client.sendHtmlMessage(
           roomId,
           rendered.body,
           rendered.formattedBody
         );
+        eventId = res?.event_id;
       } else {
-        await this.client.sendMessage(roomId, {
+        const res = await this.client.sendMessage(roomId, {
           body: rendered.body,
           msgtype: 'm.text' as never,
         });
+        eventId = res?.event_id;
       }
     } finally {
       // Stop typing notification
@@ -328,6 +353,8 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
         // Best-effort
       }
     }
+
+    return eventId;
   }
 
   async stop(): Promise<void> {
@@ -357,6 +384,8 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
       this.db = null;
     }
 
+    this.snapshotStore = undefined;
+    this.outboundLedger = undefined;
     this.client = null;
     this.started = false;
     this.lastEvent.clear();
