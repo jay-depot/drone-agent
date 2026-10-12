@@ -36,7 +36,13 @@ function makeCtx(
   backend: SpawnBackend,
   overrides: Partial<SurfaceContext> = {}
 ): SurfaceContext {
-  return { spawnBackend: backend, swarm: undefined, ...overrides };
+  return {
+    spawnBackend: backend,
+    swarm: undefined,
+    ...overrides,
+    mode: overrides.mode ?? 'active',
+    catchUpIntervalMs: overrides.catchUpIntervalMs ?? 900_000,
+  };
 }
 
 function makeExport(marker: string): DronePortableContextExport {

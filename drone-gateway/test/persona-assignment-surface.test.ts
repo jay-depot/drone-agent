@@ -1,7 +1,14 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { createPersonaAssignmentSurface } from '../src/surfaces/persona-assignment.js';
 import { DEFAULT_IDLE_TIMEOUT_MS } from '../src/surfaces/lifecycle.js';
-import { NO_RESPONSE_SENTINEL, ROOM_INSTRUCTION } from '../src/chat-format.js';
+import {
+  CANCEL_SENTINEL,
+  MENTION_INSTRUCTION,
+  NO_RESPONSE_SENTINEL,
+  OBSERVER_INSTRUCTION,
+  ROOM_INSTRUCTION,
+} from '../src/chat-format.js';
+import { logger } from '../src/logger.js';
 import type { SpawnBackend, SendMessageOptions } from '../src/spawn-backend.js';
 import type { SurfaceContext } from '../src/surfaces/types.js';
 import type { AdapterMessage, SpawnSession } from '../src/types.js';
@@ -37,6 +44,8 @@ function makeSurface(
     spawnBackend: backend,
     swarm: undefined,
     ...ctxOverrides,
+    mode: ctxOverrides.mode ?? 'active',
+    catchUpIntervalMs: ctxOverrides.catchUpIntervalMs ?? 900_000,
   };
   return createPersonaAssignmentSurface(
     { type: 'persona-assignment', personaId: 'coder', ...specOverrides },
@@ -91,6 +100,8 @@ describe('createPersonaAssignmentSurface', () => {
       createPersonaAssignmentSurface({ type: 'persona-assignment' }, 'conv-1', {
         spawnBackend: {} as never,
         swarm: undefined,
+        mode: 'active',
+        catchUpIntervalMs: 900_000,
       })
     ).toThrow('persona-assignment control surface requires personaId');
   });
@@ -356,6 +367,280 @@ describe('createPersonaAssignmentSurface', () => {
       );
       expect(sentOpts(backend)).toEqual({ systemReminder: ROOM_INSTRUCTION });
       expect(ledger.remove).toHaveBeenCalledWith([7]);
+    });
+  });
+
+  describe('observer mode', () => {
+    it('buffers messages and never sends until the catch-up timer fires', async () => {
+      const backend = makeBackend();
+      const surface = makeSurface(backend, {
+        mode: 'observer',
+        catchUpIntervalMs: 1000,
+      });
+
+      const first = await surface.handleMessage(msg('one'));
+      const second = await surface.handleMessage(
+        msg('two', { senderName: 'Bob', senderId: '@bob:x' })
+      );
+
+      expect(backend.sendMessage).not.toHaveBeenCalled();
+      expect(backend.spawnSession).not.toHaveBeenCalled();
+      expect(first).toEqual({ response: null, handled: true });
+      expect(second).toEqual({ response: null, handled: true });
+
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(backend.sendMessage).toHaveBeenCalledTimes(1);
+      expect(sentText(backend)).toBe(
+        '[- from: Alice]\none\n[- from: Bob]\ntwo'
+      );
+      expect(sentOpts(backend)).toEqual({
+        systemReminder: OBSERVER_INSTRUCTION,
+      });
+    });
+
+    it('still discards a buffered message after a flush returned text', async () => {
+      const backend = makeBackend(); // returns 'hello back'
+      const surface = makeSurface(backend, {
+        mode: 'observer',
+        catchUpIntervalMs: 1000,
+      });
+
+      await surface.handleMessage(msg('one'));
+      await vi.advanceTimersByTimeAsync(1000);
+
+      // A fresh ingest after a text-returning flush is still silent.
+      const result = await surface.handleMessage(msg('two'));
+      expect(result).toEqual({ response: null, handled: true });
+    });
+
+    it('never arms the timer when the catch-up interval is 0', async () => {
+      const backend = makeBackend();
+      const surface = makeSurface(backend, {
+        mode: 'observer',
+        catchUpIntervalMs: 0,
+      });
+
+      await surface.handleBatch?.([msg('one'), msg('two')]);
+      await vi.advanceTimersByTimeAsync(10_000_000);
+
+      expect(backend.sendMessage).not.toHaveBeenCalled();
+      expect(backend.spawnSession).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op on an empty tick (no spawn, no send)', async () => {
+      const backend = makeBackend();
+      const surface = makeSurface(backend, {
+        mode: 'observer',
+        catchUpIntervalMs: 1000,
+      });
+
+      await vi.advanceTimersByTimeAsync(5000);
+
+      expect(backend.spawnSession).not.toHaveBeenCalled();
+      expect(backend.sendMessage).not.toHaveBeenCalled();
+      expect(surface.id).toBe('persona-assignment-conv-1');
+    });
+
+    it('logs (and posts nothing for) an Error: reply from a catch-up turn', async () => {
+      const warn = vi.spyOn(logger, 'warn').mockImplementation(() => logger);
+      const backend = makeBackend({
+        sendMessage: vi.fn(async () => 'Error: boom'),
+      });
+      const surface = makeSurface(backend, {
+        mode: 'observer',
+        catchUpIntervalMs: 1000,
+      });
+
+      await surface.handleMessage(msg('one'));
+      await vi.advanceTimersByTimeAsync(1000);
+
+      const calls = warn.mock.calls.filter(call =>
+        String(call[1]).includes('Agent turn failed')
+      );
+      expect(calls).toHaveLength(1);
+      warn.mockRestore();
+    });
+
+    it('clears the timer on dispose (no further flush)', async () => {
+      const backend = makeBackend();
+      const surface = makeSurface(backend, {
+        mode: 'observer',
+        catchUpIntervalMs: 1000,
+      });
+
+      await surface.handleMessage(msg('one'));
+      await surface.dispose?.();
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(backend.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('drains atomically: an arrival during a flush lands in the next window', async () => {
+      let resolveFirst: (() => void) | undefined;
+      const backend = makeBackend({
+        sendMessage: vi
+          .fn()
+          .mockImplementationOnce(
+            () =>
+              new Promise<string>(resolve => {
+                resolveFirst = () => resolve('first done');
+              })
+          )
+          .mockImplementation(async () => 'second done'),
+      });
+      const surface = makeSurface(backend, {
+        mode: 'observer',
+        catchUpIntervalMs: 1000,
+      });
+
+      await surface.handleMessage(msg('one'));
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(backend.sendMessage).toHaveBeenCalledTimes(1);
+
+      // Arrives while the first flush is still in flight.
+      await surface.handleMessage(msg('two'));
+      resolveFirst?.();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(backend.sendMessage).toHaveBeenCalledTimes(2);
+      expect(sentText(backend, 0)).toBe('[- from: Alice]\none');
+      expect(sentText(backend, 1)).toBe('[- from: Alice]\ntwo');
+    });
+  });
+
+  describe('passive mode', () => {
+    it('buffers, then posts exactly one reply on a mention', async () => {
+      const backend = makeBackend();
+      const surface = makeSurface(backend, {
+        mode: 'passive',
+        catchUpIntervalMs: 1000,
+      });
+
+      await surface.handleMessage(msg('first'));
+      await surface.handleMessage(msg('second', { senderName: 'Bob' }));
+      expect(backend.sendMessage).not.toHaveBeenCalled();
+
+      const result = await surface.handleMessage(
+        msg('hey bot', { mentionsBot: true })
+      );
+
+      expect(backend.sendMessage).toHaveBeenCalledTimes(1);
+      expect(sentText(backend)).toBe(
+        '[- from: Alice]\nfirst\n[- from: Bob]\nsecond\n[- from: Alice]\nhey bot'
+      );
+      expect(sentOpts(backend)).toEqual({
+        systemReminder: MENTION_INSTRUCTION,
+      });
+      expect(result).toEqual({ response: 'hello back', handled: true });
+    });
+
+    it('discards the reply of an ordinary (non-mention) timer flush', async () => {
+      const backend = makeBackend();
+      const surface = makeSurface(backend, {
+        mode: 'passive',
+        catchUpIntervalMs: 1000,
+      });
+
+      const result = await surface.handleMessage(msg('first'));
+      expect(result).toEqual({ response: null, handled: true });
+
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(backend.sendMessage).toHaveBeenCalledTimes(1);
+      expect(sentOpts(backend)).toEqual({
+        systemReminder: OBSERVER_INSTRUCTION,
+      });
+    });
+
+    it('is a no-op on an empty tick', async () => {
+      const backend = makeBackend();
+      makeSurface(backend, { mode: 'passive', catchUpIntervalMs: 1000 });
+
+      await vi.advanceTimersByTimeAsync(5000);
+
+      expect(backend.spawnSession).not.toHaveBeenCalled();
+      expect(backend.sendMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reply-block and sentinel handling by mode', () => {
+    it('posts nothing and logs when an active turn is cancelled', async () => {
+      const info = vi.spyOn(logger, 'info').mockImplementation(() => logger);
+      const backend = makeBackend({
+        sendMessage: vi.fn(async () => CANCEL_SENTINEL),
+      });
+      const surface = makeSurface(backend);
+
+      const result = await surface.handleMessage(msg('hi'));
+
+      expect(result).toEqual({ response: null, handled: true });
+      const cancelled = info.mock.calls.filter(call =>
+        String(call[1]).includes('cancelled')
+      );
+      expect(cancelled).toHaveLength(1);
+      info.mockRestore();
+    });
+
+    it('posts nothing when a mention round is cancelled', async () => {
+      const backend = makeBackend({
+        sendMessage: vi.fn(async () => CANCEL_SENTINEL),
+      });
+      const surface = makeSurface(backend, {
+        mode: 'passive',
+        catchUpIntervalMs: 1000,
+      });
+
+      const result = await surface.handleMessage(
+        msg('hey bot', { mentionsBot: true })
+      );
+
+      expect(result).toEqual({ response: null, handled: true });
+    });
+
+    it('returns an Error: reply in active mode but not in a discarding mode', async () => {
+      const activeBackend = makeBackend({
+        sendMessage: vi.fn(async () => 'Error: boom'),
+      });
+      const activeSurface = makeSurface(activeBackend);
+      const activeResult = await activeSurface.handleMessage(msg('hi'));
+      expect(activeResult).toEqual({ response: 'Error: boom', handled: true });
+
+      const passiveBackend = makeBackend({
+        sendMessage: vi.fn(async () => 'Error: boom'),
+      });
+      const passiveSurface = makeSurface(passiveBackend, {
+        mode: 'passive',
+        catchUpIntervalMs: 1000,
+      });
+      const passiveResult = await passiveSurface.handleMessage(
+        msg('hey bot', { mentionsBot: true })
+      );
+      expect(passiveResult).toEqual({ response: null, handled: true });
+    });
+
+    it('ignores mentionsBot in active mode', async () => {
+      const backend = makeBackend();
+      const surface = makeSurface(backend);
+
+      const result = await surface.handleMessage(
+        msg('hi', { mentionsBot: true })
+      );
+
+      expect(result).toEqual({ response: 'hello back', handled: true });
+      expect(backend.sendMessage).toHaveBeenCalledTimes(1);
+      expect(sentOpts(backend)).toBeUndefined();
+    });
+
+    it('uses the room reminder for an active room mention (unchanged)', async () => {
+      const backend = makeBackend();
+      const surface = makeSurface(backend);
+
+      await surface.handleMessage(
+        msg('hi', { conversationKind: 'room', mentionsBot: true })
+      );
+
+      expect(sentOpts(backend)).toEqual({ systemReminder: ROOM_INSTRUCTION });
     });
   });
 });

@@ -38,6 +38,11 @@ export interface AdapterMessage {
    * id). Echoed by surfaces; the seam a future reaction/reply feature targets.
    */
   platformRef?: string;
+  /**
+   * True when this inbound message `@`-mentions the gateway bot's own identity
+   * (Matrix `m.mentions`). Adapter-stamped; surfaces treat it as opaque truth.
+   */
+  mentionsBot?: boolean;
 }
 
 // === Control Surface Interface ===

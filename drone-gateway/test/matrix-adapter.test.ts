@@ -516,6 +516,122 @@ describe('MatrixServiceAdapter', () => {
 
       expect(messages).toHaveLength(0);
     });
+
+    it('stamps mentionsBot when m.mentions includes the bot userId', async () => {
+      adapter = new MatrixServiceAdapter('matrix-1', {
+        homeserverUrl: 'https://matrix.org',
+        accessToken: 'syt_token',
+        userId: '@bot:matrix.org',
+      });
+
+      const messages: AdapterMessage[] = [];
+      adapter.onMessage(msg => messages.push(msg));
+
+      await adapter.start();
+
+      const timelineHandler = mockOn.mock.calls.find(
+        call => call[0] === 'Room.timeline'
+      )?.[1];
+
+      const room = makeRoomStub();
+      const event = makeEventStub({
+        getContent: vi.fn().mockReturnValue({
+          body: '@bot hello',
+          'm.mentions': { user_ids: ['@bot:matrix.org'] },
+        }),
+      });
+
+      timelineHandler(event, room, false, false, { liveEvent: true });
+
+      expect(messages).toHaveLength(1);
+      expect(messages[0].mentionsBot).toBe(true);
+    });
+
+    it('leaves mentionsBot false when m.mentions names someone else', async () => {
+      adapter = new MatrixServiceAdapter('matrix-1', {
+        homeserverUrl: 'https://matrix.org',
+        accessToken: 'syt_token',
+        userId: '@bot:matrix.org',
+      });
+
+      const messages: AdapterMessage[] = [];
+      adapter.onMessage(msg => messages.push(msg));
+
+      await adapter.start();
+
+      const timelineHandler = mockOn.mock.calls.find(
+        call => call[0] === 'Room.timeline'
+      )?.[1];
+
+      const room = makeRoomStub();
+      const event = makeEventStub({
+        getContent: vi.fn().mockReturnValue({
+          body: 'hey @alice',
+          'm.mentions': { user_ids: ['@alice:matrix.org'] },
+        }),
+      });
+
+      timelineHandler(event, room, false, false, { liveEvent: true });
+
+      expect(messages).toHaveLength(1);
+      expect(messages[0].mentionsBot).toBe(false);
+    });
+
+    it('leaves mentionsBot false when there is no m.mentions', async () => {
+      adapter = new MatrixServiceAdapter('matrix-1', {
+        homeserverUrl: 'https://matrix.org',
+        accessToken: 'syt_token',
+        userId: '@bot:matrix.org',
+      });
+
+      const messages: AdapterMessage[] = [];
+      adapter.onMessage(msg => messages.push(msg));
+
+      await adapter.start();
+
+      const timelineHandler = mockOn.mock.calls.find(
+        call => call[0] === 'Room.timeline'
+      )?.[1];
+
+      const room = makeRoomStub();
+      const event = makeEventStub();
+
+      timelineHandler(event, room, false, false, { liveEvent: true });
+
+      expect(messages).toHaveLength(1);
+      expect(messages[0].mentionsBot).toBe(false);
+    });
+
+    it('does not throw on a malformed m.mentions', async () => {
+      adapter = new MatrixServiceAdapter('matrix-1', {
+        homeserverUrl: 'https://matrix.org',
+        accessToken: 'syt_token',
+        userId: '@bot:matrix.org',
+      });
+
+      const messages: AdapterMessage[] = [];
+      adapter.onMessage(msg => messages.push(msg));
+
+      await adapter.start();
+
+      const timelineHandler = mockOn.mock.calls.find(
+        call => call[0] === 'Room.timeline'
+      )?.[1];
+
+      const room = makeRoomStub();
+      const event = makeEventStub({
+        getContent: vi.fn().mockReturnValue({
+          body: 'hi',
+          'm.mentions': { user_ids: 'not-an-array' },
+        }),
+      });
+
+      expect(() =>
+        timelineHandler(event, room, false, false, { liveEvent: true })
+      ).not.toThrow();
+      expect(messages).toHaveLength(1);
+      expect(messages[0].mentionsBot).toBe(false);
+    });
   });
 
   describe('sendMessage', () => {

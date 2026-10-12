@@ -245,6 +245,13 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
     const body: string = (content?.body as string) || '';
     if (!body) return;
 
+    const mentionIds = (
+      content?.['m.mentions'] as { user_ids?: string[] } | undefined
+    )?.user_ids;
+    const mentionsBot = Array.isArray(mentionIds)
+      ? mentionIds.includes(this.config.userId)
+      : false;
+
     if (!room) return;
 
     const roomId = room.roomId;
@@ -277,6 +284,7 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
       senderName,
       conversationKind: isDM ? 'dm' : 'room',
       platformRef: event.getId(),
+      mentionsBot,
     });
   }
 

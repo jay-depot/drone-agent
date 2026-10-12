@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CANCEL_SENTINEL,
+  MENTION_INSTRUCTION,
   NO_RESPONSE_SENTINEL,
+  OBSERVER_INSTRUCTION,
   ROOM_INSTRUCTION,
   OUTBOUND_LEDGER_PREAMBLE,
+  composeSystemReminder,
   formatChatTurn,
   formatOutboundPost,
+  isCancelled,
   isNoResponse,
 } from '../src/chat-format.js';
 
@@ -106,5 +111,68 @@ describe('isNoResponse', () => {
 describe('ROOM_INSTRUCTION', () => {
   it('names the sentinel so the model knows the exact token', () => {
     expect(ROOM_INSTRUCTION).toContain(NO_RESPONSE_SENTINEL);
+  });
+});
+
+describe('composeSystemReminder', () => {
+  it('keeps ROOM_INSTRUCTION for an active room turn', () => {
+    expect(composeSystemReminder('active', 'room', false)).toBe(
+      ROOM_INSTRUCTION
+    );
+    expect(composeSystemReminder('active', 'room', true)).toBe(
+      ROOM_INSTRUCTION
+    );
+  });
+
+  it('returns no reminder for an active DM turn', () => {
+    expect(composeSystemReminder('active', 'dm', false)).toBeUndefined();
+    expect(composeSystemReminder('active', 'dm', true)).toBeUndefined();
+  });
+
+  it('uses the observation instruction for every observer turn', () => {
+    expect(composeSystemReminder('observer', 'dm', false)).toBe(
+      OBSERVER_INSTRUCTION
+    );
+    expect(composeSystemReminder('observer', 'room', false)).toBe(
+      OBSERVER_INSTRUCTION
+    );
+    expect(composeSystemReminder('observer', 'room', true)).toBe(
+      OBSERVER_INSTRUCTION
+    );
+  });
+
+  it('uses the mention instruction for a passive mention round', () => {
+    expect(composeSystemReminder('passive', 'room', true)).toBe(
+      MENTION_INSTRUCTION
+    );
+    expect(composeSystemReminder('passive', 'dm', true)).toBe(
+      MENTION_INSTRUCTION
+    );
+  });
+
+  it('uses the observation instruction for an ordinary passive round', () => {
+    expect(composeSystemReminder('passive', 'room', false)).toBe(
+      OBSERVER_INSTRUCTION
+    );
+    expect(composeSystemReminder('passive', 'dm', false)).toBe(
+      OBSERVER_INSTRUCTION
+    );
+  });
+});
+
+describe('isCancelled', () => {
+  it('is the exact sentinel literal', () => {
+    expect(CANCEL_SENTINEL).toBe('__CANCELLED__');
+  });
+
+  it('matches the sentinel modulo surrounding whitespace', () => {
+    expect(isCancelled('__CANCELLED__')).toBe(true);
+    expect(isCancelled('  __CANCELLED__  ')).toBe(true);
+  });
+
+  it('does not match other text', () => {
+    expect(isCancelled('')).toBe(false);
+    expect(isCancelled('a normal reply')).toBe(false);
+    expect(isCancelled('__CANCELLED__ but more')).toBe(false);
   });
 });

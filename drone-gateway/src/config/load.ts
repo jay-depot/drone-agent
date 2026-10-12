@@ -12,6 +12,7 @@ import type {
   ControlSurfaceSpec,
   ControlApiConfig,
 } from '../types.js';
+import { isSurfaceMode, SURFACE_MODES } from '../surfaces/mode.js';
 import {
   SPAWNING_SURFACES,
   SURFACES_REQUIRING_COORDINATOR,
@@ -74,7 +75,9 @@ function sanitizeNonNegativeNumber(
  * On a non-spawning surface it is warned about and dropped. `workingDir`
  * must be an absolute path; `lifecycle.idleTimeoutMs` and `batch.debounceMs`
  * must be non-negative numbers. Invalid values for those are warned about
- * and dropped.
+ * and dropped. `mode` must be a valid `SurfaceMode` (a hard error otherwise —
+ * a typo must not silently make a notetaker chatty); `catchUp.intervalMs` must
+ * be a non-negative number and is warned about and dropped otherwise.
  */
 function sanitizeSurfaceConfig(
   type: string,
@@ -155,6 +158,39 @@ function sanitizeSurfaceConfig(
         else bag.debounceMs = sanitized;
       }
       rest.batch = bag;
+    }
+  }
+
+  const mode = rest.mode;
+  if (mode !== undefined && !isSurfaceMode(mode)) {
+    throw new Error(
+      `Control surface type "${type}" in "${file}" (conversation ` +
+        `"${convId}", adapter "${adapterId}") has an invalid mode "${String(mode)}" ` +
+        `(expected one of: ${SURFACE_MODES.join(', ')}).`
+    );
+  }
+
+  const catchUp = rest.catchUp;
+  if (catchUp !== undefined) {
+    if (
+      typeof catchUp !== 'object' ||
+      catchUp === null ||
+      Array.isArray(catchUp)
+    ) {
+      warn('catchUp is not an object; ignoring');
+      delete rest.catchUp;
+    } else {
+      const bag = { ...(catchUp as Record<string, unknown>) };
+      if (bag.intervalMs !== undefined) {
+        const sanitized = sanitizeNonNegativeNumber(
+          bag.intervalMs,
+          'intervalMs',
+          warn
+        );
+        if (sanitized === undefined) delete bag.intervalMs;
+        else bag.intervalMs = sanitized;
+      }
+      rest.catchUp = bag;
     }
   }
 

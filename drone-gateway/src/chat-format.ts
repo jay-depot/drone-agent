@@ -1,4 +1,5 @@
 import type { AdapterMessage } from './types.js';
+import type { SurfaceMode } from './surfaces/mode.js';
 
 /** The exact reply an agent sends to decline to respond. */
 export const NO_RESPONSE_SENTINEL = '<<NO_RESPONSE>>';
@@ -11,6 +12,44 @@ export const ROOM_INSTRUCTION =
   'actually warranted — answer only if you have something useful to contribute, or if you\n' +
   'are directly addressed. If no response is warranted, reply with exactly <<NO_RESPONSE>>\n' +
   'and nothing else; your reply will not be sent.';
+
+/**
+ * The per-turn instruction for a silent observation round (observer, and a
+ * passive conversation's ordinary catch-up).
+ */
+export const OBSERVER_INSTRUCTION =
+  'You are observing this conversation as a silent notetaker. Other people are talking to\n' +
+  'each other. Do NOT reply in chat. Use your tools to record anything worth remembering\n' +
+  '(notes, memories, wiki pages, todos); anything you would say is for your own records only.';
+
+/** The per-turn instruction for a passive conversation's mention round. */
+export const MENTION_INSTRUCTION =
+  'You have been mentioned in this conversation. In addition to your usual observation,\n' +
+  'you MUST reply to the last message, addressing the person who mentioned you.';
+
+/** `'__CANCELLED__'` — the soft-cancel sentinel produced by a cancelled agent turn. */
+export const CANCEL_SENTINEL = '__CANCELLED__';
+
+/** True when a reply is the soft-cancel sentinel (never post it). */
+export function isCancelled(reply: string): boolean {
+  return reply.trim() === CANCEL_SENTINEL;
+}
+
+/**
+ * The non-persisted system reminder for a turn, selected by mode. `undefined`
+ * means "no reminder" (a plain active DM turn). In a room an active turn keeps
+ * ROOM_INSTRUCTION; an observer/passive round uses the observation instruction
+ * instead (so the model is told not to reply rather than told it may decline).
+ */
+export function composeSystemReminder(
+  mode: SurfaceMode,
+  kind: 'dm' | 'room',
+  mentioned: boolean
+): string | undefined {
+  if (mode === 'active') return kind === 'room' ? ROOM_INSTRUCTION : undefined;
+  if (mode === 'observer') return OBSERVER_INSTRUCTION;
+  return mentioned ? MENTION_INSTRUCTION : OBSERVER_INSTRUCTION;
+}
 
 /** True when a reply is the decline-to-respond sentinel. Exact match modulo trim. */
 export function isNoResponse(reply: string): boolean {

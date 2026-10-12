@@ -556,6 +556,71 @@ describe('GatewayEngine', () => {
     });
   });
 
+  describe('surface mode resolution', () => {
+    function personaConfig(
+      surfaceConfig: Record<string, unknown> | undefined
+    ): GatewayConfig {
+      return makeMinimalConfig({
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              [
+                'dm:@me:server',
+                conv([
+                  makeConvSpec('persona-assignment', {
+                    personaId: 'me',
+                    ...(surfaceConfig ? { config: surfaceConfig } : {}),
+                  }),
+                ]),
+              ],
+            ]),
+          }),
+        ],
+      });
+    }
+
+    it('describes an explicit mode and logs its catch-up interval', async () => {
+      const info = vi.spyOn(logger, 'info').mockImplementation(() => logger);
+      const engine = makeEngine(
+        personaConfig({ mode: 'observer', catchUp: { intervalMs: 60000 } }),
+        mockSpawnBackend
+      );
+      await engine.start();
+
+      const described = info.mock.calls.find(call =>
+        String(call[1]).includes('surfaces:')
+      );
+      expect(String(described?.[1])).toContain('persona-assignment(local,observer)');
+
+      const catchUpLog = info.mock.calls.find(call =>
+        String(call[1]).includes('catch-up interval')
+      );
+      expect(catchUpLog?.[0]).toMatchObject({
+        mode: 'observer',
+        catchUpIntervalMs: 60000,
+      });
+      info.mockRestore();
+    });
+
+    it('defaults an absent mode to active and the catch-up interval to 15 minutes', async () => {
+      const info = vi.spyOn(logger, 'info').mockImplementation(() => logger);
+      const engine = makeEngine(personaConfig(undefined), mockSpawnBackend);
+      await engine.start();
+
+      const described = info.mock.calls.find(call =>
+        String(call[1]).includes('surfaces:')
+      );
+      expect(String(described?.[1])).toContain('persona-assignment(local,active)');
+      // An active surface logs no catch-up line at all.
+      const catchUpLog = info.mock.calls.find(call =>
+        String(call[1]).includes('catch-up interval')
+      );
+      expect(catchUpLog).toBeUndefined();
+      info.mockRestore();
+    });
+  });
+
   describe('per-conversation serialization', () => {
     it('runs two messages for one conversation serially', async () => {
       const order: string[] = [];

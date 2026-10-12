@@ -17,6 +17,12 @@ import {
   resolveSurfaceSpawnMode,
 } from './surfaces/requirements.js';
 import type { SurfaceContext } from './surfaces/types.js';
+import type { SurfaceMode } from './surfaces/mode.js';
+import {
+  DEFAULT_CATCH_UP_INTERVAL_MS,
+  DEFAULT_SURFACE_MODE,
+  isSurfaceMode,
+} from './surfaces/mode.js';
 import { MessageBatcher } from './batcher.js';
 import {
   UnknownAdapterError,
@@ -130,6 +136,25 @@ export class GatewayEngine {
             .map(s => this.describeSurface(s))
             .join(', ')}`
         );
+        for (const spec of conv.surfaces) {
+          const surfaceMode = this.resolveSurfaceMode(spec);
+          if (surfaceMode === 'active') continue;
+          const catchUp = spec.config?.catchUp as
+            | { intervalMs?: number }
+            | undefined;
+          const intervalMs =
+            catchUp?.intervalMs ?? DEFAULT_CATCH_UP_INTERVAL_MS;
+          logger.info(
+            {
+              adapterId: adapterConfig.id,
+              conversationId: convId,
+              mode: surfaceMode,
+              catchUpIntervalMs: intervalMs,
+            },
+            `Surface "${spec.type}" runs in ${surfaceMode} mode ` +
+              `(catch-up interval ${intervalMs} ms)`
+          );
+        }
         const surfaces = conv.surfaces.map(spec =>
           this.createControlSurface(spec, convId, adapterConfig.id)
         );
@@ -392,9 +417,16 @@ export class GatewayEngine {
     if (!SPAWNING_SURFACES.has(spec.type)) return spec.type;
     const mode = resolveSurfaceSpawnMode(spec);
     const beacon = this.resolveTargetBeaconId(spec);
-    return mode === 'coordinator'
-      ? `${spec.type}(coordinator:${beacon})`
-      : `${spec.type}(local)`;
+    const surfaceMode = this.resolveSurfaceMode(spec);
+    const placement =
+      mode === 'coordinator' ? `coordinator:${beacon}` : 'local';
+    return `${spec.type}(${placement},${surfaceMode})`;
+  }
+
+  /** The surface's delivery-and-reply mode, defaulted to `active`. */
+  private resolveSurfaceMode(spec: ControlSurfaceSpec): SurfaceMode {
+    const raw = spec.config?.mode;
+    return isSurfaceMode(raw) ? raw : DEFAULT_SURFACE_MODE;
   }
 
   /**
@@ -419,6 +451,7 @@ export class GatewayEngine {
   ): SurfaceContext {
     const cfg = spec.config ?? {};
     const lifecycle = cfg.lifecycle as { idleTimeoutMs?: number } | undefined;
+    const catchUp = cfg.catchUp as { intervalMs?: number } | undefined;
     const adapter = this.adapters.get(adapterId);
     return {
       spawnBackend: this.resolveSpawnBackend(spec),
@@ -429,6 +462,9 @@ export class GatewayEngine {
       debounceMs: resolveDebounceMs(cfg, this.config),
       snapshotStore: adapter?.snapshotStore,
       outboundLedger: adapter?.outboundLedger,
+      mode: this.resolveSurfaceMode(spec),
+      catchUpIntervalMs:
+        catchUp?.intervalMs ?? DEFAULT_CATCH_UP_INTERVAL_MS,
     };
   }
 }

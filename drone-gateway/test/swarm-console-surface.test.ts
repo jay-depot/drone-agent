@@ -41,6 +41,8 @@ function makeSurface(ctx: Partial<SurfaceContext>) {
     spawnBackend: {} as never,
     swarm: undefined,
     ...ctx,
+    mode: ctx.mode ?? 'active',
+    catchUpIntervalMs: ctx.catchUpIntervalMs ?? 900_000,
   };
   const surface = createSwarmConsoleSurface(
     { type: 'swarm-console' },
