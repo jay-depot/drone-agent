@@ -6,9 +6,22 @@ import {
   getClientCertFingerprint,
   resolveBeaconIdByFingerprint,
 } from './mtls.js';
-import { getBeaconTrust } from './db/index.js';
+import { getBeaconTrust, getSwarmSession, upsertCapabilityCache } from './db/index.js';
 import { publishMutationEvent } from './ws-pubsub.js';
 import { logger } from './logger.js';
+import {
+  setManifest,
+  clearManifest,
+  recordInjection,
+  removeInjectionRecord,
+  listInjections,
+} from './extension-registry.js';
+import {
+  EXTENSION_PROTOCOL_VERSION,
+  type DroneInjectFrame,
+  type DroneInjectRemoveFrame,
+  type DroneManifestFrame,
+} from 'drone-core';
 
 /**
  * Decide whether a beacon connection over the reverse channel should be
@@ -86,6 +99,8 @@ function unregisterBeaconConnection(beaconId: string): void {
     payload: { beaconId },
   });
   lifecycleHooks.onDisconnected?.(beaconId);
+  // Drop any capability manifest and clean up this node's injections.
+  void cleanupExtension(beaconId);
 }
 
 // Pending command requests awaiting a response: id -> resolver
@@ -98,11 +113,152 @@ export interface CommandResponse {
 }
 
 interface IncomingMessage {
-  type: 'response';
-  id: string;
-  ok: boolean;
+  type: string;
+  id?: string;
+  ok?: boolean;
   status?: number;
   body?: unknown;
+}
+
+/**
+ * Resolve the host beacon of a session target so an injection can be forwarded
+ * to the right node. Falls back to the target itself (the target may be a
+ * beacon id in ad-hoc cases).
+ */
+function resolveHostBeacon(target: string): string | undefined {
+  const session = getSwarmSession(target);
+  return session?.beaconId ?? target;
+}
+
+/** Apply a `manifest` frame: register, cache, and publish a mutation event. */
+function handleManifestFrame(beaconId: string, msg: IncomingMessage): void {
+  const manifest = msg as unknown as DroneManifestFrame;
+  if (manifest.protocolVersion !== EXTENSION_PROTOCOL_VERSION) {
+    logger.warn(
+      `Rejecting manifest from ${beaconId}: protocolVersion ${manifest.protocolVersion} != ${EXTENSION_PROTOCOL_VERSION}`
+    );
+    return;
+  }
+  const normalized = {
+    protocolVersion: manifest.protocolVersion,
+    capabilities: manifest.capabilities ?? [],
+    bundles: manifest.bundles ?? [],
+  };
+  setManifest(beaconId, normalized);
+  upsertCapabilityCache(beaconId, normalized);
+  logger.info(
+    `Extension manifest from ${beaconId}: ${normalized.capabilities.length} capability(ies)`
+  );
+  publishMutationEvent({
+    sessionId: beaconId,
+    eventType: 'extension.manifest',
+    payload: { beaconId },
+  });
+}
+
+/**
+ * Forward a command to a host beacon, fire-and-forget. Injection transport is
+ * best-effort: a missing host beacon or a non-response is logged, never
+ * thrown, and never blocks the inbound frame dispatch.
+ */
+function forwardCommand(
+  hostBeaconId: string,
+  command: string,
+  payload: unknown
+): void {
+  void sendBeaconCommand(hostBeaconId, command, payload).catch((err: unknown) =>
+    logger.warn(`Failed to forward ${command} to ${hostBeaconId}: ${err}`)
+  );
+}
+
+/** Forward an `inject` frame to the target session's host beacon. */
+function handleInjectFrame(beaconId: string, msg: IncomingMessage): void {
+  const frame = msg as unknown as DroneInjectFrame;
+  const hostBeaconId = resolveHostBeacon(frame.target);
+  if (!hostBeaconId) {
+    logger.warn(`inject: unknown target session ${frame.target}`);
+    return;
+  }
+  recordInjection(beaconId, {
+    target: frame.target,
+    injectionId: frame.id,
+    kind: frame.kind,
+    hostBeaconId,
+    tools: frame.tools,
+  });
+  forwardCommand(hostBeaconId, 'inject', { extensionId: beaconId, ...frame });
+}
+
+/** Forward an `inject-remove` frame to the target session's host beacon. */
+function handleInjectRemoveFrame(
+  beaconId: string,
+  msg: IncomingMessage
+): void {
+  const frame = msg as unknown as DroneInjectRemoveFrame;
+  const hostBeaconId = resolveHostBeacon(frame.target);
+  if (!hostBeaconId) {
+    logger.warn(`inject-remove: unknown target session ${frame.target}`);
+    return;
+  }
+  if (frame.injectionId) {
+    removeInjectionRecord(beaconId, frame.target, frame.injectionId);
+  }
+  forwardCommand(hostBeaconId, 'injectRemove', {
+    extensionId: beaconId,
+    ...frame,
+  });
+}
+
+/** Dispatch one inbound node frame. Shared by the live socket + test helper. */
+function dispatchIncoming(beaconId: string, raw: string): void {
+  let msg: IncomingMessage;
+  try {
+    msg = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  switch (msg.type) {
+    case 'response': {
+      if (!msg.id) return;
+      const resolver = pendingRequests.get(msg.id);
+      if (resolver) {
+        pendingRequests.delete(msg.id);
+        resolver({ ok: msg.ok ?? false, status: msg.status, body: msg.body });
+      }
+      return;
+    }
+    case 'manifest':
+      handleManifestFrame(beaconId, msg);
+      return;
+    case 'inject':
+      void handleInjectFrame(beaconId, msg);
+      return;
+    case 'inject-remove':
+      void handleInjectRemoveFrame(beaconId, msg);
+      return;
+    default:
+      return;
+  }
+}
+
+/** Drop a node's manifest and clean up every injection it pushed. */
+async function cleanupExtension(beaconId: string): Promise<void> {
+  const injections = listInjections(beaconId);
+  clearManifest(beaconId);
+  for (const record of injections) {
+    try {
+      await sendBeaconCommand(record.hostBeaconId, 'injectRemove', {
+        extensionId: beaconId,
+        target: record.target,
+        kind: record.kind,
+        injectionId: record.injectionId,
+      });
+    } catch (err) {
+      logger.warn(
+        `injection cleanup for ${beaconId} on ${record.hostBeaconId} failed: ${err}`
+      );
+    }
+  }
 }
 
 /**
@@ -141,24 +297,7 @@ export function registerBeaconWebSocket(app: FastifyInstance): void {
     registerBeaconConnection(beaconId, socket);
 
     socket.on('message', (raw: Buffer) => {
-      let msg: IncomingMessage;
-      try {
-        msg = JSON.parse(raw.toString());
-      } catch {
-        return;
-      }
-      if (msg.type !== 'response' || !msg.id) {
-        return;
-      }
-      const resolver = pendingRequests.get(msg.id);
-      if (resolver) {
-        pendingRequests.delete(msg.id);
-        resolver({
-          ok: msg.ok,
-          status: msg.status,
-          body: msg.body,
-        });
-      }
+      dispatchIncoming(beaconId, raw.toString());
     });
 
     socket.on('close', () => {
@@ -303,6 +442,11 @@ export function _setLifecycleHooks(hooks: {
   lifecycleHooks.onDisconnected = hooks.onDisconnected;
 }
 
+/** Test-only helper: disconnect a single node, firing its close cleanup. */
+export function _disconnectTestConnection(beaconId: string): void {
+  unregisterBeaconConnection(beaconId);
+}
+
 /** Test-only helper: expose whether a beacon is connected, for liveness tests. */
 export function _getConnection(
   beaconId: string
@@ -316,21 +460,8 @@ export function _getConnection(
  * beacon's WebSocket. Used to exercise the response-dispatch path without
  * a live server.
  */
-export function _handleIncomingMessage(raw: string): void {
-  let msg: IncomingMessage;
-  try {
-    msg = JSON.parse(raw);
-  } catch {
-    return;
-  }
-  if (msg.type !== 'response' || !msg.id) {
-    return;
-  }
-  const resolver = pendingRequests.get(msg.id);
-  if (resolver) {
-    pendingRequests.delete(msg.id);
-    resolver({ ok: msg.ok, status: msg.status, body: msg.body });
-  }
+export function _handleIncomingMessage(raw: string, beaconId = 'test'): void {
+  dispatchIncoming(beaconId, raw);
 }
 
 /** For tests: clear all connections and pending requests. */
@@ -348,4 +479,20 @@ export function resetBeaconConnections(): void {
   pendingRequests.clear();
   lifecycleHooks.onConnected = undefined;
   lifecycleHooks.onDisconnected = undefined;
+}
+
+/**
+ * Push an `event` frame to every connected node over its reverse channel.
+ * Best-effort: a send failure is logged, never thrown.
+ */
+export function broadcastBeaconEvent(event: unknown): void {
+  for (const beaconId of getConnectedBeaconIds()) {
+    const conn = connections.get(beaconId);
+    if (!conn) continue;
+    conn.ws.send(JSON.stringify(event), (err?: Error) => {
+      if (err) {
+        logger.warn(`Failed to broadcast event to node ${beaconId}: ${err}`);
+      }
+    });
+  }
 }
