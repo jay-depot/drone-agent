@@ -529,3 +529,58 @@ Review the diff against D1–D9; then run the full validation gate below.
 - `docs/agents/mcp-plugin.md` and `docs/adr/252-*.md` match the shipped behavior.
 - Update the swarm wiki / project memory only if asked; check `.drone-agent/`
   changes into the branch per AGENTS.md.
+
+## Execution Summary (code persona, 2026-10-13) — COMPLETE
+
+Branch: `fix/mcp-double-mount-and-tool-disclosure`. All 9 steps executed; all validation
+criteria pass. ADR 252 written.
+
+### Commits
+- `0d6c9af5` fix(mcp): idempotent serialized tool reconcile + engine tool-availability disclosure
+- `715ce964` test(mcp): cover keyed lock, disclosure, callback split, reconcile idempotency
+- `00fd0f1f` docs(mcp): reconcile/callback-split docs + ADR 252
+- `a58a9236` style: prettier formatting from lint run
+
+### Step outcomes
+1. **drone-core config** — `DroneSessionConfig.announceToolRemovals?: boolean` (default
+   `true` in `createDefaultAgentConfig`), `Type.Optional(Type.Boolean())` in the schema.
+2. **keyed lock** — `shared/file-lock.ts` → `shared/keyed-lock.ts` exporting `withKeyLock`
+   (generic keyed serializing promise chain) + `withPathLock`; deleted `file-lock.ts`;
+   updated importers (`plugins/file.ts`, `self-improvement/file-engine.ts`,
+   `mcp/server-description.ts`, `test/file/concurrency.test.ts`).
+3. **engine disclosure** — `everMountedTools`/`lastNotifiedUnavailable`/`unavailableNoticePending`
+   state; `mountTracked`/`unmountTracked({announce})`/`computeUnavailableTools`/
+   `scheduleUnavailableNotice`; all mount sites routed through `mountTracked` (registration,
+   engine member, `runtime__mount_tool`, portable-context dep); engine-owned footer fragment
+   `unavailable-tools` (`# Unavailable tools`, renders false when empty, cap 20, derived
+   annotation from registry membership); reset on `clearSession()`.
+   **Deviation:** the fragment render guards `config.session?.announceToolRemovals` (optional
+   chaining) because some test configs omit the `session` block entirely.
+4. **already-mounted success** — `runtime__mount_tool` returns
+   `{success:true, alreadyMounted:true, message}`; `/tool mount` logs `Already mounted <name>.`;
+   both keep `Unknown tool` for the truly-unknown case.
+5. **MCP client callback split** — `onStreamReconnected` → `onStreamOpened` (never remounts);
+   `onReconnected` widened to `() => void | Promise<void>` and fired ONLY on stdio respawn
+   (connect-end fire deleted); stdio-respawn fire wrapped in `.catch`.
+6. **MCP plugin reconcile** — `listAndMountTools` → surgical idempotent `reconcileServerTools`;
+   per-server `withKeyLock('mcp:<serverId>')` at all three call sites (ready / reconnected /
+   list_changed); `registeredResourceServers` gates `__list`/`__get` to once per server;
+   `onStreamOpened` added; initial mount keyed.
+7. **tests** — `test/keyed-lock.test.ts` (4), `test/tool-availability-disclosure.test.ts` (9),
+   config tests (2), updated mcp/builtin-commands tests, mcp-client callback test,
+   mcp reconcile-idempotency + helper-once tests.
+8. **docs** — `docs/agents/mcp-plugin.md` updated; `docs/adr/252-*.md` written; ADR index entry.
+9. **validation** — LSP clean (hints only); `pnpm run lint` clean; `pnpm -r run build` clean;
+   `pnpm run typecheck` clean; `pnpm run test` 4012 passed / 14 skipped; `pnpm test:integration`
+   76 passed / 4 skipped (one first-run flake in `agent-beacon.test.ts` heartbeat-timing, passed
+   on re-run; unrelated to this change).
+
+### Notable findings
+- The disclosure fragment MUST guard `config.session` with optional chaining — the MCP test
+  harness builds a partial config with no `session` block, so `config.session.announceToolRemovals`
+  threw `Cannot read properties of undefined`.
+- `test/file/concurrency.test.ts` also imported the old `file-lock.js` (the plan listed only 3
+  importers) — swept via repo-wide grep.
+- Persona premount reaches `registration.unmountTool` (announce); MCP reconcile reaches
+  `registration.unregisterTool`; `/tool unmount` reaches the engine member (announce); only
+  `runtime__unmount_tool` passes `{announce:false}` — D7 coverage verified by grep.
