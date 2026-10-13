@@ -16,7 +16,11 @@ The engine owns this mechanism (`ToolRegistry` in drone-core). The MCP plugin re
 
 ## Server Tool Registration
 
-When an MCP server connects, `listAndMountTools` (in `index.ts`) lists the server's tools and registers each one as an **unmounted** tool named `<serverId>__<tool>`, which the engine prefixes to `mcp__<serverId>__<tool>`. The per-server tool map is kept in `serverToolMaps` for reconnects and fragment rendering.
+When an MCP server connects, `reconcileServerTools` (in `index.ts`) lists the server's tools and registers each one as an **unmounted** tool named `<serverId>__<tool>`, which the engine prefixes to `mcp__<serverId>__<tool>`. The per-server tool map is kept in `serverToolMaps` for reconnects and fragment rendering.
+
+`reconcileServerTools` is **idempotent and surgical**: it diffs the previously registered set (from `serverToolMaps`) against the freshly listed set and unregisters only tools that vanished, registers only tools that appeared, and leaves persisting tools completely untouched (so their engine mount state is preserved). A no-op reconcile — the common case — changes nothing. This is what makes a repeated connect / list-change / reconnect safe: re-registering an already-registered canonical name would throw `Tool already registered` from the engine.
+
+All reconcile call sites (initial mount, stdio respawn, `tools/list_changed`) are serialized per server through `withKeyLock('mcp:<serverId>', …)` (`shared/keyed-lock.ts`). The lock is a **serializing chain, not a coalescer**: a `notifications/tools/list_changed` arriving mid-reconcile re-lists *afterwards* (the list did change), rather than being dropped.
 
 ## Per-Server Helper Tools
 
@@ -25,15 +29,26 @@ Each connected server also gets two regular unmounted tools for its resources an
 - **`mcp__<serverId>__list`** — Lists resources, resource templates, or prompts (`type: "resources" | "resource_templates" | "prompts"`).
 - **`mcp__<serverId>__get`** — Reads a resource by `uri`, or fetches a prompt by `name` (with optional `arguments`).
 
+These helpers are registered **once per server** (tracked in `registeredResourceServers`), so no reconnect or list-change can re-register them and collide.
+
 `mcp__server_status` is registered once at plugin registration time and reports each server's connection state and mounted-tool counts.
 
 Resources and prompts are **not** mounted eagerly — they follow the same deferred pattern as tools.
 
 ## Tool List Change Notifications
 
-When the server sends `notifications/tools/list_changed`, `handleToolsListChanged` performs a surgical per-server update: it diffs the old and new tool names, unmounts tools that no longer exist on the server, and registers newly added ones. Other servers are untouched.
+When the server sends `notifications/tools/list_changed`, `handleToolsListChanged` runs a keyed `reconcileServerTools` for that server only; other servers are untouched. Because the reconcile is surgical, tools that still exist keep their engine mount state.
 
 `registration.unregisterTool(canonicalName)` removes a single tool; `registration.unregisterPluginTools(pluginId)` remains available for bulk removal.
+
+## Reconnect vs. Stream-Open
+
+The client distinguishes two transport events, and the plugin reacts to them differently:
+
+- **`onStreamOpened`** — the GET SSE (server→client notification) stream opened or reopened. The plugin only flips `state.streaming = true` and clears `state.lastStreamError`. It **never** remounts. A streamable-HTTP connect fires this as soon as the GET stream opens — which is the *first* connect, not a reconnect.
+- **`onReconnected`** — a genuine transport reconnect that may have changed the tool surface. It fires **only** on a stdio child respawn, and the plugin reconciles the server's tools there.
+
+An initial connect fires **neither** remount path; the initial mount is the caller's explicit keyed `reconcileServerTools(…, 'ready')` after `createMcpClientConnection` resolves. Both fire-and-forget call sites carry a `.catch`, so a future failure degrades to a log line instead of aborting the process via an unhandled rejection. See ADR 252.
 
 ## Server Descriptions
 
