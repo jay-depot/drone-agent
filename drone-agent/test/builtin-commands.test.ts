@@ -290,7 +290,7 @@ describe('/tool mount/unmount built-in command', () => {
     expect(logger.messages).toContain('Mounted file__read.');
   });
 
-  it('reports an error when mounting an unknown or already-mounted tool', async () => {
+  it('reports an error when mounting an unknown tool', async () => {
     const { registry, ctx, logger } = makeRegistry();
     ctx.line = '/tool mount bogus__tool';
     ctx.args = ['mount', 'bogus__tool'];
@@ -298,9 +298,18 @@ describe('/tool mount/unmount built-in command', () => {
     const result = await toolCmd.handler(ctx);
     expect(result).toBe(true);
     expect(registry.isMounted('bogus__tool')).toBe(false);
-    expect(logger.messages).toContain(
-      'Unknown or already mounted tool: bogus__tool'
-    );
+    expect(logger.messages).toContain('Unknown tool: bogus__tool');
+  });
+
+  it('reports already-mounted when mounting a mounted tool', async () => {
+    const { registry, ctx, logger } = makeRegistry();
+    ctx.line = '/tool mount file__write';
+    ctx.args = ['mount', 'file__write'];
+
+    const result = await toolCmd.handler(ctx);
+    expect(result).toBe(true);
+    expect(registry.isMounted('file__write')).toBe(true);
+    expect(logger.messages).toContain('Already mounted file__write.');
   });
 
   it('unmounts a single mounted tool', async () => {

@@ -8,9 +8,10 @@ import path from 'node:path';
 const queues = new Map<string, Promise<unknown>>();
 
 /**
- * Serialize async operations that share the same key (e.g. a file path).
+ * Serialize async operations that share the same key (e.g. a file path or a
+ * server id). Same-key tasks run in order; different keys run in parallel.
  */
-export async function withFileLock<T>(
+export async function withKeyLock<T>(
   key: string,
   task: () => Promise<T>
 ): Promise<T> {
@@ -35,5 +36,5 @@ export function withPathLock<T>(
   filePath: string,
   task: () => Promise<T>
 ): Promise<T> {
-  return withFileLock(path.resolve(filePath).toLowerCase(), task);
+  return withKeyLock(path.resolve(filePath).toLowerCase(), task);
 }

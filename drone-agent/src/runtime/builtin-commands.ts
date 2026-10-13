@@ -215,9 +215,15 @@ const toolCommand: DroneSlashCommand = {
         ctx.logger.error('/tool mount: no mountTool callback available');
         return true;
       }
+      const alreadyMounted =
+        ctx.engine.listMountedTools?.().some(t => t.name === name) ?? false;
+      if (alreadyMounted) {
+        ctx.logger.info(`Already mounted ${name}.`);
+        return true;
+      }
       const def = ctx.engine.mountTool(name);
       if (!def) {
-        ctx.logger.error(`Unknown or already mounted tool: ${name}`);
+        ctx.logger.error(`Unknown tool: ${name}`);
       } else {
         ctx.logger.info(`Mounted ${name}.`);
       }

@@ -846,5 +846,9 @@
   {
     "timestamp": "2026-10-12T22:26:16.979Z",
     "insight": "TypeBox schema-widening side effect: wrapping a top-level field in `Type.Union([...])` (e.g. `providers` → `Record(...) | Null`) changes the ERROR MESSAGE emitted for a NESTED validation failure inside that field. A pinned test asserting `toThrow(/protocol/)` for a provider entry missing `protocol` started failing with \"Expected union value at /providers\" instead. The behavior (rejection) was preserved; only the message changed. When widening a TypeBox field, expect message-pinning tests on that field's descendants to break, and relax them to a message-OR-shape matcher."
+  },
+  {
+    "timestamp": "2026-10-13T18:35:24.635Z",
+    "insight": "MCP `streamable_http` double-mount crash (fixed in ADR 252): the root cause was a *semantic* mismatch — the transport fired `onReconnected` from two places that are NOT reconnects (the first GET SSE stream-open, and the end of the initial connect), racing the caller's own mount, and the mount path (`listAndMountTools`) was not idempotent, so the second registration threw `Tool already registered` out of a fire-and-forget callback → unhandled rejection → process abort. Two generalizable lessons: (1) name callbacks by the *meaning* of the event, not the transport mechanism — a single `onReconnected` covering \"stream opened\", \"connect finished\", and \"child respawned\" is what allowed an initial connect to trigger a remount path; split it (`onStreamOpened` vs `onReconnected`). (2) Any callback invoked fire-and-forget from a transport must carry a `.catch`, or a future throw becomes a process-killing unhandled rejection far from its cause."
   }
 ]

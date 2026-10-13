@@ -178,6 +178,12 @@ export type DroneSessionConfig = {
    */
   maxImagesPerMessage?: number;
   /**
+   * When true (default), the engine discloses tools that were mounted earlier
+   * in the session but are no longer available, via a footer prompt fragment.
+   * Set false to silence the disclosure entirely.
+   */
+  announceToolRemovals?: boolean;
+  /**
    * Maximum percentage of the context window that a single tool result
    * may consume. Results exceeding this threshold are truncated with a
    * note indicating the original size. Set to 0 to disable.
@@ -649,6 +655,7 @@ export function createDefaultAgentConfig(
       maxToolIterations: 50,
       maxImageSizeBytes: 20 * 1024 * 1024,
       maxImagesPerMessage: 20,
+      announceToolRemovals: true,
       promptOnToolIterationLimit: false,
       maxToolResultTokensPercent: 15,
       guardrail: {

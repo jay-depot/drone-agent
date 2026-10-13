@@ -14,7 +14,7 @@ import { FileGlobBlock } from '../tui/components/FileGlobBlock.js';
 import { renderDiffV2 } from '../shared/diff-renderer.js';
 import { applyPatch, type PatchError } from '../shared/patch-applier.js';
 import { parseUnifiedDiff } from '../shared/unified-diff-parser.js';
-import { withPathLock } from '../shared/file-lock.js';
+import { withPathLock } from '../shared/keyed-lock.js';
 
 /**
  * Wraps a raw Node.js fs error (ENOENT, EACCES, EISDIR, ...) into a clearer
