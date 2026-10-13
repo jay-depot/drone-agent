@@ -13,7 +13,11 @@ import {
   setBeaconVerificationCode,
 } from './coordinator-trust.js';
 import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
-import type { DroneSwarmFragment, ResolvedConfigEntry } from 'drone-core';
+import type {
+  DroneSessionSnapshot,
+  DroneSwarmFragment,
+  ResolvedConfigEntry,
+} from 'drone-core';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
 import type { BeaconIdentity } from 'drone-swarm-common';
 import { enqueueOutbox, upsertSkillFromCoordinator } from './db/index.js';
@@ -119,8 +123,15 @@ export interface CoordinatorClient {
   registerSwarmSession(
     sessionId: string,
     personaId: string | null,
-    interactive?: boolean
+    interactive?: boolean,
+    snapshot?: DroneSessionSnapshot
   ): Promise<void>;
+  invokeExtensionTool(
+    nodeId: string,
+    tool: string,
+    params: unknown,
+    sessionId: string
+  ): Promise<{ ok: boolean; status?: number; body?: unknown }>;
   updateSwarmSessionPersona(
     sessionId: string,
     personaId: string | null
@@ -979,13 +990,15 @@ export function createCoordinatorClient(
     async registerSwarmSession(
       sessionId: string,
       personaId: string | null,
-      interactive?: boolean
+      interactive?: boolean,
+      snapshot?: DroneSessionSnapshot
     ): Promise<void> {
       const body = {
         id: sessionId,
         personaId: personaId ?? undefined,
         beaconId: config.beaconId,
         interactive,
+        snapshot,
       };
       await sendFireAndForget(
         'registerSwarmSession',
@@ -1012,6 +1025,41 @@ export function createCoordinatorClient(
           }
         }
       );
+    },
+
+    async invokeExtensionTool(
+      nodeId: string,
+      tool: string,
+      params: unknown,
+      sessionId: string
+    ): Promise<{ ok: boolean; status?: number; body?: unknown }> {
+      if (!coordinatorTrusted()) {
+        return { ok: false, status: 503, body: { error: 'Swarm not ready' } };
+      }
+      try {
+        const res = await cfetch(
+          `${baseUrl}/api/extensions/${encodeURIComponent(nodeId)}/tools/${encodeURIComponent(tool)}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ params, sessionId }),
+          }
+        );
+        let body: unknown;
+        try {
+          body = await res.json();
+        } catch {
+          body = undefined;
+        }
+        return { ok: res.ok, status: res.status, body };
+      } catch (err) {
+        logger.warn(`Failed to invoke extension tool ${tool}: ${err}`);
+        return {
+          ok: false,
+          status: 503,
+          body: { error: 'Coordinator unavailable' },
+        };
+      }
     },
 
     async updateSwarmSessionPersona(

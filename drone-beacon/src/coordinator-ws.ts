@@ -13,6 +13,11 @@ import {
   handleDeliverMessage,
   handleDeliverUserMessage,
 } from './routes/message-handlers.js';
+import {
+  handleInject,
+  handleInjectRemove,
+  type ExtensionInjectionPayload,
+} from './routes/extension-handlers.js';
 
 /**
  * Beacon-side reverse-channel WebSocket client.
@@ -210,6 +215,24 @@ async function handleCommand(msg: CommandMessage): Promise<void> {
         void triggerCoordinatorSync().catch(err => {
           logger.warn(`fragmentsChanged sync failed: ${err}`);
         });
+        break;
+      }
+      case 'inject': {
+        const result = handleInject(
+          (msg.payload ?? {}) as unknown as ExtensionInjectionPayload
+        );
+        status = result.status;
+        ok = result.status < 400;
+        body = result.body;
+        break;
+      }
+      case 'injectRemove': {
+        const result = handleInjectRemove(
+          (msg.payload ?? {}) as unknown as ExtensionInjectionPayload
+        );
+        status = result.status;
+        ok = result.status < 400;
+        body = result.body;
         break;
       }
       default:
