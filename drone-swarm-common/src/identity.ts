@@ -4,17 +4,23 @@ import path from 'path';
 import crypto from 'crypto';
 import { logger } from './logger.js';
 
-export interface BeaconIdentity {
+/** Default identity filename for beacons; extensions pass `node-identity.json`. */
+export const DEFAULT_IDENTITY_FILENAME = 'beacon-identity.json';
+
+export interface SwarmNodeIdentity {
   id: string;
   publicKey: string; // Base64-encoded
   publicKeyHex: string;
   privateKeyPem: string;
 }
 
+/** Backwards-compatible alias for {@link SwarmNodeIdentity}. */
+export type BeaconIdentity = SwarmNodeIdentity;
+
 /**
- * Generate a new Ed25519 keypair for beacon identity.
+ * Generate a new Ed25519 keypair for swarm node identity.
  */
-export function generateIdentity(id: string): BeaconIdentity {
+export function generateIdentity(id: string): SwarmNodeIdentity {
   const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
 
   const publicKeyDer = publicKey.export({ type: 'spki', format: 'der' });
@@ -42,9 +48,10 @@ export function generateIdentity(id: string): BeaconIdentity {
  */
 export async function loadOrCreateIdentity(
   id: string,
-  configDir: string
-): Promise<BeaconIdentity> {
-  const identityPath = path.join(configDir, 'beacon-identity.json');
+  configDir: string,
+  filename: string = DEFAULT_IDENTITY_FILENAME
+): Promise<SwarmNodeIdentity> {
+  const identityPath = path.join(configDir, filename);
 
   if (existsSync(identityPath)) {
     try {
@@ -56,7 +63,7 @@ export async function loadOrCreateIdentity(
           .createHash('sha256')
           .update(publicKeyDer)
           .digest('hex');
-        logger.info(`Loaded existing identity for beacon: ${id}`);
+        logger.info(`Loaded existing identity for node: ${id}`);
         return {
           id: data.id,
           publicKey: data.publicKey,
@@ -81,7 +88,7 @@ export async function loadOrCreateIdentity(
     privateKeyPem: identity.privateKeyPem,
   };
   await writeFile(identityPath, JSON.stringify(dataToSave, null, 2));
-  logger.info(`Generated and saved new identity for beacon: ${id}`);
+  logger.info(`Generated and saved new identity for node: ${id}`);
 
   return identity;
 }
@@ -89,6 +96,6 @@ export async function loadOrCreateIdentity(
 /**
  * Get the public key in a format suitable for signing.
  */
-export function getSigningKey(identity: BeaconIdentity): crypto.KeyObject {
+export function getSigningKey(identity: SwarmNodeIdentity): crypto.KeyObject {
   return crypto.createPublicKey(identity.privateKeyPem);
 }

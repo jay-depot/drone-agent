@@ -13,9 +13,9 @@ import {
   setBeaconVerificationCode,
 } from './coordinator-trust.js';
 import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
-import type { BeaconIdentity } from './identity.js';
 import type { DroneSwarmFragment, ResolvedConfigEntry } from 'drone-core';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
+import type { BeaconIdentity } from 'drone-swarm-common';
 import { enqueueOutbox, upsertSkillFromCoordinator } from './db/index.js';
 import { getDefaultSpawnRoot, getSpawnRoots } from './spawn-roots.js';
 

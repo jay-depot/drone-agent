@@ -23,6 +23,7 @@
 //   - config-schema.ts     : Config schema and parsing
 //   - wiki-types.ts       : Wiki page types for swarm knowledge base
 //   - swarm-fragment-types.ts : Swarm prompt fragment types
+//   - extension-types.ts  : Swarm extension protocol wire types
 //   - config-keys.ts      : Config key allowlists
 //
 // -----------------------------------------------------------------------
@@ -310,6 +311,23 @@ export {
   BROADCAST_TARGET,
   validateFragmentId,
 } from './swarm-fragment-types.js';
+
+// ── Swarm extension protocol types ───────────────────────────────────
+
+export type {
+  DroneExtensionCapability,
+  DroneExtensionBundle,
+  DroneExtensionManifest,
+  DroneSessionSnapshot,
+  DroneInjectionKind,
+  DroneInjectedToolSelection,
+  DroneInjectFrame,
+  DroneInjectRemoveFrame,
+  DroneManifestFrame,
+  DroneExtensionEventFrame,
+  DroneSessionEndedEvent,
+} from './extension-types.js';
+export { EXTENSION_PROTOCOL_VERSION } from './extension-types.js';
 
 // ── Plugin system types ──────────────────────────────────────────────
 
