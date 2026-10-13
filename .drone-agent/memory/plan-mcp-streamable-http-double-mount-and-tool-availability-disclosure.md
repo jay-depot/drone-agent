@@ -60,7 +60,7 @@ idempotent:
 - **Latent second bug:** `onReconnected`'s unmount loop walks only
   `serverToolMaps` (the MCP tools), never the `mcp__<server>__list` /
   `mcp__<server>__get` resource/prompt helpers registered by
-  `registerResourcePromptTools`. So a *genuine* reconnect re-registers those and
+  `registerResourcePromptTools`. So a _genuine_ reconnect re-registers those and
   collides on them too.
 
 ## 3. Design decisions (locked during planning)
@@ -86,14 +86,14 @@ idempotent:
   - **registers only** tools that appeared,
   - **leaves persisting tools completely untouched** (no re-register, so their
     engine mount state is preserved).
-  Resource/prompt helpers (`__list`/`__get`) are registered **once per server**
-  via a per-server flag, so no reconnect can re-register them.
-  A no-op reconcile (the common case) changes nothing.
+    Resource/prompt helpers (`__list`/`__get`) are registered **once per server**
+    via a per-server flag, so no reconnect can re-register them.
+    A no-op reconcile (the common case) changes nothing.
 - **D4 — Per-server serialization.** All reconcile call sites (initial mount,
   stdio respawn, `list_changed`) are wrapped in a **keyed promise chain** so
   overlapping triggers queue. It is a **serializing chain, not a coalescer**: a
   `notifications/tools/list_changed` arriving mid-reconcile must re-list
-  *afterwards* (the list did change), not be dropped. Primitive: generalize the
+  _afterwards_ (the list did change), not be dropped. Primitive: generalize the
   existing `shared/file-lock.ts` into `shared/keyed-lock.ts` exporting
   `withKeyLock` (key `mcp:<serverId>`).
 - **D5 — Core-level, engine-owned tool-availability disclosure.** The engine
@@ -102,13 +102,13 @@ idempotent:
   fragment, merged into the single trailing `<system-reminder>` message per
   ADR 207. It renders `false` when empty. Sticky (survives turns) but
   non-growing history, and self-heals when a tool returns. This is deliberately
-  *not* a one-shot system reminder (the model re-tries dead tools once it
-  scrolls out — the failure ADR 246 documented) and *not* a stored turn
+  _not_ a one-shot system reminder (the model re-tries dead tools once it
+  scrolls out — the failure ADR 246 documented) and _not_ a stored turn
   (ADR 246's cost).
 - **D6 — Per-entry annotation, derived at render from registry membership.**
   - name still registered (`getTool(name)` defined) →
     `(Automatically unmounted, mount again if needed)`
-  - name gone from the registry → 
+  - name gone from the registry →
     `(Removed from available set, do not attempt to call or mount again)`
 - **D7 — Suppression is per-operation, opt-out, default announce.** The engine's
   removal primitives take `{ announce?: boolean }` (default `true`).
@@ -119,7 +119,7 @@ idempotent:
   - Global kill-switch: `session.announceToolRemovals` (boolean, default `true`).
 - **D8 — Human-facing notice.** When the unavailable set gains names, emit one
   coalesced `notice` conversation event (`[N tool(s) became unavailable]`) so the
-  operator sees it in the TUI. Coalesced at flush time over the *net* delta, so a
+  operator sees it in the TUI. Coalesced at flush time over the _net_ delta, so a
   bulk unmount+remount that nets to zero is silent.
 - **D9 — `mount` on an already-mounted tool is a success.** Both
   `runtime__mount_tool` (returns `{ success: true, alreadyMounted: true, message }`)
@@ -147,7 +147,7 @@ Assigned agent types: `coder` (implementation), `tester` (tests), `reviewer`
   `createDefaultAgentConfig`'s `base`. It is a scalar boolean — no `deepMerge`
   entry needed.
 - `drone-core/src/config-schema.ts`: add `announceToolRemovals:
-  Type.Optional(Type.Boolean())` to the `session: Type.Object({...})` block.
+Type.Optional(Type.Boolean())` to the `session: Type.Object({...})` block.
 - Run `pnpm -r run build` (drone-core resolves via built `dist/`).
 
 ### Step 2 — `coder` · drone-agent: generalize the keyed lock (blocks 6)
@@ -157,15 +157,24 @@ Assigned agent types: `coder` (implementation), `tester` (tests), `reviewer`
   ```ts
   const queues = new Map<string, Promise<unknown>>();
 
-  export async function withKeyLock<T>(key: string, task: () => Promise<T>): Promise<T> {
+  export async function withKeyLock<T>(
+    key: string,
+    task: () => Promise<T>
+  ): Promise<T> {
     const prev = queues.get(key) ?? Promise.resolve();
     const run = prev.then(task, task);
     queues.set(key, run);
-    try { return await run; }
-    finally { if (queues.get(key) === run) queues.delete(key); }
+    try {
+      return await run;
+    } finally {
+      if (queues.get(key) === run) queues.delete(key);
+    }
   }
 
-  export function withPathLock<T>(filePath: string, task: () => Promise<T>): Promise<T> {
+  export function withPathLock<T>(
+    filePath: string,
+    task: () => Promise<T>
+  ): Promise<T> {
     return withKeyLock(path.resolve(filePath).toLowerCase(), task);
   }
   ```
@@ -189,9 +198,14 @@ In `drone-agent/src/runtime/plugin-engine.ts`:
    ```
 2. Add a single mount wrapper and route **every** mount through it:
    ```ts
-   function mountTracked(canonicalName: string): DroneToolDefinition | undefined {
+   function mountTracked(
+     canonicalName: string
+   ): DroneToolDefinition | undefined {
      const def = toolRegistry.mount(canonicalName);
-     if (def) { everMountedTools.add(canonicalName); logToolChange('mount', canonicalName); }
+     if (def) {
+       everMountedTools.add(canonicalName);
+       logToolChange('mount', canonicalName);
+     }
      return def;
    }
    ```
@@ -200,7 +214,10 @@ In `drone-agent/src/runtime/plugin-engine.ts`:
    `mountTool` dep. (Persona premount reaches `registration.mountTool`.)
 3. Add an unmount wrapper with the announce flag:
    ```ts
-   function unmountTracked(canonicalName: string, opts?: { announce?: boolean }): void {
+   function unmountTracked(
+     canonicalName: string,
+     opts?: { announce?: boolean }
+   ): void {
      toolRegistry.unmount(canonicalName);
      logToolChange('unmount', canonicalName);
      if (opts?.announce === false) {
@@ -221,7 +238,8 @@ In `drone-agent/src/runtime/plugin-engine.ts`:
        .filter(name => !mounted.has(name))
        .sort((a, b) => {
          // registry-removed first (do-not-call), then auto-unmounted, each alphabetical
-         const aGone = !toolRegistry.get(a), bGone = !toolRegistry.get(b);
+         const aGone = !toolRegistry.get(a),
+           bGone = !toolRegistry.get(b);
          if (aGone !== bGone) return aGone ? -1 : 1;
          return a.localeCompare(b);
        });
@@ -262,7 +280,10 @@ In `drone-agent/src/runtime/plugin-engine.ts`:
            : `- ${name} (Removed from available set, do not attempt to call or mount again)`
        );
        const extra = unavailable.length - shown.length;
-       if (extra > 0) lines.push(`- …and ${extra} more (call runtime__list_tools for the current set)`);
+       if (extra > 0)
+         lines.push(
+           `- …and ${extra} more (call runtime__list_tools for the current set)`
+         );
        return `# Unavailable tools\n\nThe following tools were available earlier in the session but are no longer available.\n\n${lines.join('\n')}`;
      },
    });
@@ -278,20 +299,42 @@ In `drone-agent/src/runtime/plugin-engine.ts`:
   unknown case:
   ```ts
   if (!toolRegistry.get(toolName)) {
-    return JSON.stringify({ success: false,
-      error: `Unknown tool: ${toolName}. Use runtime__list_tools to see available tools.` }, null, 2);
+    return JSON.stringify(
+      {
+        success: false,
+        error: `Unknown tool: ${toolName}. Use runtime__list_tools to see available tools.`,
+      },
+      null,
+      2
+    );
   }
   if (toolRegistry.isMounted(toolName)) {
-    return JSON.stringify({ success: true, tool: toolName, alreadyMounted: true,
-      message: `${toolName} was already mounted.` }, null, 2);
+    return JSON.stringify(
+      {
+        success: true,
+        tool: toolName,
+        alreadyMounted: true,
+        message: `${toolName} was already mounted.`,
+      },
+      null,
+      2
+    );
   }
-  const result = mountTracked(toolName);   // see Step 3
-  return JSON.stringify({ success: true, tool: toolName, description: result?.description }, null, 2);
+  const result = mountTracked(toolName); // see Step 3
+  return JSON.stringify(
+    { success: true, tool: toolName, description: result?.description },
+    null,
+    2
+  );
   ```
 - `drone-agent/src/runtime/builtin-commands.ts`, `/tool mount` handler:
   ```ts
-  const alreadyMounted = ctx.engine.listMountedTools?.().some(t => t.name === name) ?? false;
-  if (alreadyMounted) { ctx.logger.info(`Already mounted ${name}.`); return true; }
+  const alreadyMounted =
+    ctx.engine.listMountedTools?.().some(t => t.name === name) ?? false;
+  if (alreadyMounted) {
+    ctx.logger.info(`Already mounted ${name}.`);
+    return true;
+  }
   const def = ctx.engine.mountTool(name);
   if (!def) ctx.logger.error(`Unknown tool: ${name}`);
   else ctx.logger.info(`Mounted ${name}.`);
@@ -314,7 +357,10 @@ In `drone-agent/src/plugins/mcp/client.ts`:
   catch:
   ```ts
   void Promise.resolve(options.onReconnected?.()).catch(err =>
-    options.logger.warn(`mcp ${options.serverId} onReconnected failed: ${err instanceof Error ? err.message : String(err)}`));
+    options.logger.warn(
+      `mcp ${options.serverId} onReconnected failed: ${err instanceof Error ? err.message : String(err)}`
+    )
+  );
   ```
 
 ### Step 6 — `coder` · drone-agent: MCP plugin reconcile (depends on 2, 3, 5)
@@ -327,9 +373,14 @@ In `drone-agent/src/plugins/mcp/index.ts`:
 - Rename `listAndMountTools` → `reconcileServerTools` and make it surgical
   (parameter names/signature unchanged: `(serverId, connection, serverConfig, logMessage)`):
   ```ts
-  const oldMap = serverToolMaps.get(serverId) ?? new Map<string, { definition: DroneToolDefinition; mounted: boolean }>();
+  const oldMap =
+    serverToolMaps.get(serverId) ??
+    new Map<string, { definition: DroneToolDefinition; mounted: boolean }>();
   const usedNames = serverUsedNames.get(serverId) ?? new Set<string>();
-  const newMap = new Map<string, { definition: DroneToolDefinition; mounted: boolean }>();
+  const newMap = new Map<
+    string,
+    { definition: DroneToolDefinition; mounted: boolean }
+  >();
 
   const newNames = new Set(tools.map(t => t.name));
   for (const [oldName, entry] of oldMap) {
@@ -340,9 +391,12 @@ In `drone-agent/src/plugins/mcp/index.ts`:
   }
   for (const tool of tools) {
     const existing = oldMap.get(tool.name);
-    if (existing) { newMap.set(tool.name, existing); continue; }  // preserve: no re-register
+    if (existing) {
+      newMap.set(tool.name, existing);
+      continue;
+    } // preserve: no re-register
     const mountedName = `${serverId}__${sanitizeToolSegment(tool.name, usedNames)}`;
-    const toolDef: DroneToolDefinition = { /* as today */ };
+    const toolDef: DroneToolDefinition = {/* as today */};
     registration.registerTool(toolDef);
     newMap.set(tool.name, { definition: toolDef, mounted: false });
   }
@@ -362,7 +416,13 @@ In `drone-agent/src/plugins/mcp/index.ts`:
   keyed reconcile call:
   ```ts
   await withKeyLock(`mcp:${serverId}`, () =>
-    reconcileServerTools(serverId, connection, serverConfigRef, 'tools list changed'));
+    reconcileServerTools(
+      serverId,
+      connection,
+      serverConfigRef,
+      'tools list changed'
+    )
+  );
   ```
   (Its current signature has no `serverConfig`; pass the per-server config that
   the loop already closes over, or key the reconcile by server and look the
@@ -373,7 +433,8 @@ In `drone-agent/src/plugins/mcp/index.ts`:
   const onReconnected = async (): Promise<void> => {
     if (!connection) return;
     await withKeyLock(`mcp:${serverId}`, () =>
-      reconcileServerTools(serverId, connection, serverConfig, 'reconnected'));
+      reconcileServerTools(serverId, connection, serverConfig, 'reconnected')
+    );
   };
   ```
   (No manual unregister loop — reconcile diffs for it.)
@@ -408,7 +469,7 @@ In `drone-agent/src/plugins/mcp/index.ts`:
   - re-mount → fragment renders `false` (absent).
   - `runtime__unmount_tool` → **not** listed.
   - `config.session.announceToolRemovals = false` → never listed.
-  - >20 unavailable → cap line `…and K more`.
+  - > 20 unavailable → cap line `…and K more`.
   - a `notice` event fires once for a burst of removals and is silent for a
     net-zero unmount+remount.
 - **already-mounted:** update `drone-agent/test/mcp.test.ts` "runtime__mount_tool

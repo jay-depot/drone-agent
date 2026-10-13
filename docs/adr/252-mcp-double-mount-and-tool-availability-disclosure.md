@@ -76,7 +76,7 @@ All reconcile call sites (initial mount, stdio respawn, `list_changed`) are
 wrapped in a keyed promise chain (`withKeyLock('mcp:<serverId>', …)`, from the
 generalized `shared/keyed-lock.ts`). It is a **serializing chain, not a
 coalescer**: a `notifications/tools/list_changed` arriving mid-reconcile must
-re-list *afterwards* (the list did change), not be dropped.
+re-list _afterwards_ (the list did change), not be dropped.
 
 ### D5 — Core-level, engine-owned tool-availability disclosure
 
@@ -113,7 +113,7 @@ The engine's removal primitives take `{ announce?: boolean }` (default `true`).
 
 When the unavailable set gains names, one coalesced `notice` conversation event
 (`[N tool(s) became unavailable]`) is emitted so the operator sees it in the
-TUI. Coalesced at flush time over the *net* delta, so a bulk unmount+remount
+TUI. Coalesced at flush time over the _net_ delta, so a bulk unmount+remount
 that nets to zero is silent.
 
 ### D9 — `mount` on an already-mounted tool is a success
@@ -140,7 +140,7 @@ No new registry API was needed. The truly-unknown case still returns
   once the reminder scrolls out of the window (the failure ADR 246 documented).
 - **A stored-turn disclosure.** Permanent context cost for a transient fact
   (ADR 246's cost).
-- **A coalescing in-flight guard.** Coalescing would *drop* a
+- **A coalescing in-flight guard.** Coalescing would _drop_ a
   `list_changed` that arrived mid-reconcile, but the list genuinely changed and
   must be re-listed. A serializing chain is required (D4).
 

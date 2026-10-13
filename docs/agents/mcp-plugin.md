@@ -20,7 +20,7 @@ When an MCP server connects, `reconcileServerTools` (in `index.ts`) lists the se
 
 `reconcileServerTools` is **idempotent and surgical**: it diffs the previously registered set (from `serverToolMaps`) against the freshly listed set and unregisters only tools that vanished, registers only tools that appeared, and leaves persisting tools completely untouched (so their engine mount state is preserved). A no-op reconcile — the common case — changes nothing. This is what makes a repeated connect / list-change / reconnect safe: re-registering an already-registered canonical name would throw `Tool already registered` from the engine.
 
-All reconcile call sites (initial mount, stdio respawn, `tools/list_changed`) are serialized per server through `withKeyLock('mcp:<serverId>', …)` (`shared/keyed-lock.ts`). The lock is a **serializing chain, not a coalescer**: a `notifications/tools/list_changed` arriving mid-reconcile re-lists *afterwards* (the list did change), rather than being dropped.
+All reconcile call sites (initial mount, stdio respawn, `tools/list_changed`) are serialized per server through `withKeyLock('mcp:<serverId>', …)` (`shared/keyed-lock.ts`). The lock is a **serializing chain, not a coalescer**: a `notifications/tools/list_changed` arriving mid-reconcile re-lists _afterwards_ (the list did change), rather than being dropped.
 
 ## Per-Server Helper Tools
 
@@ -45,7 +45,7 @@ When the server sends `notifications/tools/list_changed`, `handleToolsListChange
 
 The client distinguishes two transport events, and the plugin reacts to them differently:
 
-- **`onStreamOpened`** — the GET SSE (server→client notification) stream opened or reopened. The plugin only flips `state.streaming = true` and clears `state.lastStreamError`. It **never** remounts. A streamable-HTTP connect fires this as soon as the GET stream opens — which is the *first* connect, not a reconnect.
+- **`onStreamOpened`** — the GET SSE (server→client notification) stream opened or reopened. The plugin only flips `state.streaming = true` and clears `state.lastStreamError`. It **never** remounts. A streamable-HTTP connect fires this as soon as the GET stream opens — which is the _first_ connect, not a reconnect.
 - **`onReconnected`** — a genuine transport reconnect that may have changed the tool surface. It fires **only** on a stdio child respawn, and the plugin reconciles the server's tools there.
 
 An initial connect fires **neither** remount path; the initial mount is the caller's explicit keyed `reconcileServerTools(…, 'ready')` after `createMcpClientConnection` resolves. Both fire-and-forget call sites carry a `.catch`, so a future failure degrades to a log line instead of aborting the process via an unhandled rejection. See ADR 252.

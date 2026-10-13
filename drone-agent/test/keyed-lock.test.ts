@@ -43,9 +43,9 @@ describe('withKeyLock', () => {
         throw new Error('boom');
       })
     ).rejects.toThrow('boom');
-    await expect(
-      withKeyLock('reject-key', async () => 'ok')
-    ).resolves.toBe('ok');
+    await expect(withKeyLock('reject-key', async () => 'ok')).resolves.toBe(
+      'ok'
+    );
   });
 });
 

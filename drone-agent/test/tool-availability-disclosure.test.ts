@@ -96,8 +96,9 @@ describe('engine tool-availability disclosure', () => {
   });
 
   it('caps the disclosure at 20 entries with an overflow line', async () => {
-    const names = Array.from({ length: 25 }, (_, i) =>
-      `t${String(i).padStart(2, '0')}`
+    const names = Array.from(
+      { length: 25 },
+      (_, i) => `t${String(i).padStart(2, '0')}`
     );
     const engine = engineWithTools(names);
     await engine.initialize();
