@@ -315,6 +315,7 @@ export {
 
 export type {
   DronePlugin,
+  DronePluginStatus,
   DroneToolDefinition,
   DroneToolExecutionContext,
   DronePromptFragment,

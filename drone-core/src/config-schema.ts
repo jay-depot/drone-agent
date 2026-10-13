@@ -14,6 +14,7 @@ import type {
   DroneProviderConfig,
   ProviderConfigValidationResult,
 } from './provider-config-types.js';
+import type { PartialDroneAgentConfig } from './config-types.js';
 import { WELL_KNOWN_MODEL_ROLES } from './model-selection.js';
 export type { ProviderConfigValidationResult };
 
@@ -178,13 +179,24 @@ const McpServerConfigSchema = Type.Union([
 
 export const PartialDroneAgentConfigSchema = Type.Partial(
   Type.Object({
-    enabledPlugins: Type.Array(Type.String()),
+    enabledPlugins: Type.Union([
+      Type.Array(Type.String()),
+      Type.Record(Type.String(), Type.Boolean()),
+      Type.Null(),
+    ]),
     externalPlugins: Type.Optional(Type.Array(Type.String())),
     trustedPlugins: Type.Optional(
-      Type.Record(
-        Type.String(),
-        Type.Union([Type.Literal('trusted'), Type.Literal('untrusted')])
-      )
+      Type.Union([
+        Type.Record(
+          Type.String(),
+          Type.Union([
+            Type.Literal('trusted'),
+            Type.Literal('untrusted'),
+            Type.Null(),
+          ])
+        ),
+        Type.Null(),
+      ])
     ),
     systemPrompt: Type.String(),
     activePersona: Type.Union([Type.String(), Type.Null()]),
@@ -217,7 +229,13 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
         ])
       ),
     }),
-    providers: Type.Record(Type.String(), DroneProviderSchema),
+    providers: Type.Union([
+      Type.Record(
+        Type.String(),
+        Type.Union([DroneProviderSchema, Type.Null()])
+      ),
+      Type.Null(),
+    ]),
     openrouter: Type.Object({
       apiKey: Type.Optional(Type.String()),
       defaultModel: Type.Optional(Type.String()),
@@ -255,7 +273,15 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
       preferExternal: Type.Optional(Type.Boolean()),
       autoInstall: Type.Optional(Type.Boolean()),
       preinstall: Type.Optional(Type.Boolean()),
-      servers: Type.Optional(Type.Record(Type.String(), LspServerConfigSchema)),
+      servers: Type.Optional(
+        Type.Union([
+          Type.Record(
+            Type.String(),
+            Type.Union([LspServerConfigSchema, Type.Null()])
+          ),
+          Type.Null(),
+        ])
+      ),
     }),
     mcp: Type.Object({
       enabled: Type.Optional(Type.Boolean()),
@@ -267,7 +293,15 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
       compatibilityMode: Type.Optional(
         Type.Union([Type.Literal('strict'), Type.Literal('permissive')])
       ),
-      servers: Type.Optional(Type.Record(Type.String(), McpServerConfigSchema)),
+      servers: Type.Optional(
+        Type.Union([
+          Type.Record(
+            Type.String(),
+            Type.Union([McpServerConfigSchema, Type.Null()])
+          ),
+          Type.Null(),
+        ])
+      ),
     }),
     compaction: Type.Object({
       enabled: Type.Optional(Type.Boolean()),
@@ -424,7 +458,7 @@ export function transformEnvVars(
 export function parseConfigWithSchema(
   raw: unknown,
   source: string
-): PartialDroneAgentConfigDecoded {
+): PartialDroneAgentConfig {
   // Use Decode for strict validation (no coercion).
   // If it fails, collect all errors for a descriptive message.
   if (!Value.Check(PartialDroneAgentConfigSchema, raw)) {
@@ -438,7 +472,25 @@ export function parseConfigWithSchema(
     throw new Error(`Invalid config in ${source}: validation failed.`);
   }
   const decoded = Value.Decode(PartialDroneAgentConfigSchema, raw);
-  return transformEnvVars(decoded, source) as PartialDroneAgentConfigDecoded;
+  const interpolated = transformEnvVars(decoded, source) as Record<
+    string,
+    unknown
+  >;
+  normalizeEnabledPlugins(interpolated);
+  return interpolated as PartialDroneAgentConfig;
+}
+
+/**
+ * Normalize a legacy `enabledPlugins` array to the override-map shape so that
+ * every layer carries the map form before the config layers merge.
+ */
+function normalizeEnabledPlugins(decoded: Record<string, unknown>): void {
+  const value = decoded.enabledPlugins;
+  if (Array.isArray(value)) {
+    decoded.enabledPlugins = Object.fromEntries(
+      value.map(id => [id as string, true])
+    );
+  }
 }
 
 /**

@@ -93,6 +93,7 @@ function makeRegistration(env: {
     },
     runWorkflow: async () => ({ toolResult: '{}' }),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   };
 
   return {

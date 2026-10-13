@@ -75,6 +75,7 @@ async function setupBroker(options: {
     runWorkflow: async () => ({ toolResult: '{}' }),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   };
 
   await llmPlugin.register(registration);

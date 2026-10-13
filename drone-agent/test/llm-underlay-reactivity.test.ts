@@ -115,6 +115,7 @@ async function makeHarness(opts: {
     runWorkflow: async () => ({ toolResult: '{}' }),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   };
 
   await llmPlugin.register(registration);

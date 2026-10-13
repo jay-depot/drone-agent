@@ -58,6 +58,7 @@ async function captureBroker(
     runWorkflow: async () => ({ toolResult: '{}' }),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   });
 
   if (!capability) throw new Error('capability not offered');

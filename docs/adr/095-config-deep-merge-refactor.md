@@ -26,6 +26,7 @@ type MergeSpec = {
   deepMerge?: Record<string, MergeSpec>; // Recursive deep merge with nested spec
   replaceNullable?: string[]; // Like replace, but null is a valid value
   mergeArrays?: string[]; // Arrays are merged and deduplicated
+  mergeMaps?: string[]; // Named-entry maps merged entry-by-entry (null entry deletes)
 };
 ```
 
@@ -33,55 +34,66 @@ type MergeSpec = {
 
 ```typescript
 const CONFIG_MERGE_SPEC: MergeSpec = {
-  replace: ['enabledPlugins', 'externalPlugins', 'systemPrompt'],
+  replace: ['externalPlugins', 'systemPrompt'],
   replaceNullable: ['activePersona'],
+  mergeMaps: ['enabledPlugins', 'trustedPlugins', 'providers'],
   merge: [
-    'trustedPlugins',
-    'llm',
     'ollama',
-    'session',
     'compaction',
     'memory',
+    'wakelock',
+    'checkpoint',
+    'herdr',
     'log',
     'terminal',
+    'search',
   ],
   deepMerge: {
     openai: { replace: ['models'] },
     anthropic: { replace: ['models'] },
     openrouter: { replace: ['models'] },
-    lsp: { replace: ['servers'] },
-    mcp: { replace: ['servers'] },
+    lsp: { mergeMaps: ['servers'] },
+    mcp: { mergeMaps: ['servers'] },
     promptFile: { mergeArrays: ['files'] },
-    swarm: { deepMerge: { knowledgeSync: {} } },
+    llm: { deepMerge: { modelRoles: {} } },
+    session: {
+      deepMerge: { guardrail: { deepMerge: {} }, retry: { deepMerge: {} } },
+    },
+    swarm: { deepMerge: { knowledgeSync: {}, sessionImport: {}, memory: {} } },
     tui: { deepMerge: { syntaxHighlighting: { deepMerge: { colors: {} } } } },
   },
 };
 ```
 
+> The `mergeMaps` rule kind replaced the per-map `replace` behavior in ADR 251
+> (`enabledPlugins` became an override map; `lsp.servers`/`mcp.servers` — and,
+> for consistency, `providers`/`trustedPlugins` — became 1-level merges with
+> `null`-delete semantics).
+
 ### Behavior preserved
 
-| Field             | Merge Rule                                                                                | Notes                                    |
-| ----------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `enabledPlugins`  | Replace                                                                                   | Additive behavior is handled by caller   |
-| `externalPlugins` | Replace                                                                                   |                                          |
-| `trustedPlugins`  | Merge objects                                                                             | `{ ...base, ...layer }`                  |
-| `systemPrompt`    | Replace                                                                                   |                                          |
-| `activePersona`   | Replace (nullable)                                                                        | `null` is a valid value (explicit clear) |
-| `llm`             | Spread merge                                                                              |                                          |
-| `ollama`          | Spread merge                                                                              |                                          |
-| `openai`          | Spread merge, replace `models`                                                            | `models` is an array, layer replaces     |
-| `anthropic`       | Spread merge, replace `models`                                                            |                                          |
-| `openrouter`      | Spread merge, replace `models`                                                            |                                          |
-| `session`         | Spread merge                                                                              |                                          |
-| `lsp`             | Spread merge, replace `servers`                                                           | `servers` is a record, layer replaces    |
-| `mcp`             | Spread merge, replace `servers`                                                           |                                          |
-| `compaction`      | Spread merge                                                                              |                                          |
-| `memory`          | Spread merge                                                                              |                                          |
-| `log`             | Spread merge                                                                              |                                          |
-| `terminal`        | Spread merge                                                                              |                                          |
-| `promptFile`      | Spread merge, merge+dedup `files`                                                         | `files` is an array, merged with Set     |
-| `swarm`           | Spread merge, spread merge `knowledgeSync`                                                | Nested object merge                      |
-| `tui`             | Spread merge, spread merge `syntaxHighlighting`, spread merge `syntaxHighlighting.colors` | 3 levels deep                            |
+| Field             | Merge Rule                                                                                | Notes                                                      |
+| ----------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `enabledPlugins`  | `mergeMaps` (entry-level merge; null clears)                                              | Override map over the default plugin base; engine resolves |
+| `externalPlugins` | Replace                                                                                   |                                                            |
+| `trustedPlugins`  | Merge objects                                                                             | `{ ...base, ...layer }`                                    |
+| `systemPrompt`    | Replace                                                                                   |                                                            |
+| `activePersona`   | Replace (nullable)                                                                        | `null` is a valid value (explicit clear)                   |
+| `llm`             | Spread merge                                                                              |                                                            |
+| `ollama`          | Spread merge                                                                              |                                                            |
+| `openai`          | Spread merge, replace `models`                                                            | `models` is an array, layer replaces                       |
+| `anthropic`       | Spread merge, replace `models`                                                            |                                                            |
+| `openrouter`      | Spread merge, replace `models`                                                            |                                                            |
+| `session`         | Spread merge                                                                              |                                                            |
+| `lsp`             | Spread merge, `mergeMaps` `servers`                                                       | `servers` 1-level merge; null entry deletes                |
+| `mcp`             | Spread merge, `mergeMaps` `servers`                                                       |                                                            |
+| `compaction`      | Spread merge                                                                              |                                                            |
+| `memory`          | Spread merge                                                                              |                                                            |
+| `log`             | Spread merge                                                                              |                                                            |
+| `terminal`        | Spread merge                                                                              |                                                            |
+| `promptFile`      | Spread merge, merge+dedup `files`                                                         | `files` is an array, merged with Set                       |
+| `swarm`           | Spread merge, spread merge `knowledgeSync`                                                | Nested object merge                                        |
+| `tui`             | Spread merge, spread merge `syntaxHighlighting`, spread merge `syntaxHighlighting.colors` | 3 levels deep                                              |
 
 ### TypeScript consideration
 

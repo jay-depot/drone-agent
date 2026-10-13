@@ -357,7 +357,7 @@ describe('terminalPlugin', () => {
         error: () => {},
       } as DroneLogger,
       getConfig: () => ({
-        enabledPlugins: ['terminal'],
+        enabledPlugins: { terminal: true },
         externalPlugins: [],
         trustedPlugins: {},
         systemPrompt: '',
@@ -513,6 +513,7 @@ describe('terminalPlugin', () => {
       runWorkflow: async () => ({ toolResult: '{}' }),
       getCliFlags: () => ({}),
       requestElicitation: () => undefined,
+      listPlugins: () => [],
     };
 
     await terminalPlugin.register(mockRegistration);

@@ -834,5 +834,17 @@
   {
     "timestamp": "2026-10-12T02:26:37.594Z",
     "insight": "drone-gateway tests are still not covered by any standard type gate (see the 2026-10-12 insight about tsconfig.test.json excluding drone-gateway). A concrete new instance: adding REQUIRED `mode`/`catchUpIntervalMs` members to `SurfaceContext` broke five test files, and the ONLY gate that surfaced it was the connected TypeScript LSP (`lsp__get_diagnostics`); `pnpm -r run build`, `pnpm typecheck`, `pnpm run lint`, and `vitest` were all green. Worse, the failures were subtle: `const ctx: SurfaceContext = { ...defaults, ...partialOverrides }` reports TS2322 because the spread taints the required members as `T | undefined` — the fix is to place defaults AFTER the spread (`mode: o.mode ?? 'active'`). Until drone-gateway/{src,test} is added to a typecheck project, the LSP sweep on every changed gateway test file is mandatory after any shared-interface change."
+  },
+  {
+    "timestamp": "2026-10-12T22:26:16.972Z",
+    "insight": "Mechanical test-sweep script footgun: converting `enabledPlugins: ['id']` array literals to map form (`{ id: true }`) with a regex that emits BARE identifiers silently breaks any plugin id containing a hyphen (`opt-in`, `self-improvement`, `skill-provider-project`) — a bare `self-improvement:` is a syntax error. A one-pass regex missed these and produced 12+ parse errors. Correct assumption: any generated object literal key derived from a string must be quoted (`'opt-in': true`). A second pass quoting `[A-Za-z_$][\\w$-]*-[\\w$-]*` keys fixed it. Prefer quoted keys universally for generated map literals."
+  },
+  {
+    "timestamp": "2026-10-12T22:26:16.977Z",
+    "insight": "Adding a member to the shared `DronePluginRegistration` interface (`listPlugins`) required editing 44 hand-rolled mock registrations across 38 test files. The `requestElicitation`-field anchor worked only because every hand-rolled mock happens to carry that field; the sweep still had to also catch multi-line array literals hidden inside `as unknown as` casts (mcp.test.ts) and helper functions taking a `string[]` param. `tsc -p tsconfig.test.json` is the authoritative gate for this — vitest does NOT typecheck, so a missed mock fails the type gate, not the test run. This reinforces the existing project principle: sweep every registration mock on any interface change; the connected TS LSP + `tsc -p tsconfig.test.json` are the tools that find them."
+  },
+  {
+    "timestamp": "2026-10-12T22:26:16.979Z",
+    "insight": "TypeBox schema-widening side effect: wrapping a top-level field in `Type.Union([...])` (e.g. `providers` → `Record(...) | Null`) changes the ERROR MESSAGE emitted for a NESTED validation failure inside that field. A pinned test asserting `toThrow(/protocol/)` for a provider entry missing `protocol` started failing with \"Expected union value at /providers\" instead. The behavior (rejection) was preserved; only the message changed. When widening a TypeBox field, expect message-pinning tests on that field's descendants to break, and relax them to a message-OR-shape matcher."
   }
 ]

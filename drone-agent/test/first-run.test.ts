@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDefaultAgentConfig, type DroneAgentConfig } from 'drone-core';
 import { runFirstRunSetup } from '../src/first-run.js';
 
 const { mkdirMock, writeFileMock, askMock } = vi.hoisted(() => ({
@@ -71,35 +70,27 @@ describe('runFirstRunSetup', () => {
     delete process.env['ANTHROPIC_API_KEY'];
   });
 
-  it('writes enabledPlugins and appends selected provider when missing', async () => {
+  it('writes the selected provider as an enabledPlugins override', async () => {
     askMock.mockResolvedValueOnce({ provider: 'openai' });
     askMock.mockResolvedValueOnce({ apiKey: 'sk-test-openai' });
     askMock.mockResolvedValueOnce({ model: 'gpt-4o' });
 
     const setModel = vi.fn();
-    const config: DroneAgentConfig = createDefaultAgentConfig();
 
     await runFirstRunSetup(
       makeEngineWithoutOllama() as never,
       makeConversation(setModel) as never,
-      makeLogger() as never,
-      config,
-      ['startup', 'llm', 'ollama']
+      makeLogger() as never
     );
 
     const written = getWrittenConfig();
-    expect(written['enabledPlugins']).toEqual([
-      'startup',
-      'llm',
-      'ollama',
-      'openai',
-    ]);
+    expect(written['enabledPlugins']).toEqual({ openai: true });
     expect((written['llm'] as { active: string }).active).toBe('openai/gpt-4o');
     expect(process.env['OPENAI_API_KEY']).toBe('sk-test-openai');
     expect(setModel).toHaveBeenCalledWith('gpt-4o');
   });
 
-  it('does not duplicate provider when already in defaults', async () => {
+  it('writes exactly one override entry for the chosen provider', async () => {
     askMock.mockResolvedValueOnce({ provider: 'openai' });
     askMock.mockResolvedValueOnce({ apiKey: 'sk-test-openai' });
     askMock.mockResolvedValueOnce({ model: 'gpt-4.1' });
@@ -107,14 +98,12 @@ describe('runFirstRunSetup', () => {
     await runFirstRunSetup(
       makeEngineWithoutOllama() as never,
       makeConversation() as never,
-      makeLogger() as never,
-      createDefaultAgentConfig(),
-      ['startup', 'llm', 'openai']
+      makeLogger() as never
     );
 
     const written = getWrittenConfig();
-    const enabled = written['enabledPlugins'] as string[];
-    expect(enabled.filter(id => id === 'openai')).toHaveLength(1);
+    const enabled = written['enabledPlugins'] as Record<string, boolean>;
+    expect(enabled).toEqual({ openai: true });
   });
 
   it('writes enabledPlugins for OpenRouter and Anthropic branches', async () => {
@@ -125,17 +114,11 @@ describe('runFirstRunSetup', () => {
     await runFirstRunSetup(
       makeEngineWithoutOllama() as never,
       makeConversation() as never,
-      makeLogger() as never,
-      createDefaultAgentConfig(),
-      ['startup', 'llm']
+      makeLogger() as never
     );
 
     const openRouterConfig = getWrittenConfig();
-    expect(openRouterConfig['enabledPlugins']).toEqual([
-      'startup',
-      'llm',
-      'openrouter',
-    ]);
+    expect(openRouterConfig['enabledPlugins']).toEqual({ openrouter: true });
     expect((openRouterConfig['llm'] as { active: string }).active).toBe(
       'openrouter/openai/gpt-4o'
     );
@@ -148,17 +131,11 @@ describe('runFirstRunSetup', () => {
     await runFirstRunSetup(
       makeEngineWithoutOllama() as never,
       makeConversation() as never,
-      makeLogger() as never,
-      createDefaultAgentConfig(),
-      ['startup', 'llm']
+      makeLogger() as never
     );
 
     const anthropicConfig = getWrittenConfig();
-    expect(anthropicConfig['enabledPlugins']).toEqual([
-      'startup',
-      'llm',
-      'anthropic',
-    ]);
+    expect(anthropicConfig['enabledPlugins']).toEqual({ anthropic: true });
     expect((anthropicConfig['llm'] as { active: string }).active).toBe(
       'anthropic/claude-sonnet-4-6'
     );

@@ -92,6 +92,7 @@ export function captureRegistration(): {
     runWorkflow: async () => ({ toolResult: '{}' }),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
     mountTool: () => undefined,
     unmountTool: () => {},
     listMountedTools: () => [],

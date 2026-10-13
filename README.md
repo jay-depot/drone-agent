@@ -76,19 +76,14 @@ Alternatively, you can write the user config manually. The minimum required conf
       }
     }
   },
-  "enabledPlugins": [
-    "startup",
-    "config",
-    "llm",
-    "anthropic",
-    "file",
-    "exec",
-    "git",
-    "fetch",
-    "search",
-    "compaction",
-    "log"
-  ]
+  "enabledPlugins": {
+    "anthropic": true,
+    "file": true,
+    "exec": true,
+    "git": true,
+    "fetch": true,
+    "search": true
+  }
 }
 ```
 
@@ -107,19 +102,14 @@ Alternatively, you can write the user config manually. The minimum required conf
       }
     }
   },
-  "enabledPlugins": [
-    "startup",
-    "config",
-    "llm",
-    "openai",
-    "file",
-    "exec",
-    "git",
-    "fetch",
-    "search",
-    "compaction",
-    "log"
-  ]
+  "enabledPlugins": {
+    "openai": true,
+    "file": true,
+    "exec": true,
+    "git": true,
+    "fetch": true,
+    "search": true
+  }
 }
 ```
 
@@ -137,19 +127,14 @@ Alternatively, you can write the user config manually. The minimum required conf
       }
     }
   },
-  "enabledPlugins": [
-    "startup",
-    "config",
-    "llm",
-    "openrouter",
-    "file",
-    "exec",
-    "git",
-    "fetch",
-    "search",
-    "compaction",
-    "log"
-  ]
+  "enabledPlugins": {
+    "openrouter": true,
+    "file": true,
+    "exec": true,
+    "git": true,
+    "fetch": true,
+    "search": true
+  }
 }
 ```
 
@@ -168,23 +153,18 @@ Alternatively, you can write the user config manually. The minimum required conf
       }
     }
   },
-  "enabledPlugins": [
-    "startup",
-    "config",
-    "llm",
-    "ollama",
-    "file",
-    "exec",
-    "git",
-    "fetch",
-    "search",
-    "compaction",
-    "log"
-  ]
+  "enabledPlugins": {
+    "ollama": true,
+    "file": true,
+    "exec": true,
+    "git": true,
+    "fetch": true,
+    "search": true
+  }
 }
 ```
 
-The `enabledPlugins` list above is a reasonable baseline. Note that a non-empty `enabledPlugins` list replaces the default-enabled plugin set, so it must include the `llm` broker and the protocol plugin matching your provider entry's `protocol` field. See the plugin list in the Design Principles section for the full set of built-in plugins you can enable. The `config-library/` directory contains example configs, skills, macros, and personas to use as a starting point.
+The `enabledPlugins` map above is a reasonable baseline. Note that `enabledPlugins` is a sparse override map layered over the default-enabled plugin set (`true` force-enables, `false` force-disables, absent means no opinion), so you only name the plugins you add or remove — the `llm` broker and the built-in defaults stay enabled unless you set them to `false`. Be sure to enable the protocol plugin matching your provider entry's `protocol` field, as the example does. See the plugin list in the Design Principles section for the full set of built-in plugins you can enable. The `config-library/` directory contains example configs, skills, macros, and personas to use as a starting point.
 
 ### Swarm Configuration
 
@@ -194,7 +174,7 @@ If you are running a swarm, you will need a `.drone-agent/config.json` on each m
 
 - Minimalist: The core agent should be as minimal as possible, with most of the functionality provided through plugins. This allows users to have a very lightweight agent if they want, and only add the functionality they need. More importantly, it means we're not opinionated about _how_ basic functionality gets done. `drone-agent` provides a rich set of built-in plugins: MCP client, LSP server connections, file operations, git tools, shell execution, HTTP fetch, text search, project memory, persona management, skills management, session logging, context compaction, TODO list management, subagent spawning, swarm coordination, macros, focus management, config management, self-improvement (insights/principles), prompt file injection, startup banner, and utility tools. Almost none of it is enabled by default though, because `drone-agent` should still work, even if you replace any of these components with one that better aligns with your needs or opinions.
 - Model-centric: `drone-agent` doesn't come with hundreds of lines of built in system prompts. In fact by default it doesn't come with any, except the enabled tools. Turns out, the LLM can usually figure it out with just those, and skills/prompts are only really needed to fill in gaps, and those gaps usually need to be discovered.
-- Project-first: `drone-agent` applies configuration in a layered cascade: **default → user → project** (last-write-wins per key, except `enabledPlugins` which is additive at the project level). When the swarm plugin is active, beacon and coordinator config values are injected as additional underlays via the `DroneConfigInjector` capability, not through the file-based config loader. Only the user level and below can specify loaded plugins, and project level plugins are added to user-level plugins, rather than replacing them. This allows projects to, for example, define the project-level memory system it wants to use, so that project memory could be meaningfully shared in version control.
+- Project-first: `drone-agent` applies configuration in a layered cascade: **default → user → project** (last-write-wins per key). `enabledPlugins` is a sparse override **map** merged per-key over the default plugin base — a more-local layer names only the plugins it adds (`true`) or removes (`false`), rather than restating the whole set. When the swarm plugin is active, beacon and coordinator config values are injected as additional underlays via the `DroneConfigInjector` capability, not through the file-based config loader. This allows projects to, for example, define the project-level memory system it wants to use, so that project memory could be meaningfully shared in version control.
 - Single-user swarm: The swarm is designed to work with a single human, meaning that all agents in the swarm are expected to be working for the same user. If you are trying to set up coordination between multiple users, you would want to set up separate swarms for each user, and then have each set up to connect to an MCP server that is designed for multi-user coordination.
 
 ## Config Library

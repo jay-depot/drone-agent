@@ -361,6 +361,51 @@ describe('config plugin', () => {
       expect(parsed.key).toBe('session.retry.maxRetries');
     });
 
+    it('accepts wildcard enabledPlugins.<id> keys and writes a boolean', async () => {
+      const { projectDir } = await setupDirs();
+      process.chdir(projectDir);
+
+      const engine = createTestEngine({
+        plugins: [configPlugin],
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+
+      await engine.initialize();
+
+      const result = await engine.executeTool('config__set', {
+        key: 'enabledPlugins.self-improvement',
+        value: true,
+      });
+      const parsed = JSON.parse(toToolResultContent(result));
+      expect(parsed.ok).toBe(true);
+      expect(parsed.key).toBe('enabledPlugins.self-improvement');
+
+      const { readFile } = await import('node:fs/promises');
+      const written = JSON.parse(await readFile(parsed.filePath, 'utf-8'));
+      expect(written.enabledPlugins['self-improvement']).toBe(true);
+    });
+
+    it('rejects a bare enabledPlugins. prefix with no id', async () => {
+      const { projectDir } = await setupDirs();
+      process.chdir(projectDir);
+
+      const engine = createTestEngine({
+        plugins: [configPlugin],
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+
+      await engine.initialize();
+
+      await expect(
+        engine.executeTool('config__set', {
+          key: 'enabledPlugins.',
+          value: true,
+        })
+      ).rejects.toThrow(/Unknown config key/);
+    });
+
     it('rejects invalid scope values', async () => {
       const { projectDir } = await setupDirs();
       process.chdir(projectDir);

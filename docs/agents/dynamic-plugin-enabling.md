@@ -12,4 +12,4 @@ The plugin engine supports `enablePlugin(pluginId)` — dynamically enabling and
 
 ## CLI Flag
 
-The `--plugin` CLI flag enables plugins for the current session by merging plugin IDs into the `enabledPlugins` config before engine initialization. Supports comma-separated names (`--plugin bootstrap,lsp,git`) and repeated flags.
+The `--plugin` CLI flag enables plugins for the current session by writing a `true` override entry into the `enabledPlugins` map (`{ "<id>": true }`) before engine initialization. That override beats an explicit `false` from a config layer and merges over the built-in default plugin set. Supports comma-separated names (`--plugin bootstrap,lsp,git`) and repeated flags.

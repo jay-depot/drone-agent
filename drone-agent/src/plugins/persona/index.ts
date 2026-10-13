@@ -385,8 +385,8 @@ export const personaPlugin: DronePlugin = {
       }
 
       const swarmEnabled = registration
-        .getConfig()
-        .enabledPlugins.includes('swarm');
+        .listPlugins()
+        .some(p => p.id === 'swarm' && p.enabled);
       const message = swarmEnabled
         ? `persona "${candidate}" not found. Swarm personas are loaded, but ` +
           `none has id "${candidate}" — check the id and its scope ` +

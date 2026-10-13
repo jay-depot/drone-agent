@@ -63,6 +63,7 @@ function makeRegistration(): DronePluginRegistration {
     runWorkflow: async () => ({ toolResult: '{}' }),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   };
 }
 

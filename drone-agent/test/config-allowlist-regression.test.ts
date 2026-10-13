@@ -45,7 +45,7 @@ describe('config setValue real write path (llm.active regression)', () => {
         error: () => {},
       },
       getConfig: () => ({
-        enabledPlugins: [],
+        enabledPlugins: {},
         systemPrompt: '',
         activePersona: null,
         llm: { provider: 'ollama' },
@@ -82,6 +82,7 @@ describe('config setValue real write path (llm.active regression)', () => {
       runWorkflow: async () => ({ toolResult: '{}' }),
       getCliFlags: () => ({}),
       requestElicitation: () => undefined,
+      listPlugins: () => [],
     };
 
     // The config plugin registers its capability during register().

@@ -76,6 +76,7 @@ function captureRegistration(): {
     runWorkflow: async () => ({ toolResult: '{}' }),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   };
   return {
     registration,
@@ -227,6 +228,7 @@ describe('search plugin — semantic exclude passthrough', () => {
       runWorkflow: async () => ({ toolResult: '{}' }),
       getCliFlags: () => ({}),
       requestElicitation: () => undefined,
+      listPlugins: () => [],
     };
 
     await searchPlugin.register(registration);
@@ -399,6 +401,7 @@ describe('search plugin — /search-files slash command', () => {
       runWorkflow: async () => ({ toolResult: '{}' }),
       getCliFlags: () => ({}),
       requestElicitation: () => undefined,
+      listPlugins: () => [],
     };
     return { registration, slashCommands };
   }

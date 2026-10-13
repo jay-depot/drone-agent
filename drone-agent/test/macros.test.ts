@@ -441,7 +441,7 @@ describe('macrosPlugin', () => {
         plugins: [macrosPlugin],
         config: {
           ...createDefaultAgentConfig(),
-          enabledPlugins: ['macros'],
+          enabledPlugins: { macros: true },
         },
         logger: silentLogger(),
       });
@@ -464,7 +464,7 @@ describe('macrosPlugin', () => {
         plugins: [macrosPlugin],
         config: {
           ...createDefaultAgentConfig(),
-          enabledPlugins: ['macros'],
+          enabledPlugins: { macros: true },
         },
         logger: silentLogger(),
       });
@@ -495,7 +495,7 @@ describe('macrosPlugin', () => {
         plugins: [macrosPlugin],
         config: {
           ...createDefaultAgentConfig(),
-          enabledPlugins: ['macros'],
+          enabledPlugins: { macros: true },
         },
         logger: silentLogger(),
       });
@@ -530,7 +530,7 @@ describe('macrosPlugin', () => {
         plugins: [macrosPlugin],
         config: {
           ...createDefaultAgentConfig(),
-          enabledPlugins: ['macros'],
+          enabledPlugins: { macros: true },
         },
         logger: silentLogger(),
       });
@@ -571,7 +571,7 @@ describe('macrosPlugin', () => {
         plugins: [macrosPlugin],
         config: {
           ...createDefaultAgentConfig(),
-          enabledPlugins: ['macros'],
+          enabledPlugins: { macros: true },
         },
         logger: silentLogger(),
       });
@@ -598,7 +598,7 @@ describe('macrosPlugin', () => {
         plugins: [macrosPlugin],
         config: {
           ...createDefaultAgentConfig(),
-          enabledPlugins: ['macros'],
+          enabledPlugins: { macros: true },
         },
         logger: silentLogger(),
       });
@@ -622,7 +622,7 @@ describe('macrosPlugin', () => {
         plugins: [macrosPlugin],
         config: {
           ...createDefaultAgentConfig(),
-          enabledPlugins: ['macros'],
+          enabledPlugins: { macros: true },
         },
         logger: silentLogger(),
       });
@@ -654,7 +654,7 @@ describe('macrosPlugin', () => {
         plugins: [macrosPlugin],
         config: {
           ...createDefaultAgentConfig(),
-          enabledPlugins: ['macros'],
+          enabledPlugins: { macros: true },
         },
         logger: silentLogger(),
       });
@@ -704,7 +704,7 @@ describe('macrosPlugin', () => {
         plugins: [macrosPlugin],
         config: {
           ...createDefaultAgentConfig(),
-          enabledPlugins: ['macros'],
+          enabledPlugins: { macros: true },
         },
         logger: silentLogger(),
       });

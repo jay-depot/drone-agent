@@ -151,24 +151,34 @@ export const bootstrapPlugin: DronePlugin = {
           };
         }
 
-        // Write enabledPlugins to project config
-        const config = ctx.config as DroneAgentConfig;
-        const existingEnabled = [...config.enabledPlugins];
-        const merged = [...new Set([...existingEnabled, ...selectedPluginIds])];
-
-        // Use config capability if available, otherwise write directly
+        // Write per-plugin `enabledPlugins.<id>` override entries to project
+        // config. The override map merges over the default plugin base, so a
+        // project only needs to name the plugins it adds.
         const configCap =
           ctx.requestCapability<DroneConfigCapability>('config');
         if (configCap) {
-          await configCap.setValue('project', 'enabledPlugins', merged);
+          for (const pluginId of selectedPluginIds) {
+            await configCap.setValue(
+              'project',
+              `enabledPlugins.${pluginId}`,
+              true
+            );
+          }
         } else {
-          // Fallback: write config directly
           const configDir = path.join(cwd, '.drone-agent');
           const configPath = path.join(configDir, 'config.json');
           await mkdir(configDir, { recursive: true });
           await writeFile(
             configPath,
-            JSON.stringify({ enabledPlugins: merged }, null, 2) + '\n',
+            JSON.stringify(
+              {
+                enabledPlugins: Object.fromEntries(
+                  selectedPluginIds.map(id => [id, true])
+                ),
+              },
+              null,
+              2
+            ) + '\n',
             'utf-8'
           );
         }

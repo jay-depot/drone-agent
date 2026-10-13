@@ -59,6 +59,7 @@ function captureDriver(
     runWorkflow: async () => ({}),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   };
   return (async () => {
     await plugin.register(registration);

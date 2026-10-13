@@ -458,7 +458,7 @@ export type DroneMcpConfig = {
 };
 
 export type DroneAgentConfig = {
-  enabledPlugins: string[];
+  enabledPlugins: Record<string, boolean>;
   /** Plugin IDs loaded from external directories (for tracking). */
   externalPlugins: string[];
   /**
@@ -492,20 +492,24 @@ export type DroneAgentConfig = {
 };
 
 export type PartialDroneAgentConfig = Partial<{
-  enabledPlugins: string[];
+  enabledPlugins: Record<string, boolean> | null;
   externalPlugins: string[];
-  trustedPlugins: Record<string, 'trusted' | 'untrusted'>;
+  trustedPlugins: Record<string, 'trusted' | 'untrusted' | null> | null;
   systemPrompt: string;
   activePersona: string | null;
   llm: Partial<DroneLlmConfig>;
-  providers: Partial<Record<string, DroneProviderConfig>>;
+  providers: Record<string, DroneProviderConfig | null> | null;
   ollama: Partial<DroneOllamaConfig>;
   openai: Partial<DroneOpenAiConfig>;
   anthropic: Partial<DroneAnthropicConfig>;
   openrouter: Partial<DroneOpenRouterConfig>;
   session: Partial<DroneSessionConfig>;
-  lsp: Partial<DroneLspConfig>;
-  mcp: Partial<DroneMcpConfig>;
+  lsp: Partial<Omit<DroneLspConfig, 'servers'>> & {
+    servers?: Record<string, DroneLspServerConfig | null> | null;
+  };
+  mcp: Partial<Omit<DroneMcpConfig, 'servers'>> & {
+    servers?: Record<string, DroneMcpServerConfig | null> | null;
+  };
   compaction: Partial<DroneCompactionConfig>;
   memory: Partial<DroneMemoryConfig>;
   wakelock: Partial<DroneWakelockConfig>;
@@ -544,14 +548,10 @@ export type DroneResolvedConfig = {
 // ── Config helper functions ─────────────────────────────────────────
 
 const CONFIG_MERGE_SPEC: MergeSpec = {
-  replace: ['enabledPlugins', 'externalPlugins', 'systemPrompt'],
+  replace: ['externalPlugins', 'systemPrompt'],
   replaceNullable: ['activePersona'],
+  mergeMaps: ['enabledPlugins', 'trustedPlugins', 'providers'],
   merge: [
-    'trustedPlugins',
-    // Entry-level replace: maps merge by key, but any scope defining
-    // `providers.<id>` replaces that whole entry (no intra-entry deep merge —
-    // prevents beacon/local frankensteins).
-    'providers',
     'ollama',
     'compaction',
     'memory',
@@ -566,8 +566,8 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
     openai: { replace: ['models'] },
     anthropic: { replace: ['models'] },
     openrouter: { replace: ['models'] },
-    lsp: { replace: ['servers'] },
-    mcp: { replace: ['servers'] },
+    lsp: { mergeMaps: ['servers'] },
+    mcp: { mergeMaps: ['servers'] },
     promptFile: { mergeArrays: ['files'] },
     // llm scalars (provider/active/reasoningLevel) replace; modelRoles merges
     // per-key so distinct roles from different scopes combine (user sets
@@ -592,7 +592,7 @@ export function createDefaultAgentConfig(
   overrides?: Partial<DroneAgentConfig>
 ): DroneAgentConfig {
   const base: DroneAgentConfig = {
-    enabledPlugins: [],
+    enabledPlugins: {},
     externalPlugins: [],
     trustedPlugins: {},
     systemPrompt:

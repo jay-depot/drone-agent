@@ -61,6 +61,7 @@ function makeCapture(): Capture {
     runWorkflow: async () => ({ toolResult: '{}' }),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   };
   return { registration, tools, contributors };
 }

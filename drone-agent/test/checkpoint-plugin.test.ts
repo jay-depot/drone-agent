@@ -155,6 +155,7 @@ function makeCapture(
     runWorkflow: async () => ({ toolResult: '{}' }),
     getCliFlags: () => pluginFlags,
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   };
   capture.registration = registration;
   return capture;

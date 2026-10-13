@@ -110,6 +110,8 @@ Underlay `${VAR}` templates are resolved receiver-side at session apply time fro
 
 Config files live in `.drone-agent/config.json` at each scope. The config loader (`runtime/config.ts`) walks up the directory tree looking for `.drone-agent/` directories.
 
+`enabledPlugins` is a sparse override **map** (`Record<string, boolean>`), merged per-key across layers and applied by the engine over the built-in default plugin set (`required || defaultEnabled`): `true` force-enables, `false` force-disables, absent means no opinion. `required` plugins and `--plugin`/`--swarm` CLI flags both override an explicit `false`. The named-entry maps `enabledPlugins`, `providers`, `trustedPlugins`, `lsp.servers`, and `mcp.servers` use the `mergeMaps` merge rule (shallow, 1-level; a `null` entry deletes that entry; a `null` whole value clears the map). A legacy array form is tolerated at parse time and rewritten on disk once (with a `.old` backup + advisory notice). See ADR 251.
+
 Key config sections: `enabledPlugins`, `systemPrompt`, `activePersona`, `llm`, `ollama`, `openrouter`, `session`, `lsp`, `mcp`, `compaction`, `memory`, `log`, `promptFile`, `swarm`.
 
 `search.paths[]` entries accept an optional `ragSource?: boolean` (default false). When true, that folder's workspace-file semantic index also feeds the proactive swarm-memory RAG (`swarm.memory`) as an extra candidate source — file hits compete with wiki entries for the same `swarm.memory.topK` slots (no extra slots). The `search` plugin must be enabled for the folder to be registered/indexed. See ADR 245.

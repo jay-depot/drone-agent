@@ -15,6 +15,7 @@ import {
   type DroneElicitation,
   type DroneLogger,
   type DronePlugin,
+  type DronePluginStatus,
   type DronePromptFragment,
   type DroneSessionClearPayload,
   type DroneSessionRecyclePayload,
@@ -41,18 +42,12 @@ import { parseSlashInvocation, stripNowFlag } from './slash-parse.js';
 import { createReferenceCapability } from './reference-expansion/index.js';
 import { createPortableContextCapability } from './portable-context/index.js';
 
+export type { DronePluginStatus } from 'drone-core';
+
 export type RegisteredPluginState = {
   plugin: DronePlugin;
   tools: DroneToolDefinition[];
   prompts: DronePromptFragment[];
-};
-
-export type DronePluginStatus = {
-  id: string;
-  name: string;
-  enabled: boolean;
-  required: boolean;
-  defaultEnabled: boolean;
 };
 
 export type StandardHookName = DroneStandardHookName;
@@ -346,20 +341,17 @@ function resolveEnabledPluginIds(
   config: DroneAgentConfig,
   pluginFlags: Record<string, string | true>
 ): Set<string> {
-  const enabledPluginIds =
-    config.enabledPlugins.length > 0
-      ? new Set(config.enabledPlugins)
-      : new Set(getDefaultEnabledPluginIds(plugins));
+  const enabledPluginIds = new Set(getDefaultEnabledPluginIds(plugins));
 
-  for (const plugin of plugins) {
-    if (plugin.metadata.required) {
-      enabledPluginIds.add(plugin.metadata.id);
-    }
+  for (const [pluginId, on] of Object.entries(config.enabledPlugins)) {
+    if (on === true) enabledPluginIds.add(pluginId);
+    else if (on === false) enabledPluginIds.delete(pluginId);
   }
 
-  // A plugin whose id namespaces a CLI flag is force-enabled, so e.g.
-  // `--swarm.session-import <id>` works without `--swarm` or editing
-  // `enabledPlugins`.
+  for (const plugin of plugins) {
+    if (plugin.metadata.required) enabledPluginIds.add(plugin.metadata.id);
+  }
+
   for (const namespace of pluginFlagNamespaces(pluginFlags)) {
     if (pluginMapIds(plugins).has(namespace)) {
       enabledPluginIds.add(namespace);
@@ -395,11 +387,11 @@ function validatePluginRegistry(
 }
 
 function validateKnownEnabledPlugins(
-  enabledPluginIds: Set<string>,
+  enabledOverrides: Record<string, boolean>,
   pluginMap: Map<string, DronePlugin>
 ): void {
-  for (const pluginId of enabledPluginIds) {
-    if (!pluginMap.has(pluginId)) {
+  for (const [pluginId, on] of Object.entries(enabledOverrides)) {
+    if (on === true && !pluginMap.has(pluginId)) {
       throw new Error(`Config enabled unknown plugin: ${pluginId}`);
     }
   }
@@ -474,7 +466,7 @@ export function createDronePluginEngine({
     config,
     pluginFlags
   );
-  validateKnownEnabledPlugins(enabledPluginIds, pluginMap);
+  validateKnownEnabledPlugins(config.enabledPlugins, pluginMap);
   const sortedPlugins = sortPluginsByDependencies(
     plugins,
     enabledPluginIds,
@@ -736,6 +728,16 @@ export function createDronePluginEngine({
     }
   }
 
+  function listPluginStatuses(): DronePluginStatus[] {
+    return plugins.map(plugin => ({
+      id: plugin.metadata.id,
+      name: plugin.metadata.name,
+      enabled: enabledPluginIds.has(plugin.metadata.id),
+      required: Boolean(plugin.metadata.required),
+      defaultEnabled: Boolean(plugin.metadata.defaultEnabled),
+    }));
+  }
+
   async function registerPlugin(
     plugin: DronePlugin
   ): Promise<RegisteredPluginState> {
@@ -766,6 +768,7 @@ export function createDronePluginEngine({
     await plugin.register({
       logger: pluginLogger,
       getConfig: () => config,
+      listPlugins: () => listPluginStatuses(),
       getCliFlags: () => scopedFlags,
       registerTool: tool => {
         const canonicalName = getCanonicalToolName(
@@ -1240,14 +1243,7 @@ export function createDronePluginEngine({
     listMountedTools: () => toolRegistry.listMounted(),
     getCapability: <T>(pluginId: string) =>
       capabilities.get(pluginId) as T | undefined,
-    listPlugins: () =>
-      plugins.map(plugin => ({
-        id: plugin.metadata.id,
-        name: plugin.metadata.name,
-        enabled: enabledPluginIds.has(plugin.metadata.id),
-        required: Boolean(plugin.metadata.required),
-        defaultEnabled: Boolean(plugin.metadata.defaultEnabled),
-      })),
+    listPlugins: () => listPluginStatuses(),
     getRegisteredPluginCount: () => registeredPlugins.length,
     getRegisteredToolCount: () => toolRegistry.getTotalCount(),
     getMountedToolCount: () => toolRegistry.getMountedCount(),

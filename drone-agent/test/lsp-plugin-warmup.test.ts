@@ -83,6 +83,7 @@ function registerWithCapture(config: DroneLspConfig, warns: string[]) {
     runWorkflow: async () => ({ toolResult: '{}' }),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   };
   lspPlugin.register(registration);
   return hooks;

@@ -134,12 +134,12 @@ export async function createEngine(options?: {
     );
   }
 
-  const enabledPlugins = ['self-improvement'];
+  const enabledPlugins: Record<string, boolean> = { 'self-improvement': true };
   if (options?.personaCapability !== undefined) {
-    enabledPlugins.push('persona');
+    enabledPlugins['persona'] = true;
   }
   if (options?.skillsCapability !== undefined) {
-    enabledPlugins.push('skills');
+    enabledPlugins['skills'] = true;
   }
 
   const engine = createTestEngine({

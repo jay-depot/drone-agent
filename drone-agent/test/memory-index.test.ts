@@ -119,6 +119,7 @@ function createMockRegistration(): {
     runWorkflow: async () => ({ toolResult: '{}' }),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   };
 
   return { registration, captured, logger };

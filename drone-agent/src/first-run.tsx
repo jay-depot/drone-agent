@@ -2,7 +2,6 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { render } from 'ink';
-import type { DroneAgentConfig } from 'drone-core';
 import { ModelPicker } from './tui/components/ModelPicker.js';
 import type { createConversationService } from './runtime/conversation-service.js';
 import type { createDronePluginEngine } from './runtime/plugin-engine.js';
@@ -51,9 +50,7 @@ export function pickModelInteractive(
 export async function runFirstRunSetup(
   engine: CreateDronePluginEngine,
   conversation: CreateConversationService,
-  logger: CreateConsoleLogger,
-  config: DroneAgentConfig,
-  defaultEnabledPlugins: string[]
+  logger: CreateConsoleLogger
 ): Promise<void> {
   const userConfigDir = path.join(os.homedir(), '.drone-agent');
   const userConfigFile = path.join(userConfigDir, 'config.json');
@@ -95,12 +92,11 @@ export async function runFirstRunSetup(
   // Use the readline elicitation to ask the user
   const elicit = createReadlineElicitation();
 
-  const withProviderEnabled = (providerId: string): string[] => {
-    if (defaultEnabledPlugins.includes(providerId)) {
-      return [...defaultEnabledPlugins];
-    }
-    return [...defaultEnabledPlugins, providerId];
-  };
+  const withProviderEnabled = (
+    providerId: string
+  ): Record<string, boolean> => ({
+    [providerId]: true,
+  });
 
   while (true) {
     const answers = await elicit.ask([

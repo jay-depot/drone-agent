@@ -175,7 +175,7 @@ describe('ConfigGetBlock', () => {
       arguments: {},
       status: 'done',
       result: JSON.stringify({
-        enabledPlugins: ['memory'],
+        enabledPlugins: { memory: true },
         _provenance: { source: 'project' },
       }),
     });

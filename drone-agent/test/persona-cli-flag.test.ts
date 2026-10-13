@@ -60,7 +60,7 @@ const swarmStub: DronePlugin = {
 describe('--persona CLI flag', () => {
   it('exposes _runtime capability even without subagent plugin enabled', async () => {
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['persona'];
+    config.enabledPlugins = { persona: true };
     const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
@@ -79,7 +79,7 @@ describe('--persona CLI flag', () => {
 
   it('activates persona from --persona flag via onSessionStart', async () => {
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['persona'];
+    config.enabledPlugins = { persona: true };
     const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
@@ -115,7 +115,7 @@ describe('--persona CLI flag', () => {
 
   it('activates persona from --persona flag even when provider registers after onPluginsLoaded', async () => {
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['persona'];
+    config.enabledPlugins = { persona: true };
     const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
@@ -153,7 +153,7 @@ describe('--persona CLI flag', () => {
 
   it('falls back to config.activePersona when --persona is not provided', async () => {
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['persona'];
+    config.enabledPlugins = { persona: true };
     config.activePersona = 'planner';
     const engine = createTestEngine({
       plugins: [personaPlugin],
@@ -186,7 +186,7 @@ describe('--persona CLI flag', () => {
 
   it('--persona flag takes precedence over config.activePersona', async () => {
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['persona'];
+    config.enabledPlugins = { persona: true };
     config.activePersona = 'planner';
     const engine = createTestEngine({
       plugins: [personaPlugin],
@@ -221,7 +221,7 @@ describe('--persona CLI flag', () => {
 
   it('throws when an explicit --persona id is not found', async () => {
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['persona'];
+    config.enabledPlugins = { persona: true };
     const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
@@ -253,7 +253,7 @@ describe('--persona CLI flag', () => {
 
   it('names the swarm-plugin fix when the explicit persona misses and swarm is disabled', async () => {
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['persona'];
+    config.enabledPlugins = { persona: true };
     const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
@@ -268,7 +268,7 @@ describe('--persona CLI flag', () => {
 
   it('warns (does not throw) for a missing DRONE_PERSONA env persona', async () => {
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['persona'];
+    config.enabledPlugins = { persona: true };
     const previous = process.env.DRONE_PERSONA;
     process.env.DRONE_PERSONA = 'nonexistent';
     try {
@@ -299,7 +299,7 @@ describe('--persona CLI flag', () => {
 
   it('warns (does not throw) for a missing config.activePersona', async () => {
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['persona'];
+    config.enabledPlugins = { persona: true };
     config.activePersona = 'nonexistent';
     const engine = createTestEngine({
       plugins: [personaPlugin],
@@ -323,7 +323,7 @@ describe('--persona CLI flag', () => {
 
   it('uses the swarm-present branch when swarm is enabled', async () => {
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['persona', 'swarm'];
+    config.enabledPlugins = { persona: true, swarm: true };
     const engine = createTestEngine({
       plugins: [personaPlugin, swarmStub],
       config,

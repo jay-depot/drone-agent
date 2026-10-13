@@ -55,6 +55,7 @@ function createMockRegistration(
     runWorkflow: async () => ({}),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
     mountTool: () => undefined,
     unmountTool: () => {},
     unregisterPluginTools: () => {},

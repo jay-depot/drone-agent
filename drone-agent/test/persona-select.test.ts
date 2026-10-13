@@ -50,7 +50,7 @@ function makeMockProvider(
 describe('persona.select tool — graceful error handling', () => {
   it('returns a graceful error with available personas when selecting an unknown id', async () => {
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['persona'];
+    config.enabledPlugins = { persona: true };
     const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
@@ -89,7 +89,7 @@ describe('persona.select tool — graceful error handling', () => {
 
   it('still works for a valid persona id', async () => {
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['persona'];
+    config.enabledPlugins = { persona: true };
     const engine = createTestEngine({
       plugins: [personaPlugin],
       config,
@@ -119,7 +119,7 @@ describe('persona.select tool — graceful error handling', () => {
 
   it('returns graceful error with "(none)" when no personas are loaded', async () => {
     const config = createDefaultAgentConfig();
-    config.enabledPlugins = ['persona'];
+    config.enabledPlugins = { persona: true };
     const engine = createTestEngine({
       plugins: [personaPlugin],
       config,

@@ -286,7 +286,7 @@ async function getCapability(
       error: () => {},
     },
     getConfig: () => ({
-      enabledPlugins: [],
+      enabledPlugins: {},
       systemPrompt: '',
       activePersona: null,
       llm: { provider: 'ollama' },
@@ -435,6 +435,7 @@ async function getCapability(
     runWorkflow: async () => ({ toolResult: '{}' }),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   });
   if (!cap) throw new Error('Capability not offered');
   return { cap, onSessionClear };

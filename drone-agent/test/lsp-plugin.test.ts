@@ -51,6 +51,7 @@ function captureLspTools(): Map<
     runWorkflow: async () => ({ toolResult: '{}' }),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   };
   lspPlugin.register(registration);
   return tools;
@@ -112,6 +113,7 @@ describe('lsp plugin integration', () => {
       runWorkflow: async () => ({ toolResult: '{}' }),
       getCliFlags: () => ({}),
       requestElicitation: () => undefined,
+      listPlugins: () => [],
     };
 
     await lspPlugin.register(registration);

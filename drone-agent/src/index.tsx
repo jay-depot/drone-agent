@@ -18,10 +18,7 @@ import { createConversationService } from './runtime/conversation-service.js';
 import { createContextBudgetService } from './runtime/context-budget-service.js';
 import { loadAgentConfig } from './runtime/config.js';
 import { createReferenceCapability } from './runtime/reference-expansion/index.js';
-import {
-  createDronePluginEngine,
-  getDefaultEnabledPluginIds,
-} from './runtime/plugin-engine.js';
+import { createDronePluginEngine } from './runtime/plugin-engine.js';
 import { createSessionManager } from './runtime/session-manager.js';
 
 import { parseCliArgs } from './cli.js';
@@ -163,35 +160,14 @@ async function main(): Promise<void> {
   const allPlugins = [...builtInPlugins, ...userPlugins, ...projectPlugins];
 
   // ── Plugin overrides from --plugin flag ─────────────────────────────
-  // Merge --plugin overrides into the config's enabledPlugins so that
-  // plugins specified on the CLI are enabled for this session. If
-  // enabledPlugins is empty (default), compute the default set first,
-  // then add the overrides. If it's non-empty (explicit config), just
-  // append the overrides.
-  if (invocation.options.pluginOverrides.length > 0) {
-    if (resolvedConfig.config.enabledPlugins.length === 0) {
-      // Compute the default set: all required or defaultEnabled plugins.
-      const defaultIds = getDefaultEnabledPluginIds(allPlugins);
-      resolvedConfig.config.enabledPlugins = [
-        ...defaultIds,
-        ...invocation.options.pluginOverrides,
-      ];
-    } else {
-      // Config already specifies enabledPlugins — append overrides.
-      resolvedConfig.config.enabledPlugins = [
-        ...resolvedConfig.config.enabledPlugins,
-        ...invocation.options.pluginOverrides,
-      ];
-    }
+  // --plugin and --swarm each write a `true` override entry, which the engine
+  // applies over the default plugin base and which deliberately beats an
+  // explicit `false` from a config layer (a CLI flag is the higher layer).
+  for (const id of invocation.options.pluginOverrides) {
+    resolvedConfig.config.enabledPlugins[id] = true;
   }
-  // --swarm: a beacon-spawned agent. Enable the swarm plugin (it is
-  // defaultEnabled:false) so the agent connects to its beacon and runs in
-  // listen-mode. The plugin is added to enabledPlugins regardless of whether
-  // the user configured a set, mirroring the --plugin override behavior.
   if (invocation.options.swarm) {
-    if (!resolvedConfig.config.enabledPlugins.includes('swarm')) {
-      resolvedConfig.config.enabledPlugins.push('swarm');
-    }
+    resolvedConfig.config.enabledPlugins['swarm'] = true;
   }
   const debugFlags = createDebugFlagRegistry(
     invocation.options.debugSubsystems
@@ -472,13 +448,7 @@ async function main(): Promise<void> {
   if (!hasUserLayer && !invocation.options.modelOverride) {
     const llm = getLlmCapability(engine);
     if (llm) {
-      await runFirstRunSetup(
-        engine,
-        conversation,
-        logger,
-        resolvedConfig.config,
-        getDefaultEnabledPluginIds(allPlugins)
-      );
+      await runFirstRunSetup(engine, conversation, logger);
     }
   }
 

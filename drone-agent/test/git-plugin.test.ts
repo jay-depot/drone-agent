@@ -70,6 +70,7 @@ function captureGitTools(): Map<
     runWorkflow: async () => ({ toolResult: '{}' }),
     getCliFlags: () => ({}),
     requestElicitation: () => undefined,
+    listPlugins: () => [],
   };
   gitPlugin.register(registration);
   return tools;
