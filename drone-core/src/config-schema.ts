@@ -262,6 +262,7 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
       maxToolIterations: Type.Optional(PositiveInteger),
       promptOnToolIterationLimit: Type.Optional(Type.Boolean()),
       maxImagesPerMessage: Type.Optional(PositiveInteger),
+      announceToolRemovals: Type.Optional(Type.Boolean()),
       maxToolResultTokensPercent: Type.Optional(Percent),
       guardrail: Type.Optional(GuardrailSchema),
       retry: Type.Optional(RetrySchema),

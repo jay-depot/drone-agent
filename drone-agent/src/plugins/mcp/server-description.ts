@@ -19,7 +19,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import type { DroneLlmCapability, DroneLogger } from 'drone-core';
-import { withPathLock } from '../../shared/file-lock.js';
+import { withPathLock } from '../../shared/keyed-lock.js';
 
 const PROMPT_VERSION = 2;
 

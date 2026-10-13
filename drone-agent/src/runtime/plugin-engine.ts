@@ -477,6 +477,9 @@ export function createDronePluginEngine({
   const hookBuckets = createHookBuckets();
   const promptFragments: DronePromptFragment[] = [];
   const toolRegistry = new ToolRegistry();
+  const everMountedTools = new Set<string>();
+  let lastNotifiedUnavailable = new Set<string>();
+  let unavailableNoticePending = false;
   const workflows = new Map<string, DroneWorkflow>();
   const promptKeys = new Set<string>();
   const capabilities = new Map<string, unknown>();
@@ -561,6 +564,77 @@ export function createDronePluginEngine({
   };
 
   /**
+   * Mount a tool and remember it was mounted at least once this session. The
+   * disclosure fragment diffs this set against the currently-mounted set.
+   */
+  function mountTracked(
+    canonicalName: string
+  ): DroneToolDefinition | undefined {
+    const def = toolRegistry.mount(canonicalName);
+    if (def) {
+      everMountedTools.add(canonicalName);
+      logToolChange('mount', canonicalName);
+    }
+    return def;
+  }
+
+  /**
+   * Unmount a tool and, unless suppressed, queue the availability notice. A
+   * suppressed unmount (`announce: false`) forgets the tool entirely so the
+   * model's own `runtime__unmount_tool` never appears in the disclosure.
+   */
+  function unmountTracked(
+    canonicalName: string,
+    opts?: { announce?: boolean }
+  ): void {
+    toolRegistry.unmount(canonicalName);
+    logToolChange('unmount', canonicalName);
+    if (opts?.announce === false) {
+      everMountedTools.delete(canonicalName);
+    } else {
+      scheduleUnavailableNotice();
+    }
+  }
+
+  /**
+   * Tools mounted earlier this session that are no longer available, sorted
+   * registry-removed first (do-not-call) then auto-unmounted, each alphabetical.
+   */
+  function computeUnavailableTools(): string[] {
+    const mounted = new Set(toolRegistry.listMounted().map(t => t.name));
+    return [...everMountedTools]
+      .filter(name => !mounted.has(name))
+      .sort((a, b) => {
+        const aGone = !toolRegistry.get(a);
+        const bGone = !toolRegistry.get(b);
+        if (aGone !== bGone) return aGone ? -1 : 1;
+        return a.localeCompare(b);
+      });
+  }
+
+  /**
+   * Coalesce a burst of removals into one notice. The notice is computed over
+   * the net delta at flush time, so a bulk unmount+remount that nets to zero
+   * stays silent.
+   */
+  function scheduleUnavailableNotice(): void {
+    if (unavailableNoticePending) return;
+    unavailableNoticePending = true;
+    queueMicrotask(() => {
+      unavailableNoticePending = false;
+      const current = new Set(computeUnavailableTools());
+      const gained = [...current].filter(n => !lastNotifiedUnavailable.has(n));
+      lastNotifiedUnavailable = current;
+      if (gained.length > 0) {
+        dispatchConversationEvent({
+          kind: 'notice',
+          content: `[${gained.length} tool(s) became unavailable]`,
+        }).catch(err => logger.error(`disclosure notice failed: ${err}`));
+      }
+    });
+  }
+
+  /**
    * The session boundary: snapshot hooks → mechanical clear → id mint →
    * recycle hooks. Steps 1/3/4 run only when the outgoing session had turns,
    * so an empty clear is purely mechanical (no spurious swarm session).
@@ -577,6 +651,8 @@ export function createDronePluginEngine({
       }
     }
     clearConversationFromHost();
+    everMountedTools.clear();
+    lastNotifiedUnavailable = new Set();
     if (hadTurns) {
       const previousSessionId = currentSessionId;
       currentSessionId = `agent-${Date.now()}`;
@@ -870,15 +946,10 @@ export function createDronePluginEngine({
       runWorkflow: (canonicalName, args) => runWorkflow(canonicalName, args),
       requestElicitation: () => elicitationCapability,
       mountTool: (canonicalName: string) => {
-        const def = toolRegistry.mount(canonicalName);
-        if (def) {
-          logToolChange('mount', canonicalName);
-        }
-        return def;
+        return mountTracked(canonicalName);
       },
       unmountTool: (canonicalName: string) => {
-        toolRegistry.unmount(canonicalName);
-        logToolChange('unmount', canonicalName);
+        unmountTracked(canonicalName);
       },
       listMountedTools: () => {
         return toolRegistry.listMounted();
@@ -1012,23 +1083,34 @@ export function createDronePluginEngine({
             );
           }
 
-          const result = toolRegistry.mount(toolName);
-          if (!result) {
+          if (!toolRegistry.get(toolName)) {
             return JSON.stringify(
               {
                 success: false,
-                error: `Unknown or already mounted tool: ${toolName}. Use runtime__list_tools to see available tools.`,
+                error: `Unknown tool: ${toolName}. Use runtime__list_tools to see available tools.`,
               },
               null,
               2
             );
           }
-          logToolChange('mount', toolName);
+          if (toolRegistry.isMounted(toolName)) {
+            return JSON.stringify(
+              {
+                success: true,
+                tool: toolName,
+                alreadyMounted: true,
+                message: `${toolName} was already mounted.`,
+              },
+              null,
+              2
+            );
+          }
+          const result = mountTracked(toolName);
           return JSON.stringify(
             {
               success: true,
               tool: toolName,
-              description: result.description,
+              description: result?.description,
             },
             null,
             2
@@ -1059,8 +1141,7 @@ export function createDronePluginEngine({
             );
           }
 
-          toolRegistry.unmount(toolName);
-          logToolChange('unmount', toolName);
+          unmountTracked(toolName, { announce: false });
           return JSON.stringify({ success: true, tool: toolName }, null, 2);
         },
       },
@@ -1072,6 +1153,38 @@ export function createDronePluginEngine({
       toolRegistry.mount(tool.name);
       logToolChange('mount', tool.name);
     }
+  }
+
+  /**
+   * Register the engine-owned footer fragment disclosing tools that were
+   * available earlier this session but are no longer available. Sticky (it
+   * survives turns) and self-healing: it renders `false` once the unavailable
+   * set is empty again.
+   */
+  function registerUnavailableToolsFragment(): void {
+    promptFragments.push({
+      key: 'unavailable-tools',
+      phase: 'footer',
+      render: async () => {
+        if (config.session.announceToolRemovals === false) return false;
+        const unavailable = computeUnavailableTools();
+        if (unavailable.length === 0) return false;
+        const CAP = 20;
+        const shown = unavailable.slice(0, CAP);
+        const lines = shown.map(name =>
+          toolRegistry.get(name)
+            ? `- ${name} (Automatically unmounted, mount again if needed)`
+            : `- ${name} (Removed from available set, do not attempt to call or mount again)`
+        );
+        const extra = unavailable.length - shown.length;
+        if (extra > 0) {
+          lines.push(
+            `- …and ${extra} more (call runtime__list_tools for the current set)`
+          );
+        }
+        return `# Unavailable tools\n\nThe following tools were available earlier in the session but are no longer available.\n\n${lines.join('\n')}`;
+      },
+    });
   }
 
   async function renderFragmentsByPhase(
@@ -1134,7 +1247,7 @@ export function createDronePluginEngine({
           sessionManager,
           listAllTools: () => toolRegistry.listAll(),
           listMountedTools: () => toolRegistry.listMounted(),
-          mountTool: name => toolRegistry.mount(name),
+          mountTool: name => mountTracked(name),
           isToolRegistered: name => Boolean(toolRegistry.get(name)),
           clearSession,
           getSessionId: () => currentSessionId,
@@ -1154,6 +1267,9 @@ export function createDronePluginEngine({
 
       // Register runtime meta-tools (always available)
       registerRuntimeMetaTools();
+
+      // Register the engine-owned tool-availability disclosure fragment last.
+      registerUnavailableToolsFragment();
 
       // Inject enabled plugin list into system prompt
       const enabledPluginList = Array.from(enabledPluginIds).sort().join(', ');
@@ -1238,8 +1354,8 @@ export function createDronePluginEngine({
     },
     listTools: () => toolRegistry.listMounted(),
     listAllTools: () => toolRegistry.listAll(),
-    mountTool: canonicalName => toolRegistry.mount(canonicalName),
-    unmountTool: canonicalName => toolRegistry.unmount(canonicalName),
+    mountTool: canonicalName => mountTracked(canonicalName),
+    unmountTool: canonicalName => unmountTracked(canonicalName),
     listMountedTools: () => toolRegistry.listMounted(),
     getCapability: <T>(pluginId: string) =>
       capabilities.get(pluginId) as T | undefined,

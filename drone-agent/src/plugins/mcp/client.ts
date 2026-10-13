@@ -720,7 +720,7 @@ function createStreamableHttpJsonRpcClient(options: {
   onNotification: (method: string, params: unknown) => void;
   onRequest?: (method: string, params: unknown) => Promise<unknown>;
   onStreamError: (message: string) => void;
-  onStreamReconnected?: () => void;
+  onStreamOpened?: () => void;
 }): JsonRpcClient {
   let nextId = 1;
   let closed = false;
@@ -761,7 +761,7 @@ function createStreamableHttpJsonRpcClient(options: {
 
         // Successfully opened — reset backoff and mark streaming
         backoffMs = 1000;
-        options.onStreamReconnected?.();
+        options.onStreamOpened?.();
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -1161,8 +1161,10 @@ export async function createMcpClientConnection(options: {
   onNotification: (method: string, params: unknown) => void;
   onStreamError: (message: string) => void;
   logger: DroneLogger;
-  /** Fires after a successful reconnection (SSE stream reconnect or stdio child respawn). */
-  onReconnected?: () => void;
+  /** Fires after a genuine transport reconnect (stdio child respawn). */
+  onReconnected?: () => void | Promise<void>;
+  /** Fires when the GET SSE (server→client notification) stream opens/reopens. */
+  onStreamOpened?: () => void;
   /** Roots to advertise via the roots/list client capability. */
   roots?: DroneMcpRoot[];
 }): Promise<McpClientConnection> {
@@ -1227,7 +1229,7 @@ export async function createMcpClientConnection(options: {
       onNotification: options.onNotification,
       onRequest: handleServerRequest,
       onStreamError: options.onStreamError,
-      onStreamReconnected: options.onReconnected,
+      onStreamOpened: options.onStreamOpened,
     });
   } else {
     const stdioConfig = options.config as DroneMcpStdioServerConfig;
@@ -1418,7 +1420,13 @@ export async function createMcpClientConnection(options: {
           state.lastError = undefined;
           state.lastErrorCategory = undefined;
           backoffMs = 1000;
-          options.onReconnected?.();
+          void Promise.resolve(options.onReconnected?.()).catch(err =>
+            options.logger.warn(
+              `mcp ${options.serverId} onReconnected failed: ${
+                err instanceof Error ? err.message : String(err)
+              }`
+            )
+          );
           state.reconnectCount = (state.reconnectCount ?? 0) + 1;
         } catch (error) {
           state.lastError =
@@ -1496,7 +1504,6 @@ export async function createMcpClientConnection(options: {
     if (state.ownership === 'spawned') {
       startRespawnMonitor();
     }
-    options.onReconnected?.();
   } catch (error) {
     state.status = 'error';
     state.lastError = error instanceof Error ? error.message : String(error);

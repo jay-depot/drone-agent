@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { readFile, writeFile } from 'node:fs/promises';
-import { withFileLock, withPathLock } from '../../src/shared/file-lock.js';
+import { withKeyLock, withPathLock } from '../../src/shared/keyed-lock.js';
 import { registerFilePlugin } from './setup.js';
 
 function tempPath(prefix: string): string {
@@ -19,7 +19,7 @@ describe('withFileLock / withPathLock', () => {
     let active = 0;
     let maxActive = 0;
     const task = (): Promise<void> =>
-      withFileLock('concurrency-test-key-a', async () => {
+      withKeyLock('concurrency-test-key-a', async () => {
         active += 1;
         maxActive = Math.max(maxActive, active);
         await new Promise(resolve => setTimeout(resolve, 5));
@@ -34,7 +34,7 @@ describe('withFileLock / withPathLock', () => {
     let active = 0;
     let maxActive = 0;
     const task = (key: string): Promise<void> =>
-      withFileLock(key, async () => {
+      withKeyLock(key, async () => {
         active += 1;
         maxActive = Math.max(maxActive, active);
         await new Promise(resolve => setTimeout(resolve, 5));
@@ -50,12 +50,12 @@ describe('withFileLock / withPathLock', () => {
 
   it('releases the key when a task throws', async () => {
     await expect(
-      withFileLock('concurrency-test-key-c', async () => {
+      withKeyLock('concurrency-test-key-c', async () => {
         throw new Error('boom');
       })
     ).rejects.toThrow('boom');
     await expect(
-      withFileLock('concurrency-test-key-c', async () => 'ok')
+      withKeyLock('concurrency-test-key-c', async () => 'ok')
     ).resolves.toBe('ok');
   });
 

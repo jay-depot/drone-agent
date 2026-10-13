@@ -12,7 +12,7 @@ import { CONFIG_DIR, INSIGHTS_SUBDIR, PRINCIPLES_SUBDIR } from './constants.js';
 import { resolveBaseDir } from './validation.js';
 import { resolveInsightPaths, resolvePrinciplePaths } from './paths.js';
 import { readJsonArray, scanJsonDir, writeJsonArrayAtomic } from './io.js';
-import { withFileLock } from '../../shared/file-lock.js';
+import { withKeyLock } from '../../shared/keyed-lock.js';
 
 /**
  * Create a file-based insight storage engine. This is the default for
@@ -42,7 +42,7 @@ export function createFileInsightEngine(
         skillsCap()
       );
       await mkdir(insightsDir, { recursive: true });
-      return withFileLock(filePath, async () => {
+      return withKeyLock(filePath, async () => {
         const entries = await readJsonArray<DroneInsightEntry>(filePath);
         entries.push({ timestamp: new Date().toISOString(), insight });
         await writeJsonArrayAtomic(filePath, entries);
@@ -128,7 +128,7 @@ export function createFileInsightEngine(
         baseDir,
         skillsCap()
       );
-      return withFileLock(filePath, async () => {
+      return withKeyLock(filePath, async () => {
         const now = new Date().toISOString();
         const entries = await readJsonArray<DroneInsightEntry>(filePath);
         for (const entry of entries) {
@@ -166,7 +166,7 @@ export function createFilePrincipleEngine(
         skillsCap()
       );
       await mkdir(principlesDir, { recursive: true });
-      return withFileLock(filePath, async () => {
+      return withKeyLock(filePath, async () => {
         const entries = await readJsonArray<DronePrincipleEntry>(filePath);
         entries.push({
           principle,
@@ -257,7 +257,7 @@ export function createFilePrincipleEngine(
         baseDir,
         skillsCap()
       );
-      return withFileLock(filePath, async () => {
+      return withKeyLock(filePath, async () => {
         const entries = await readJsonArray<DronePrincipleEntry>(filePath);
         if (index >= entries.length) {
           throw new Error(
