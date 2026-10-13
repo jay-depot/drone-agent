@@ -362,6 +362,24 @@ describe('loadAgentConfig', () => {
     expect(resolved.config.session.maxToolIterations).toBe(25);
   });
 
+  it('defaults session.announceToolRemovals to true when omitted', async () => {
+    const { projectDir } = await setupDirs();
+    await writeJson(path.join(projectDir, '.drone-agent/config.json'), {
+      session: { maxToolIterations: 25 },
+    });
+    const resolved = await loadAgentConfig(projectDir);
+    expect(resolved.config.session.announceToolRemovals).toBe(true);
+  });
+
+  it('accepts session.announceToolRemovals: false', async () => {
+    const { projectDir } = await setupDirs();
+    await writeJson(path.join(projectDir, '.drone-agent/config.json'), {
+      session: { announceToolRemovals: false },
+    });
+    const resolved = await loadAgentConfig(projectDir);
+    expect(resolved.config.session.announceToolRemovals).toBe(false);
+  });
+
   it('rejects non-integer maxToolIterations', async () => {
     const { projectDir } = await setupDirs();
     await writeJson(path.join(projectDir, '.drone-agent/config.json'), {

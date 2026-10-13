@@ -325,8 +325,9 @@ describe('mcp plugin integration (stdio child)', () => {
         })
       )
     );
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('already mounted');
+    expect(result.success).toBe(true);
+    expect(result.alreadyMounted).toBe(true);
+    expect(result.message).toBe('mcp__demo__echo was already mounted.');
   });
 
   it('runtime__mount_tool rejects a non-existent tool name', async () => {
@@ -464,6 +465,55 @@ describe('mcp plugin integration (stdio child)', () => {
 
     // Tool should still be mounted after list_changed (echo still exists).
     expect(toolNames(engine)).toContain('mcp__demo__echo');
+  });
+
+  it('reconcile is idempotent: a list_changed after connect does not throw and keeps a stable tool count', async () => {
+    const server = startFakeMcpServer({
+      toolNames: ['echo', 'add'],
+      notifyOnToolName: 'echo',
+    });
+    const engine = await bootWithServers({
+      demo: server.serverConfig,
+    });
+
+    const listMcpTools = async (): Promise<string[]> => {
+      const result = JSON.parse(
+        toToolResultContent(
+          await engine.executeTool('runtime__list_tools', { plugin: 'mcp' })
+        )
+      );
+      return (result.tools as Array<{ name: string }>).map(t => t.name);
+    };
+
+    const before = await listMcpTools();
+    expect(before).toContain('mcp__demo__echo');
+    expect(before).toContain('mcp__demo__add');
+
+    // Calling the tool triggers a tools/list_changed notification, which runs
+    // a second reconcile for the same server. It must not throw and must not
+    // duplicate or drop tools.
+    await engine.executeTool('mcp__demo__echo', {});
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const after = await listMcpTools();
+    expect(after.sort()).toEqual(before.sort());
+  });
+
+  it('registers __list and __get helpers exactly once per server across a reconcile', async () => {
+    const server = startFakeMcpServer({
+      toolNames: ['echo'],
+      notifyOnToolName: 'echo',
+    });
+    const engine = await bootWithServers({
+      demo: server.serverConfig,
+    });
+
+    await engine.executeTool('mcp__demo__echo', {});
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    const all = engine.listAllTools().map(t => t.name);
+    expect(all.filter(n => n === 'mcp__demo__list')).toHaveLength(1);
+    expect(all.filter(n => n === 'mcp__demo__get')).toHaveLength(1);
   });
 
   it('dispatches notifications/message from server to the plugin logger at the correct level', async () => {

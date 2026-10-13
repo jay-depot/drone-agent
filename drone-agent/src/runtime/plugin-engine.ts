@@ -1166,7 +1166,7 @@ export function createDronePluginEngine({
       key: 'unavailable-tools',
       phase: 'footer',
       render: async () => {
-        if (config.session.announceToolRemovals === false) return false;
+        if (config.session?.announceToolRemovals === false) return false;
         const unavailable = computeUnavailableTools();
         if (unavailable.length === 0) return false;
         const CAP = 20;

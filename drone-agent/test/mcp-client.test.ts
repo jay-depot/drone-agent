@@ -76,6 +76,8 @@ async function makeConnection(
   callbacks: {
     onNotification?: (method: string, params: unknown) => void;
     onStreamError?: (message: string) => void;
+    onStreamOpened?: () => void;
+    onReconnected?: () => void | Promise<void>;
   } = {},
   roots?: DroneMcpRoot[]
 ) {
@@ -92,6 +94,8 @@ async function makeConnection(
     defaultMaxResponseSizeBytes: defaults.maxResponseSizeBytes ?? 1048576,
     onNotification: callbacks.onNotification ?? (() => {}),
     onStreamError: callbacks.onStreamError ?? (() => {}),
+    onStreamOpened: callbacks.onStreamOpened,
+    onReconnected: callbacks.onReconnected,
     logger: silentLogger,
     roots,
   });
@@ -786,6 +790,31 @@ describe('streamable-HTTP GET SSE stream + DELETE termination (point 8)', () => 
     expect(get).toBeDefined();
     expect(get!.headers['accept']).toBe('text/event-stream');
     expect(get!.headers['mcp-session-id']).toBe('sess-xyz');
+  });
+
+  it('fires onStreamOpened (not onReconnected) when the GET stream opens', async () => {
+    const opened: number[] = [];
+    let reconnected = 0;
+    const mock = createMockFetch({ sessionId: 'sess-xyz' });
+    installFetch(mock);
+    await makeConnection(
+      mock,
+      {},
+      {},
+      {
+        onStreamOpened: () => {
+          opened.push(1);
+        },
+        onReconnected: () => {
+          reconnected += 1;
+        },
+      }
+    );
+    // Give the fire-and-forget GET reader a tick to open the stream.
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(opened.length).toBeGreaterThan(0);
+    // A streamable-HTTP connect must never fire the remount path.
+    expect(reconnected).toBe(0);
   });
 
   it('dispatches received SSE notifications to onNotification (incl. tools/list_changed)', async () => {
