@@ -9,7 +9,8 @@ import {
 } from '../storage.js';
 import { buildSessionTranscript } from '../transcript.js';
 import * as db from '../db/index.js';
-import { sendBeaconCommand } from '../beacon-ws.js';
+import { sendBeaconCommand, broadcastBeaconEvent } from '../beacon-ws.js';
+import type { DroneSessionSnapshot } from 'drone-core';
 import {
   toChatFeedItem,
   isNoiseEvent,
@@ -95,9 +96,10 @@ export default function swarmRoutes(app: FastifyInstance) {
       personaId?: string;
       beaconId: string;
       interactive?: boolean;
+      snapshot?: DroneSessionSnapshot;
     };
   }>('/sync/sessions/register', async (request, reply) => {
-    const { id, personaId, beaconId, interactive } = request.body;
+    const { id, personaId, beaconId, interactive, snapshot } = request.body;
     if (!id || !beaconId) {
       return reply.code(400).send({ error: 'id and beaconId are required' });
     }
@@ -105,7 +107,8 @@ export default function swarmRoutes(app: FastifyInstance) {
       id,
       personaId ?? null,
       beaconId,
-      interactive === true
+      interactive === true,
+      snapshot ?? null
     );
     publishMutationEvent({
       sessionId: id,
@@ -118,6 +121,14 @@ export default function swarmRoutes(app: FastifyInstance) {
         interactive: interactive === true,
       },
     });
+    // Notify every node (extensions + plain beacons) of the new session.
+    if (snapshot) {
+      broadcastBeaconEvent({
+        type: 'event',
+        event: 'sessionStarted',
+        session: snapshot,
+      });
+    }
     return reply.code(201).send(session);
   });
   app.post<{
@@ -141,6 +152,16 @@ export default function swarmRoutes(app: FastifyInstance) {
         sessionId: request.params.id,
         eventType: 'session.ended',
         payload: { sessionId: request.params.id, status: 'ended' },
+      });
+      // Notify every node that the session ended so extensions can drop
+      // per-session state (fragments, reminders, tool selections).
+      broadcastBeaconEvent({
+        type: 'event',
+        event: 'sessionEnded',
+        session: {
+          sessionId: request.params.id,
+          extensionHint: session.sessionSnapshot?.extensionHint,
+        },
       });
       // Fire the configured session-end hook after the session is marked
       // ended and published; failures are contained and non-blocking.

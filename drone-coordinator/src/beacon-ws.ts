@@ -6,7 +6,12 @@ import {
   getClientCertFingerprint,
   resolveBeaconIdByFingerprint,
 } from './mtls.js';
-import { getBeaconTrust, getSwarmSession, upsertCapabilityCache } from './db/index.js';
+import {
+  getBeaconTrust,
+  getSwarmSession,
+  upsertCapabilityCache,
+  listActiveSessionSnapshots,
+} from './db/index.js';
 import { publishMutationEvent } from './ws-pubsub.js';
 import { logger } from './logger.js';
 import {
@@ -21,6 +26,7 @@ import {
   type DroneInjectFrame,
   type DroneInjectRemoveFrame,
   type DroneManifestFrame,
+  type DroneSessionSnapshot,
 } from 'drone-core';
 
 /**
@@ -79,6 +85,9 @@ function registerBeaconConnection(
   ws.on('pong', () => {
     conn.isAlive = true;
   });
+  // Replay `sessionStarted` for currently-active sessions so a node that just
+  // connected (e.g. a restarted extension) recovers the sessions it missed.
+  replayActiveSessions(conn);
   publishMutationEvent({
     sessionId: beaconId,
     eventType: 'beacon.connected',
@@ -258,6 +267,33 @@ async function cleanupExtension(beaconId: string): Promise<void> {
         `injection cleanup for ${beaconId} on ${record.hostBeaconId} failed: ${err}`
       );
     }
+  }
+}
+
+/**
+ * Replay `sessionStarted` for every currently-active session to a
+ * just-connected node, so a restarted extension recovers sessions it missed
+ * while offline. Best-effort: never throws into the connect path.
+ */
+function replayActiveSessions(conn: BeaconConnection): void {
+  let sessions: DroneSessionSnapshot[];
+  try {
+    sessions = listActiveSessionSnapshots();
+  } catch (err) {
+    logger.warn(`Failed to replay active sessions to ${conn.beaconId}: ${err}`);
+    return;
+  }
+  for (const session of sessions) {
+    conn.ws.send(
+      JSON.stringify({ type: 'event', event: 'sessionStarted', session }),
+      (err?: Error) => {
+        if (err) {
+          logger.warn(
+            `Failed to replay sessionStarted to ${conn.beaconId}: ${err}`
+          );
+        }
+      }
+    );
   }
 }
 
