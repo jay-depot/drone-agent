@@ -95,6 +95,7 @@ describe('SwarmMemoryRetriever', () => {
   ): SwarmMemoryRetriever {
     const capability: DroneSwarmCapability = {
       getBeaconUrl: () => 'http://beacon:3457',
+      registerWsHandler: () => () => {},
       getAgentId: () => 'agent-1',
     };
     return new SwarmMemoryRetriever({

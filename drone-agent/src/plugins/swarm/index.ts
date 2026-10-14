@@ -219,6 +219,20 @@ export function createSwarmPlugin(
       const swarmCap: DroneSwarmCapability & DroneSessionImportCapability = {
         getBeaconUrl: () => baseUrl,
         getAgentId: () => ctx.sessionId,
+        registerWsHandler: (type, handler) => {
+          let set = ctx.wsHandlers.get(type);
+          if (!set) {
+            set = new Set();
+            ctx.wsHandlers.set(type, set);
+          }
+          set.add(handler);
+          return () => {
+            const current = ctx.wsHandlers.get(type);
+            if (!current) return;
+            current.delete(handler);
+            if (current.size === 0) ctx.wsHandlers.delete(type);
+          };
+        },
         runImport: targetSessionId =>
           runSessionImport(
             buildSessionImportDeps(

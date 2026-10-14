@@ -30,7 +30,6 @@ function makeRegistration(
       (opts.mountedTools ?? []).map(name => ({
         name,
         description: '',
-        inputSchema: {},
       })),
     emitEvent: () => {},
     hooks: {

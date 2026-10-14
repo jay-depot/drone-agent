@@ -119,6 +119,13 @@ export function connectWebSocket(ctx: SwarmContext): void {
           registration.logger.error(
             `WebSocket error: ${wsMsg.payload.message}`
           );
+        } else if (dispatchCustomWsMessage(ctx, wsMsg.type, wsMsg.payload)) {
+          // Dispatched to a plugin-registered handler (e.g. the extensions
+          // plugin's `injection` frames).
+        } else {
+          registration.logger.warn(
+            `Ignoring unknown WebSocket message type: ${wsMsg.type}`
+          );
         }
       } catch (err) {
         registration.logger.error(`Failed to parse WebSocket message: ${err}`);
@@ -202,4 +209,28 @@ export function getPendingMessages(ctx: SwarmContext) {
   const messages = [...ctx.pendingMessages];
   ctx.pendingMessages.length = 0;
   return messages;
+}
+
+/**
+ * Dispatch an inbound frame to handlers registered via
+ * `DroneSwarmCapability.registerWsHandler`. Best-effort: a handler throwing
+ * never breaks the socket loop. Returns true when at least one handler ran.
+ */
+export function dispatchCustomWsMessage(
+  ctx: SwarmContext,
+  type: string,
+  payload: unknown
+): boolean {
+  const handlers = ctx.wsHandlers.get(type);
+  if (!handlers || handlers.size === 0) return false;
+  for (const handler of handlers) {
+    try {
+      handler(payload, { type, payload });
+    } catch (err) {
+      ctx.registration.logger.error(
+        `WS handler for "${type}" threw: ${err}`
+      );
+    }
+  }
+  return true;
 }

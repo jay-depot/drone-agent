@@ -77,6 +77,14 @@ export interface SwarmContext {
    * Refreshed out-of-band (plugin load, WS reconnect, slow interval).
    */
   swarmInfo: SwarmInfoStore;
+  /**
+   * Handlers registered for inbound agent-WebSocket frame types the swarm
+   * plugin does not itself dispatch (e.g. the `extensions` plugin's
+   * `injection` frames). Keyed by frame `type`; dispatched after the
+   * built-in branches. The swarm plugin's WS seam exposes registration via
+   * `DroneSwarmCapability.registerWsHandler`.
+   */
+  wsHandlers: Map<string, Set<(payload: unknown, raw: unknown) => void>>;
 }
 
 /**
@@ -108,5 +116,6 @@ export function createSwarmContext(
     fragmentStore: createSwarmFragmentStore(),
     fragmentsResynced: false,
     swarmInfo: createSwarmInfoStore(localAddress),
+    wsHandlers: new Map(),
   };
 }
