@@ -255,12 +255,21 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
     if (!room) return;
 
     const roomId = room.roomId;
+    // An explicitly configured room is always a room, even if it currently
+    // has only two members. Without this, a two-member room (for example a
+    // bot + operator "Council" room) is misread as a DM and delivered as
+    // `dm:<sender>`, which no room-keyed conversation file matches — so the
+    // message falls through to the wildcard and is silently discarded.
+    const configuredRooms = this.config.rooms;
+    const isConfiguredRoom =
+      Array.isArray(configuredRooms) && configuredRooms.includes(roomId);
     const joinedCount = room.getJoinedMemberCount();
-    const isDM = joinedCount <= 2;
+    const isDM = !isConfiguredRoom && joinedCount <= 2;
 
-    // Apply allowlist: if rooms[] is set, only process listed rooms + DMs
-    if (!isDM && this.config.rooms && this.config.rooms.length > 0) {
-      if (!this.config.rooms.includes(roomId)) return;
+    // Apply allowlist: if rooms[] is set, only process listed rooms + DMs.
+    // (A configured room is always processed, so this never drops it.)
+    if (!isDM && Array.isArray(configuredRooms) && configuredRooms.length > 0) {
+      if (!configuredRooms.includes(roomId)) return;
     }
 
     const conversationId = isDM ? `dm:${sender}` : roomId;

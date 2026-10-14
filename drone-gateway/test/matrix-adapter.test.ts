@@ -390,6 +390,44 @@ describe('MatrixServiceAdapter', () => {
       expect(messages[0].conversationKind).toBe('room');
     });
 
+    it('treats a configured 2-member room as a room, not a DM', async () => {
+      // Regression: a two-member room listed in rooms[] (for example a bot +
+      // operator "Council" room) must be delivered as `!room:…`, not
+      // `dm:<sender>`. The latter matches no room-keyed conversation file and
+      // is silently discarded by the wildcard.
+      adapter = new MatrixServiceAdapter('matrix-1', {
+        homeserverUrl: 'https://matrix.org',
+        accessToken: 'syt_token',
+        userId: '@bot:matrix.org',
+        rooms: ['!council:matrix.org'],
+      });
+
+      const messages: AdapterMessage[] = [];
+      adapter.onMessage(msg => messages.push(msg));
+
+      await adapter.start();
+
+      const timelineHandler = mockOn.mock.calls.find(
+        call => call[0] === 'Room.timeline'
+      )?.[1];
+
+      const room = makeRoomStub({
+        roomId: '!council:matrix.org',
+        getJoinedMemberCount: vi.fn().mockReturnValue(2), // would be a DM by count
+        getMember: vi
+          .fn()
+          .mockReturnValue({ name: 'Alice', rawDisplayName: 'Alice' }),
+      });
+
+      const event = makeEventStub();
+
+      timelineHandler(event, room, false, false, { liveEvent: true });
+
+      expect(messages).toHaveLength(1);
+      expect(messages[0].conversationId).toBe('!council:matrix.org');
+      expect(messages[0].conversationKind).toBe('room');
+    });
+
     it('drops events from non-allowlisted rooms', async () => {
       adapter = new MatrixServiceAdapter('matrix-1', {
         homeserverUrl: 'https://matrix.org',
