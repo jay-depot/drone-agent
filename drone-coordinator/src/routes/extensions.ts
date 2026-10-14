@@ -15,6 +15,7 @@ import {
   computeBundleHash,
   writeBundleFiles,
   removeBundleDir,
+  bundleFileUrls,
   type BundleFile,
 } from '../extension-bundles.js';
 import * as db from '../db/index.js';
@@ -91,17 +92,30 @@ export default function extensionRoutes(app: FastifyInstance) {
     const nodeIds = new Set(listExtensionNodeIds());
     for (const row of db.listCapabilityCache()) nodeIds.add(row.nodeId);
 
-    return [...nodeIds].map(nodeId => {
+    return Promise.all([...nodeIds].map(async nodeId => {
       const manifest = getManifest(nodeId) ?? db.getCapabilityCache(nodeId)?.manifest;
+      const bundleRows = db.listBundles(nodeId);
+      const bundles = await Promise.all(
+        bundleRows.map(async row => {
+          const urls = await bundleFileUrls(nodeId, row.hash, row.path);
+          return {
+            name: row.name,
+            version: row.version,
+            hash: row.hash,
+            scriptUrls: urls.scripts,
+            styleUrls: urls.styles,
+          };
+        })
+      );
       return {
         nodeId,
         connected: isBeaconConnected(nodeId),
         isExtension: isExtension(nodeId),
         protocolVersion: manifest?.protocolVersion ?? EXTENSION_PROTOCOL_VERSION,
         capabilities: manifest?.capabilities ?? [],
-        bundles: db.listBundleDescriptors(nodeId),
+        bundles,
       };
-    });
+    }));
   });
 
   // Invoke a proxied API action (UI/external consumer; web-token protected).

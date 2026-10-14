@@ -1,4 +1,4 @@
-import { mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdir, writeFile, rm, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { logger } from './logger.js';
@@ -112,4 +112,28 @@ export function bundleUrls(
     target.push(`/${base}/${nodeId}/${hash}/${f.name}`);
   }
   return { scripts, styles };
+}
+
+/**
+ * Public URLs for an ALREADY-STORED bundle, derived from the files on disk.
+ * Used by the UI manifest so the client can inject `<script>`/`<link>` tags
+ * without knowing the directory layout. Returns empty lanes when the
+ * directory is missing.
+ */
+export async function bundleFileUrls(
+  nodeId: string,
+  hash: string,
+  dir: string
+): Promise<{ scripts: string[]; styles: string[] }> {
+  let names: string[] = [];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return { scripts: [], styles: [] };
+  }
+  const files: BundleFile[] = names.map(name => ({
+    name,
+    contentBase64: '',
+  }));
+  return bundleUrls(nodeId, hash, files);
 }

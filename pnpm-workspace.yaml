@@ -8,6 +8,7 @@ packages:
   - drone-swarm
   - drone-gateway
   - mcp-swarm
+  - drone-extension-ui-types
 allowBuilds:
   better-sqlite3: true
   esbuild: true
