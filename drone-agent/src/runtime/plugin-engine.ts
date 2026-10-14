@@ -285,6 +285,7 @@ export type CreateDronePluginEngineOptions = {
     subagentId?: string;
     persona?: string;
     swarmSpawned?: boolean;
+    extensionHint?: string;
   };
   buildSystemMessages?: () => Promise<DroneChatMessage[]>;
   buildFooterMessages?: () => Promise<DroneChatMessage[]>;
@@ -1214,6 +1215,7 @@ export function createDronePluginEngine({
         persona: runtimeOptions?.persona,
         isSubagent: !!runtimeOptions?.subagentId,
         swarmSpawned: !!runtimeOptions?.swarmSpawned,
+        extensionHint: runtimeOptions?.extensionHint,
         pluginFlags,
         debugFlags,
         flags: runtimeFlagRegistry,

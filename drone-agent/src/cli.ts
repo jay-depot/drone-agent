@@ -17,6 +17,8 @@ export type CliOptions = {
   task?: string;
   /** Working directory for a beacon-spawned agent (already set as process cwd). */
   workingDir?: string;
+  /** Free-form hint identifying the session's origin (set by the spawning extension). */
+  extensionHint?: string;
   modelOverride?: string;
   configDir?: string;
   pluginOverrides: string[];
@@ -158,6 +160,8 @@ export function parseCliArgs(argv: string[]): CliInvocation {
       options.task = argv[++i];
     } else if (arg === '--working-dir' && i + 1 < argv.length) {
       options.workingDir = argv[++i];
+    } else if (arg === '--extension-hint' && i + 1 < argv.length) {
+      options.extensionHint = argv[++i];
     } else if (arg === '--model' && i + 1 < argv.length) {
       options.modelOverride = argv[++i];
     } else if (arg === '--config-dir' && i + 1 < argv.length) {
@@ -288,6 +292,7 @@ export function parseCliArgs(argv: string[]): CliInvocation {
 
   options.subagentId ??= process.env.DRONE_SUBAGENT_ID;
   options.sessionId ??= process.env.DRONE_SESSION_ID;
+  options.extensionHint ??= process.env.DRONE_EXTENSION_HINT;
 
   return { kind: 'default', options };
 }
