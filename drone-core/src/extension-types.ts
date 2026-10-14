@@ -82,6 +82,14 @@ export type DroneInjectionKind = 'fragment' | 'reminder' | 'tools';
 export type DroneInjectedToolSelection = {
   /** Capability name from the extension's manifest. */
   capability: string;
+  /**
+   * Resolved capability description, populated coordinator-side from the
+   * manifest at injection time so the agent-side tool definition carries a
+   * real description. Absent when the coordinator could not resolve it.
+   */
+  description?: string;
+  /** Resolved param schema (JSON Schema), populated coordinator-side. */
+  paramSchema?: Record<string, unknown>;
 };
 
 /**

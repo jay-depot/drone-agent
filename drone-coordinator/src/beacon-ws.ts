@@ -16,6 +16,7 @@ import { publishMutationEvent } from './ws-pubsub.js';
 import { logger } from './logger.js';
 import {
   setManifest,
+  getManifest,
   clearManifest,
   recordInjection,
   removeInjectionRecord,
@@ -195,7 +196,35 @@ function handleInjectFrame(beaconId: string, msg: IncomingMessage): void {
     hostBeaconId,
     tools: frame.tools,
   });
-  forwardCommand(hostBeaconId, 'inject', { extensionId: beaconId, ...frame });
+  forwardCommand(hostBeaconId, 'inject', {
+    extensionId: beaconId,
+    ...frame,
+    tools: resolveToolSelections(beaconId, frame.tools),
+  });
+}
+
+/**
+ * Enrich a tools injection's selections with the resolved capability metadata
+ * from the extension's manifest, so the agent-side tool definition carries
+ * the real description + param schema (single source of truth = the
+ * manifest). Unresolvable capabilities pass through name-only.
+ */
+function resolveToolSelections(
+  extensionId: string,
+  tools: Array<{ capability: string }> | undefined
+): Array<{ capability: string; description?: string; paramSchema?: unknown }> | undefined {
+  if (!tools) return undefined;
+  const manifest = getManifest(extensionId);
+  return tools.map(t => {
+    const cap = manifest?.capabilities.find(c => c.name === t.capability);
+    return cap
+      ? {
+          capability: t.capability,
+          description: cap.description,
+          paramSchema: cap.paramSchema,
+        }
+      : { capability: t.capability };
+  });
 }
 
 /** Forward an `inject-remove` frame to the target session's host beacon. */
