@@ -423,13 +423,14 @@ Every validation criterion passes: `pnpm -r run build` ✓, `pnpm typecheck`
 (4125 passed / 16 skipped), LSP zero diagnostics.
 
 **Shipped**
+
 - Wire types (`drone-core/src/extension-types.ts`), Ed25519 identity helper moved
   to `drone-swarm-common/src/identity.ts` (P0.1/P0.2).
 - Coordinator: inbound `manifest`/`inject`/`inject-remove` dispatch + in-memory
   `extension-registry.ts`; `swarm_sessions.session_snapshot` + `extension_capabilities`
-  + `extension_bundles` tables; `extension-bundles.ts` storage; `/api/extensions*`
-  REST surface + `bundle-serving.ts` same-origin `/plugin-scripts` `/plugin-styles`;
-  `sessionStarted`/`sessionEnded` broadcast + connect replay (P0.3–P0.7).
+  - `extension_bundles` tables; `extension-bundles.ts` storage; `/api/extensions*`
+    REST surface + `bundle-serving.ts` same-origin `/plugin-scripts` `/plugin-styles`;
+    `sessionStarted`/`sessionEnded` broadcast + connect replay (P0.3–P0.7).
 - Beacon: registration `snapshot` forward, `/coordinator/extensions/:nodeId/tools/:tool`
   proxy, `inject`/`injectRemove` → agent WS (P0.5).
 - SDK `createExtensionNode` in `drone-swarm-common/src/extension-server.ts`
@@ -447,6 +448,7 @@ Every validation criterion passes: `pnpm -r run build` ✓, `pnpm typecheck`
   CONTEXT.md updated; project wiki pointer stub + indexes (P4).
 
 **Deviations / notes**
+
 - P2 ran after P3 (plan recommended P0→P1→P3→P2→P4; followed).
 - `extensions` plugin `defaultEnabled: false` with a HARD `swarm` dep.
 - UI region slots degrade gracefully without an `ExtensionProvider` (EMPTY

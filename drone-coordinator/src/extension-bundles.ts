@@ -14,15 +14,38 @@ let bundleRoot: string | null = null;
 
 const SAFE_ID = /^[a-zA-Z0-9_-]+$/;
 const SAFE_FILE = /^[A-Za-z0-9._-]+$/;
+const MAX_BUNDLE_SEGMENT_LENGTH = 255;
 
-/** Whether `id` is safe to use as a nodeId or bundle-name path segment. */
+/** Whether `id` is safe to use as a nodeId path segment (chars + length). */
 export function isSafeId(id: string): boolean {
-  return SAFE_ID.test(id);
+  return (
+    typeof id === 'string' &&
+    id.length > 0 &&
+    id.length <= MAX_BUNDLE_SEGMENT_LENGTH &&
+    SAFE_ID.test(id)
+  );
 }
 
-/** Whether `name` is safe to use as a bundle file name (no traversal). */
-export function isSafeFileName(name: string): boolean {
-  return SAFE_FILE.test(name) && name !== '.' && name !== '..';
+/**
+ * Sanity-check one request-supplied path segment before it is joined into a
+ * filesystem path. Filters directory-traversal characters (`/`, `\`, NUL,
+ * `..`), rejects dot-only/empty/over-long segments, and requires a
+ * conservative character class. Shared by the write (upload) and read (serve)
+ * paths.
+ */
+export function isSafeBundleSegment(segment: string): boolean {
+  return (
+    typeof segment === 'string' &&
+    segment.length > 0 &&
+    segment.length <= MAX_BUNDLE_SEGMENT_LENGTH &&
+    segment !== '.' &&
+    segment !== '..' &&
+    !segment.includes('/') &&
+    !segment.includes('\\') &&
+    !segment.includes('\0') &&
+    !segment.includes('..') &&
+    SAFE_FILE.test(segment)
+  );
 }
 
 export async function initExtensionBundleStorage(
@@ -33,7 +56,8 @@ export async function initExtensionBundleStorage(
   logger.info(`Extension bundle storage initialized at: ${bundleRoot}`);
 }
 
-function getBundleRoot(): string {
+/** The absolute bundle-root directory (throws if storage is uninitialized). */
+export function getBundleRoot(): string {
   if (!bundleRoot) {
     throw new Error('Extension bundle storage not initialized');
   }
@@ -70,7 +94,7 @@ export async function writeBundleFiles(
   const dir = path.join(getBundleRoot(), nodeId, hash);
   await mkdir(dir, { recursive: true });
   for (const f of files) {
-    if (!isSafeFileName(f.name)) {
+    if (!isSafeBundleSegment(f.name)) {
       throw new Error(`Invalid bundle file name: ${f.name}`);
     }
     await writeFile(
@@ -99,7 +123,7 @@ export function resolveBundleFilePath(
 ): string | null {
   if (!isSafeId(nodeId)) return null;
   if (!/^[a-f0-9]{64}$/.test(hash)) return null;
-  if (!isSafeFileName(fileName)) return null;
+  if (!isSafeBundleSegment(fileName)) return null;
   return path.join(getBundleRoot(), nodeId, hash, fileName);
 }
 

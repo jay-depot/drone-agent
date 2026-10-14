@@ -135,13 +135,11 @@ describe('MCP stdio server request handling', () => {
   });
 
   it('returns an error result for a failing capability (not a throw)', async () => {
-    const invoke = vi
-      .fn()
-      .mockResolvedValue({
-        ok: false,
-        status: 504,
-        body: { error: 'timeout' },
-      });
+    const invoke = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 504,
+      body: { error: 'timeout' },
+    });
     const res = (await handleRequest(
       {
         jsonrpc: '2.0',

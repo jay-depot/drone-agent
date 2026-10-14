@@ -53,12 +53,10 @@ async function invoke(
   }
   const cap = findCapability(nodeId, action);
   if (!cap) {
-    return reply
-      .code(404)
-      .send({
-        error: `Unknown capability: ${action}`,
-        code: 'UNKNOWN_CAPABILITY',
-      });
+    return reply.code(404).send({
+      error: `Unknown capability: ${action}`,
+      code: 'UNKNOWN_CAPABILITY',
+    });
   }
 
   const errors = validateJsonSchema(params ?? {}, cap.paramSchema ?? {});
@@ -67,12 +65,10 @@ async function invoke(
   }
 
   if (!isBeaconConnected(nodeId)) {
-    return reply
-      .code(503)
-      .send({
-        error: 'Extension not connected',
-        code: 'EXTENSION_DISCONNECTED',
-      });
+    return reply.code(503).send({
+      error: 'Extension not connected',
+      code: 'EXTENSION_DISCONNECTED',
+    });
   }
 
   try {
@@ -87,12 +83,10 @@ async function invoke(
   } catch (err) {
     const timeout = err instanceof Error && /Timed out/.test(err.message);
     if (timeout) {
-      return reply
-        .code(504)
-        .send({
-          error: 'Extension did not respond',
-          code: 'EXTENSION_TIMEOUT',
-        });
+      return reply.code(504).send({
+        error: 'Extension did not respond',
+        code: 'EXTENSION_TIMEOUT',
+      });
     }
     return reply
       .code(503)
