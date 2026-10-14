@@ -23,6 +23,8 @@
     "drone-agent/src/**/*.tsx",
     "drone-agent/test/**/*.ts",
     "drone-agent/test/**/*.tsx",
+    "mcp-swarm/src/**/*.ts",
+    "mcp-swarm/test/**/*.ts",
     "vitest.config.ts"
   ]
 }

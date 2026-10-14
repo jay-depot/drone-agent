@@ -368,6 +368,19 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0(@types/node@24.13.2)(jsdom@29.1.1)(vite@7.3.6(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0))
 
+  mcp-swarm:
+    dependencies:
+      drone-core:
+        specifier: workspace:*
+        version: link:../drone-core
+      drone-swarm-common:
+        specifier: workspace:*
+        version: link:../drone-swarm-common
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.10
+        version: 24.13.3
+
 packages:
 
   '@adobe/css-tools@4.5.0':

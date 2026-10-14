@@ -59,6 +59,8 @@ export interface BundleFileInput {
 }
 
 export interface ExtensionNode {
+  /** mTLS-authenticated fetch bound to the coordinator (TOFU-pinned). */
+  getFetch(): typeof fetch;
   /** Push a persistent prompt fragment into a target session. */
   injectFragment(input: {
     target: string;
@@ -287,6 +289,9 @@ export async function createExtensionNode(
   connect();
 
   return {
+    getFetch() {
+      return cfetch;
+    },
     injectFragment(input) {
       send({
         type: 'inject',
