@@ -135,6 +135,7 @@ export interface SpawnConfig {
   preamble?: string;
   workingDir?: string;
   env?: Record<string, string>;
+  extensionHint?: string;
 }
 
 export interface SpawnRequest {
