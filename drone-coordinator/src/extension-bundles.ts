@@ -25,7 +25,9 @@ export function isSafeFileName(name: string): boolean {
   return SAFE_FILE.test(name) && name !== '.' && name !== '..';
 }
 
-export async function initExtensionBundleStorage(baseDir: string): Promise<void> {
+export async function initExtensionBundleStorage(
+  baseDir: string
+): Promise<void> {
   bundleRoot = path.join(baseDir, 'extension-bundles');
   await mkdir(bundleRoot, { recursive: true });
   logger.info(`Extension bundle storage initialized at: ${bundleRoot}`);
@@ -71,7 +73,10 @@ export async function writeBundleFiles(
     if (!isSafeFileName(f.name)) {
       throw new Error(`Invalid bundle file name: ${f.name}`);
     }
-    await writeFile(path.join(dir, f.name), Buffer.from(f.contentBase64, 'base64'));
+    await writeFile(
+      path.join(dir, f.name),
+      Buffer.from(f.contentBase64, 'base64')
+    );
   }
   return dir;
 }
@@ -125,7 +130,7 @@ export async function bundleFileUrls(
   hash: string,
   dir: string
 ): Promise<{ scripts: string[]; styles: string[] }> {
-  let names: string[] = [];
+  let names: string[];
   try {
     names = await readdir(dir);
   } catch {

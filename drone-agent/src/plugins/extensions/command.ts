@@ -6,7 +6,9 @@
 import type { DroneSlashCommand } from 'drone-core';
 import type { ExtensionsContext } from './context.js';
 
-export function createExtensionsCommand(ctx: ExtensionsContext): DroneSlashCommand {
+export function createExtensionsCommand(
+  ctx: ExtensionsContext
+): DroneSlashCommand {
   return {
     command: '/extensions',
     description: 'List swarm extensions injecting into this session.',

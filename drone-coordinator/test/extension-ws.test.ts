@@ -98,9 +98,7 @@ describe('extension manifest frames', () => {
       JSON.stringify({
         type: 'manifest',
         protocolVersion: 1,
-        capabilities: [
-          { name: 'a', description: 'A', paramSchema: {} },
-        ],
+        capabilities: [{ name: 'a', description: 'A', paramSchema: {} }],
         bundles: [],
       }),
       'node-1'
@@ -127,9 +125,7 @@ describe('extension manifest frames', () => {
       JSON.stringify({
         type: 'manifest',
         protocolVersion: 1,
-        capabilities: [
-          { name: 'a', description: 'A', paramSchema: {} },
-        ],
+        capabilities: [{ name: 'a', description: 'A', paramSchema: {} }],
         bundles: [],
       }),
       'node-1'
@@ -208,7 +204,10 @@ describe('inject-remove fan-out', () => {
     await new Promise(r => setImmediate(r));
     const sent = lastCommand(hostWs);
     expect(sent.command).toBe('injectRemove');
-    expect(sent.payload).toMatchObject({ target: 'sess-1', injectionId: 'inj-1' });
+    expect(sent.payload).toMatchObject({
+      target: 'sess-1',
+      injectionId: 'inj-1',
+    });
   });
 });
 

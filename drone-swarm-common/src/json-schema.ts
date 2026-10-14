@@ -9,13 +9,7 @@
 export type JsonSchema = Record<string, unknown>;
 
 type JsonType =
-  | 'object'
-  | 'array'
-  | 'string'
-  | 'number'
-  | 'integer'
-  | 'boolean'
-  | 'null';
+  'object' | 'array' | 'string' | 'number' | 'integer' | 'boolean' | 'null';
 
 function jsonTypeOf(value: unknown): JsonType {
   if (value === null) return 'null';
@@ -36,7 +30,8 @@ function matchesType(value: unknown, type: JsonType): boolean {
 function typeList(schema: JsonSchema): JsonType[] {
   const t = schema.type;
   if (typeof t === 'string') return [t as JsonType];
-  if (Array.isArray(t)) return t.filter(x => typeof x === 'string') as JsonType[];
+  if (Array.isArray(t))
+    return t.filter(x => typeof x === 'string') as JsonType[];
   return [];
 }
 
@@ -73,7 +68,9 @@ export function validateJsonSchema(
     }
     const props = schema.properties;
     if (props && typeof props === 'object') {
-      for (const [key, sub] of Object.entries(props as Record<string, unknown>)) {
+      for (const [key, sub] of Object.entries(
+        props as Record<string, unknown>
+      )) {
         if (key in obj && sub && typeof sub === 'object') {
           errors.push(
             ...validateJsonSchema(obj[key], sub as JsonSchema, `${path}.${key}`)
@@ -83,7 +80,10 @@ export function validateJsonSchema(
     }
   }
 
-  if ((schema.type === 'array' || schema.items !== undefined) && Array.isArray(value)) {
+  if (
+    (schema.type === 'array' || schema.items !== undefined) &&
+    Array.isArray(value)
+  ) {
     const items = schema.items;
     if (items && typeof items === 'object') {
       value.forEach((item, i) => {

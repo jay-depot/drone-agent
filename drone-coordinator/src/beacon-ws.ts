@@ -212,7 +212,9 @@ function handleInjectFrame(beaconId: string, msg: IncomingMessage): void {
 function resolveToolSelections(
   extensionId: string,
   tools: Array<{ capability: string }> | undefined
-): Array<{ capability: string; description?: string; paramSchema?: unknown }> | undefined {
+):
+  | Array<{ capability: string; description?: string; paramSchema?: unknown }>
+  | undefined {
   if (!tools) return undefined;
   const manifest = getManifest(extensionId);
   return tools.map(t => {
@@ -228,10 +230,7 @@ function resolveToolSelections(
 }
 
 /** Forward an `inject-remove` frame to the target session's host beacon. */
-function handleInjectRemoveFrame(
-  beaconId: string,
-  msg: IncomingMessage
-): void {
+function handleInjectRemoveFrame(beaconId: string, msg: IncomingMessage): void {
   const frame = msg as unknown as DroneInjectRemoveFrame;
   const hostBeaconId = resolveHostBeacon(frame.target);
   if (!hostBeaconId) {

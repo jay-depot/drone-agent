@@ -104,15 +104,17 @@ export function ExtensionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const disposers = extensions.load(
       (region, component, label) =>
-        registerComponent(region as UIRegion, component as ComponentType, label),
+        registerComponent(
+          region as UIRegion,
+          component as ComponentType,
+          label
+        ),
       registerRoute
     );
     if (extensions.loaded.length > 0) setLoaded(extensions.loaded);
     return () => {
       for (const dispose of disposers) dispose();
     };
-    // Load once; `load`/`register*` are stable via useMemo.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [extensions.load, registerComponent, registerRoute]);
 
   const value: ExtensionContextValue = {

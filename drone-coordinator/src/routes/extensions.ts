@@ -9,7 +9,10 @@ import {
   isExtension,
   listExtensionNodeIds,
 } from '../extension-registry.js';
-import { resolveBeaconIdByFingerprint, getClientCertFingerprint } from '../mtls.js';
+import {
+  resolveBeaconIdByFingerprint,
+  getClientCertFingerprint,
+} from '../mtls.js';
 import { publishMutationEvent } from '../ws-pubsub.js';
 import {
   computeBundleHash,
@@ -44,13 +47,18 @@ async function invoke(
   reply: FastifyReply
 ): Promise<unknown> {
   if (!isExtension(nodeId)) {
-    return reply.code(404).send({ error: 'Not an extension', code: 'NOT_EXTENSION' });
+    return reply
+      .code(404)
+      .send({ error: 'Not an extension', code: 'NOT_EXTENSION' });
   }
   const cap = findCapability(nodeId, action);
   if (!cap) {
     return reply
       .code(404)
-      .send({ error: `Unknown capability: ${action}`, code: 'UNKNOWN_CAPABILITY' });
+      .send({
+        error: `Unknown capability: ${action}`,
+        code: 'UNKNOWN_CAPABILITY',
+      });
   }
 
   const errors = validateJsonSchema(params ?? {}, cap.paramSchema ?? {});
@@ -61,7 +69,10 @@ async function invoke(
   if (!isBeaconConnected(nodeId)) {
     return reply
       .code(503)
-      .send({ error: 'Extension not connected', code: 'EXTENSION_DISCONNECTED' });
+      .send({
+        error: 'Extension not connected',
+        code: 'EXTENSION_DISCONNECTED',
+      });
   }
 
   try {
@@ -78,7 +89,10 @@ async function invoke(
     if (timeout) {
       return reply
         .code(504)
-        .send({ error: 'Extension did not respond', code: 'EXTENSION_TIMEOUT' });
+        .send({
+          error: 'Extension did not respond',
+          code: 'EXTENSION_TIMEOUT',
+        });
     }
     return reply
       .code(503)
@@ -92,30 +106,34 @@ export default function extensionRoutes(app: FastifyInstance) {
     const nodeIds = new Set(listExtensionNodeIds());
     for (const row of db.listCapabilityCache()) nodeIds.add(row.nodeId);
 
-    return Promise.all([...nodeIds].map(async nodeId => {
-      const manifest = getManifest(nodeId) ?? db.getCapabilityCache(nodeId)?.manifest;
-      const bundleRows = db.listBundles(nodeId);
-      const bundles = await Promise.all(
-        bundleRows.map(async row => {
-          const urls = await bundleFileUrls(nodeId, row.hash, row.path);
-          return {
-            name: row.name,
-            version: row.version,
-            hash: row.hash,
-            scriptUrls: urls.scripts,
-            styleUrls: urls.styles,
-          };
-        })
-      );
-      return {
-        nodeId,
-        connected: isBeaconConnected(nodeId),
-        isExtension: isExtension(nodeId),
-        protocolVersion: manifest?.protocolVersion ?? EXTENSION_PROTOCOL_VERSION,
-        capabilities: manifest?.capabilities ?? [],
-        bundles,
-      };
-    }));
+    return Promise.all(
+      [...nodeIds].map(async nodeId => {
+        const manifest =
+          getManifest(nodeId) ?? db.getCapabilityCache(nodeId)?.manifest;
+        const bundleRows = db.listBundles(nodeId);
+        const bundles = await Promise.all(
+          bundleRows.map(async row => {
+            const urls = await bundleFileUrls(nodeId, row.hash, row.path);
+            return {
+              name: row.name,
+              version: row.version,
+              hash: row.hash,
+              scriptUrls: urls.scripts,
+              styleUrls: urls.styles,
+            };
+          })
+        );
+        return {
+          nodeId,
+          connected: isBeaconConnected(nodeId),
+          isExtension: isExtension(nodeId),
+          protocolVersion:
+            manifest?.protocolVersion ?? EXTENSION_PROTOCOL_VERSION,
+          capabilities: manifest?.capabilities ?? [],
+          bundles,
+        };
+      })
+    );
   });
 
   // Invoke a proxied API action (UI/external consumer; web-token protected).
@@ -173,7 +191,11 @@ export default function extensionRoutes(app: FastifyInstance) {
         .code(400)
         .send({ error: 'version and a non-empty files array are required' });
     }
-    if (files.some(f => typeof f?.name !== 'string' || typeof f?.contentBase64 !== 'string')) {
+    if (
+      files.some(
+        f => typeof f?.name !== 'string' || typeof f?.contentBase64 !== 'string'
+      )
+    ) {
       return reply
         .code(400)
         .send({ error: 'each file needs a name and contentBase64' });
@@ -206,7 +228,9 @@ export default function extensionRoutes(app: FastifyInstance) {
     // Replace semantics: drop the superseded content-hash directory.
     if (previous && previous.hash !== hash) {
       await removeBundleDir(previous.path).catch(err => {
-        logger.warn(`Failed to remove superseded bundle ${previous.path}: ${err}`);
+        logger.warn(
+          `Failed to remove superseded bundle ${previous.path}: ${err}`
+        );
       });
     }
 

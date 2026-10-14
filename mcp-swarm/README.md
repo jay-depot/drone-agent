@@ -40,20 +40,20 @@ Register it with an MCP client (e.g. Claude Code):
       "command": "node",
       "args": ["/absolute/path/to/mcp-swarm/bin/mcp-swarm"],
       "env": {
-        "MCP_SWARM_COORDINATOR_URL": "http://127.0.0.1:3456"
-      }
-    }
-  }
+        "MCP_SWARM_COORDINATOR_URL": "http://127.0.0.1:3456",
+      },
+    },
+  },
 }
 ```
 
 ### Environment
 
-| Variable                     | Default                              | Purpose                          |
-| ---------------------------- | ------------------------------------ | -------------------------------- |
-| `MCP_SWARM_COORDINATOR_URL`  | `http://127.0.0.1:3456`              | Coordinator to connect to.       |
-| `MCP_SWARM_DATA_DIR`         | `~/.drone-agent/mcp-swarm`           | Identity + TLS storage.          |
-| `MCP_SWARM_ID`               | `mcp-swarm`                          | Node id used for registration.   |
+| Variable                    | Default                    | Purpose                        |
+| --------------------------- | -------------------------- | ------------------------------ |
+| `MCP_SWARM_COORDINATOR_URL` | `http://127.0.0.1:3456`    | Coordinator to connect to.     |
+| `MCP_SWARM_DATA_DIR`        | `~/.drone-agent/mcp-swarm` | Identity + TLS storage.        |
+| `MCP_SWARM_ID`              | `mcp-swarm`                | Node id used for registration. |
 
 ## Capability catalog as the single source of truth
 
@@ -66,13 +66,13 @@ schema) and maps it to a coordinator REST request. The same catalog drives:
 
 ## Layout
 
-| File                | Purpose                                                        |
-| ------------------- | -------------------------------------------------------------- |
-| `src/mapping.ts`    | Capability catalog + coordinator REST mapping + executor.     |
+| File                | Purpose                                                                    |
+| ------------------- | -------------------------------------------------------------------------- |
+| `src/mapping.ts`    | Capability catalog + coordinator REST mapping + executor.                  |
 | `src/mcp-server.ts` | Dependency-free MCP stdio server (`initialize`/`tools/list`/`tools/call`). |
-| `src/bundle.ts`     | The embedded `status-panel` front-end bundle.                  |
-| `src/index.ts`      | Wires the extension node to the MCP server.                    |
-| `bin/mcp-swarm`     | Executable shim.                                               |
+| `src/bundle.ts`     | The embedded `status-panel` front-end bundle.                              |
+| `src/index.ts`      | Wires the extension node to the MCP server.                                |
+| `bin/mcp-swarm`     | Executable shim.                                                           |
 
 ## Notes
 

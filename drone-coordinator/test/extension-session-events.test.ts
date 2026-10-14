@@ -144,7 +144,9 @@ describe('sessionStarted replay on connect', () => {
 
     const started = frames(lateWs).filter(f => f.event === 'sessionStarted');
     expect(started).toHaveLength(1);
-    expect((started[0].session as DroneSessionSnapshot).sessionId).toBe('live-1');
+    expect((started[0].session as DroneSessionSnapshot).sessionId).toBe(
+      'live-1'
+    );
   });
 
   it('does not replay ended sessions', async () => {

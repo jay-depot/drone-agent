@@ -101,7 +101,8 @@ export const CAPABILITY_MAPPINGS: CapabilityMapping[] = [
       responseSchema: { type: 'array' },
     },
     method: 'GET',
-    path: params => `/api/agents/location${query({ beaconId: params.beaconId })}`,
+    path: params =>
+      `/api/agents/location${query({ beaconId: params.beaconId })}`,
   },
 ];
 

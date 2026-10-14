@@ -854,5 +854,21 @@
   {
     "timestamp": "2026-10-13T23:31:49.093Z",
     "insight": "Planning-swarm-extensions finding: the coordinator's beacon WS inbound handler (drone-coordinator/src/beacon-ws.ts) is a one-line type gate, and the coordinator→beacon `sendBeaconCommand(beaconId, command, payload, timeoutMs)` UUID request/response primitive already exists. Both make \"add a new node type that speaks the beacon protocol\" far cheaper than it looks — worth knowing for any future 'new server type connects to the coordinator' work."
+  },
+  {
+    "timestamp": "2026-10-14T00:48:53.423Z",
+    "insight": "Adding a React context consumer (`useExtensionRegistry`) to widely-rendered pages (Topology/Sessions/SessionDetail) without a default context value breaks every existing page test with \"must be used within a Provider\". Provide a graceful EMPTY default via `createContext(EMPTY)` + a non-throwing hook so region slots render nothing when unwrapped — this preserves focused unit tests and is the better production posture anyway (a page should never crash because a decorative slot has no provider)."
+  },
+  {
+    "timestamp": "2026-10-14T00:48:53.425Z",
+    "insight": "Before attributing a test failure to your own change, verify against the stashed baseline with the same command: `git stash push -u`, run the test N times, `git stash pop`. drone-coordinator-ui's `sessions.test.tsx` \"debounces an event burst\" test is flaky on the baseline too (fails 4/4 in one run, passes 1/4 in another) — it is pre-existing, not introduced. A single green or red run is not evidence with fake-timer debounce tests."
+  },
+  {
+    "timestamp": "2026-10-14T00:48:53.427Z",
+    "insight": "For a testability seam where production uses a runtime `import(url)` that cannot be stubbed in jsdom, extract the logic into a pure function taking an injected `importModule` dep and keep the hook a thin wrapper. This is the same pattern as the `withKeyLock`/`coordinator-fetch` extractions: pure core + injected side effects = unit-testable without integration scaffolding."
+  },
+  {
+    "timestamp": "2026-10-14T00:48:53.429Z",
+    "insight": "The `git__commit` plugin tool fails (silently, non-zero) on commit messages containing em-dashes or multi-line bodies, while the identical message succeeds via `exec__run` + `git commit -m`. Also `git__commit all:true` does NOT stage untracked files (needs includeUntracked:true). When the plugin tool errors on a working tree that is NOT clean, fall back to the shell — do not assume \"clean tree\" from HOST.md is the only failure mode."
   }
 ]

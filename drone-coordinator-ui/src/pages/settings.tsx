@@ -49,8 +49,7 @@ export default function SettingsPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Settings</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Coordinator configuration, shared agent config, and extension
-          settings
+          Coordinator configuration, shared agent config, and extension settings
         </p>
       </div>
 

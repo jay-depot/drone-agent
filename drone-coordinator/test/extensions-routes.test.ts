@@ -3,7 +3,10 @@ import { setupDb, teardownDb } from './setup.js';
 import { buildTestApp } from './app-helper.js';
 import type { FastifyInstance } from 'fastify';
 import type { DroneExtensionManifest } from 'drone-core';
-import { setManifest, resetExtensionRegistry } from '../src/extension-registry.js';
+import {
+  setManifest,
+  resetExtensionRegistry,
+} from '../src/extension-registry.js';
 import { getBundle, listBundles } from '../src/db/index.js';
 
 const sendBeaconCommand = vi.fn();
@@ -104,7 +107,12 @@ describe('POST /api/extensions/:nodeId/actions/:action', () => {
     expect(sendBeaconCommand).toHaveBeenCalledWith(
       'node-1',
       'invokeAction',
-      { action: 'echo', params: { q: 'hi' }, caller: 'ui', sessionId: undefined },
+      {
+        action: 'echo',
+        params: { q: 'hi' },
+        caller: 'ui',
+        sessionId: undefined,
+      },
       1000
     );
   });
@@ -192,7 +200,12 @@ describe('POST /api/extensions/:nodeId/tools/:tool', () => {
     expect(sendBeaconCommand).toHaveBeenCalledWith(
       'node-1',
       'invokeTool',
-      { action: 'echo', params: { q: 'hi' }, caller: 'agent', sessionId: 'sess-1' },
+      {
+        action: 'echo',
+        params: { q: 'hi' },
+        caller: 'agent',
+        sessionId: 'sess-1',
+      },
       1000
     );
   });
@@ -210,8 +223,14 @@ describe('POST /api/extensions/:nodeId/tools/:tool', () => {
 
 describe('bundle upload / serving / delete', () => {
   const files = [
-    { name: 'index.js', contentBase64: Buffer.from('export default {}').toString('base64') },
-    { name: 'style.css', contentBase64: Buffer.from('body{}').toString('base64') },
+    {
+      name: 'index.js',
+      contentBase64: Buffer.from('export default {}').toString('base64'),
+    },
+    {
+      name: 'style.css',
+      contentBase64: Buffer.from('body{}').toString('base64'),
+    },
   ];
 
   it('uploads a bundle and records the DB row', async () => {
@@ -336,7 +355,9 @@ describe('bundle upload / serving / delete', () => {
         files: [
           {
             name: 'index.js',
-            contentBase64: Buffer.from('export default {v:2}').toString('base64'),
+            contentBase64: Buffer.from('export default {v:2}').toString(
+              'base64'
+            ),
           },
         ],
       },

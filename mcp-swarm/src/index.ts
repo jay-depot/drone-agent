@@ -17,11 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createExtensionNode, type ExtensionNode } from 'drone-swarm-common';
 import { SWARM_CAPABILITIES } from './mapping.js';
-import {
-  createInvoker,
-  frame,
-  startMcpStdioServer,
-} from './mcp-server.js';
+import { createInvoker, frame, startMcpStdioServer } from './mcp-server.js';
 import { buildStatusPanelFiles, STATUS_PANEL_BUNDLE } from './bundle.js';
 
 export interface McpSwarmConfig {
@@ -33,8 +29,7 @@ export interface McpSwarmConfig {
 /** Resolve config from env with sensible defaults. */
 export function resolveConfig(env = process.env): McpSwarmConfig {
   return {
-    coordinatorUrl:
-      env.MCP_SWARM_COORDINATOR_URL ?? 'http://127.0.0.1:3456',
+    coordinatorUrl: env.MCP_SWARM_COORDINATOR_URL ?? 'http://127.0.0.1:3456',
     dataDir:
       env.MCP_SWARM_DATA_DIR ??
       path.join(os.homedir(), '.drone-agent', 'mcp-swarm'),
@@ -55,18 +50,18 @@ export async function startMcpSwarm(
     handlers: {
       // An MCP-client-driven action invoked through the coordinator.
       onInvokeAction: async (capability, params) => {
-        const result = await createInvoker(
-          node.getFetch(),
-          cfg.coordinatorUrl
-        )(capability, (params ?? {}) as Record<string, unknown>);
+        const result = await createInvoker(node.getFetch(), cfg.coordinatorUrl)(
+          capability,
+          (params ?? {}) as Record<string, unknown>
+        );
         return { ok: result.ok, status: result.status, body: result.body };
       },
       // The same, for a proxied agent tool call.
       onInvokeTool: async (capability, params) => {
-        const result = await createInvoker(
-          node.getFetch(),
-          cfg.coordinatorUrl
-        )(capability, (params ?? {}) as Record<string, unknown>);
+        const result = await createInvoker(node.getFetch(), cfg.coordinatorUrl)(
+          capability,
+          (params ?? {}) as Record<string, unknown>
+        );
         return { ok: result.ok, status: result.status, body: result.body };
       },
     },

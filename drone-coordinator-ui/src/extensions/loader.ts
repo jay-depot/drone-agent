@@ -68,8 +68,7 @@ export async function loadExtensionBundles(
   const disposers: Array<() => void> = [];
   const loaded: string[] = [];
   const injectStylesheet = deps.injectStylesheet ?? defaultInjectStylesheet;
-  const onError =
-    deps.onError ?? ((message: string) => console.warn(message));
+  const onError = deps.onError ?? ((message: string) => console.warn(message));
 
   for (const entry of entries) {
     for (const bundle of entry.bundles ?? []) {
@@ -86,16 +85,18 @@ export async function loadExtensionBundles(
           )) {
             if (component) {
               disposers.push(
-                deps.registerComponent(region as UIRegion, component, entry.nodeId)
+                deps.registerComponent(
+                  region as UIRegion,
+                  component,
+                  entry.nodeId
+                )
               );
             }
           }
           for (const route of client.routes ?? []) {
             disposers.push(deps.registerRoute(route));
           }
-          client.onReady?.(
-            makeApi(deps.registerComponent, deps.registerRoute)
-          );
+          client.onReady?.(makeApi(deps.registerComponent, deps.registerRoute));
           loaded.push(entry.nodeId);
         } catch (err) {
           // Contained: one bad bundle never breaks the app.

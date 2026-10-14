@@ -42,7 +42,7 @@ export function useExtensions(): ExtensionsLoader {
       didLoadRef.current = true;
 
       void (async () => {
-        let entries: Parameters<typeof loadExtensionBundles>[0] = [];
+        let entries: Parameters<typeof loadExtensionBundles>[0];
         try {
           const res = await authFetch('/api/extensions');
           if (!res.ok) return;

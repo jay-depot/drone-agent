@@ -18,9 +18,8 @@ vi.mock('../src/ws-server.js', () => ({
   startMessageCleanup: vi.fn(),
 }));
 
-const { handleInject, handleInjectRemove } = await import(
-  '../src/routes/extension-handlers.js'
-);
+const { handleInject, handleInjectRemove } =
+  await import('../src/routes/extension-handlers.js');
 
 let app: FastifyInstance;
 

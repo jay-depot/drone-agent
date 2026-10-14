@@ -63,12 +63,16 @@ export function buildStatusPanelFiles(): BundleFileDefinition[] {
   return [
     {
       name: 'index.js',
-      contentBase64: Buffer.from(STATUS_PANEL_INDEX_JS, 'utf8').toString('base64'),
+      contentBase64: Buffer.from(STATUS_PANEL_INDEX_JS, 'utf8').toString(
+        'base64'
+      ),
       contentType: 'application/javascript',
     },
     {
       name: 'style.css',
-      contentBase64: Buffer.from(STATUS_PANEL_STYLE_CSS, 'utf8').toString('base64'),
+      contentBase64: Buffer.from(STATUS_PANEL_STYLE_CSS, 'utf8').toString(
+        'base64'
+      ),
       contentType: 'text/css',
     },
   ];

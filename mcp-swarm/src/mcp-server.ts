@@ -8,7 +8,11 @@
  * coordinator-proxied action/tool surface.
  */
 
-import { executeCapability, mcpToolName, type InvokeResult } from './mapping.js';
+import {
+  executeCapability,
+  mcpToolName,
+  type InvokeResult,
+} from './mapping.js';
 import type { DroneExtensionCapability } from 'drone-core';
 
 export interface McpServerOptions {
@@ -164,7 +168,10 @@ export function frame(payload: string): string {
 export function createInvoker(
   fetchImpl: typeof fetch,
   baseUrl: string
-): (capability: string, params: Record<string, unknown>) => Promise<InvokeResult> {
+): (
+  capability: string,
+  params: Record<string, unknown>
+) => Promise<InvokeResult> {
   return (capability, params) =>
     executeCapability(capability, params, fetchImpl, baseUrl);
 }

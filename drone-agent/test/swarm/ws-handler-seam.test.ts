@@ -82,10 +82,13 @@ describe('dispatchCustomWsMessage', () => {
 
     const ran = dispatchCustomWsMessage(ctx, 'injection', { kind: 'fragment' });
     expect(ran).toBe(true);
-    expect(handler).toHaveBeenCalledWith({ kind: 'fragment' }, {
-      type: 'injection',
-      payload: { kind: 'fragment' },
-    });
+    expect(handler).toHaveBeenCalledWith(
+      { kind: 'fragment' },
+      {
+        type: 'injection',
+        payload: { kind: 'fragment' },
+      }
+    );
   });
 
   it('returns false when no handler is registered for the type', () => {
@@ -127,9 +130,12 @@ describe('swarm WS seam routes unknown frames to handlers', () => {
       data: JSON.stringify({ type: 'injection', payload: { kind: 'tools' } }),
     });
 
-    expect(handler).toHaveBeenCalledWith({ kind: 'tools' }, {
-      type: 'injection',
-      payload: { kind: 'tools' },
-    });
+    expect(handler).toHaveBeenCalledWith(
+      { kind: 'tools' },
+      {
+        type: 'injection',
+        payload: { kind: 'tools' },
+      }
+    );
   });
 });

@@ -1,9 +1,6 @@
 import { getDatabase } from './init.js';
 import { logger } from '../logger.js';
-import type {
-  DroneExtensionBundle,
-  DroneExtensionManifest,
-} from 'drone-core';
+import type { DroneExtensionBundle, DroneExtensionManifest } from 'drone-core';
 
 export interface ExtensionCapabilityCacheRow {
   nodeId: string;
@@ -20,7 +17,9 @@ export interface ExtensionBundleRow {
   updatedAt: number;
 }
 
-function rowToCapabilityCache(row: Record<string, unknown>): ExtensionCapabilityCacheRow {
+function rowToCapabilityCache(
+  row: Record<string, unknown>
+): ExtensionCapabilityCacheRow {
   return {
     nodeId: row.node_id as string,
     manifest: JSON.parse(row.manifest as string) as DroneExtensionManifest,
@@ -125,7 +124,9 @@ export function listBundles(nodeId?: string): ExtensionBundleRow[] {
     ? getDatabase().prepare(
         'SELECT * FROM extension_bundles WHERE node_id = ? ORDER BY name'
       )
-    : getDatabase().prepare('SELECT * FROM extension_bundles ORDER BY node_id, name');
+    : getDatabase().prepare(
+        'SELECT * FROM extension_bundles ORDER BY node_id, name'
+      );
   const rows = (nodeId ? stmt.all(nodeId) : stmt.all()) as Record<
     string,
     unknown

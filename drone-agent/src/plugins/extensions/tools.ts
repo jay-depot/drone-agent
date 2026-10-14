@@ -82,7 +82,11 @@ async function invokeExtensionTool(
 function buildToolDefinition(
   ctx: ExtensionsContext,
   extensionId: string,
-  selection: { capability: string; description?: string; paramSchema?: Record<string, unknown> }
+  selection: {
+    capability: string;
+    description?: string;
+    paramSchema?: Record<string, unknown>;
+  }
 ): DroneToolDefinition {
   return {
     name: registeredToolName(extensionId, selection.capability),
@@ -122,7 +126,7 @@ export function reconcileInjectedTools(ctx: ExtensionsContext): void {
     }
   }
 
-  for (const [canonical, entry] of ctx.injectedTools) {
+  for (const canonical of ctx.injectedTools.keys()) {
     if (!desired.has(canonical)) {
       ctx.registration.unregisterTool(canonical);
       ctx.injectedTools.delete(canonical);

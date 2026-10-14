@@ -47,9 +47,7 @@ export interface ExtensionNodeHandlers {
     ctx: InvokeCtx
   ) => Promise<InvokeResult>;
   onSessionStarted?: (snapshot: DroneSessionSnapshot) => void | Promise<void>;
-  onSessionEnded?: (
-    session: DroneSessionEndedEvent
-  ) => void | Promise<void>;
+  onSessionEnded?: (session: DroneSessionEndedEvent) => void | Promise<void>;
 }
 
 export interface BundleFileInput {
@@ -168,7 +166,7 @@ export async function createExtensionNode(
     payload?: Record<string, unknown>;
   }): Promise<void> => {
     let ok = true;
-    let status = 200;
+    let status: number | undefined;
     let body: unknown;
     try {
       const payload = msg.payload ?? {};
@@ -184,7 +182,11 @@ export async function createExtensionNode(
           ok = false;
           body = { error: 'Unknown action' };
         } else {
-          const result = await opts.handlers.onInvokeAction(action, params, ctx);
+          const result = await opts.handlers.onInvokeAction(
+            action,
+            params,
+            ctx
+          );
           ({ ok, status = ok ? 200 : 502, body } = result);
         }
       } else if (msg.command === 'invokeTool') {
@@ -215,9 +217,16 @@ export async function createExtensionNode(
   }): void => {
     try {
       if (msg.event === 'sessionStarted' && opts.handlers?.onSessionStarted) {
-        void opts.handlers.onSessionStarted(msg.session as DroneSessionSnapshot);
-      } else if (msg.event === 'sessionEnded' && opts.handlers?.onSessionEnded) {
-        void opts.handlers.onSessionEnded(msg.session as DroneSessionEndedEvent);
+        void opts.handlers.onSessionStarted(
+          msg.session as DroneSessionSnapshot
+        );
+      } else if (
+        msg.event === 'sessionEnded' &&
+        opts.handlers?.onSessionEnded
+      ) {
+        void opts.handlers.onSessionEnded(
+          msg.session as DroneSessionEndedEvent
+        );
       }
     } catch (err) {
       logger.warn(`Extension event handler failed: ${err}`);
@@ -226,8 +235,7 @@ export async function createExtensionNode(
 
   const connect = (): void => {
     if (stopped) return;
-    const wsUrl =
-      opts.coordinatorUrl.replace(/^http/, 'ws') + '/ws/beacon';
+    const wsUrl = opts.coordinatorUrl.replace(/^http/, 'ws') + '/ws/beacon';
     try {
       ws = new WebSocket(wsUrl, {
         // codeql[js/disabling-certificate-verification]
@@ -256,11 +264,18 @@ export async function createExtensionNode(
       }
       if (msg.type === 'command') {
         void dispatchCommand(
-          msg as unknown as { id: string; command: string; payload?: Record<string, unknown> }
+          msg as unknown as {
+            id: string;
+            command: string;
+            payload?: Record<string, unknown>;
+          }
         );
       } else if (msg.type === 'event') {
         dispatchEvent(
-          msg as unknown as { event: 'sessionStarted' | 'sessionEnded'; session: unknown }
+          msg as unknown as {
+            event: 'sessionStarted' | 'sessionEnded';
+            session: unknown;
+          }
         );
       }
     });
@@ -344,7 +359,9 @@ export async function createExtensionNode(
         }
       );
       if (!res.ok) {
-        throw new Error(`Bundle upload failed: ${res.status} ${await res.text()}`);
+        throw new Error(
+          `Bundle upload failed: ${res.status} ${await res.text()}`
+        );
       }
       return (await res.json()) as { hash: string };
     },

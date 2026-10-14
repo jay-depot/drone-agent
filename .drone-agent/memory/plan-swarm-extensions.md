@@ -21,16 +21,17 @@ updated: 2026-10-13T23:31:34.330Z
 
 ## Summary — what & why
 
-**Swarm Extensions** are external services that connect to the coordinator over the **same protocol as beacons**. An extension *is* a beacon that also declares a **capability manifest**; that single unification gives it "everything a beacon can do" for free, plus four new powers:
+**Swarm Extensions** are external services that connect to the coordinator over the **same protocol as beacons**. An extension _is_ a beacon that also declares a **capability manifest**; that single unification gives it "everything a beacon can do" for free, plus four new powers:
 
 1. **Inject into agent sessions** — system-prompt fragments, one-shot system reminders, and "proxied tools", driven by a **session-start notification** carrying agent metadata.
-2. **Do anything a beacon already can** (spawn, deliver messages, relay, sync) — free, because it *is* a beacon.
+2. **Do anything a beacon already can** (spawn, deliver messages, relay, sync) — free, because it _is_ a beacon.
 3. **Expose proxied API actions** — declared with a param + response schema; the coordinator serves the REST route and proxies over the extension's WebSocket with a UUID tag, waiting for the reply.
 4. **Ship front-end bundles** — code the coordinator stores and serves same-origin into its web UI as a "front-end plugin".
 
-**Why**: this answers several open "how does the gateway manage remote agents" questions at once (the gateway is *conceptually* a swarm extension), and opens end-user extension points. It reuses the existing beacon trust path (mTLS + `beacon_trust` + approval), the existing UUID request/response WS primitive (`sendBeaconCommand`), the existing fragment/prompt pipeline, the existing tool list/mount registry, and the alice-assistant front-end-plugin model.
+**Why**: this answers several open "how does the gateway manage remote agents" questions at once (the gateway is _conceptually_ a swarm extension), and opens end-user extension points. It reuses the existing beacon trust path (mTLS + `beacon_trust` + approval), the existing UUID request/response WS primitive (`sendBeaconCommand`), the existing fragment/prompt pipeline, the existing tool list/mount registry, and the alice-assistant front-end-plugin model.
 
 **Scope guardrails (v0)**:
+
 - Extensions are **local-only (same-host)**. Remote extensions are deferred until a future "pre-approval token" auth flow lands.
 - **No** coordinator config toggle, **no** separate approval machinery, **no** `kind` field, **no** rename of "beacon".
 - The beacon is **not** refactored onto the new SDK; the **gateway** is **not** replatformed (both deferred — gateway first, then beacon).
@@ -80,6 +81,7 @@ updated: 2026-10-13T23:31:34.330Z
 ## Protocol reference (write this down; it is the contract)
 
 **Node → coordinator, over the `/ws/beacon` WebSocket (inbound frames the coordinator now accepts):**
+
 ```
 { type: 'response',      id, ok, status?, body? }                    // existing (command replies)
 { type: 'manifest',      protocolVersion: 1, capabilities: [...], bundles: [...] }
@@ -88,16 +90,19 @@ updated: 2026-10-13T23:31:34.330Z
                          tools?: [{ capability: string }] }
 { type: 'inject-remove', target: agentId, kind, injectionId?, tools?: [{ capability }] }
 ```
+
 Capability entry: `{ name, description, paramSchema, responseSchema, timeoutMs? }`.
 Bundle entry: `{ name, version, hash, targetRegions? }`.
 
 **Coordinator → node, over the same WS (outbound frames):**
+
 ```
 { type: 'command', id, command, payload }     // existing; now also command='invokeAction'|'invokeTool'|'inject'|'injectRemove'
 { type: 'event',   event: 'sessionStarted'|'sessionEnded', session: <sessionSnapshot> }
 ```
 
 **Agent → beacon → coordinator session registration:**
+
 ```
 POST /agents                      { id, personaId }
 POST /api/sync/sessions/register  { id, personaId, beaconId, interactive, snapshot }
@@ -106,14 +111,15 @@ POST /api/sync/sessions/register  { id, personaId, beaconId, interactive, snapsh
 ```
 
 **Extension HTTP surface (all under `/api`; web-token/localhost-protected unless noted):**
-| Method + path | Purpose | Auth |
-|---|---|---|
-| `PUT /api/extensions/bundles/:name` | upload/replace a bundle (`{version, files:[{name,contentBase64,contentType}]}`) | node mTLS |
-| `DELETE /api/extensions/bundles/:name` | remove a bundle | node mTLS |
-| `GET /api/extensions` | UI manifest `[{ nodeId, name, connected, protocolVersion, capabilities[], bundles[] }]` | web token |
-| `POST /api/extensions/:nodeId/actions/:action` | invoke a proxied API action | web token |
-| `POST /api/extensions/:nodeId/tools/:tool` | agent tool-call proxy | node mTLS |
-| `GET /plugin-scripts/:nodeId/:hash/:name` (+ `/plugin-styles/...`) | serve bundle assets same-origin | none (like `/assets/`) |
+
+| Method + path                                                      | Purpose                                                                                 | Auth                   |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------- | ---------------------- |
+| `PUT /api/extensions/bundles/:name`                                | upload/replace a bundle (`{version, files:[{name,contentBase64,contentType}]}`)         | node mTLS              |
+| `DELETE /api/extensions/bundles/:name`                             | remove a bundle                                                                         | node mTLS              |
+| `GET /api/extensions`                                              | UI manifest `[{ nodeId, name, connected, protocolVersion, capabilities[], bundles[] }]` | web token              |
+| `POST /api/extensions/:nodeId/actions/:action`                     | invoke a proxied API action                                                             | web token              |
+| `POST /api/extensions/:nodeId/tools/:tool`                         | agent tool-call proxy                                                                   | node mTLS              |
+| `GET /plugin-scripts/:nodeId/:hash/:name` (+ `/plugin-styles/...`) | serve bundle assets same-origin                                                         | none (like `/assets/`) |
 
 **Coordinator tool-invoke route must also be reachable via the BEACON** at `POST /coordinator/extensions/:nodeId/tools/:tool` (beacon proxies to coordinator, same pattern as the existing `/coordinator/*` routes).
 
@@ -127,15 +133,16 @@ POST /api/sync/sessions/register  { id, personaId, beaconId, interactive, snapsh
 
 **P0.1 — Shared wire types (`drone-core`).**
 Add `drone-core/src/extension-types.ts` and re-export from `drone-core/src/index.ts`:
+
 ```ts
 export const EXTENSION_PROTOCOL_VERSION = 1;
 
 export type DroneExtensionCapability = {
   name: string;
   description: string;
-  paramSchema: Record<string, unknown>;      // JSON Schema, enforced
-  responseSchema?: Record<string, unknown>;  // advisory
-  timeoutMs?: number;                        // default 15000
+  paramSchema: Record<string, unknown>; // JSON Schema, enforced
+  responseSchema?: Record<string, unknown>; // advisory
+  timeoutMs?: number; // default 15000
 };
 
 export type DroneExtensionBundle = {
@@ -164,9 +171,11 @@ export type DroneSessionSnapshot = {
   extensionHint?: string;
 };
 ```
+
 Also add `type: 'manifest' | 'inject' | 'inject-remove'` and `type: 'event'` frame unions if a shared frame-type module is preferred. Tests: a type-only compile check is unnecessary; cover behaviour in P0.3/P0.6.
 
 **P0.2 — Move Ed25519 identity helper into `drone-swarm-common`.**
+
 - Create `drone-swarm-common/src/identity.ts` with the contents of `drone-beacon/src/identity.ts` (`generateIdentity`, `loadOrCreateIdentity`, `getSigningKey`, `BeaconIdentity` — rename exported type to `SwarmNodeIdentity` for clarity, keep a `BeaconIdentity` alias to avoid churn), parameterising the identity filename (`beacon-identity.json` default; extensions pass `node-identity.json`).
 - Add `export * from './identity.js';` to `drone-swarm-common/src/index.ts`.
 - Delete `drone-beacon/src/identity.ts`; update its importers (`drone-beacon/src/index.ts`, `coordinator-client.ts`, `fingerprint-announce.ts`, and any test) to `import { … } from 'drone-swarm-common'`.
@@ -174,6 +183,7 @@ Also add `type: 'manifest' | 'inject' | 'inject-remove'` and `type: 'event'` fra
 - Tests: port the beacon's identity tests (if any) to `drone-swarm-common/test/identity.test.ts`; keep the same filenames/defaults so behaviour is unchanged.
 
 **P0.3 — Coordinator: inbound frame handling + manifest registry.**
+
 - `drone-coordinator/src/beacon-ws.ts`: extend the inbound `socket.on('message')` handler (and the test-only `_handleIncomingMessage`) to dispatch a small set of inbound frame types instead of only `response`:
   - `response` → existing pendingRequests resolver.
   - `manifest` → `extensionRegistry.setManifest(beaconId, manifest)` (reject/log on `protocolVersion` mismatch) → persist last-known to `extension_capabilities` → `publishMutationEvent({eventType:'extension.manifest', payload:{beaconId}})` (drives the UI refresh).
@@ -183,6 +193,7 @@ Also add `type: 'manifest' | 'inject' | 'inject-remove'` and `type: 'event'` fra
 - Tests: `drone-coordinator/test/extension-ws.test.ts` — manifest admit/replace/reject-on-version; inject forwarded to host beacon (spy `sendBeaconCommand`); unknown target logged; disconnect clears the registry.
 
 **P0.4 — Coordinator DB: session snapshot column + extension tables.**
+
 - `drone-coordinator/src/db/init.ts`: add idempotent migration
   ```sql
   -- PRAGMA table_info(swarm_sessions) guard, then:
@@ -201,6 +212,7 @@ Also add `type: 'manifest' | 'inject' | 'inject-remove'` and `type: 'event'` fra
 - Tests: migration is idempotent (run twice); snapshot round-trips; bundle CRUD.
 
 **P0.5 — Beacon: registration snapshot + `/coordinator/extensions/*` proxy.**
+
 - `drone-beacon/src/routes/sync.ts`: accept `snapshot?: DroneSessionSnapshot` on `POST /sync/sessions/register`; pass through to the coordinator client.
 - `drone-beacon/src/coordinator-client.ts`: `registerSwarmSession(id, personaId, interactive, snapshot?)` and a new `invokeExtensionTool(nodeId, tool, params, sessionId)`; POST to the coordinator `/api/sessions/register` (with snapshot) and `/api/extensions/:nodeId/tools/:tool`.
 - New `drone-beacon/src/routes/extensions.ts`: `POST /coordinator/extensions/:nodeId/tools/:tool` → forwards to the coordinator via the client; registers in `routes/index.ts`.
@@ -208,6 +220,7 @@ Also add `type: 'manifest' | 'inject' | 'inject-remove'` and `type: 'event'` fra
 - Tests: proxy route forwards; `inject` command reaches a fake agent socket; snapshot forwarded.
 
 **P0.6 — Coordinator: extension REST surface + bundle storage/serving.**
+
 - New `drone-coordinator/src/routes/extensions.ts` (mounted under `/api` in `routes/index.ts`):
   - `GET /extensions` — merge connected-node registry + last-known cache + bundles → UI manifest. `connected = isBeaconConnected(nodeId)`, `isExtension = registry.isExtension(nodeId)`.
   - `POST /extensions/:nodeId/actions/:action` — look up manifest capability; validate `params` against `paramSchema` (add a tiny JSON-Schema-subset validator, or reuse an existing one if present — grep first; else enforce `type`/`required`/`properties` minimally) → 400 on failure; `sendBeaconCommand(nodeId,'invokeAction',{action,params,caller:'ui'},cap.timeoutMs ?? 15000)`; map: not connected → 503, timeout → 504, else pass `{ok,status,body}` through (status defaults 200).
@@ -224,6 +237,7 @@ Also add `type: 'manifest' | 'inject' | 'inject-remove'` and `type: 'event'` fra
 - Tests: `drone-coordinator/test/extensions-routes.test.ts` — manifest listing, action invoke success/400/503/504, tool invoke, bundle upload + serve + delete, path-traversal rejection (`name`/`nodeId` sanitised with the fragment-id-style regex).
 
 **P0.7 — Coordinator: session-start/end events + injection-replay + injection fan-out.**
+
 - On `POST /api/sync/sessions/register` (`drone-coordinator/src/routes/swarm.ts`) after storing the snapshot: broadcast `{type:'event', event:'sessionStarted', session: snapshot}` to **all connected nodes** (`broadcastBeaconCommand` variant that carries a payload — add `broadcastBeaconEvent(event, session)` in `beacon-ws.ts`).
 - On session end (`DELETE /api/sync/sessions/:id` handler): broadcast `{type:'event', event:'sessionEnded', session:{sessionId, extensionHint?}}`; drop the snapshot.
 - On node WS connect (`registerBeaconConnection`): replay `sessionStarted` for all currently-active local sessions (`listActiveSessionSnapshots()`).
@@ -232,12 +246,24 @@ Also add `type: 'manifest' | 'inject' | 'inject-remove'` and `type: 'event'` fra
 
 **P0.8 — SDK `extension-server` module (`drone-swarm-common`).**
 Create `drone-swarm-common/src/extension-server.ts` (+ barrel export):
+
 ```ts
 export type ExtensionNodeHandlers = {
-  onInvokeAction?: (cap: string, params: unknown, ctx: InvokeCtx) => Promise<InvokeResult>;
-  onInvokeTool?:  (cap: string, params: unknown, ctx: InvokeCtx) => Promise<InvokeResult>;
+  onInvokeAction?: (
+    cap: string,
+    params: unknown,
+    ctx: InvokeCtx
+  ) => Promise<InvokeResult>;
+  onInvokeTool?: (
+    cap: string,
+    params: unknown,
+    ctx: InvokeCtx
+  ) => Promise<InvokeResult>;
   onSessionStarted?: (snapshot: DroneSessionSnapshot) => void | Promise<void>;
-  onSessionEnded?:  (session: { sessionId: string; extensionHint?: string }) => void | Promise<void>;
+  onSessionEnded?: (session: {
+    sessionId: string;
+    extensionHint?: string;
+  }) => void | Promise<void>;
 };
 
 export async function createExtensionNode(opts: {
@@ -258,10 +284,13 @@ export async function createExtensionNode(opts: {
 //   uploadBundle({ name, version, files }): Promise<{hash, urls}>
 //   stop(): Promise<void>
 ```
+
 The helper: loads/creates the Ed25519 identity + TLS cert (`loadOrCreateIdentity` + `loadOrCreateTlsIdentity`, identity file `node-identity.json`); registers (`POST /api/beacons` with `publicKey`, `tlsFingerprint`, `fingerprintConfirmed:false`, plus `extension: { protocolVersion: 1 }`); opens the `/ws/beacon` WS with the client cert; on `open` sends the `manifest` frame; dispatches inbound `command` (`invokeAction`/`invokeTool`) to the handlers and replies `{type:'response', id, ok, status, body}`; dispatches inbound `event` to `onSessionStarted`/`onSessionEnded`; reconnects with backoff. Cross-check the TLS/identity helpers' exact signatures in `drone-swarm-common/src/tls.ts` and reuse them verbatim.
+
 - Tests: `drone-swarm-common/test/extension-server.test.ts` — registration body shape, manifest frame on open, invoke dispatch + reply, event dispatch, reconnect, inject frame emission (use a fake WS).
 
 **P0.9 — Spawner + spawn payload: `--extension-hint` forwarding.**
+
 - `drone-swarm-common/src/spawner.ts`: read `configOverride.extensionHint` and append `['--extension-hint', value]` to `args` (mirror the `--persona`/`--working-dir` blocks).
 - Coordinator `POST /api/spawn` (`routes/spawn.ts`) + `handleSpawnAgent` payload: pass `extensionHint` through into the spawner `config`.
 - Tests: spawner argv includes `--extension-hint` when set, omits it otherwise.
@@ -269,33 +298,39 @@ The helper: loads/creates the Ed25519 identity + TLS cert (`loadOrCreateIdentity
 ### Phase P1 — Agent-side `extensions` plugin
 
 **P1.1 — CLI flag + runtime exposure.**
+
 - `drone-agent/src/cli.ts`: add `extensionHint?: string` to `CliOptions`, parse bare `--extension-hint <value>`, and default `options.extensionHint ??= process.env.DRONE_EXTENSION_HINT`.
 - `drone-agent/src/index.tsx`: thread `extensionHint` into the engine/runtime options (like `swarmSpawned`), exposed as `_runtime.extensionHint`.
 - Tests: `drone-agent/test/cli-extension-hint.test.ts` — flag, env fallback, absent.
 
 **P1.2 — Snapshot assembly + registration.**
+
 - `drone-agent/src/plugins/swarm/hooks.ts` `registerSwarmSession`: build the `DroneSessionSnapshot` (sessionId, personaId, beaconId=sessionId, interactive, isSubagent, cwd=`process.cwd()`, `enabledPlugins` from `registration.listPlugins().filter(p=>p.enabled).map(p=>p.id)`, `mountedTools` from `registration.listMountedTools().map(t=>t.name)`, `extensionHint` from `_runtime.extensionHint`, `protocolVersion:1`) and include it in the `POST /sync/sessions/register` body.
 - Tests: snapshot shape; names-only (no schemas); flags reflected.
 
 **P1.3 — Swarm capability: generic WS handler seam.**
+
 - `drone-core/src/capabilities.ts`: extend `DroneSwarmCapability` with `registerWsHandler(type: string, handler: (payload: unknown) => void): () => void`.
 - `drone-agent/src/plugins/swarm/websocket.ts`: keep a `Map<type, Set<handler>>` on `SwarmContext`; in `onmessage`, after the built-in branches, dispatch unknown `type`s to registered handlers (default branch → handlers, then log unknown).
 - `drone-agent/src/plugins/swarm/index.ts` / `context.ts`: expose the seam through the offered capability.
 - Tests: registered handler receives a custom frame.
 
 **P1.4 — `extensions` plugin skeleton + injection store.**
+
 - New `drone-agent/src/plugins/extensions/` with `index.ts` (`createExtensionsPlugin`), `context.ts`, `injection-store.ts`, `injection-fragment.ts`, `injection-handlers.ts`, `tools.ts`, `command.ts`. `metadata.id = 'extensions'`, `defaultEnabled: false`, dependencies `[ { id: 'swarm' } ]` (**hard**).
 - `injection-store.ts`: `ExtensionInjectionStore` keyed `(extensionId, injectionId)`; per-extension budget (bytes + count); `applyFragment/applyRemove/applyToolSelection/clearExtension/clearAll`; render `renderHeader()` (`# Extension Injections`, ordered after built-ins by registering AFTER the swarm fragments) and `renderFooter()`.
 - Register the plugin in `drone-agent/src/plugins/index.ts` `staticBuiltInPlugins`.
 - Tests: store apply/remove/budget/clear; header/footer render.
 
 **P1.5 — Wire up the plugin.**
+
 - `index.ts` `register()`: `request<DroneSwarmCapability>('swarm')`; if present, `registerWsHandler('injection', handleInjection)`; register the header + footer fragments; register the `/extensions` slash command (`busyBehavior: true`, read-only listing of connected extensions, capabilities, injections, tools); emit `notice` events on inject/remove.
 - `injection-handlers.ts`: handle `fragment`/`reminder`/`tools` payloads; `reminder` → `_runtime.queueSystemReminder`; `tools` → register `extensions__<extId>__<name>` unmounted (idempotent reconcile per the MCP pattern) via `registration.registerTool`.
 - On `onSessionRecycle`: `clearAll()` (extensions re-inject on the fresh `sessionStarted`).
 - Tests: `drone-agent/test/plugins/extensions/*.test.ts` — frame → store → fragment render; reminder queued; tool registered unmounted with the right canonical name; persona glob `!extensions__*` filters.
 
 **P1.6 — Proxied tool execution.**
+
 - `tools.ts`: each injected tool's `execute` POSTs to `${beaconUrl}/coordinator/extensions/${extId}/tools/${toolName}` (get `beaconUrl` from the swarm capability) with `{params, sessionId}`; parse `{ok,status,body}`; on non-2xx or network error return a **tool-error string** (never throw into the loop) — e.g. `extension did not respond` on timeout.
 - Tests: success returns the body; timeout/503 produce an error string.
 
@@ -304,11 +339,13 @@ The helper: loads/creates the Ed25519 identity + TLS cert (`loadOrCreateIdentity
 **P3.1 — Package scaffold.** New workspace package `mcp-swarm/` (`package.json` with `"name": "mcp-swarm"`, `bin` `mcp-swarm`, deps on `drone-swarm-common` + an MCP server SDK or hand-rolled stdio JSON-RPC — grep the mcp plugin for the protocol shape). Add to `pnpm-workspace.yaml` if packages are listed explicitly. `tsconfig.json` extending `tsconfig.base.json`.
 **P3.2 — Extension + MCP server.** On start, `createExtensionNode(...)` with a capability catalog (e.g. `swarm.session.list`, `swarm.wiki.read`, `swarm.agent.list`), and serve MCP tools that map 1:1 onto those capabilities over stdio. Declare one small front-end bundle (a status panel) to exercise P2.
 **P3.3 — Installable example.** README with a `~/.drone-agent/…` config example; used as the e2e acceptance fixture.
+
 - Tests: unit-test the MCP↔extension mapping; an integration smoke test guarded like the existing swarm integration suites.
 
 ### Phase P2 — Coordinator UI front-end plugin system
 
 **P2.1 — `globalThis.React` + loader + registry.**
+
 - `drone-coordinator-ui/src/main.tsx`: assign `(globalThis as any).React = React; (globalThis as any).ReactDOM = ReactDOM;` before render.
 - New `src/extensions/types.ts` (re-export from `drone-extension-ui-types`).
 - New `src/extensions/useExtensions.tsx`: fetch `GET /api/extensions`, inject `<link>` per `styleUrls`, `await import(/* @vite-ignore */ scriptUrl)`, read `module.default` `{regions, routes, onReady}`, register into an `ExtensionContext`.
@@ -317,6 +354,7 @@ The helper: loads/creates the Ed25519 identity + TLS cert (`loadOrCreateIdentity
 **P2.2 — Regions.** Add `<RegionSlot region=…/>` at: sidebar nav (`sidebar-nav`), topology toolbar (`topology-widget`) + topology cards/pages (`topology-card`, `topology-page`), sessions toolbar (`sessions-widget`) + session cards/pages (`session-card`, `session-page`), settings (`settings-panel`). Render plugin routes in `App.tsx`'s `<Routes>`.
 
 **P2.3 — Topology split + Settings page.**
+
 - `src/pages/topology.tsx`: split into two sections, **Beacons** and **Extensions**, on one page.
 - New `src/pages/settings.tsx` (nav entry "Settings"): sections in order **Coordinator Settings** (new, read-only), **Shared Agent Config** (move the existing config page content here), then one section per extension (`settings-panel`). Update `navItems`/route table in `App.tsx`.
 - Extensions' headings are core-provided (a `<ExtensionSection title>` wrapper).
@@ -374,3 +412,48 @@ The helper: loads/creates the Ed25519 identity + TLS cert (`loadOrCreateIdentity
 - Bundle sandboxing / iframe isolation.
 - SPA-reload-on-plugin-route polish (unformatted-JSON edge case).
 - Manifest-change audit-log UI.
+
+---
+
+## Outcome (2026-10-13) — COMPLETE
+
+All phases P0–P4 executed on `feat/swarm-extensions` (off `main` @ `18f021b7`).
+Every validation criterion passes: `pnpm -r run build` ✓, `pnpm typecheck`
+(`tsc -p tsconfig.test.json`) ✓, `pnpm run lint` ✓, `pnpm run test` ✓
+(4125 passed / 16 skipped), LSP zero diagnostics.
+
+**Shipped**
+- Wire types (`drone-core/src/extension-types.ts`), Ed25519 identity helper moved
+  to `drone-swarm-common/src/identity.ts` (P0.1/P0.2).
+- Coordinator: inbound `manifest`/`inject`/`inject-remove` dispatch + in-memory
+  `extension-registry.ts`; `swarm_sessions.session_snapshot` + `extension_capabilities`
+  + `extension_bundles` tables; `extension-bundles.ts` storage; `/api/extensions*`
+  REST surface + `bundle-serving.ts` same-origin `/plugin-scripts` `/plugin-styles`;
+  `sessionStarted`/`sessionEnded` broadcast + connect replay (P0.3–P0.7).
+- Beacon: registration `snapshot` forward, `/coordinator/extensions/:nodeId/tools/:tool`
+  proxy, `inject`/`injectRemove` → agent WS (P0.5).
+- SDK `createExtensionNode` in `drone-swarm-common/src/extension-server.ts`
+  (+ shared `coordinator-fetch.ts`); spawner `--extension-hint` (P0.8/P0.9).
+- Agent: `--extension-hint`/`DRONE_EXTENSION_HINT` → `_runtime.extensionHint`;
+  session snapshot assembly; `DroneSwarmCapability.registerWsHandler` seam;
+  new `extensions` plugin (injection store, handlers, proxied tools,
+  `/extensions` command, `# Extension Injections` fragment) (P1.1–P1.6).
+- `mcp-swarm` reference extension package (capability catalog → coordinator REST,
+  dependency-free MCP stdio server, embedded status-panel bundle) (P3).
+- Coordinator UI front-end plugin system: `globalThis.React`, loader/registry/
+  `RegionSlot`/`ExtensionSections`, regions, Topology Beacons/Extensions split,
+  new Settings page, types-only `drone-extension-ui-types` (P2).
+- ADR 254 + `docs/agents/swarm-extensions.md`; AGENTS.md / CONTEXT-MAP.md /
+  CONTEXT.md updated; project wiki pointer stub + indexes (P4).
+
+**Deviations / notes**
+- P2 ran after P3 (plan recommended P0→P1→P3→P2→P4; followed).
+- `extensions` plugin `defaultEnabled: false` with a HARD `swarm` dep.
+- UI region slots degrade gracefully without an `ExtensionProvider` (EMPTY
+  default context) so focused page tests need no provider.
+- The bundle loader was extracted to a pure `loader.ts` (injected `importModule`)
+  for unit-testability.
+- Pre-existing flaky test (not introduced): `drone-coordinator-ui` sessions
+  "debounces an event burst" fails intermittently on the stashed baseline too.
+- Remote extensions, gateway replatform, beacon-onto-SDK refactor, bundle
+  sandboxing, and manifest-audit UI remain deferred (per the plan).

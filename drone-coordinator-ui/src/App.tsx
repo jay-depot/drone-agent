@@ -30,7 +30,6 @@ import WikiPage from '@/pages/wiki';
 import WikiDetailPage from '@/pages/wiki-detail';
 import WikiEditorPage from '@/pages/wiki-editor';
 import WikiTagPage from '@/pages/wiki-tag';
-import ConfigPage from '@/pages/config';
 import SettingsPage from '@/pages/settings';
 import IdentityPage from '@/pages/identity';
 import LoginPage from '@/pages/login';

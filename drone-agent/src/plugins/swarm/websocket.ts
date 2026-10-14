@@ -227,9 +227,7 @@ export function dispatchCustomWsMessage(
     try {
       handler(payload, { type, payload });
     } catch (err) {
-      ctx.registration.logger.error(
-        `WS handler for "${type}" threw: ${err}`
-      );
+      ctx.registration.logger.error(`WS handler for "${type}" threw: ${err}`);
     }
   }
   return true;

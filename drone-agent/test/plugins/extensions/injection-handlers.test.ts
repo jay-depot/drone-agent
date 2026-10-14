@@ -73,8 +73,7 @@ function createCapture(): Capture {
     },
     offer: () => {},
     request: <T>(pluginId: string): T | undefined => {
-      if (pluginId === 'swarm')
-        return swarmCap as unknown as T;
+      if (pluginId === 'swarm') return swarmCap as unknown as T;
       if (pluginId === 'runtime')
         return {
           queueSystemReminder: (content: string) => reminders.push(content),
@@ -213,7 +212,11 @@ describe('handleInjection — tools', () => {
     fetchMock.mockResolvedValue({
       ok: false,
       status: 504,
-      json: async () => ({ ok: false, status: 504, body: { error: 'timeout' } }),
+      json: async () => ({
+        ok: false,
+        status: 504,
+        body: { error: 'timeout' },
+      }),
     });
     const cap = createCapture();
     const ctx = createExtensionsContext(cap.registration);

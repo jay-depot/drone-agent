@@ -15,7 +15,9 @@ function entry(
   };
 }
 
-function deps(overrides: Partial<Parameters<typeof loadExtensionBundles>[1]> = {}) {
+function deps(
+  overrides: Partial<Parameters<typeof loadExtensionBundles>[1]> = {}
+) {
   return {
     importModule: vi.fn().mockResolvedValue({ default: {} }),
     registerComponent: vi.fn(() => vi.fn()),
@@ -40,11 +42,19 @@ describe('loadExtensionBundles', () => {
     const registerRoute = vi.fn(() => vi.fn());
 
     const result = await loadExtensionBundles(
-      [entry('node-1', [{ name: 'panel', version: '1', hash: 'h', scriptUrls: ['/a.js'] }])],
+      [
+        entry('node-1', [
+          { name: 'panel', version: '1', hash: 'h', scriptUrls: ['/a.js'] },
+        ]),
+      ],
       { ...deps(), importModule, registerComponent, registerRoute }
     );
 
-    expect(registerComponent).toHaveBeenCalledWith('topology-widget', Widget, 'node-1');
+    expect(registerComponent).toHaveBeenCalledWith(
+      'topology-widget',
+      Widget,
+      'node-1'
+    );
     expect(registerRoute).toHaveBeenCalledTimes(1);
     expect(result.loaded).toEqual(['node-1']);
   });
@@ -72,7 +82,11 @@ describe('loadExtensionBundles', () => {
     const onReady = vi.fn();
     const registerRoute = vi.fn(() => vi.fn());
     await loadExtensionBundles(
-      [entry('node-1', [{ name: 'p', version: '1', hash: 'h', scriptUrls: ['/a.js'] }])],
+      [
+        entry('node-1', [
+          { name: 'p', version: '1', hash: 'h', scriptUrls: ['/a.js'] },
+        ]),
+      ],
       {
         ...deps(),
         importModule: vi.fn().mockResolvedValue({ default: { onReady } }),
@@ -97,8 +111,12 @@ describe('loadExtensionBundles', () => {
 
     const result = await loadExtensionBundles(
       [
-        entry('node-bad', [{ name: 'p', version: '1', hash: 'h', scriptUrls: ['/bad.js'] }]),
-        entry('node-good', [{ name: 'p', version: '1', hash: 'h', scriptUrls: ['/ok.js'] }]),
+        entry('node-bad', [
+          { name: 'p', version: '1', hash: 'h', scriptUrls: ['/bad.js'] },
+        ]),
+        entry('node-good', [
+          { name: 'p', version: '1', hash: 'h', scriptUrls: ['/ok.js'] },
+        ]),
       ],
       { ...deps(), importModule, registerComponent, onError }
     );
@@ -111,8 +129,16 @@ describe('loadExtensionBundles', () => {
   it('skips a bundle whose default export is missing', async () => {
     const registerComponent = vi.fn(() => vi.fn());
     const result = await loadExtensionBundles(
-      [entry('node-1', [{ name: 'p', version: '1', hash: 'h', scriptUrls: ['/a.js'] }])],
-      { ...deps(), importModule: vi.fn().mockResolvedValue({}), registerComponent }
+      [
+        entry('node-1', [
+          { name: 'p', version: '1', hash: 'h', scriptUrls: ['/a.js'] },
+        ]),
+      ],
+      {
+        ...deps(),
+        importModule: vi.fn().mockResolvedValue({}),
+        registerComponent,
+      }
     );
     expect(registerComponent).not.toHaveBeenCalled();
     expect(result.loaded).toEqual([]);

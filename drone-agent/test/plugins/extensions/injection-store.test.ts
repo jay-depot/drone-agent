@@ -135,9 +135,7 @@ describe('ExtensionInjectionStore — tool selections', () => {
     ).toBe('unchanged');
 
     store.removeTools('ext-1', ['a']);
-    const remaining = store
-      .list()
-      .flatMap(i => i.tools.map(t => t.capability));
+    const remaining = store.list().flatMap(i => i.tools.map(t => t.capability));
     expect(remaining).toEqual(['b']);
   });
 

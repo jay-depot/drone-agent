@@ -39,7 +39,9 @@ export function setManifest(
   });
 }
 
-export function getManifest(nodeId: string): DroneExtensionManifest | undefined {
+export function getManifest(
+  nodeId: string
+): DroneExtensionManifest | undefined {
   return nodes.get(nodeId)?.manifest;
 }
 

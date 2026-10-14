@@ -36,7 +36,10 @@ vi.mock('../src/logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-const captured: { urls: string[]; bodies: unknown[] } = { urls: [], bodies: [] };
+const captured: { urls: string[]; bodies: unknown[] } = {
+  urls: [],
+  bodies: [],
+};
 
 vi.mock('../src/coordinator-fetch.js', () => ({
   createCoordinatorFetch: () => async (url: string, init?: RequestInit) => {
@@ -120,10 +123,14 @@ describe('createExtensionNode', () => {
     );
     await new Promise(r => setImmediate(r));
 
-    expect(onInvokeAction).toHaveBeenCalledWith('echo', { q: 'hi' }, {
-      caller: 'ui',
-      sessionId: undefined,
-    });
+    expect(onInvokeAction).toHaveBeenCalledWith(
+      'echo',
+      { q: 'hi' },
+      {
+        caller: 'ui',
+        sessionId: undefined,
+      }
+    );
     const reply = ws.frames().find(f => f.type === 'response');
     expect(reply).toMatchObject({
       id: 'req-1',
@@ -160,10 +167,14 @@ describe('createExtensionNode', () => {
       )
     );
     await new Promise(r => setImmediate(r));
-    expect(onInvokeTool).toHaveBeenCalledWith('echo', { q: 'x' }, {
-      caller: 'agent',
-      sessionId: 'sess-1',
-    });
+    expect(onInvokeTool).toHaveBeenCalledWith(
+      'echo',
+      { q: 'x' },
+      {
+        caller: 'agent',
+        sessionId: 'sess-1',
+      }
+    );
     await node.stop();
   });
 
@@ -216,7 +227,11 @@ describe('createExtensionNode', () => {
     });
     node.injectReminder({ target: 's1', id: 'rem-1', content: 'Note' });
     node.injectTools({ target: 's1', capabilities: ['echo'] });
-    node.removeInjection({ target: 's1', kind: 'fragment', injectionId: 'frag-1' });
+    node.removeInjection({
+      target: 's1',
+      kind: 'fragment',
+      injectionId: 'frag-1',
+    });
 
     const frames = ws.frames();
     expect(frames[0]).toMatchObject({
@@ -260,9 +275,7 @@ describe('createExtensionNode', () => {
     ws.sent = [];
     node.declareManifest({
       protocolVersion: 1,
-      capabilities: [
-        { name: 'new', description: 'n', paramSchema: {} },
-      ],
+      capabilities: [{ name: 'new', description: 'n', paramSchema: {} }],
       bundles: [],
     });
     const manifest = ws.frames().find(f => f.type === 'manifest');

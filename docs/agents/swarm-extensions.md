@@ -37,12 +37,12 @@ After connecting to `/ws/beacon`, the node sends a **manifest** frame:
     {
       "name": "swarm.session.list",
       "description": "List swarm agent sessions.",
-      "paramSchema": { "type": "object", "properties": { } },
+      "paramSchema": { "type": "object", "properties": {} },
       "responseSchema": { "type": "object" },
-      "timeoutMs": 15000
-    }
+      "timeoutMs": 15000,
+    },
   ],
-  "bundles": [{ "name": "status-panel", "version": "0.1.0", "hash": "…" }]
+  "bundles": [{ "name": "status-panel", "version": "0.1.0", "hash": "…" }],
 }
 ```
 
@@ -52,18 +52,18 @@ frame; a mismatch is logged and rejected in v0 (no negotiation). Manifests use
 
 ### Node → coordinator frames
 
-| Frame           | Purpose                                                       |
-| --------------- | ------------------------------------------------------------- |
-| `manifest`      | Declare/replace the capability catalog + bundle list.         |
-| `inject`        | Push an injection (`kind: fragment \| reminder \| tools`).    |
-| `inject-remove` | Remove a prior injection (by id, or drop all of a kind).      |
-| `response`      | Reply to a command (`{ id, ok, status, body }`).              |
+| Frame           | Purpose                                                    |
+| --------------- | ---------------------------------------------------------- |
+| `manifest`      | Declare/replace the capability catalog + bundle list.      |
+| `inject`        | Push an injection (`kind: fragment \| reminder \| tools`). |
+| `inject-remove` | Remove a prior injection (by id, or drop all of a kind).   |
+| `response`      | Reply to a command (`{ id, ok, status, body }`).           |
 
 ### Coordinator → node frames
 
-| Frame     | Purpose                                                        |
-| --------- | -------------------------------------------------------------- |
-| `command` | `invokeAction` / `invokeTool` (UUID request/response).         |
+| Frame     | Purpose                                                       |
+| --------- | ------------------------------------------------------------- |
+| `command` | `invokeAction` / `invokeTool` (UUID request/response).        |
 | `event`   | `sessionStarted` / `sessionEnded` (non-blocking push to all). |
 
 ### Session lifecycle
@@ -165,9 +165,17 @@ const node = await createExtensionNode({
     { name: 'my.thing', description: '…', paramSchema: { type: 'object' } },
   ],
   handlers: {
-    onInvokeAction: async (cap, params) => ({ ok: true, status: 200, body: {} }),
+    onInvokeAction: async (cap, params) => ({
+      ok: true,
+      status: 200,
+      body: {},
+    }),
     onSessionStarted: snapshot => {
-      node.injectFragment({ target: snapshot.sessionId, id: 'ctx', content: '# Hello' });
+      node.injectFragment({
+        target: snapshot.sessionId,
+        id: 'ctx',
+        content: '# Hello',
+      });
     },
   },
 });

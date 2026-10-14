@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type {
   DroneConversationEvent,
   DronePluginRegistration,
@@ -60,7 +60,8 @@ function createCapture(): Capture {
       onConversationEvent: () => {},
       onSessionClear: () => {},
       onSessionRecycle: cb => {
-        onRecycle = () => Promise.resolve(cb({ sessionId: 's', previousSessionId: 'p' }));
+        onRecycle = () =>
+          Promise.resolve(cb({ sessionId: 's', previousSessionId: 'p' }));
       },
       onShutdown: () => {},
       onSessionSafetyTrimWillRun: () => {},
@@ -97,9 +98,8 @@ function createCapture(): Capture {
 
 describe('extensions plugin registration wiring', () => {
   it('registers both injection prompt fragments', async () => {
-    const { extensionsPlugin } = await import(
-      '../../../src/plugins/extensions/index.js'
-    );
+    const { extensionsPlugin } =
+      await import('../../../src/plugins/extensions/index.js');
     const cap = createCapture();
     await extensionsPlugin.register(cap.registration);
     const keys = cap.fragments.map(f => f.key);
@@ -114,18 +114,16 @@ describe('extensions plugin registration wiring', () => {
   });
 
   it('registers the /extensions command as immediate', async () => {
-    const { extensionsPlugin } = await import(
-      '../../../src/plugins/extensions/index.js'
-    );
+    const { extensionsPlugin } =
+      await import('../../../src/plugins/extensions/index.js');
     const cap = createCapture();
     await extensionsPlugin.register(cap.registration);
     expect(cap.slashCommands).toContain('/extensions');
   });
 
   it('subscribes to injection + injectionRemove WS frames', async () => {
-    const { extensionsPlugin } = await import(
-      '../../../src/plugins/extensions/index.js'
-    );
+    const { extensionsPlugin } =
+      await import('../../../src/plugins/extensions/index.js');
     const cap = createCapture();
     await extensionsPlugin.register(cap.registration);
     expect(cap.wsHandlers.has('injection')).toBe(true);
@@ -133,9 +131,8 @@ describe('extensions plugin registration wiring', () => {
   });
 
   it('clears injections on session recycle', async () => {
-    const { extensionsPlugin } = await import(
-      '../../../src/plugins/extensions/index.js'
-    );
+    const { extensionsPlugin } =
+      await import('../../../src/plugins/extensions/index.js');
     const cap = createCapture();
     await extensionsPlugin.register(cap.registration);
     // Drive an injection through the registered handler, then recycle.

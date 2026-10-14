@@ -90,7 +90,10 @@ describe('MCP stdio server request handling', () => {
   };
 
   it('answers initialize with the protocol version + tools capability', async () => {
-    const res = await handleRequest({ jsonrpc: '2.0', id: 1, method: 'initialize' }, opts);
+    const res = await handleRequest(
+      { jsonrpc: '2.0', id: 1, method: 'initialize' },
+      opts
+    );
     expect(res).toMatchObject({
       jsonrpc: '2.0',
       id: 1,
@@ -115,7 +118,9 @@ describe('MCP stdio server request handling', () => {
   });
 
   it('routes tools/call through the invoker', async () => {
-    const invoke = vi.fn().mockResolvedValue({ ok: true, status: 200, body: { x: 1 } });
+    const invoke = vi
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200, body: { x: 1 } });
     const res = await handleRequest(
       {
         jsonrpc: '2.0',
@@ -132,7 +137,11 @@ describe('MCP stdio server request handling', () => {
   it('returns an error result for a failing capability (not a throw)', async () => {
     const invoke = vi
       .fn()
-      .mockResolvedValue({ ok: false, status: 504, body: { error: 'timeout' } });
+      .mockResolvedValue({
+        ok: false,
+        status: 504,
+        body: { error: 'timeout' },
+      });
     const res = (await handleRequest(
       {
         jsonrpc: '2.0',

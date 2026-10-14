@@ -10,7 +10,7 @@
  */
 
 import type { DronePlugin, DroneSwarmCapability } from 'drone-core';
-import { createExtensionsContext, type ExtensionsContext } from './context.js';
+import { createExtensionsContext } from './context.js';
 import {
   createInjectionHeaderFragment,
   createInjectionFooterFragment,
@@ -38,8 +38,12 @@ export const extensionsPlugin: DronePlugin = {
 
     // Prompt seams: registered after the swarm fragments so injected content
     // is ordered after the built-ins.
-    registration.registerPromptFragment(createInjectionHeaderFragment(ctx.store));
-    registration.registerPromptFragment(createInjectionFooterFragment(ctx.store));
+    registration.registerPromptFragment(
+      createInjectionHeaderFragment(ctx.store)
+    );
+    registration.registerPromptFragment(
+      createInjectionFooterFragment(ctx.store)
+    );
 
     registration.registerSlashCommand(createExtensionsCommand(ctx));
 
