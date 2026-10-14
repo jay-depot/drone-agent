@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { initDatabase, closeDatabase } from '../src/db/index.js';
 import { initStorage } from '../src/storage.js';
+import { initExtensionBundleStorage } from '../src/extension-bundles.js';
 
 let dbPath = '';
 
@@ -11,6 +12,7 @@ export async function setupDb(): Promise<string> {
   const dbFile = path.join(dir, 'test.db');
   initDatabase(dbFile);
   initStorage(dir);
+  await initExtensionBundleStorage(dir);
   dbPath = dbFile;
   return dbFile;
 }

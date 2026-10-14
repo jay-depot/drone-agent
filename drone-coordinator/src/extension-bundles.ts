@@ -1,0 +1,115 @@
+import { mkdir, writeFile, rm } from 'node:fs/promises';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { logger } from './logger.js';
+
+/**
+ * Coordinator-side storage for extension front-end bundles. Files land under
+ * `<coordinatorDataDir>/extension-bundles/<nodeId>/<hash>/<fileName>` and are
+ * served same-origin by the web port. A DB row (extension_bundles) records the
+ * directory + metadata for listing and serving.
+ */
+
+let bundleRoot: string | null = null;
+
+const SAFE_ID = /^[a-zA-Z0-9_-]+$/;
+const SAFE_FILE = /^[A-Za-z0-9._-]+$/;
+
+/** Whether `id` is safe to use as a nodeId or bundle-name path segment. */
+export function isSafeId(id: string): boolean {
+  return SAFE_ID.test(id);
+}
+
+/** Whether `name` is safe to use as a bundle file name (no traversal). */
+export function isSafeFileName(name: string): boolean {
+  return SAFE_FILE.test(name) && name !== '.' && name !== '..';
+}
+
+export async function initExtensionBundleStorage(baseDir: string): Promise<void> {
+  bundleRoot = path.join(baseDir, 'extension-bundles');
+  await mkdir(bundleRoot, { recursive: true });
+  logger.info(`Extension bundle storage initialized at: ${bundleRoot}`);
+}
+
+function getBundleRoot(): string {
+  if (!bundleRoot) {
+    throw new Error('Extension bundle storage not initialized');
+  }
+  return bundleRoot;
+}
+
+export interface BundleFile {
+  name: string;
+  contentBase64: string;
+  contentType?: string;
+}
+
+/** sha256 over the concatenated (name, bytes) pairs. */
+export function computeBundleHash(files: BundleFile[]): string {
+  const hash = crypto.createHash('sha256');
+  for (const f of files) {
+    hash.update(f.name);
+    hash.update(Buffer.from(f.contentBase64, 'base64'));
+  }
+  return hash.digest('hex');
+}
+
+/**
+ * Write a bundle's files to disk under `<root>/<nodeId>/<hash>/`. Returns the
+ * bundle directory. Rejects any file name that is not path-safe.
+ */
+export async function writeBundleFiles(
+  nodeId: string,
+  hash: string,
+  files: BundleFile[]
+): Promise<string> {
+  if (!isSafeId(nodeId)) throw new Error('Invalid nodeId');
+  if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('Invalid hash');
+  const dir = path.join(getBundleRoot(), nodeId, hash);
+  await mkdir(dir, { recursive: true });
+  for (const f of files) {
+    if (!isSafeFileName(f.name)) {
+      throw new Error(`Invalid bundle file name: ${f.name}`);
+    }
+    await writeFile(path.join(dir, f.name), Buffer.from(f.contentBase64, 'base64'));
+  }
+  return dir;
+}
+
+/** Remove a bundle directory (best-effort). */
+export async function removeBundleDir(dir: string): Promise<void> {
+  const root = getBundleRoot();
+  const resolved = path.resolve(dir);
+  if (!resolved.startsWith(path.resolve(root) + path.sep)) {
+    throw new Error('Refusing to remove a path outside the bundle root');
+  }
+  await rm(resolved, { recursive: true, force: true });
+}
+
+/** Absolute path for a served bundle file, or null when unsafe/missing. */
+export function resolveBundleFilePath(
+  nodeId: string,
+  hash: string,
+  fileName: string
+): string | null {
+  if (!isSafeId(nodeId)) return null;
+  if (!/^[a-f0-9]{64}$/.test(hash)) return null;
+  if (!isSafeFileName(fileName)) return null;
+  return path.join(getBundleRoot(), nodeId, hash, fileName);
+}
+
+/** Public URLs for a bundle's files. */
+export function bundleUrls(
+  nodeId: string,
+  hash: string,
+  files: BundleFile[]
+): { scripts: string[]; styles: string[] } {
+  const scripts: string[] = [];
+  const styles: string[] = [];
+  for (const f of files) {
+    const target = f.name.endsWith('.css') ? styles : scripts;
+    const base = f.name.endsWith('.css') ? 'plugin-styles' : 'plugin-scripts';
+    target.push(`/${base}/${nodeId}/${hash}/${f.name}`);
+  }
+  return { scripts, styles };
+}

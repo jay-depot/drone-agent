@@ -11,3 +11,4 @@ export * from './search-provider-ollama.js';
 export * from './fragments-limits.js';
 export * from './persona-metadata.js';
 export * from './process-lookup.js';
+export * from './json-schema.js';
