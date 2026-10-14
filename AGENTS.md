@@ -1,6 +1,6 @@
 # AGENTS.md — drone-agent
 
-This file describes how to work on the `drone-agent` project itself. The project is a monorepo (pnpm workspace) with eight packages.
+This file describes how to work on the `drone-agent` project itself. The project is a monorepo (pnpm workspace) with ten packages.
 
 **If you encounter any discrepancy between this document and the code, the code is the source of truth, and this document should be updated.**
 
@@ -28,6 +28,8 @@ The project is a pnpm workspace with eight packages:
 | `drone-swarm-common/`   | Shared utilities for beacon and coordinator.                                       |
 | `drone-swarm/`          | Standalone REST CLI for the swarm (session pipeline + wiki).                       |
 | `drone-gateway/`        | Chat API gateway (Matrix, Discord, Slack).                                         |
+| `mcp-swarm/`           | Reference swarm extension: exposes swarm functions to MCP clients over stdio.     |
+| `drone-extension-ui-types/` | Types-only package: the coordinator UI extension-bundle contract (`PluginClientExport`, `UIRegion`, `UIExtensionApi`, `PluginClientRoute`). |
 | `skill-library/`        | Reusable skill `.md` files (not a workspace package).                              |
 
 Key source directories within `drone-agent/`:
@@ -180,6 +182,7 @@ The following subsystems have dedicated documentation in `docs/agents/`:
 - **Reference Expansion** (`docs/agents/reference-expansion.md`) — `@`-references in user messages (`@file`, `@skill:`, image files via the vision path, `~/`/cwd resolution, dir/glob inline caps) expanded at the conversation-service append sites, plus TUI tab completion
 - **Bootstrap Plugin** (`docs/agents/bootstrap-plugin.md`) — Setup workflows for new projects and users
 - **Swarm Plugin** (`docs/agents/swarm-plugin.md`) — Beacon/coordinator integration for swarm-wide personas, skills, and config; the `# Swarm Status` header fragment (local beacon + coordinator + beacon roster, cached), the reserved-`swarm-identity` `# Swarm Identity` fragment authored from the coordinator UI's Identity page (`PUT`/`DELETE /api/fragments/:id` + the `fragmentsChanged` reverse-channel nudge), and the shared `drone-swarm-common` fragment limits module (reserved ids have their own budget and never expire)
+- **Swarm Extensions** (`docs/agents/swarm-extensions.md`) — external services that connect to the coordinator as beacons and declare a capability manifest: session-start/end push events, fragment/reminder/tool injections, proxied API actions + tools, front-end bundles served same-origin, the `createExtensionNode` SDK, and the `mcp-swarm` reference package (ADR 254)
 - **External Plugin Loading** (`docs/agents/external-plugin-loading.md`) — User and project-scope plugin discovery, trust model, engine integration
 - **MCP Plugin** (`docs/agents/mcp-plugin.md`) — Deferred list/mount via the runtime-level `ToolRegistry` + engine `runtime__*` meta-tools (all MCP tools registered unmounted), per-server `__list`/`__get` resource/prompt helpers, LLM-generated server descriptions surfaced by the `# MCP Servers` header + `<system-reminder>` footer fragments, persona filtering at the runtime seam
 - **Herdr Plugin** (`docs/agents/herdr-plugin.md`) — Reports agent state (`idle`/`working`) and a session resume command to the Herdr terminal multiplexer; the resume command rides a new startup session-import (`--swarm.session-import`) and a minimal plugin CLI-flag facility (ADR 239)
