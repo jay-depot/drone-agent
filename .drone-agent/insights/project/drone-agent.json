@@ -870,5 +870,9 @@
   {
     "timestamp": "2026-10-14T00:48:53.429Z",
     "insight": "The `git__commit` plugin tool fails (silently, non-zero) on commit messages containing em-dashes or multi-line bodies, while the identical message succeeds via `exec__run` + `git commit -m`. Also `git__commit all:true` does NOT stage untracked files (needs includeUntracked:true). When the plugin tool errors on a working tree that is NOT clean, fall back to the shell — do not assume \"clean tree\" from HOST.md is the only failure mode."
+  },
+  {
+    "timestamp": "2026-10-15T00:50:34.651Z",
+    "insight": "AGENTS.md drifts in two recurring ways: (1) hardcoded counts/numbers that go stale (it said \"ten packages\" in the intro, \"eight packages\" above a ten-row table, and \"recompile both packages\" after there were ten) — prefer count-free phrasing (\"a pnpm workspace monorepo\", \"the workspace\") so the doc can't contradict itself; and (2) changelog noise documenting past state (\"The `?` alias for /help has been removed\") — state current behavior only. Also: when AGENTS.md's \"Specialized Subsystems\" index grows, it accumulates dense inline prose that duplicates the linked doc — keep each entry a one-line pointer and move detail into the doc. And an audit should check the index against `ls docs/agents/`: three docs (memory-pipeline, provider-model-config, session-import, plus import-conventions) existed but were missing from the index."
   }
 ]
