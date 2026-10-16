@@ -882,5 +882,13 @@
   {
     "timestamp": "2026-10-16T19:20:23.082Z",
     "insight": "Planning rough edge: the extension capability catalog in mcp-swarm/src/mapping.ts drives BOTH the MCP tool surface and the coordinator-proxied action surface from one list. Adding any privileged capability (token management) to it silently promotes that capability to an MCP tool any client can call. Whenever a single source of truth feeds two surfaces with different trust levels, the catalog needs an explicit tier/permission field. Worth watching for this pattern elsewhere (skills/personas broker? tool registry?)."
+  },
+  {
+    "timestamp": "2026-10-16T19:37:12.878Z",
+    "insight": "`file__apply_diff` can silently no-op on a file even when it reports a hunk applied — during the mcp-swarm HTTP-token work a patch to `drone-core/src/extension-types.ts` reported \"additions: 0, deletions: 0\" and left the file unchanged, so the `exposed` field was never added and the dependent build failed with TS2353. Correct assumption: after every apply_diff, verify the change landed (re-read the file or check the reported insertion count is non-zero), and re-apply if the count is zero. A non-zero `additions` with matching `deletions` is the reliable success signal."
+  },
+  {
+    "timestamp": "2026-10-16T19:37:12.882Z",
+    "insight": "`node:http` response ordering: a body-size-limit guard that calls `req.destroy()` on the first over-limit chunk races the `413` response write — the client sees `ECONNRESET`/`fetch failed` instead of the status. Correct pattern: stop buffering and resolve a sentinel (do not destroy yet), write the 413 with `Connection: close`, then `req.destroy()`. Resolving first and draining the remaining request data (or closing the connection) is required for the client to read the status."
   }
 ]
