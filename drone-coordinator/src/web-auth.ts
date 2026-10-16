@@ -1,5 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { networkInterfaces } from 'os';
+import { timingSafeEqualStrings } from 'drone-swarm-common';
 
 /**
  * API route prefixes that require auth for non-local connections.
@@ -111,7 +112,7 @@ export function createWebAuthMiddleware(getToken: () => string | null) {
       ? authHeader.slice(7)
       : null;
 
-    if (headerToken !== token) {
+    if (!headerToken || !timingSafeEqualStrings(headerToken, token)) {
       return reply.code(401).send({
         error: 'Unauthorized',
         message: 'Valid web token required for remote access',

@@ -1,6 +1,6 @@
 # AGENTS.md — drone-agent
 
-This file describes how to work on the `drone-agent` project itself. The project is a monorepo (pnpm workspace) with eight packages.
+This file describes how to work on the `drone-agent` project itself. The project is a pnpm workspace monorepo.
 
 **If you encounter any discrepancy between this document and the code, the code is the source of truth, and this document should be updated.**
 
@@ -16,19 +16,19 @@ If classification is ambiguous, ask for clarification before editing that specif
 
 ## Project Structure
 
-The project is a pnpm workspace with eight packages:
-
-| Package                 | Purpose                                                                            |
-| ----------------------- | ---------------------------------------------------------------------------------- |
-| `drone-agent/`          | CLI + TUI coding agent (Ink-based). Entry point, plugins, runtime, TUI components. |
-| `drone-core/`           | Shared types, contracts, config defaults, token estimation.                        |
-| `drone-beacon/`         | Local hub for drone swarm (Fastify + SQLite + WebSocket).                          |
-| `drone-coordinator/`    | Global hub for swarm coordination (Fastify + SQLite).                              |
-| `drone-coordinator-ui/` | Web UI for the coordinator (React + Vite + Tailwind).                              |
-| `drone-swarm-common/`   | Shared utilities for beacon and coordinator.                                       |
-| `drone-swarm/`          | Standalone REST CLI for the swarm (session pipeline + wiki).                       |
-| `drone-gateway/`        | Chat API gateway (Matrix, Discord, Slack).                                         |
-| `skill-library/`        | Reusable skill `.md` files (not a workspace package).                              |
+| Package                     | Purpose                                                                                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `drone-agent/`              | CLI + TUI coding agent (Ink-based). Entry point, plugins, runtime, TUI components.                                                          |
+| `drone-core/`               | Shared types, contracts, config defaults, token estimation.                                                                                 |
+| `drone-beacon/`             | Local hub for drone swarm (Fastify + SQLite + WebSocket).                                                                                   |
+| `drone-coordinator/`        | Global hub for swarm coordination (Fastify + SQLite).                                                                                       |
+| `drone-coordinator-ui/`     | Web UI for the coordinator (React + Vite + Tailwind).                                                                                       |
+| `drone-swarm-common/`       | Shared utilities for beacon and coordinator.                                                                                                |
+| `drone-swarm/`              | Standalone REST CLI for the swarm (session pipeline + wiki).                                                                                |
+| `drone-gateway/`            | Chat API gateway (Matrix, Discord, Slack).                                                                                                  |
+| `mcp-swarm/`                | Reference swarm extension: exposes swarm functions to MCP clients over stdio.                                                               |
+| `drone-extension-ui-types/` | Types-only package: the coordinator UI extension-bundle contract (`PluginClientExport`, `UIRegion`, `UIExtensionApi`, `PluginClientRoute`). |
+| `skill-library/`            | Reusable skill `.md` files (not a workspace package).                                                                                       |
 
 Key source directories within `drone-agent/`:
 
@@ -80,18 +80,7 @@ The `--debug` flag enables subsystem-specific debug logging to stderr. Supports 
 
 ### Hook Ordering Guarantees
 
-The `onAfterToolCall` hook fires **after tool results have been appended to the session**. This means hooks observe the full session state, including the latest tool results. This ordering is critical for plugins like compaction, which need an accurate view of context usage to decide whether to summarize.
-
-The hook receives an optional `DroneAfterToolCallPayload` — `{ calls: [{ name, arguments }] }` listing every tool call executed in the round (a parallel batch from one LLM response, or a single entry for `/tool` and `/exec` slash-command executions). Callbacks registered without parameters keep working; hosts that cannot supply a payload may invoke the hook without one. Consumers should treat the payload as fire-and-forget material (the lsp plugin uses it to warm ambient language servers when file tools touch servable files) and never as a signal to block the round.
-
-Inside the conversation service's tool-call loop, the order of operations per iteration is:
-
-1. Build system messages and run safety budget check
-2. Send messages to the LLM
-3. Execute tool calls and buffer results
-4. Append tool results to the session manager
-5. Run `onAfterToolCall` hooks (compaction, logging, etc.)
-6. Continue to next iteration
+`onAfterToolCall` fires **after tool results have been appended to the session** — critical for compaction's context-usage view. The per-iteration tool-call loop order and the `DroneAfterToolCallPayload` contract live in `docs/agents/hook-ordering.md`.
 
 ### Broker + Provider Pattern (Skills & Personas)
 
@@ -104,17 +93,7 @@ Providers are sorted by precedence (lower number = higher priority). Duplicate I
 
 ### Config System
 
-When the swarm plugin is active, the beacon's config is injected as an additional underlay via the `DroneConfigInjector` capability rather than the file-based loader. Coordinator-level values ride that single beacon underlay (precedence 75): the beacon pulls the coordinator's allowlisted `/api/config/distribution` payload on its 5-minute sync, persists the non-secret entries as `beacon_config scope='swarm'` and holds secret-bearing rows (`${secret:NAME}`-referencing) in a memory-only overlay that never touches disk, and serves the merged view where beacon-local entries win for the same key; the agent applies the merged underlay at session start via the config plugin's `rebuild()`. Resolved secret values are injected at session start and never retained by the beacon — a beacon compromise at rest yields zero secret material. There is no separate coordinator injector — the merged view rides the beacon underlay.
-
-Underlay `${VAR}` templates are resolved receiver-side at session apply time from the agent process environment (same interpolation the disk config loader runs at parse time); a row referencing an unset variable is dropped with a one-time warning.
-
-Config files live in `.drone-agent/config.json` at each scope. The config loader (`runtime/config.ts`) walks up the directory tree looking for `.drone-agent/` directories.
-
-`enabledPlugins` is a sparse override **map** (`Record<string, boolean>`), merged per-key across layers and applied by the engine over the built-in default plugin set (`required || defaultEnabled`): `true` force-enables, `false` force-disables, absent means no opinion. `required` plugins and `--plugin`/`--swarm` CLI flags both override an explicit `false`. The named-entry maps `enabledPlugins`, `providers`, `trustedPlugins`, `lsp.servers`, and `mcp.servers` use the `mergeMaps` merge rule (shallow, 1-level; a `null` entry deletes that entry; a `null` whole value clears the map). A legacy array form is tolerated at parse time and rewritten on disk once (with a `.old` backup + advisory notice). See ADR 251.
-
-Key config sections: `enabledPlugins`, `systemPrompt`, `activePersona`, `llm`, `ollama`, `openrouter`, `session`, `lsp`, `mcp`, `compaction`, `memory`, `log`, `promptFile`, `swarm`.
-
-`search.paths[]` entries accept an optional `ragSource?: boolean` (default false). When true, that folder's workspace-file semantic index also feeds the proactive swarm-memory RAG (`swarm.memory`) as an extra candidate source — file hits compete with wiki entries for the same `swarm.memory.topK` slots (no extra slots). The `search` plugin must be enabled for the folder to be registered/indexed. See ADR 245.
+Config files live in `.drone-agent/config.json` at each scope; the loader (`runtime/config.ts`) walks up the directory tree, so project config overrides user config. The `enabledPlugins` override map, the `mergeMaps` rule, and the `search.paths[].ragSource` option are in `docs/agents/config-system.md` (ADR 251, ADR 245). The swarm config underlay (coordinator → beacon → agent, including secrets and reactivity) is in `docs/agents/swarm-plugin.md`.
 
 ### TUI Architecture
 
@@ -144,46 +123,27 @@ Custom slash commands defined in `.macro` files. The `macros` plugin loads them 
 
 ### Slash Commands
 
-All slash commands (built-in and plugin-registered) are dispatched through the engine's unified registry. Built-in commands (`/exit`, `/quit`, `/help`, `/clear`, `/plugins`, `/tools`, `/systemprompt`, `/tool`, `/exec`) have lower precedence than plugin commands, allowing plugins to override them. Unrecognized slash commands display an error instead of being sent to the LLM. The `?` alias for `/help` has been removed.
-
-**`/steer` and `/btw`.** Two built-in commands round out the deferred-input story above, both `busyBehavior: true` so they run immediately even mid-turn:
-
-- **`/steer <message>`** injects `<message>` as a user turn into the _currently in-flight_ round — the opt-in restoration of ADR 040's mid-round absorption that ADR 215 removed for plain text. It does not go through the queue: the message is held in a dedicated `steeringMessages` buffer and absorbed at the next tool-loop boundary (after the soft-cancel check), so the model sees it on its very next call. Absorbing a steer resets the degeneracy guards (empty/reasoning-only/identical-tool-call streaks) but _not_ the tool-call iteration count — a steer can break a loop, but cannot extend the depth safety limit. When no turn is in flight, `/steer <message>` degrades to a normal round (with the usual `onBeforePrompt`/`onAfterToolCall` hooks). A steer that never reaches a boundary (the round ends first, or is cancelled) is discarded with a `[steering: discarded late steering message: "..."]` notice; a successful mid-round injection logs `[steering: <message>]`.
-- **`/btw <question>`** asks a **side question about the current context**: it re-assembles the current context (header system messages + session turns + footer system messages) plus the question, sends it to the LLM **with no tools**, displays the answer, and discards the copy. Session history is never touched. It surfaces as a single `aside` conversation event (`{ question, answer }`) — rendered distinctly in the TUI and recorded in the coordinator's readable transcript as `[aside Q]`/`[aside A]` lines, but ignored by the round-window tracker and wakelock. It runs concurrently with an in-flight turn and inherits the active model + reasoning level.
-
-Known caveat (fix later): because `--now` is stripped from the line before dispatch, a `/steer` or `/btw` message that legitimately contains the standalone token `--now` has it removed — the same footgun every rest-of-line command shares.
-
-**Slash commands while the LLM is working.** A slash command typed while a turn is in
-flight is NEVER sent as plain text. Every entry point (TUI input line, readline loop,
-remote steering via `_runtime.submitUserMessage`) routes leading-`/` lines through the
-engine's classifier and dispatches or defers them uniformly:
-
-- **`busyBehavior`** — each `DroneSlashCommand` can declare how it behaves when the LLM
-  is busy: `true` runs immediately (read-only, instant commands like `/help`, `/plugins`,
-  `/context`, `/focus show`), `false`/unset queues the command until the current task
-  finishes (mutating commands like `/focus set`, `/clear`), and a function receives the
-  parsed `invocation` (`{ subcommand, flags }`) for subcommand-aware decisions (e.g.
-  `/todo show` immediate, `/todo add` queued).
-- **`--now` escape hatch** — appending `--now` to ANY command overrides queue → immediate
-  (including destructive ones like `/clear --now` and `/exec --now`), so you can force a
-  queued command to run mid-turn. `--now` is stripped from the line before dispatch and
-  never leaks into the handler's args.
-- **Queued commands** log a `(deferred — runs when the current task finishes)` notice,
-  share one ordered queue with deferred steering text, and drain at the next loop
-  boundary (or run as their own full round on normal completion). Queued entries are
-  preserved across an Escape-cancel and flushed by `/clear`.
+All slash commands (built-in and plugin-registered) are dispatched through the engine's unified registry; plugin commands take precedence over built-ins, and unrecognized commands error instead of reaching the LLM. The built-in list, `/steer` and `/btw`, the `busyBehavior` deferral contract, and the `--now` escape hatch are documented in `docs/agents/slash-commands.md`.
 
 ### Specialized Subsystems
 
 The following subsystems have dedicated documentation in `docs/agents/`:
 
-- **Reference Expansion** (`docs/agents/reference-expansion.md`) — `@`-references in user messages (`@file`, `@skill:`, image files via the vision path, `~/`/cwd resolution, dir/glob inline caps) expanded at the conversation-service append sites, plus TUI tab completion
+- **Config System** (`docs/agents/config-system.md`) — `enabledPlugins` override map, `mergeMaps` merge rule, key sections, `search.paths[].ragSource` (ADR 251, ADR 245)
+- **Hook Ordering** (`docs/agents/hook-ordering.md`) — the `onAfterToolCall` ordering guarantee, `DroneAfterToolCallPayload` contract, and the per-iteration tool-call loop order
+- **Slash Commands** (`docs/agents/slash-commands.md`) — registry/dispatch, `/steer`/`/btw`, the `busyBehavior` deferral contract, and the `--now` escape hatch
+- **Reference Expansion** (`docs/agents/reference-expansion.md`) — `@`-references (`@file`, `@skill:`, images, `~/`/cwd, dir/glob) plus TUI tab completion
 - **Bootstrap Plugin** (`docs/agents/bootstrap-plugin.md`) — Setup workflows for new projects and users
-- **Swarm Plugin** (`docs/agents/swarm-plugin.md`) — Beacon/coordinator integration for swarm-wide personas, skills, and config; the `# Swarm Status` header fragment (local beacon + coordinator + beacon roster, cached), the reserved-`swarm-identity` `# Swarm Identity` fragment authored from the coordinator UI's Identity page (`PUT`/`DELETE /api/fragments/:id` + the `fragmentsChanged` reverse-channel nudge), and the shared `drone-swarm-common` fragment limits module (reserved ids have their own budget and never expire)
-- **External Plugin Loading** (`docs/agents/external-plugin-loading.md`) — User and project-scope plugin discovery, trust model, engine integration
-- **MCP Plugin** (`docs/agents/mcp-plugin.md`) — Deferred list/mount via the runtime-level `ToolRegistry` + engine `runtime__*` meta-tools (all MCP tools registered unmounted), per-server `__list`/`__get` resource/prompt helpers, LLM-generated server descriptions surfaced by the `# MCP Servers` header + `<system-reminder>` footer fragments, persona filtering at the runtime seam
-- **Herdr Plugin** (`docs/agents/herdr-plugin.md`) — Reports agent state (`idle`/`working`) and a session resume command to the Herdr terminal multiplexer; the resume command rides a new startup session-import (`--swarm.session-import`) and a minimal plugin CLI-flag facility (ADR 239)
-- **Portable Context** (`docs/agents/portable-context.md`) — Engine-seeded `portable-context` capability: versioned JSON serialization of a session's context (turns + tool catalog + `pluginData`) and a continuation path that restores it as a brand-new session (recycle → restore → remount → disclosure). First consumers: the opt-in `checkpoint` plugin (`/checkpoint`, `--checkpoint.restore`) and the `--output-json` NDJSON `exportContext`/`importContext` commands (ADR 246/247)
+- **Swarm Plugin** (`docs/agents/swarm-plugin.md`) — Beacon/coordinator integration: swarm-wide personas/skills, the beacon config underlay and secret handling, TLS trust, and the `# Swarm Status`/`# Swarm Identity` fragments
+- **Swarm Extensions** (`docs/agents/swarm-extensions.md`) — External services that register as beacons with a capability manifest; the `createExtensionNode` SDK and `mcp-swarm` reference package (ADR 254)
+- **External Plugin Loading** (`docs/agents/external-plugin-loading.md`) — User/project-scope plugin discovery, trust model, engine integration
+- **MCP Plugin** (`docs/agents/mcp-plugin.md`) — Deferred list/mount via the runtime `ToolRegistry` + `runtime__*` meta-tools, per-server resource/prompt helpers, LLM-generated descriptions, persona filtering
+- **Herdr Plugin** (`docs/agents/herdr-plugin.md`) — Agent `idle`/`working` state + session resume command for the Herdr multiplexer (ADR 239)
+- **Portable Context** (`docs/agents/portable-context.md`) — Versioned JSON context serialization + brand-new-session continuation; the `checkpoint` plugin and `--output-json` commands (ADR 246/247)
+- **Memory Pipeline** (`docs/agents/memory-pipeline.md`) — The session-collection → memory-retrieval pipeline and the opinionated `bootstrap__swarm-memory` default
+- **Provider / Model Config** (`docs/agents/provider-model-config.md`) — Protocols (code) vs providers (data) vs models, and the `config.providers` schema
+- **Session Import** (`docs/agents/session-import.md`) — The `/swarm-session` import command
+- **Import Conventions** (`docs/agents/import-conventions.md`) — Monorepo build/type gotchas (e.g. `.js` imports for `.tsx` siblings)
 
 ## Working on the Project
 
@@ -221,7 +181,7 @@ Call `registration.registerSlashCommand({ command, description, handler })`. The
 
 ### Modifying shared types
 
-Shared types live in `drone-core/src/index.ts`. After changing them, run `pnpm build` to recompile both packages.
+Shared types live in `drone-core/src/index.ts`. After changing them, run `pnpm build` to recompile the workspace.
 
 ### Architecture Decision Records
 

@@ -6,6 +6,7 @@
 import fastify, { type FastifyInstance } from 'fastify';
 import fastifyCors from '@fastify/cors';
 import { registerRoutes } from '../src/routes/index.js';
+import { registerBundleServingRoutes } from '../src/routes/bundle-serving.js';
 
 export async function buildTestApp(opts?: {
   rateLimitMax?: number;
@@ -27,6 +28,8 @@ export async function buildTestApp(opts?: {
   }
 
   await registerRoutes(app);
+
+  registerBundleServingRoutes(app);
 
   return app;
 }

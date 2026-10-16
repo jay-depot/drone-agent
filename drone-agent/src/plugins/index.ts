@@ -35,6 +35,7 @@ import { lightpandaPlugin } from './lightpanda/index.js';
 import { startupPlugin } from './startup.js';
 import { subagentPlugin } from './subagent/index.js';
 import { createSwarmPlugin } from './swarm/index.js';
+import { extensionsPlugin } from './extensions/index.js';
 import { todoPlugin } from './todo/index.js';
 import { utilsPlugin } from './utils.js';
 import { focusPlugin } from './focus.js';
@@ -52,6 +53,7 @@ const staticBuiltInPlugins: DronePlugin[] = [
   notepadPlugin,
   checkpointPlugin,
   subagentPlugin, // NEW
+  extensionsPlugin,
   startupPlugin,
   terminalPlugin,
   configPlugin,

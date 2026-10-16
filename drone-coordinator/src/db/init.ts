@@ -286,6 +286,30 @@ export function initDatabase(dataPath: string): Database.Database {
     );
   }
 
+  // Idempotent migration: add session_snapshot JSON to swarm_sessions.
+  if (!swarmSessionCols.some(c => c.name === 'session_snapshot')) {
+    db.exec('ALTER TABLE swarm_sessions ADD COLUMN session_snapshot TEXT');
+  }
+
+  // Extension capability cache + bundle registry.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS extension_capabilities (
+      node_id TEXT PRIMARY KEY,
+      manifest TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS extension_bundles (
+      node_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      version TEXT NOT NULL,
+      hash TEXT NOT NULL,
+      path TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (node_id, name)
+    );
+  `);
+
   // Seed built-in tool definitions
   seedBuiltinToolDefinitions();
 

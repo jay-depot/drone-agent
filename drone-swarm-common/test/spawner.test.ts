@@ -212,4 +212,48 @@ describe('spawner workingDir guard', () => {
 
     expect(db.unregisterAgent).toHaveBeenCalledWith('agent-2');
   });
+
+  it('appends --extension-hint when set', async () => {
+    const { initSpawner, spawnAgent } = await import('../src/spawner.js');
+    initSpawner(
+      {
+        agentPath: 'drone-agent',
+        timeoutMs: 60_000,
+        maxConcurrentSpawns: 2,
+        beaconHost: '127.0.0.1',
+        beaconPort: 4000,
+      },
+      db
+    );
+    spawnMock.mockReturnValue(createMockChildProcess());
+
+    await spawnAgent('spawn-1', 'agent-1', null, null, {
+      extensionHint: 'gateway-42',
+    });
+
+    const [, args] = spawnMock.mock.calls[0] as [string, string[]];
+    const idx = args.indexOf('--extension-hint');
+    expect(idx).toBeGreaterThan(-1);
+    expect(args[idx + 1]).toBe('gateway-42');
+  });
+
+  it('omits --extension-hint when unset', async () => {
+    const { initSpawner, spawnAgent } = await import('../src/spawner.js');
+    initSpawner(
+      {
+        agentPath: 'drone-agent',
+        timeoutMs: 60_000,
+        maxConcurrentSpawns: 2,
+        beaconHost: '127.0.0.1',
+        beaconPort: 4000,
+      },
+      db
+    );
+    spawnMock.mockReturnValue(createMockChildProcess());
+
+    await spawnAgent('spawn-1', 'agent-1', null, null, {});
+
+    const [, args] = spawnMock.mock.calls[0] as [string, string[]];
+    expect(args).not.toContain('--extension-hint');
+  });
 });

@@ -91,6 +91,7 @@ export async function spawnAgent(
         model?: unknown;
         env?: Record<string, string>;
         workingDir?: string;
+        extensionHint?: string;
       }
     | undefined;
   const workingDirOverride = override?.workingDir;
@@ -141,6 +142,9 @@ export async function spawnAgent(
     }
     if (workingDirOverride) {
       args.push('--working-dir', workingDirOverride);
+    }
+    if (override?.extensionHint) {
+      args.push('--extension-hint', String(override.extensionHint));
     }
   }
 

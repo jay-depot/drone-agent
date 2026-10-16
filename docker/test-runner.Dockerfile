@@ -15,6 +15,7 @@ COPY drone-core ./drone-core
 COPY drone-beacon ./drone-beacon
 COPY drone-coordinator ./drone-coordinator
 COPY drone-coordinator-ui ./drone-coordinator-ui
+COPY drone-extension-ui-types ./drone-extension-ui-types
 COPY drone-swarm-common ./drone-swarm-common
 COPY drone-gateway ./drone-gateway
 COPY docker ./docker

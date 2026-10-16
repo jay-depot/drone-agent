@@ -5,6 +5,7 @@ import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import { usePaginationOffset } from '@/hooks/use-pagination-offset';
 import { useToast } from '@/hooks/use-toast';
 import { ErrorBanner } from '@/components/error-banner';
+import { RegionSlot } from '@/extensions/ExtensionContext';
 import type {
   BeaconSession,
   WsEventMessage,
@@ -558,6 +559,7 @@ export default function SessionsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <RegionSlot region="sessions-widget" />
           <Button
             variant="default"
             size="sm"

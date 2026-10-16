@@ -6,6 +6,7 @@ import { SwarmMemoryRetriever } from '../../../src/plugins/swarm/memory-retrieva
 
 const capability: DroneSwarmCapability = {
   getBeaconUrl: () => 'http://beacon:3457',
+  registerWsHandler: () => () => {},
   getAgentId: () => 'agent-1',
 };
 

@@ -66,13 +66,13 @@ import {
 } from './fragments-sweep.js';
 import { startSpawnReconcile, stopSpawnReconcile } from './spawn-reconcile.js';
 import { logger } from './logger.js';
-import { loadOrCreateIdentity } from './identity.js';
 import { configureSessionEndHook } from './session-end.js';
 import {
   loadOrCreateTlsIdentity,
   getTlsOptions,
   setTlsLogger,
 } from 'drone-swarm-common/tls';
+import { loadOrCreateIdentity } from 'drone-swarm-common';
 import { setKnowledgeBaseDir } from 'drone-swarm-common/wiki-storage';
 
 const DEFAULT_PORT = 3457;

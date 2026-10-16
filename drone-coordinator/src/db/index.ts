@@ -66,6 +66,7 @@ export {
   getSwarmSession,
   countSwarmSessions,
   listSwarmSessions,
+  listActiveSessionSnapshots,
   updateSwarmSessionStatus,
   transitionSessionStatus,
   archiveSwarmSession,
@@ -137,3 +138,18 @@ export {
   getWikiReadCounts,
   deleteWikiPageMetadata,
 } from './wiki-page-metadata.js';
+export {
+  upsertCapabilityCache,
+  getCapabilityCache,
+  listCapabilityCache,
+  deleteCapabilityCache,
+  upsertBundle,
+  getBundle,
+  deleteBundle,
+  listBundles,
+  listBundleDescriptors,
+} from './extensions.js';
+export type {
+  ExtensionCapabilityCacheRow,
+  ExtensionBundleRow,
+} from './extensions.js';

@@ -850,5 +850,45 @@
   {
     "timestamp": "2026-10-13T18:35:24.635Z",
     "insight": "MCP `streamable_http` double-mount crash (fixed in ADR 252): the root cause was a *semantic* mismatch — the transport fired `onReconnected` from two places that are NOT reconnects (the first GET SSE stream-open, and the end of the initial connect), racing the caller's own mount, and the mount path (`listAndMountTools`) was not idempotent, so the second registration threw `Tool already registered` out of a fire-and-forget callback → unhandled rejection → process abort. Two generalizable lessons: (1) name callbacks by the *meaning* of the event, not the transport mechanism — a single `onReconnected` covering \"stream opened\", \"connect finished\", and \"child respawned\" is what allowed an initial connect to trigger a remount path; split it (`onStreamOpened` vs `onReconnected`). (2) Any callback invoked fire-and-forget from a transport must carry a `.catch`, or a future throw becomes a process-killing unhandled rejection far from its cause."
+  },
+  {
+    "timestamp": "2026-10-13T23:31:49.093Z",
+    "insight": "Planning-swarm-extensions finding: the coordinator's beacon WS inbound handler (drone-coordinator/src/beacon-ws.ts) is a one-line type gate, and the coordinator→beacon `sendBeaconCommand(beaconId, command, payload, timeoutMs)` UUID request/response primitive already exists. Both make \"add a new node type that speaks the beacon protocol\" far cheaper than it looks — worth knowing for any future 'new server type connects to the coordinator' work."
+  },
+  {
+    "timestamp": "2026-10-14T00:48:53.423Z",
+    "insight": "Adding a React context consumer (`useExtensionRegistry`) to widely-rendered pages (Topology/Sessions/SessionDetail) without a default context value breaks every existing page test with \"must be used within a Provider\". Provide a graceful EMPTY default via `createContext(EMPTY)` + a non-throwing hook so region slots render nothing when unwrapped — this preserves focused unit tests and is the better production posture anyway (a page should never crash because a decorative slot has no provider)."
+  },
+  {
+    "timestamp": "2026-10-14T00:48:53.425Z",
+    "insight": "Before attributing a test failure to your own change, verify against the stashed baseline with the same command: `git stash push -u`, run the test N times, `git stash pop`. drone-coordinator-ui's `sessions.test.tsx` \"debounces an event burst\" test is flaky on the baseline too (fails 4/4 in one run, passes 1/4 in another) — it is pre-existing, not introduced. A single green or red run is not evidence with fake-timer debounce tests."
+  },
+  {
+    "timestamp": "2026-10-14T00:48:53.427Z",
+    "insight": "For a testability seam where production uses a runtime `import(url)` that cannot be stubbed in jsdom, extract the logic into a pure function taking an injected `importModule` dep and keep the hook a thin wrapper. This is the same pattern as the `withKeyLock`/`coordinator-fetch` extractions: pure core + injected side effects = unit-testable without integration scaffolding."
+  },
+  {
+    "timestamp": "2026-10-14T00:48:53.429Z",
+    "insight": "The `git__commit` plugin tool fails (silently, non-zero) on commit messages containing em-dashes or multi-line bodies, while the identical message succeeds via `exec__run` + `git commit -m`. Also `git__commit all:true` does NOT stage untracked files (needs includeUntracked:true). When the plugin tool errors on a working tree that is NOT clean, fall back to the shell — do not assume \"clean tree\" from HOST.md is the only failure mode."
+  },
+  {
+    "timestamp": "2026-10-15T00:50:34.651Z",
+    "insight": "AGENTS.md drifts in two recurring ways: (1) hardcoded counts/numbers that go stale (it said \"ten packages\" in the intro, \"eight packages\" above a ten-row table, and \"recompile both packages\" after there were ten) — prefer count-free phrasing (\"a pnpm workspace monorepo\", \"the workspace\") so the doc can't contradict itself; and (2) changelog noise documenting past state (\"The `?` alias for /help has been removed\") — state current behavior only. Also: when AGENTS.md's \"Specialized Subsystems\" index grows, it accumulates dense inline prose that duplicates the linked doc — keep each entry a one-line pointer and move detail into the doc. And an audit should check the index against `ls docs/agents/`: three docs (memory-pipeline, provider-model-config, session-import, plus import-conventions) existed but were missing from the index."
+  },
+  {
+    "timestamp": "2026-10-16T19:20:23.079Z",
+    "insight": "Repeated pattern: authentication/credential logic is duplicated and slightly wrong across packages (constant-time compare exists privately in the LSP installer while the coordinator web-auth uses plain !==; token generation exists inline in db/web-token.ts with no shared helper). When a plan touches any credential code, sweep for sibling copies and consolidate into drone-swarm-common. Cheap to do while already in the area."
+  },
+  {
+    "timestamp": "2026-10-16T19:20:23.082Z",
+    "insight": "Planning rough edge: the extension capability catalog in mcp-swarm/src/mapping.ts drives BOTH the MCP tool surface and the coordinator-proxied action surface from one list. Adding any privileged capability (token management) to it silently promotes that capability to an MCP tool any client can call. Whenever a single source of truth feeds two surfaces with different trust levels, the catalog needs an explicit tier/permission field. Worth watching for this pattern elsewhere (skills/personas broker? tool registry?)."
+  },
+  {
+    "timestamp": "2026-10-16T19:37:12.878Z",
+    "insight": "`file__apply_diff` can silently no-op on a file even when it reports a hunk applied — during the mcp-swarm HTTP-token work a patch to `drone-core/src/extension-types.ts` reported \"additions: 0, deletions: 0\" and left the file unchanged, so the `exposed` field was never added and the dependent build failed with TS2353. Correct assumption: after every apply_diff, verify the change landed (re-read the file or check the reported insertion count is non-zero), and re-apply if the count is zero. A non-zero `additions` with matching `deletions` is the reliable success signal."
+  },
+  {
+    "timestamp": "2026-10-16T19:37:12.882Z",
+    "insight": "`node:http` response ordering: a body-size-limit guard that calls `req.destroy()` on the first over-limit chunk races the `413` response write — the client sees `ECONNRESET`/`fetch failed` instead of the status. Correct pattern: stop buffering and resolve a sentinel (do not destroy yet), write the 413 with `Connection: close`, then `req.destroy()`. Resolving first and draining the remaining request data (or closing the connection) is required for the client to read the status."
   }
 ]

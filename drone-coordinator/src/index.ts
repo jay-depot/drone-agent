@@ -62,6 +62,8 @@ import {
 } from './default-assets.js';
 import { configureSessionEndHook } from './session-end.js';
 import { setAutoApproveBeacons } from './auto-approve.js';
+import { initExtensionBundleStorage } from './extension-bundles.js';
+import { registerBundleServingRoutes } from './routes/bundle-serving.js';
 
 const DEFAULT_PORT = 3456;
 const DEFAULT_HOST = '0.0.0.0';
@@ -514,6 +516,9 @@ async function attachUi(
     return reply.sendFile('index.html', path.resolve(uiDistPath));
   });
 
+  // Serve extension bundle assets same-origin (public, like /assets/).
+  registerBundleServingRoutes(app);
+
   // SPA fallback
   app.setNotFoundHandler(async (request, reply) => {
     if (
@@ -588,6 +593,7 @@ export async function main() {
     logger.info(`Persona metadata: backfilled ${repairedPersonas} row(s)`);
   }
   await initStorage(config.configDir);
+  await initExtensionBundleStorage(config.configDir);
 
   // Initialize wiki storage under config dir
   setKnowledgeBaseDir(path.join(config.configDir, 'knowledge-base'));

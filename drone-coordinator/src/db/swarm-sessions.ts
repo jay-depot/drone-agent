@@ -1,5 +1,6 @@
 import { getDatabase } from './init.js';
 import { logger } from '../logger.js';
+import type { DroneSessionSnapshot } from 'drone-core';
 
 export interface SwarmSession {
   id: string;
@@ -9,6 +10,7 @@ export interface SwarmSession {
   updatedAt: number;
   status: string;
   interactive: boolean;
+  sessionSnapshot: DroneSessionSnapshot | null;
 }
 
 export interface SwarmEvent {
@@ -21,11 +23,37 @@ export interface SwarmEvent {
   createdAt: number;
 }
 
+interface SwarmSessionRow {
+  id: string;
+  persona_id: string | null;
+  beacon_id: string;
+  createdAt: number;
+  updatedAt: number;
+  status: string;
+  interactive: number;
+  session_snapshot: string | null;
+}
+
+function rowToSwarmSession(row: SwarmSessionRow): SwarmSession {
+  return {
+    id: row.id,
+    personaId: row.persona_id,
+    beaconId: row.beacon_id,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    status: row.status,
+    interactive: row.interactive === 1,
+    sessionSnapshot: row.session_snapshot
+      ? (JSON.parse(row.session_snapshot) as DroneSessionSnapshot)
+      : null,
+  };
+}
 export function createSwarmSession(
   id: string,
   personaId: string | null,
   beaconId: string,
-  interactive = false
+  interactive = false,
+  sessionSnapshot: DroneSessionSnapshot | null = null
 ): SwarmSession {
   const now = Date.now();
   const session: SwarmSession = {
@@ -36,11 +64,12 @@ export function createSwarmSession(
     updatedAt: now,
     status: 'active',
     interactive,
+    sessionSnapshot,
   };
 
   const stmt = getDatabase().prepare(`
-    INSERT INTO swarm_sessions (id, persona_id, beacon_id, createdAt, updatedAt, status, interactive)
-    VALUES (@id, @personaId, @beaconId, @createdAt, @updatedAt, @status, @interactive)
+    INSERT INTO swarm_sessions (id, persona_id, beacon_id, createdAt, updatedAt, status, interactive, session_snapshot)
+    VALUES (@id, @personaId, @beaconId, @createdAt, @updatedAt, @status, @interactive, @sessionSnapshot)
   `);
 
   stmt.run({
@@ -51,6 +80,9 @@ export function createSwarmSession(
     updatedAt: session.updatedAt,
     status: session.status,
     interactive: session.interactive ? 1 : 0,
+    sessionSnapshot: session.sessionSnapshot
+      ? JSON.stringify(session.sessionSnapshot)
+      : null,
   });
 
   logger.info(`Created swarm session: ${session.id}`);
@@ -61,27 +93,8 @@ export function getSwarmSession(id: string): SwarmSession | undefined {
   const stmt = getDatabase().prepare(
     'SELECT * FROM swarm_sessions WHERE id = ?'
   );
-  const row = stmt.get(id) as
-    | {
-        id: string;
-        persona_id: string | null;
-        beacon_id: string;
-        createdAt: number;
-        updatedAt: number;
-        status: string;
-        interactive: number;
-      }
-    | undefined;
-  if (!row) return undefined;
-  return {
-    id: row.id,
-    personaId: row.persona_id,
-    beaconId: row.beacon_id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    status: row.status,
-    interactive: row.interactive === 1,
-  };
+  const row = stmt.get(id) as SwarmSessionRow | undefined;
+  return row ? rowToSwarmSession(row) : undefined;
 }
 
 export function listSwarmSessions(options?: {
@@ -119,24 +132,8 @@ export function listSwarmSessions(options?: {
   }
 
   const stmt = getDatabase().prepare(query);
-  const rows = stmt.all(...params) as Array<{
-    id: string;
-    persona_id: string | null;
-    beacon_id: string;
-    createdAt: number;
-    updatedAt: number;
-    status: string;
-    interactive: number;
-  }>;
-  return rows.map(row => ({
-    id: row.id,
-    personaId: row.persona_id,
-    beaconId: row.beacon_id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    status: row.status,
-    interactive: row.interactive === 1,
-  }));
+  const rows = stmt.all(...params) as SwarmSessionRow[];
+  return rows.map(rowToSwarmSession);
 }
 export function markStaleSessions(thresholdMs: number): SwarmSession[] {
   const staleSessions = getStaleSessions(thresholdMs);
@@ -250,24 +247,22 @@ export function getStaleSessions(thresholdMs: number): SwarmSession[] {
   const stmt = getDatabase().prepare(
     "SELECT * FROM swarm_sessions WHERE status = 'active' AND updatedAt < ?"
   );
-  const rows = stmt.all(cutoff) as Array<{
-    id: string;
-    persona_id: string | null;
-    beacon_id: string;
-    createdAt: number;
-    updatedAt: number;
-    status: string;
-    interactive: number;
-  }>;
-  return rows.map(row => ({
-    id: row.id,
-    personaId: row.persona_id,
-    beaconId: row.beacon_id,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    status: row.status,
-    interactive: row.interactive === 1,
-  }));
+  const rows = stmt.all(cutoff) as SwarmSessionRow[];
+  return rows.map(rowToSwarmSession);
+}
+
+/**
+ * Snapshots of all currently-active sessions, for replaying `sessionStarted`
+ * to a node that just connected. Rows without a stored snapshot are skipped.
+ */
+export function listActiveSessionSnapshots(): DroneSessionSnapshot[] {
+  const stmt = getDatabase().prepare(
+    "SELECT * FROM swarm_sessions WHERE status = 'active' AND session_snapshot IS NOT NULL"
+  );
+  const rows = stmt.all() as SwarmSessionRow[];
+  return rows
+    .map(row => rowToSwarmSession(row).sessionSnapshot)
+    .filter((s): s is DroneSessionSnapshot => s !== null);
 }
 
 export function createSwarmEvent(event: SwarmEvent): SwarmEvent {

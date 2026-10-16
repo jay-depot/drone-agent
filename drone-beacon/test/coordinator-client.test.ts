@@ -65,7 +65,7 @@ describe('Coordinator Client', () => {
     it('should fetch fragments and mark them as coordinator scope', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -106,7 +106,7 @@ describe('Coordinator Client', () => {
     it('should accept a raw array response shape', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -144,7 +144,7 @@ describe('Coordinator Client', () => {
     it('should return empty array when coordinator is not trusted', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -397,7 +397,7 @@ describe('Coordinator Client', () => {
     it('should return a client with all required methods', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -442,7 +442,7 @@ describe('Coordinator Client', () => {
     it('should register beacon and return status', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
       const { isCoordinatorTrusted } =
@@ -490,7 +490,7 @@ describe('Coordinator Client', () => {
     it('computes the verification code with the observed coordinator fingerprint', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
       const { generateVerificationCode } = await import('drone-swarm-common');
@@ -527,7 +527,7 @@ describe('Coordinator Client', () => {
     it('should throw on non-ok response', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -565,7 +565,7 @@ describe('Coordinator Client', () => {
     it('POSTs a signed beaconId:timestamp announcement to the coordinator', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
       const { verifyBeaconSignature } = await import('drone-swarm-common');
@@ -628,7 +628,7 @@ describe('Coordinator Client', () => {
     it('should return pending status on 404', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -663,7 +663,7 @@ describe('Coordinator Client', () => {
     it('should return approved status', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -691,7 +691,7 @@ describe('Coordinator Client', () => {
     it('should fetch personas and mark them as coordinator scope', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -730,7 +730,7 @@ describe('Coordinator Client', () => {
     it('should fetch skills and mark them as coordinator scope', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -770,7 +770,7 @@ describe('Coordinator Client', () => {
     it('returns an empty list when the coordinator is not trusted', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
       const identity = await loadOrCreateIdentity('test-beacon', configDir);
@@ -791,7 +791,7 @@ describe('Coordinator Client', () => {
     it('fetches owned skills and marks them coordinator scope', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
       const identity = await loadOrCreateIdentity('test-beacon', configDir);
@@ -819,7 +819,7 @@ describe('Coordinator Client', () => {
     it('returns null when the coordinator is not trusted', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
       const identity = await loadOrCreateIdentity('test-beacon', configDir);
@@ -842,7 +842,7 @@ describe('Coordinator Client', () => {
     it('upserts the created row into the local skills table', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
       const { initDatabase, closeDatabase, getSkillByKey } =
@@ -892,7 +892,7 @@ describe('Coordinator Client', () => {
     it('should relay a message and return success', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -923,7 +923,7 @@ describe('Coordinator Client', () => {
     it('should return success false on failure', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -964,7 +964,7 @@ describe('Coordinator Client', () => {
     it('should push knowledge to coordinator', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -1003,7 +1003,7 @@ describe('Coordinator Client', () => {
     it('should pull knowledge from coordinator', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -1041,7 +1041,7 @@ describe('Coordinator Client', () => {
     it('should return empty array on failure', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -1078,7 +1078,7 @@ describe('Coordinator Client', () => {
     it('should search knowledge on coordinator', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -1118,7 +1118,7 @@ describe('Coordinator Client', () => {
     it('should register a swarm session', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -1146,7 +1146,7 @@ describe('Coordinator Client', () => {
     it('should push events to coordinator', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -1181,7 +1181,7 @@ describe('Coordinator Client', () => {
     it('should fetch a session transcript from the coordinator', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -1217,7 +1217,7 @@ describe('Coordinator Client', () => {
     it('should return null when the transcript endpoint errors', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 
@@ -1245,7 +1245,7 @@ describe('Coordinator Client', () => {
     async function makeClient() {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
-      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateIdentity } = await import('drone-swarm-common');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
 

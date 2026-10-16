@@ -38,6 +38,17 @@ export type DroneSwarmCapability = {
   getBeaconUrl(): string;
   /** Get the agent's session ID registered with the beacon. */
   getAgentId(): string;
+  /**
+   * Register a handler for an inbound agent-WebSocket frame type the swarm
+   * plugin does not itself dispatch (e.g. the `extensions` plugin's
+   * `injection` frames). Handlers are invoked for every frame whose `type`
+   * matches; unknown built-in types fall through to registered handlers
+   * before being logged. Returns an unsubscribe function.
+   */
+  registerWsHandler(
+    type: string,
+    handler: (payload: unknown, raw: unknown) => void
+  ): () => void;
 };
 
 /**

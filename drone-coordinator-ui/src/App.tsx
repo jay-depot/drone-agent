@@ -10,6 +10,11 @@ import { cn } from '@/lib/utils';
 import { ToastProvider } from '@/hooks/use-toast';
 import { WebSocketProvider } from '@/hooks/use-websocket';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
+import {
+  ExtensionProvider,
+  RegionSlot,
+  useExtensionRegistry,
+} from '@/extensions/ExtensionContext';
 import TopologyPage from '@/pages/topology';
 import BeaconDetailPage from '@/pages/beacon-detail';
 import SessionsPage from '@/pages/sessions';
@@ -25,7 +30,7 @@ import WikiPage from '@/pages/wiki';
 import WikiDetailPage from '@/pages/wiki-detail';
 import WikiEditorPage from '@/pages/wiki-editor';
 import WikiTagPage from '@/pages/wiki-tag';
-import ConfigPage from '@/pages/config';
+import SettingsPage from '@/pages/settings';
 import IdentityPage from '@/pages/identity';
 import LoginPage from '@/pages/login';
 
@@ -35,7 +40,7 @@ const navItems = [
   { to: '/personas', label: 'Personas', icon: '◌' },
   { to: '/skills', label: 'Skills', icon: '⚙' },
   { to: '/wiki', label: 'Wiki', icon: '◈' },
-  { to: '/config', label: 'Config', icon: '▤' },
+  { to: '/settings', label: 'Settings', icon: '▤' },
   { to: '/identity', label: 'Identity', icon: '◆' },
 ];
 
@@ -76,6 +81,7 @@ function DarkModeToggle() {
 
 function AppLayout() {
   const { isAuthenticated } = useAuth();
+  const { routes: pluginRoutes } = useExtensionRegistry();
 
   if (!isAuthenticated) {
     return <LoginPage />;
@@ -110,6 +116,8 @@ function AppLayout() {
               {item.label}
             </NavLink>
           ))}
+          {/* Extension-contributed nav links (sidebar-nav region). */}
+          <RegionSlot region="sidebar-nav" />
         </nav>
         <div className="p-3 border-t border-sidebar-border space-y-2">
           <DarkModeToggle />
@@ -147,8 +155,17 @@ function AppLayout() {
           <Route path="/wiki/tag/:tag" element={<WikiTagPage />} />
           <Route path="/wiki/:pageId" element={<WikiDetailPage />} />
           <Route path="/wiki/:pageId/edit" element={<WikiEditorPage />} />
-          <Route path="/config" element={<ConfigPage />} />
+          <Route path="/config" element={<Navigate to="/settings" replace />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="/identity" element={<IdentityPage />} />
+          {/* Extension-contributed routes. */}
+          {pluginRoutes.map(route => (
+            <Route
+              key={route.path}
+              path={route.path}
+              element={<route.component />}
+            />
+          ))}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
@@ -161,9 +178,11 @@ export default function App() {
     <ToastProvider>
       <AuthProvider>
         <WebSocketProvider>
-          <BrowserRouter>
-            <AppLayout />
-          </BrowserRouter>
+          <ExtensionProvider>
+            <BrowserRouter>
+              <AppLayout />
+            </BrowserRouter>
+          </ExtensionProvider>
         </WebSocketProvider>
       </AuthProvider>
     </ToastProvider>
