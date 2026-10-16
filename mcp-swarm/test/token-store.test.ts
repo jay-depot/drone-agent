@@ -61,10 +61,12 @@ describe('loadTokenStore', () => {
     await first.flush();
 
     const second = await openStore();
-    expect(second.list().map(t => t.name).sort()).toEqual([
-      'default',
-      'work-laptop',
-    ]);
+    expect(
+      second
+        .list()
+        .map(t => t.name)
+        .sort()
+    ).toEqual(['default', 'work-laptop']);
   });
 
   it('creates, lists, and renames a token', async () => {
@@ -101,9 +103,9 @@ describe('loadTokenStore', () => {
     expect(entry.lastUsedAt).toBeUndefined();
 
     expect(store.verify(token)).toBeDefined();
-    expect(store.list().find(t => t.id === entry.id)?.lastUsedAt).toBeGreaterThan(
-      0
-    );
+    expect(
+      store.list().find(t => t.id === entry.id)?.lastUsedAt
+    ).toBeGreaterThan(0);
   });
 
   it('does not corrupt the file under parallel writes', async () => {

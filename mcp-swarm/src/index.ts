@@ -39,7 +39,8 @@ export function resolveConfig(env = process.env): McpSwarmConfig {
   return {
     coordinatorUrl: env.MCP_SWARM_COORDINATOR_URL ?? 'http://127.0.0.1:3456',
     dataDir:
-      env.MCP_SWARM_DATA_DIR ?? path.join(os.homedir(), '.drone-agent', 'mcp-swarm'),
+      env.MCP_SWARM_DATA_DIR ??
+      path.join(os.homedir(), '.drone-agent', 'mcp-swarm'),
     id: env.MCP_SWARM_ID ?? 'mcp-swarm',
     host: env.MCP_SWARM_HOST ?? '127.0.0.1',
     port: Number(env.MCP_SWARM_PORT ?? 3460),
@@ -95,7 +96,11 @@ export function runTokenCapability(
  */
 export async function startMcpSwarm(
   cfg: McpSwarmConfig = resolveConfig()
-): Promise<{ node: ExtensionNode; server: McpHttpServer; stop: () => Promise<void> }> {
+): Promise<{
+  node: ExtensionNode;
+  server: McpHttpServer;
+  stop: () => Promise<void>;
+}> {
   const store = await loadTokenStore(cfg.dataDir);
 
   const node = await createExtensionNode({
@@ -149,7 +154,10 @@ export async function startMcpSwarm(
     invoke: (capability, params) =>
       isTokenCapability(capability)
         ? Promise.resolve(runTokenCapability(store, capability, params))
-        : createInvoker(node.getFetch(), cfg.coordinatorUrl)(capability, params),
+        : createInvoker(node.getFetch(), cfg.coordinatorUrl)(
+            capability,
+            params
+          ),
     verify: token => store.verify(token) !== undefined,
     host: cfg.host,
     port: cfg.port,

@@ -59,7 +59,8 @@ export async function loadTokenStore(
 ): Promise<TokenStore> {
   const filePath = path.join(dataDir, 'tokens.json');
   const bootstrapPath = path.join(dataDir, 'token');
-  const log = options.log ?? ((message: string) => process.stderr.write(`${message}\n`));
+  const log =
+    options.log ?? ((message: string) => process.stderr.write(`${message}\n`));
 
   await mkdir(dataDir, { recursive: true });
 

@@ -118,10 +118,7 @@ describe('createWebAuthMiddleware', () => {
   it('blocks a missing auth header even when only the token is empty', async () => {
     const middleware = createWebAuthMiddleware(() => 'secret');
     const reply = makeReply();
-    await middleware(
-      makeReq('8.8.8.8', '/api/sessions', 'Bearer '),
-      reply
-    );
+    await middleware(makeReq('8.8.8.8', '/api/sessions', 'Bearer '), reply);
     expect(reply._code()).toBe(401);
   });
 

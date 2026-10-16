@@ -1,8 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  startMcpHttpServer,
-  type McpHttpServer,
-} from '../src/http-server.js';
+import { startMcpHttpServer, type McpHttpServer } from '../src/http-server.js';
 import { SWARM_CAPABILITIES } from '../src/mapping.js';
 
 const TOKEN = 'mcpsw_testtoken';
@@ -64,7 +61,10 @@ describe('MCP streamable-HTTP transport', () => {
   });
 
   it('rejects a missing token with 401', async () => {
-    const res = await post({ jsonrpc: '2.0', id: 1, method: 'initialize' }, null);
+    const res = await post(
+      { jsonrpc: '2.0', id: 1, method: 'initialize' },
+      null
+    );
     expect(res.status).toBe(401);
   });
 

@@ -32,7 +32,9 @@ describe('capability catalog', () => {
   });
 
   it('exposes only the read tools to MCP', () => {
-    const exposed = mcpExposedCapabilities().map(c => c.name).sort();
+    const exposed = mcpExposedCapabilities()
+      .map(c => c.name)
+      .sort();
     expect(exposed).toEqual([
       'swarm.agent.list',
       'swarm.session.list',

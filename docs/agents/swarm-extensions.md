@@ -40,6 +40,7 @@ After connecting to `/ws/beacon`, the node sends a **manifest** frame:
       "paramSchema": { "type": "object", "properties": {} },
       "responseSchema": { "type": "object" },
       "timeoutMs": 15000,
+      "exposed": "mcp",
     },
   ],
   "bundles": [{ "name": "status-panel", "version": "0.1.0", "hash": "…" }],
@@ -49,6 +50,18 @@ After connecting to `/ws/beacon`, the node sends a **manifest** frame:
 `protocolVersion` rides **both** the registration payload and the manifest
 frame; a mismatch is logged and rejected in v0 (no negotiation). Manifests use
 **replace semantics** — re-sending replaces the catalog.
+
+### Capability tiers
+
+Each capability carries an `exposed` tier, `'mcp' | 'ui'` (default `'mcp'`):
+
+- **`mcp`** — visible to MCP clients (when the extension serves MCP) and
+  callable as an agent tool.
+- **`ui`** — a coordinator-UI-only capability. Hidden from MCP `tools/list` and
+  rejected on the agent tool route with **403 `CAPABILITY_NOT_AGENT_CALLABLE`**.
+
+The tier is advisory metadata; the enforcement lives in each extension's MCP
+surface and in the coordinator's `invoke` (agent caller).
 
 ### Node → coordinator frames
 
@@ -188,7 +201,11 @@ removeInjection / declareManifest / uploadBundle / getFetch / stop`.
 
 The reference implementation is the **`mcp-swarm`** workspace package: it
 declares a small swarm catalog and exposes it to external MCP clients over
-stdio, mapping each MCP tool 1:1 onto a catalog capability.
+**streamable HTTP**, mapping each MCP tool 1:1 onto a catalog capability. It
+runs as a long-lived daemon, guards its endpoint with **named auth tokens**, and
+serves a **settings-panel** bundle for token management. See
+[`mcp-swarm/README.md`](../../mcp-swarm/README.md) and ADR
+[`255-mcp-swarm-http-transport-and-tokens`](../adr/255-mcp-swarm-http-transport-and-tokens.md).
 
 ## Constraints (v0)
 
