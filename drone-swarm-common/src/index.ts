@@ -14,3 +14,5 @@ export * from './persona-metadata.js';
 export * from './process-lookup.js';
 export * from './json-schema.js';
 export * from './extension-server.js';
+export * from './keyed-lock.js';
+export * from './token-crypto.js';

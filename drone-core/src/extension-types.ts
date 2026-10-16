@@ -27,6 +27,13 @@ export type DroneExtensionCapability = {
   responseSchema?: Record<string, unknown>;
   /** Invocation timeout in ms. Defaults to 15000. */
   timeoutMs?: number;
+  /**
+   * Exposure tier. `mcp` capabilities are visible to MCP clients and
+   * agent-callable; `ui` capabilities are for the coordinator UI only and are
+   * hidden from `tools/list` and rejected on the agent tool route. Defaults
+   * to `mcp`.
+   */
+  exposed?: 'mcp' | 'ui';
 };
 
 /**

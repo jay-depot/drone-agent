@@ -6,6 +6,11 @@
  * package) and as a coordinator-proxied API action / injected agent tool. The
  * coordinator serves the REST route; here we only translate a capability call
  * into the coordinator REST request it maps onto.
+ *
+ * Capabilities carry an exposure tier. `mcp` capabilities are visible to MCP
+ * clients and agent-callable; `ui` capabilities are for the coordinator UI
+ * only (they are hidden from `tools/list` and rejected on the agent tool
+ * route).
  */
 
 import type { DroneExtensionCapability } from 'drone-core';
@@ -13,6 +18,7 @@ import type { DroneExtensionCapability } from 'drone-core';
 export interface CapabilityMapping {
   capability: DroneExtensionCapability;
   method: 'GET' | 'POST';
+  exposed: 'mcp' | 'ui';
   /** Build the coordinator path (with query) for a set of params. */
   path: (params: Record<string, unknown>) => string;
 }
@@ -57,6 +63,7 @@ export const CAPABILITY_MAPPINGS: CapabilityMapping[] = [
       responseSchema: { type: 'object' },
     },
     method: 'GET',
+    exposed: 'mcp',
     path: params => `/api/sessions${query(params)}`,
   },
   {
@@ -79,6 +86,7 @@ export const CAPABILITY_MAPPINGS: CapabilityMapping[] = [
       responseSchema: { type: 'object' },
     },
     method: 'GET',
+    exposed: 'mcp',
     path: params =>
       `/api/wiki/${encodeURIComponent(String(params.pageId ?? ''))}${query({
         scope: params.scope,
@@ -101,14 +109,94 @@ export const CAPABILITY_MAPPINGS: CapabilityMapping[] = [
       responseSchema: { type: 'array' },
     },
     method: 'GET',
+    exposed: 'mcp',
     path: params =>
       `/api/agents/location${query({ beaconId: params.beaconId })}`,
   },
 ];
 
+/**
+ * UI-only capabilities: managed by a local handler in this package, never by
+ * the coordinator REST mapping. They are declared in the manifest so the
+ * coordinator UI can invoke them through the proxied-action route.
+ */
+export const TOKEN_CAPABILITIES: DroneExtensionCapability[] = [
+  {
+    name: 'token.list',
+    description: 'List the named auth tokens (never the secrets). UI only.',
+    paramSchema: { type: 'object', properties: {} },
+    responseSchema: { type: 'object' },
+    exposed: 'ui',
+  },
+  {
+    name: 'token.create',
+    description:
+      'Create a named auth token. The plaintext is returned exactly once. UI only.',
+    paramSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Human name for the token.' },
+      },
+      required: ['name'],
+    },
+    responseSchema: { type: 'object' },
+    exposed: 'ui',
+  },
+  {
+    name: 'token.revoke',
+    description: 'Revoke a token by id. UI only.',
+    paramSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'The token id to revoke.' },
+      },
+      required: ['id'],
+    },
+    responseSchema: { type: 'object' },
+    exposed: 'ui',
+  },
+  {
+    name: 'token.rename',
+    description: 'Rename a token by id. UI only.',
+    paramSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'The token id to rename.' },
+        name: { type: 'string', description: 'The new name.' },
+      },
+      required: ['id', 'name'],
+    },
+    responseSchema: { type: 'object' },
+    exposed: 'ui',
+  },
+];
+
 /** The capability catalog declared in the extension manifest. */
-export const SWARM_CAPABILITIES: DroneExtensionCapability[] =
-  CAPABILITY_MAPPINGS.map(m => m.capability);
+export const SWARM_CAPABILITIES: DroneExtensionCapability[] = [
+  ...CAPABILITY_MAPPINGS.map(m => m.capability),
+  ...TOKEN_CAPABILITIES,
+];
+
+/** The capabilities visible to MCP clients (tier `mcp`). */
+export function mcpExposedCapabilities(
+  capabilities: DroneExtensionCapability[] = SWARM_CAPABILITIES
+): DroneExtensionCapability[] {
+  return capabilities.filter(cap => cap.exposed !== 'ui');
+}
+
+/** Whether a capability is visible to MCP clients. */
+export function isMcpExposed(
+  name: string,
+  capabilities: DroneExtensionCapability[] = SWARM_CAPABILITIES
+): boolean {
+  const cap = capabilities.find(candidate => candidate.name === name);
+  return !!cap && cap.exposed !== 'ui';
+}
+
+/** Whether a capability is a UI-only token-management capability. */
+export function isTokenCapability(name: string): boolean {
+  return TOKEN_CAPABILITIES.some(cap => cap.name === name);
+}
 
 /** The MCP tool name for a capability (1:1 — the catalog name IS the tool name). */
 export function mcpToolName(capabilityName: string): string {

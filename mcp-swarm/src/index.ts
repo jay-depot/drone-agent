@@ -1,29 +1,37 @@
 /**
  * `mcp-swarm` — the reference swarm extension.
  *
- * Connects to the coordinator as an extension node (declaring a small swarm
- * capability catalog + a front-end status-panel bundle) and exposes that same
- * catalog to external MCP clients over stdio. Every MCP tool call maps 1:1
- * onto a catalog capability and is executed against the coordinator over the
- * node's mTLS-authenticated fetch.
+ * Runs as a long-lived daemon: it connects to the coordinator as an extension
+ * node (declaring a swarm capability catalog + a front-end bundle) and serves
+ * that catalog to external MCP clients over streamable HTTP. MCP tool calls
+ * are authenticated by a named bearer token and either run locally (the
+ * UI-only `token.*` capabilities) or proxy to the coordinator over the node's
+ * mTLS-authenticated fetch.
  *
  * Config via env:
  *   MCP_SWARM_COORDINATOR_URL  (default http://127.0.0.1:3456)
  *   MCP_SWARM_DATA_DIR         (default ~/.drone-agent/mcp-swarm)
  *   MCP_SWARM_ID               (default mcp-swarm)
+ *   MCP_SWARM_HOST             (default 127.0.0.1)
+ *   MCP_SWARM_PORT             (default 3460)
  */
 
 import os from 'node:os';
 import path from 'node:path';
 import { createExtensionNode, type ExtensionNode } from 'drone-swarm-common';
-import { SWARM_CAPABILITIES } from './mapping.js';
-import { createInvoker, frame, startMcpStdioServer } from './mcp-server.js';
-import { buildStatusPanelFiles, STATUS_PANEL_BUNDLE } from './bundle.js';
+import { SWARM_CAPABILITIES, isTokenCapability } from './mapping.js';
+import { createInvoker } from './mcp-server.js';
+import { startMcpHttpServer, type McpHttpServer } from './http-server.js';
+import { loadTokenStore, type TokenStore } from './token-store.js';
+import { buildBundleFiles, BUNDLE } from './bundle.js';
+import type { InvokeResult } from './mapping.js';
 
 export interface McpSwarmConfig {
   coordinatorUrl: string;
   dataDir: string;
   id: string;
+  host: string;
+  port: number;
 }
 
 /** Resolve config from env with sensible defaults. */
@@ -31,16 +39,65 @@ export function resolveConfig(env = process.env): McpSwarmConfig {
   return {
     coordinatorUrl: env.MCP_SWARM_COORDINATOR_URL ?? 'http://127.0.0.1:3456',
     dataDir:
-      env.MCP_SWARM_DATA_DIR ??
-      path.join(os.homedir(), '.drone-agent', 'mcp-swarm'),
+      env.MCP_SWARM_DATA_DIR ?? path.join(os.homedir(), '.drone-agent', 'mcp-swarm'),
     id: env.MCP_SWARM_ID ?? 'mcp-swarm',
+    host: env.MCP_SWARM_HOST ?? '127.0.0.1',
+    port: Number(env.MCP_SWARM_PORT ?? 3460),
   };
 }
 
-/** Start the extension node + MCP stdio server. Returns a stop function. */
+/** Run a UI-only `token.*` capability against the token store. */
+export function runTokenCapability(
+  store: TokenStore,
+  capability: string,
+  params: Record<string, unknown>
+): InvokeResult {
+  switch (capability) {
+    case 'token.list':
+      return { ok: true, status: 200, body: { tokens: store.list() } };
+    case 'token.create': {
+      const name = String(params.name ?? '').trim();
+      if (!name) {
+        return {
+          ok: false,
+          status: 400,
+          body: { error: 'A non-empty name is required' },
+        };
+      }
+      const { entry, token } = store.create(name);
+      return { ok: true, status: 200, body: { token, entry } };
+    }
+    case 'token.revoke': {
+      const id = String(params.id ?? '');
+      return { ok: true, status: 200, body: { revoked: store.revoke(id), id } };
+    }
+    case 'token.rename': {
+      const id = String(params.id ?? '');
+      const name = String(params.name ?? '').trim();
+      const entry = store.rename(id, name);
+      if (!entry) {
+        return { ok: false, status: 404, body: { error: 'Unknown token id' } };
+      }
+      return { ok: true, status: 200, body: { entry } };
+    }
+    default:
+      return {
+        ok: false,
+        status: 404,
+        body: { error: 'Unknown token capability' },
+      };
+  }
+}
+
+/**
+ * Start the extension node, the token store, and the MCP HTTP server. Returns
+ * a stop function.
+ */
 export async function startMcpSwarm(
   cfg: McpSwarmConfig = resolveConfig()
-): Promise<{ node: ExtensionNode; stop: () => Promise<void> }> {
+): Promise<{ node: ExtensionNode; server: McpHttpServer; stop: () => Promise<void> }> {
+  const store = await loadTokenStore(cfg.dataDir);
+
   const node = await createExtensionNode({
     coordinatorUrl: cfg.coordinatorUrl,
     dataDir: cfg.dataDir,
@@ -48,46 +105,62 @@ export async function startMcpSwarm(
     name: 'mcp-swarm',
     capabilities: SWARM_CAPABILITIES,
     handlers: {
-      // An MCP-client-driven action invoked through the coordinator.
       onInvokeAction: async (capability, params) => {
-        const result = await createInvoker(node.getFetch(), cfg.coordinatorUrl)(
+        if (isTokenCapability(capability)) {
+          return runTokenCapability(
+            store,
+            capability,
+            (params ?? {}) as Record<string, unknown>
+          );
+        }
+        return createInvoker(node.getFetch(), cfg.coordinatorUrl)(
           capability,
           (params ?? {}) as Record<string, unknown>
         );
-        return { ok: result.ok, status: result.status, body: result.body };
       },
-      // The same, for a proxied agent tool call.
       onInvokeTool: async (capability, params) => {
-        const result = await createInvoker(node.getFetch(), cfg.coordinatorUrl)(
+        if (isTokenCapability(capability)) {
+          return runTokenCapability(
+            store,
+            capability,
+            (params ?? {}) as Record<string, unknown>
+          );
+        }
+        return createInvoker(node.getFetch(), cfg.coordinatorUrl)(
           capability,
           (params ?? {}) as Record<string, unknown>
         );
-        return { ok: result.ok, status: result.status, body: result.body };
       },
     },
   });
 
-  // Upload the reference front-end bundle (best-effort — the UI may not be up).
   try {
     await node.uploadBundle({
-      name: STATUS_PANEL_BUNDLE.name,
-      version: STATUS_PANEL_BUNDLE.version,
-      files: buildStatusPanelFiles(),
+      name: BUNDLE.name,
+      version: BUNDLE.version,
+      files: buildBundleFiles(),
     });
   } catch {
     // Non-fatal: the bundle is a UI nicety, not a protocol requirement.
   }
 
-  const stopServer = startMcpStdioServer({
+  const server = await startMcpHttpServer({
     capabilities: SWARM_CAPABILITIES,
-    invoke: createInvoker(node.getFetch(), cfg.coordinatorUrl),
-    write: payload => process.stdout.write(frame(payload)),
+    invoke: (capability, params) =>
+      isTokenCapability(capability)
+        ? Promise.resolve(runTokenCapability(store, capability, params))
+        : createInvoker(node.getFetch(), cfg.coordinatorUrl)(capability, params),
+    verify: token => store.verify(token) !== undefined,
+    host: cfg.host,
+    port: cfg.port,
   });
 
   return {
     node,
+    server,
     stop: async () => {
-      stopServer();
+      await server.close();
+      await store.flush();
       await node.stop();
     },
   };

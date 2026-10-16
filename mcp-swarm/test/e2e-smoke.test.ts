@@ -30,6 +30,8 @@ describe.skipIf(shouldSkip)('mcp-swarm end-to-end', () => {
       coordinatorUrl: COORDINATOR_URL,
       dataDir,
       id: 'mcp-swarm',
+      host: '127.0.0.1',
+      port: 0,
     });
     stop = started.stop;
   }, 30000);

@@ -45,6 +45,8 @@ export interface UIExtensionApi {
   registerComponent: (region: UIRegion, component: ComponentType) => () => void;
   /** Register a client route. Returns a disposer. */
   registerRoute: (route: PluginClientRoute) => () => void;
+  /** Authenticated same-origin fetch against the coordinator API. */
+  fetch: (path: string, init?: RequestInit) => Promise<Response>;
 }
 
 /** The `default` export shape of a front-end ESM bundle. */

@@ -56,6 +56,7 @@ export function useExtensions(): ExtensionsLoader {
           registerComponent,
           registerRoute,
           injectStylesheet: defaultInjectStylesheet,
+          fetch: (path, init) => authFetch(path, init),
         });
         disposers.push(...result.disposers);
         loadedRef.current = result.loaded;

@@ -59,6 +59,13 @@ async function invoke(
     });
   }
 
+  if (caller === 'agent' && cap.exposed === 'ui') {
+    return reply.code(403).send({
+      error: 'Capability is not agent-callable',
+      code: 'CAPABILITY_NOT_AGENT_CALLABLE',
+    });
+  }
+
   const errors = validateJsonSchema(params ?? {}, cap.paramSchema ?? {});
   if (errors.length > 0) {
     return reply.code(400).send({ error: 'Invalid params', details: errors });

@@ -23,6 +23,7 @@ function deps(
     registerComponent: vi.fn(() => vi.fn()),
     registerRoute: vi.fn(() => vi.fn()),
     injectStylesheet: vi.fn(),
+    fetch: vi.fn(),
     onError: vi.fn(),
     ...overrides,
   };
@@ -97,6 +98,28 @@ describe('loadExtensionBundles', () => {
     const api = onReady.mock.calls[0][0];
     api.registerRoute({ path: '/y', title: 'Y', component: () => null });
     expect(registerRoute).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands the injected fetch to bundles via api.fetch', async () => {
+    const onReady = vi.fn();
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true });
+    await loadExtensionBundles(
+      [
+        entry('node-1', [
+          { name: 'p', version: '1', hash: 'h', scriptUrls: ['/a.js'] },
+        ]),
+      ],
+      {
+        ...deps(),
+        importModule: vi.fn().mockResolvedValue({ default: { onReady } }),
+        fetch: fetchImpl,
+      }
+    );
+    const api = onReady.mock.calls[0][0];
+    await api.fetch('/api/extensions', { method: 'POST' });
+    expect(fetchImpl).toHaveBeenCalledWith('/api/extensions', {
+      method: 'POST',
+    });
   });
 
   it('contains a failing bundle without breaking others', async () => {

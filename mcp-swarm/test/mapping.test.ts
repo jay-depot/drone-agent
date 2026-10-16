@@ -3,17 +3,25 @@ import {
   CAPABILITY_MAPPINGS,
   SWARM_CAPABILITIES,
   executeCapability,
+  isMcpExposed,
+  isTokenCapability,
+  mcpExposedCapabilities,
   mcpToolName,
 } from '../src/mapping.js';
-import { handleRequest, frame } from '../src/mcp-server.js';
+import { handleRequest, type McpRequestOptions } from '../src/mcp-server.js';
+import { buildBundleFiles, BUNDLE, BUNDLE_INDEX_JS } from '../src/bundle.js';
 
 describe('capability catalog', () => {
-  it('declares swarm.session.list / swarm.wiki.read / swarm.agent.list', () => {
+  it('declares the three read tools plus the four token capabilities', () => {
     const names = SWARM_CAPABILITIES.map(c => c.name).sort();
     expect(names).toEqual([
       'swarm.agent.list',
       'swarm.session.list',
       'swarm.wiki.read',
+      'token.create',
+      'token.list',
+      'token.rename',
+      'token.revoke',
     ]);
   });
 
@@ -21,6 +29,19 @@ describe('capability catalog', () => {
     for (const cap of SWARM_CAPABILITIES) {
       expect(mcpToolName(cap.name)).toBe(cap.name);
     }
+  });
+
+  it('exposes only the read tools to MCP', () => {
+    const exposed = mcpExposedCapabilities().map(c => c.name).sort();
+    expect(exposed).toEqual([
+      'swarm.agent.list',
+      'swarm.session.list',
+      'swarm.wiki.read',
+    ]);
+    expect(isMcpExposed('swarm.session.list')).toBe(true);
+    expect(isMcpExposed('token.create')).toBe(false);
+    expect(isTokenCapability('token.create')).toBe(true);
+    expect(isTokenCapability('swarm.wiki.read')).toBe(false);
   });
 
   it('builds coordinator paths with query params', () => {
@@ -82,11 +103,10 @@ describe('executeCapability', () => {
   });
 });
 
-describe('MCP stdio server request handling', () => {
-  const opts = {
+describe('MCP request handling', () => {
+  const opts: McpRequestOptions = {
     capabilities: SWARM_CAPABILITIES,
     invoke: vi.fn().mockResolvedValue({ ok: true, status: 200, body: 'ok' }),
-    write: () => {},
   };
 
   it('answers initialize with the protocol version + tools capability', async () => {
@@ -105,7 +125,7 @@ describe('MCP stdio server request handling', () => {
     });
   });
 
-  it('lists the catalog 1:1 as MCP tools', async () => {
+  it('lists only the mcp-tier catalog as MCP tools', async () => {
     const res = (await handleRequest(
       { jsonrpc: '2.0', id: 2, method: 'tools/list' },
       opts
@@ -134,6 +154,21 @@ describe('MCP stdio server request handling', () => {
     expect(res).toMatchObject({ id: 3 });
   });
 
+  it('rejects a tools/call for a ui-tier capability', async () => {
+    const invoke = vi.fn();
+    const res = (await handleRequest(
+      {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: { name: 'token.create', arguments: { name: 'x' } },
+      },
+      { ...opts, invoke }
+    )) as { error: { code: number } };
+    expect(res.error.code).toBe(-32602);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it('returns an error result for a failing capability (not a throw)', async () => {
     const invoke = vi.fn().mockResolvedValue({
       ok: false,
@@ -143,7 +178,7 @@ describe('MCP stdio server request handling', () => {
     const res = (await handleRequest(
       {
         jsonrpc: '2.0',
-        id: 4,
+        id: 5,
         method: 'tools/call',
         params: { name: 'swarm.session.list', arguments: {} },
       },
@@ -156,7 +191,7 @@ describe('MCP stdio server request handling', () => {
     const res = (await handleRequest(
       {
         jsonrpc: '2.0',
-        id: 5,
+        id: 6,
         method: 'tools/call',
         params: { name: 'missing', arguments: {} },
       },
@@ -174,9 +209,24 @@ describe('MCP stdio server request handling', () => {
   });
 });
 
-describe('stdio framing', () => {
-  it('frames a payload with a Content-Length header', () => {
-    const framed = frame('{"a":1}');
-    expect(framed).toBe('Content-Length: 7\r\n\r\n{"a":1}');
+describe('front-end bundle', () => {
+  it('registers the settings-panel and topology-page regions', () => {
+    expect(BUNDLE_INDEX_JS).toContain("'settings-panel': SettingsPanel");
+    expect(BUNDLE_INDEX_JS).toContain("'topology-page': StatusPanel");
+  });
+
+  it('references only token.* capabilities from the settings panel', () => {
+    const calls = [...BUNDLE_INDEX_JS.matchAll(/callAction\('([^']+)'/g)].map(
+      m => m[1]
+    );
+    expect(calls.length).toBeGreaterThan(0);
+    for (const name of calls) expect(name.startsWith('token.')).toBe(true);
+  });
+
+  it('emits an index.js + style.css with a bundle name', () => {
+    const files = buildBundleFiles();
+    expect(files.map(f => f.name)).toEqual(['index.js', 'style.css']);
+    expect(files[0].contentType).toBe('application/javascript');
+    expect(BUNDLE.name).toBe('status-panel');
   });
 });
