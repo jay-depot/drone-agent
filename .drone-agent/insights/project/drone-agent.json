@@ -890,5 +890,9 @@
   {
     "timestamp": "2026-10-16T19:37:12.882Z",
     "insight": "`node:http` response ordering: a body-size-limit guard that calls `req.destroy()` on the first over-limit chunk races the `413` response write — the client sees `ECONNRESET`/`fetch failed` instead of the status. Correct pattern: stop buffering and resolve a sentinel (do not destroy yet), write the 413 with `Connection: close`, then `req.destroy()`. Resolving first and draining the remaining request data (or closing the connection) is required for the client to read the status."
+  },
+  {
+    "timestamp": "2026-10-19T20:45:00.519Z",
+    "insight": "Planning the drone-gateway swarm-extension migration surfaced a discovery-tooling trap: `swarm__wiki_list` returns the ENTIRE corpus (hundreds of pages, well over 500k tokens) — one unfiltered call nearly exhausted the context window. `swarm__wiki_search` is the long-known-empty defect, so the usual \"search first\" path is unavailable. Practical rule for orientation: do NOT call `swarm__wiki_list` unfiltered; read the specific page named in the system-prompt suggestions, and/or read the local project wiki index at /home/unleet/Obsidian/drone-agent-project/index.md. When a same-day wiki page exists for the exact topic (here: `drone-gateway-coordinator-spawn-and-optional-connection`, created the same day as the planning session), that single page is the highest-value read and beats broad exploration. Also: `self-improvement__insight` takes the `insight` parameter plus `targetId` for project scope — `text` is the wrong key."
   }
 ]
