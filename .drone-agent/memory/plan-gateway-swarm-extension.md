@@ -367,17 +367,17 @@ Branch `feat/swarm-extensions`. Commit `670a6905` (34 files, +1288/−117).
 
 ### What was built
 
-| Step | Result |
-| --- | --- |
-| 1 | SDK: `createCoordinatorFetch` gained `timeoutMs` (rejects `coordinator did not respond within <ms> ms`); `createExtensionNode` gained `awaitRegistration` (default `true`) and `requestTimeoutMs`; registration retries 1 s→30 s without end; `stop()` clears the registration timer too. New `test/coordinator-fetch.test.ts` (3 tests) against a real `http` server. |
-| 2 | `GatewayConfig`: `coordinatorToken` removed (hard error with its own message), `swarmExtension?: SwarmExtensionConfig` added (present only when `coordinatorUrl` is set). New `src/extension-defaults.ts` holds the four D5 defaults. `resolveSwarmExtension` expands `~` and resolves `dataDir` against the config dir. |
-| 3 | New `src/extension-node.ts` — `ExtensionNodeHandle` (start non-blocking / `isReady` / `fetch` with a clear not-connected rejection / idempotent `stop`). 8 tests. |
-| 4 | `CoordinatorClient(fetchFn, baseUrl)` + exported `CoordinatorFetch`; no `Authorization` header, no `token` field; `spawnAgent` config widened with `extensionHint`. 34 tests. |
-| 5 | `SpawnSessionOptions.extensionHint`; `SurfaceContext.extensionHintPrefix`; lifecycle composes `${prefix}:${conversationId}`; engine sets the prefix from `swarmExtension.id`; coordinator backend forwards `config.extensionHint` (empty config bag omitted); local backend appends `--extension-hint`. |
-| 6 | `main()`: handle → client → backends → engine; `engine.start()` then `nodeHandle.start()` (not awaited); shutdown controlApi → engine → node → exit; the failure path also stops the node. Shutdown-order test asserts the exact sequence. |
-| 7 | `drone-swarm-common` added to the gateway's dependencies. |
-| 8 | ADR `256-gateway-swarm-extension.md` + `docs/adr/index.md` row; `drone-gateway/CONTEXT.md` (Coordinator Client rewritten, new **Swarm Extension** + **Extension Hint** terms, Config Layout updated); `docs/agents/swarm-extensions.md` gained "Gateway as an extension" and the deferral sentence was replaced; swarm wiki page `gateway-swarm-extension-migration`. |
-| 9 | Build, typecheck, lint, and the fast suite all green: **4205 passed / 0 failed** (16 skipped), 319 of 323 test files passed (4 skipped). |
+| Step | Result                                                                                                                                                                                                                                                                                                                                                                 |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | SDK: `createCoordinatorFetch` gained `timeoutMs` (rejects `coordinator did not respond within <ms> ms`); `createExtensionNode` gained `awaitRegistration` (default `true`) and `requestTimeoutMs`; registration retries 1 s→30 s without end; `stop()` clears the registration timer too. New `test/coordinator-fetch.test.ts` (3 tests) against a real `http` server. |
+| 2    | `GatewayConfig`: `coordinatorToken` removed (hard error with its own message), `swarmExtension?: SwarmExtensionConfig` added (present only when `coordinatorUrl` is set). New `src/extension-defaults.ts` holds the four D5 defaults. `resolveSwarmExtension` expands `~` and resolves `dataDir` against the config dir.                                               |
+| 3    | New `src/extension-node.ts` — `ExtensionNodeHandle` (start non-blocking / `isReady` / `fetch` with a clear not-connected rejection / idempotent `stop`). 8 tests.                                                                                                                                                                                                      |
+| 4    | `CoordinatorClient(fetchFn, baseUrl)` + exported `CoordinatorFetch`; no `Authorization` header, no `token` field; `spawnAgent` config widened with `extensionHint`. 34 tests.                                                                                                                                                                                          |
+| 5    | `SpawnSessionOptions.extensionHint`; `SurfaceContext.extensionHintPrefix`; lifecycle composes `${prefix}:${conversationId}`; engine sets the prefix from `swarmExtension.id`; coordinator backend forwards `config.extensionHint` (empty config bag omitted); local backend appends `--extension-hint`.                                                                |
+| 6    | `main()`: handle → client → backends → engine; `engine.start()` then `nodeHandle.start()` (not awaited); shutdown controlApi → engine → node → exit; the failure path also stops the node. Shutdown-order test asserts the exact sequence.                                                                                                                             |
+| 7    | `drone-swarm-common` added to the gateway's dependencies.                                                                                                                                                                                                                                                                                                              |
+| 8    | ADR `256-gateway-swarm-extension.md` + `docs/adr/index.md` row; `drone-gateway/CONTEXT.md` (Coordinator Client rewritten, new **Swarm Extension** + **Extension Hint** terms, Config Layout updated); `docs/agents/swarm-extensions.md` gained "Gateway as an extension" and the deferral sentence was replaced; swarm wiki page `gateway-swarm-extension-migration`.  |
+| 9    | Build, typecheck, lint, and the fast suite all green: **4205 passed / 0 failed** (16 skipped), 319 of 323 test files passed (4 skipped).                                                                                                                                                                                                                               |
 
 ### Deviations from the plan (and why)
 
@@ -399,7 +399,7 @@ Branch `feat/swarm-extensions`. Commit `670a6905` (34 files, +1288/−117).
    proves the timeout and keeps the mock-based passthrough assertion.
 5. **`logger.error`, not `warn`, for a node that fails to start.** The plan sketched
    `logger.warn`; a failure to create the node means no coordinator capability at all,
-   so it is an error. (Background *registration* failures stay `warn` — they retry.)
+   so it is an error. (Background _registration_ failures stay `warn` — they retry.)
 
 ### Not done here (as planned)
 

@@ -906,5 +906,13 @@
   {
     "timestamp": "2026-10-19T21:01:43.121Z",
     "insight": "Don't trust a plan's step ordering when a later step is a hard prerequisite for an earlier one's typecheck. Here Step 7 (\"add drone-swarm-common to drone-gateway deps\") sat after Step 3, but Step 3's new module imports that package — so the dependency had to move to Step 3 and Step 7 became verify-only. Rule: before starting a plan, scan every new import in the planned new files and confirm each resolves in the package.json as it stands today; hoist any dependency additions to just before their first consumer."
+  },
+  {
+    "timestamp": "2026-10-19T21:11:17.800Z",
+    "insight": "tsc `include` does NOT support brace expansion. `\"drone-swarm-common/{src,test}/**/*.ts\"` in a tsconfig `include` array matches ZERO files and tsc reports no error — it silently typechecks nothing (contrast: the shell would expand it, and vitest/globs elsewhere may). This is a false-green trap: the config LOOKS like it covers both directories. Correct forms are explicit entries (`\"pkg/src/**/*.ts\"`, `\"pkg/test/**/*.ts\"`) or a real glob package. Verification method that catches it: `npx tsc -p tsconfig.test.json --listFiles | grep -c \"/<pkg>/test/\"` per package — a zero count on a package you believe is covered means the pattern matched nothing. Always pair any tsconfig `include` change with an injected deliberate type error to prove the gate bites; a clean exit code alone proves nothing when the include may match nothing."
+  },
+  {
+    "timestamp": "2026-10-19T21:11:17.804Z",
+    "insight": "Root `tsconfig.test.json` now covers EVERY workspace package's src+test (was missing drone-gateway entirely, plus drone-beacon/test and drone-coordinator/test). The pre-existing `{src,test}` brace patterns for drone-swarm-common and drone-swarm were silently matching nothing, so those two packages' test files were NOT being typechecked either, despite the config implying otherwise. This retires the long-standing project insight \"drone-gateway tests are not typechecked by any automated gate; LSP is the only gate\" (logged repeatedly 2026-10-12, 2026-10-13, and again this session) — `lsp__get_diagnostics` is no longer mandatory as a substitute gate, though it remains useful for fast feedback."
   }
 ]
