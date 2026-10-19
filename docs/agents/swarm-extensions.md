@@ -207,6 +207,54 @@ serves a **settings-panel** bundle for token management. See
 [`mcp-swarm/README.md`](../../mcp-swarm/README.md) and ADR
 [`255-mcp-swarm-http-transport-and-tokens`](../adr/255-mcp-swarm-http-transport-and-tokens.md).
 
+## Gateway as an extension
+
+`drone-gateway` uses this protocol to reach its coordinator. When
+`coordinatorUrl` is set the gateway registers as an extension node and routes
+**all** coordinator traffic through the node's mTLS `getFetch()`. The old
+web-port-plus-Bearer-token path and its `coordinatorToken` config key are gone.
+
+v0 is a **sender**: the node carries spawn and management requests, so the
+gateway no longer needs a shared secret. It does **not** declare callable
+capabilities or ship a front-end bundle — its manifest is
+`{ protocolVersion: 1, capabilities: [], bundles: [] }`. The node is still an
+extension because it declares a manifest.
+
+```jsonc
+// config.json
+{
+  "coordinatorUrl": "http://127.0.0.1:3456",
+  "swarmExtension": {
+    "id": "drone-gateway", // default
+    "name": "Drone Gateway", // default
+    "dataDir": "<configDir>/extension", // default; "~" expanded
+    "requestTimeoutMs": 15000, // default; bounded coordinator fetch
+  },
+}
+```
+
+Behaviour:
+
+- **Implicit gate.** `coordinatorUrl` presence enables the extension. Without
+  it the gateway is a standalone chat agent runner. `coordinatorToken` is a
+  removed key and a hard error when present.
+- **Boot now.** The gateway serves conversations at once. Registration retries
+  in the background (1 s to 30 s, without end), as does the WebSocket.
+- **Not ready yet.** Until the node exists, coordinator requests reject with
+  `coordinator unavailable: gateway extension node not connected`.
+- **Bounded fetch.** A stalled coordinator rejects after
+  `requestTimeoutMs` with `coordinator did not respond within <ms> ms`.
+- **Extension hint.** Every spawned agent is stamped
+  `drone-gateway:<conversationId>` — coordinator mode as
+  `config.extensionHint`, local mode as `--extension-hint`. Stamp-only in v0.
+- **Session events.** `sessionStarted` / `sessionEnded` are wired to debug logs;
+  filtering by hint is the next phase.
+- **Shutdown order.** Injection API → Gateway Engine (agents terminate over the
+  live node) → node → exit.
+
+See ADR
+[`256-gateway-swarm-extension`](../adr/256-gateway-swarm-extension.md).
+
 ## Constraints (v0)
 
 - **Local-only**: same host as the coordinator. Remote extensions are deferred
@@ -214,5 +262,7 @@ serves a **settings-panel** bundle for token management. See
 - No sandbox for front-end bundles (same-origin, full page trust).
 - A disconnected node → 503; a timeout (15 s default, per-capability override)
   → 504 / tool-error; no retry.
-- The beacon refactor onto the SDK and the gateway replatform onto the
-  extension protocol are deferred.
+- The beacon refactor onto the SDK is deferred. The gateway is replatformed
+  (ADR [256](../adr/256-gateway-swarm-extension.md)); the callee direction, tool
+  and prompt injection, the gateway config UI, and remote extensions are
+  deferred.

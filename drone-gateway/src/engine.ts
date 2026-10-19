@@ -24,6 +24,7 @@ import {
   isSurfaceMode,
 } from './surfaces/mode.js';
 import { MessageBatcher } from './batcher.js';
+import { DEFAULT_GATEWAY_EXTENSION_ID } from './extension-defaults.js';
 import {
   UnknownAdapterError,
   UnknownConversationError,
@@ -463,6 +464,8 @@ export class GatewayEngine {
       outboundLedger: adapter?.outboundLedger,
       mode: this.resolveSurfaceMode(spec),
       catchUpIntervalMs: catchUp?.intervalMs ?? DEFAULT_CATCH_UP_INTERVAL_MS,
+      extensionHintPrefix:
+        this.config.swarmExtension?.id ?? DEFAULT_GATEWAY_EXTENSION_ID,
     };
   }
 }

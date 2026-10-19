@@ -46,6 +46,7 @@ export class SessionLifecycle {
       {
         targetBeaconId: this.opts.ctx.targetBeaconId,
         workingDir: this.opts.ctx.workingDir,
+        extensionHint: `${this.opts.ctx.extensionHintPrefix}:${this.opts.conversationId}`,
       }
     );
     this.session = session;

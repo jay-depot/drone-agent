@@ -781,3 +781,101 @@ describe('loadGatewayConfig injection parsing', () => {
     ).toBe(false);
   });
 });
+
+describe('loadGatewayConfig swarmExtension resolution', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(path.join(os.tmpdir(), 'gateway-swarm-ext-test-'));
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  async function load(config: Record<string, unknown>): Promise<GatewayConfig> {
+    const configPath = path.join(tmpDir, 'config.json');
+    writeFileSync(configPath, JSON.stringify(config));
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    return loadGatewayConfig(configPath);
+  }
+
+  it('throws when the removed coordinatorToken key is present', async () => {
+    await expect(
+      load({
+        coordinatorUrl: 'http://127.0.0.1:3456',
+        coordinatorToken: 'secret',
+      })
+    ).rejects.toThrow('coordinatorToken');
+  });
+
+  it('applies defaults when swarmExtension is absent', async () => {
+    const config = await load({ coordinatorUrl: 'http://127.0.0.1:3456' });
+    expect(config.swarmExtension).toEqual({
+      id: 'drone-gateway',
+      name: 'Drone Gateway',
+      dataDir: path.join(tmpDir, 'extension'),
+      requestTimeoutMs: 15000,
+    });
+  });
+
+  it('resolves dataDir against the config directory', async () => {
+    const config = await load({
+      coordinatorUrl: 'http://127.0.0.1:3456',
+      swarmExtension: { dataDir: 'state/node' },
+    });
+    expect(config.swarmExtension?.dataDir).toBe(
+      path.join(tmpDir, 'state/node')
+    );
+  });
+
+  it('expands ~ in dataDir', async () => {
+    const config = await load({
+      coordinatorUrl: 'http://127.0.0.1:3456',
+      swarmExtension: { dataDir: '~/gw-ext' },
+    });
+    expect(config.swarmExtension?.dataDir).toBe(
+      path.join(os.homedir(), 'gw-ext')
+    );
+  });
+
+  it('keeps an explicit id, name and requestTimeoutMs', async () => {
+    const config = await load({
+      coordinatorUrl: 'http://127.0.0.1:3456',
+      swarmExtension: {
+        id: 'gw-2',
+        name: 'Gateway Two',
+        requestTimeoutMs: 500,
+      },
+    });
+    expect(config.swarmExtension).toMatchObject({
+      id: 'gw-2',
+      name: 'Gateway Two',
+      requestTimeoutMs: 500,
+    });
+  });
+
+  it('falls back to defaults for invalid field values', async () => {
+    const config = await load({
+      coordinatorUrl: 'http://127.0.0.1:3456',
+      swarmExtension: { id: '', name: 42, requestTimeoutMs: -1 },
+    });
+    expect(config.swarmExtension).toEqual({
+      id: 'drone-gateway',
+      name: 'Drone Gateway',
+      dataDir: path.join(tmpDir, 'extension'),
+      requestTimeoutMs: 15000,
+    });
+  });
+
+  it('omits swarmExtension when coordinatorUrl is absent', async () => {
+    const config = await load({});
+    expect(config.coordinatorUrl).toBe('');
+    expect(config.swarmExtension).toBeUndefined();
+  });
+
+  it('omits swarmExtension when a block is given without coordinatorUrl', async () => {
+    const config = await load({ swarmExtension: { id: 'gw-2' } });
+    expect(config.swarmExtension).toBeUndefined();
+  });
+});

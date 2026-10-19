@@ -43,6 +43,7 @@ function makeSurface(ctx: Partial<SurfaceContext>) {
     ...ctx,
     mode: ctx.mode ?? 'active',
     catchUpIntervalMs: ctx.catchUpIntervalMs ?? 900_000,
+    extensionHintPrefix: ctx.extensionHintPrefix ?? 'drone-gateway',
   };
   const surface = createSwarmConsoleSurface(
     { type: 'swarm-console' },

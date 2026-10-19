@@ -7,6 +7,7 @@ import { GatewayEngine } from './engine.js';
 import { LocalSpawnBackend } from './local-spawn-backend.js';
 import { CoordinatorSpawnBackend } from './coordinator-spawn-backend.js';
 import { CoordinatorClient } from './coordinator-client.js';
+import { ExtensionNodeHandle } from './extension-node.js';
 import { loadGatewayConfig } from './config/load.js';
 import { cleanupAdapter } from './cleanup.js';
 import { ControlApiServer } from './control-api/server.js';
@@ -135,8 +136,17 @@ export async function main(): Promise<void> {
   logger.info(`Loading config from: ${cliConfig.configPath}`);
   const config = await loadConfig(cliConfig.configPath);
 
-  const coordinatorClient = config.coordinatorUrl
-    ? new CoordinatorClient(config.coordinatorUrl, config.coordinatorToken)
+  // `coordinatorUrl` presence is the extension gate (D4): with a coordinator the
+  // gateway is a swarm extension and the node's mTLS fetch carries all
+  // coordinator traffic; without one it is a standalone chat agent runner.
+  const nodeHandle = config.swarmExtension
+    ? new ExtensionNodeHandle(config.coordinatorUrl, config.swarmExtension)
+    : undefined;
+  const coordinatorClient = nodeHandle
+    ? new CoordinatorClient(
+        nodeHandle.fetch.bind(nodeHandle),
+        config.coordinatorUrl
+      )
     : undefined;
   const backends = createSpawnBackends(config, coordinatorClient);
   const engine = new GatewayEngine(config, backends, coordinatorClient);
@@ -146,7 +156,9 @@ export async function main(): Promise<void> {
   const shutdown = async () => {
     logger.info('Shutting down...');
     await controlApi?.stop();
+    // Agents terminate over the LIVE node, so the node stops last (D13).
     await engine.stop();
+    await nodeHandle?.stop();
     process.exit(0);
   };
 
@@ -155,6 +167,9 @@ export async function main(): Promise<void> {
 
   try {
     await engine.start();
+    // Not awaited: the gateway serves conversations before the coordinator
+    // answers, and the node retries registration in the background (D8).
+    nodeHandle?.start();
 
     if (config.controlApi?.enabled) {
       controlApi = new ControlApiServer({
@@ -172,6 +187,7 @@ export async function main(): Promise<void> {
     logger.error(err, 'Failed to start gateway');
     await controlApi?.stop();
     await engine.stop();
+    await nodeHandle?.stop();
     process.exit(1);
   }
 }

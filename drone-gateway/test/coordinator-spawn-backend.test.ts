@@ -123,6 +123,50 @@ describe('CoordinatorSpawnBackend', () => {
       });
     });
 
+    it('forwards extensionHint as config.extensionHint', async () => {
+      mockSpawnAgent.mockResolvedValue({
+        spawnId: 'spawn-abc',
+        agentId: 'agent-xyz',
+        status: 'running',
+      });
+
+      await backend.spawnSession('conv-1', 'coder', {
+        targetBeaconId: 'beacon-1',
+        extensionHint: 'drone-gateway:conv-1',
+      });
+
+      expect(mockSpawnAgent).toHaveBeenCalledWith({
+        targetBeaconId: 'beacon-1',
+        personaId: 'coder',
+        spawnId: expect.any(String),
+        config: { extensionHint: 'drone-gateway:conv-1' },
+      });
+    });
+
+    it('forwards workingDir and extensionHint together', async () => {
+      mockSpawnAgent.mockResolvedValue({
+        spawnId: 'spawn-abc',
+        agentId: 'agent-xyz',
+        status: 'running',
+      });
+
+      await backend.spawnSession('conv-1', 'coder', {
+        targetBeaconId: 'beacon-1',
+        workingDir: '/srv/bots',
+        extensionHint: 'drone-gateway:conv-1',
+      });
+
+      expect(mockSpawnAgent).toHaveBeenCalledWith({
+        targetBeaconId: 'beacon-1',
+        personaId: 'coder',
+        spawnId: expect.any(String),
+        config: {
+          workingDir: '/srv/bots',
+          extensionHint: 'drone-gateway:conv-1',
+        },
+      });
+    });
+
     it('dedupes concurrent spawns for the same conversation', async () => {
       mockSpawnAgent.mockResolvedValue({
         spawnId: 'spawn-abc',

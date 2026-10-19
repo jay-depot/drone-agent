@@ -1,14 +1,17 @@
 import { logger } from './logger.js';
 import type { SwarmApi } from './console/swarm-api.js';
 
-export class CoordinatorClient implements SwarmApi {
-  private baseUrl: string;
-  private token: string | undefined;
+/** Transport the client speaks over. Bound to the extension node's mTLS fetch. */
+export type CoordinatorFetch = (
+  url: string,
+  init?: RequestInit
+) => Promise<Response>;
 
-  constructor(baseUrl: string, token?: string) {
-    this.baseUrl = baseUrl;
-    this.token = token;
-  }
+export class CoordinatorClient implements SwarmApi {
+  constructor(
+    private readonly fetchFn: CoordinatorFetch,
+    private readonly baseUrl: string
+  ) {}
 
   private async request(
     method: string,
@@ -18,12 +21,9 @@ export class CoordinatorClient implements SwarmApi {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
-    }
     const url = `${this.baseUrl}${path}`;
     logger.debug({ method, url }, 'Coordinator request');
-    return fetch(url, {
+    return this.fetchFn(url, {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -69,7 +69,7 @@ export class CoordinatorClient implements SwarmApi {
     personaId?: string;
     task?: string;
     spawnId?: string;
-    config?: { workingDir?: string };
+    config?: { workingDir?: string; extensionHint?: string };
   }): Promise<unknown> {
     return this.mutate('POST', '/api/spawn', input, 'Spawn failed', true);
   }

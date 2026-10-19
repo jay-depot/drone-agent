@@ -327,6 +327,9 @@ importers:
       drone-core:
         specifier: workspace:*
         version: link:../drone-core
+      drone-swarm-common:
+        specifier: workspace:*
+        version: link:../drone-swarm-common
       fastify:
         specifier: ^5.12.5
         version: 5.12.5

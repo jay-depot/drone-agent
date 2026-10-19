@@ -128,6 +128,22 @@ export interface ControlApiConfig {
 }
 
 /**
+ * Settings for the gateway's swarm extension node. Resolved only when
+ * `coordinatorUrl` is set; `coordinatorUrl` presence is what enables the
+ * extension, so this block carries tuning and identity only.
+ */
+export interface SwarmExtensionConfig {
+  /** Extension id the coordinator keys the node on. */
+  id: string;
+  /** Human-readable name shown in the coordinator's extension list. */
+  name: string;
+  /** Directory for the node identity and TLS material. Absolute. */
+  dataDir: string;
+  /** Bounded timeout for coordinator HTTP requests, in ms. */
+  requestTimeoutMs: number;
+}
+
+/**
  * Gateway configuration.
  *
  * The spawn backend is chosen per control surface and inferred: a surface that
@@ -136,7 +152,8 @@ export interface ControlApiConfig {
  */
 export interface GatewayConfig {
   coordinatorUrl: string;
-  coordinatorToken?: string;
+  /** Present only when `coordinatorUrl` is set. */
+  swarmExtension?: SwarmExtensionConfig;
   /**
    * Gateway-wide default idle timeout (ms) for spawning control surfaces.
    * A surface-level `config.lifecycle.idleTimeoutMs` overrides it; `0` disables.
@@ -196,4 +213,10 @@ export interface SpawnSessionOptions {
    * (subject to the beacon's spawnRoots whitelist).
    */
   workingDir?: string;
+  /**
+   * Extension hint stamped onto the spawned agent, so the gateway can identify
+   * the sessions it caused. Coordinator mode forwards it as
+   * `config.extensionHint`; local mode appends `--extension-hint`.
+   */
+  extensionHint?: string;
 }

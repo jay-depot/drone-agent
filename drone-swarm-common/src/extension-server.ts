@@ -97,10 +97,19 @@ export interface CreateExtensionNodeOptions {
   name: string;
   capabilities: DroneExtensionCapability[];
   handlers?: ExtensionNodeHandlers;
+  /**
+   * When `false`, `createExtensionNode` resolves before registration completes
+   * and retries registration in the background with exponential backoff.
+   */
+  awaitRegistration?: boolean;
+  /** Bounded timeout for coordinator HTTP requests. Unset means no timeout. */
+  requestTimeoutMs?: number;
 }
 
 const RECONNECT_MIN_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
+const REGISTER_RETRY_MIN_MS = 1000;
+const REGISTER_RETRY_MAX_MS = 30000;
 
 export async function createExtensionNode(
   opts: CreateExtensionNodeOptions
@@ -118,7 +127,8 @@ export async function createExtensionNode(
     opts.coordinatorUrl,
     undefined,
     undefined,
-    tlsIdentity
+    tlsIdentity,
+    opts.requestTimeoutMs
   );
 
   let manifest: DroneExtensionManifest = {
@@ -131,6 +141,8 @@ export async function createExtensionNode(
   let stopped = false;
   let attempts = 0;
   let reconnectTimer: NodeJS.Timeout | null = null;
+  let registerAttempts = 0;
+  let registerTimer: NodeJS.Timeout | null = null;
 
   const register = async (): Promise<void> => {
     const res = await cfetch(`${opts.coordinatorUrl}/api/beacons`, {
@@ -300,8 +312,37 @@ export async function createExtensionNode(
     }, delay);
   };
 
-  await register();
-  connect();
+  const scheduleRegisterRetry = (): void => {
+    if (stopped || registerTimer) return;
+    const delay = Math.min(
+      REGISTER_RETRY_MIN_MS * 2 ** registerAttempts,
+      REGISTER_RETRY_MAX_MS
+    );
+    registerAttempts++;
+    registerTimer = setTimeout(() => {
+      registerTimer = null;
+      void tryRegister();
+    }, delay);
+  };
+
+  const tryRegister = async (): Promise<void> => {
+    if (stopped) return;
+    try {
+      await register();
+      registerAttempts = 0;
+      connect();
+    } catch (err) {
+      logger.warn(`Extension node registration failed: ${err}`);
+      scheduleRegisterRetry();
+    }
+  };
+
+  if (opts.awaitRegistration === false) {
+    void tryRegister();
+  } else {
+    await register();
+    connect();
+  }
 
   return {
     getFetch() {
@@ -370,6 +411,10 @@ export async function createExtensionNode(
       if (reconnectTimer) {
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
+      }
+      if (registerTimer) {
+        clearTimeout(registerTimer);
+        registerTimer = null;
       }
       if (ws) {
         try {

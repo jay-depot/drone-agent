@@ -1,5 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
+const callOrder: string[] = [];
+
 // Mock the config loader so we don't need filesystem access
 const mockLoadGatewayConfig = vi.fn();
 vi.mock('../src/config/load.js', () => ({
@@ -38,9 +40,28 @@ vi.mock('../src/coordinator-spawn-backend.js', () => ({
   }),
 }));
 
+const mockNodeStart = vi.fn(() => {
+  callOrder.push('node.start');
+});
+const mockNodeStop = vi.fn(async () => {
+  callOrder.push('node.stop');
+});
+vi.mock('../src/extension-node.js', () => ({
+  ExtensionNodeHandle: vi.fn().mockImplementation(function () {
+    return {
+      start: mockNodeStart,
+      stop: mockNodeStop,
+      isReady: vi.fn(() => true),
+      fetch: vi.fn(async () => new Response('ok')),
+    };
+  }),
+}));
+
 // Mock engine so main() doesn't actually start anything
 const mockEngineStart = vi.fn();
-const mockEngineStop = vi.fn();
+const mockEngineStop = vi.fn(async () => {
+  callOrder.push('engine.stop');
+});
 vi.mock('../src/engine.js', () => ({
   GatewayEngine: vi.fn().mockImplementation(function () {
     return {
@@ -51,7 +72,9 @@ vi.mock('../src/engine.js', () => ({
 }));
 
 const mockControlApiStart = vi.fn();
-const mockControlApiStop = vi.fn();
+const mockControlApiStop = vi.fn(async () => {
+  callOrder.push('controlApi.stop');
+});
 vi.mock('../src/control-api/server.js', () => ({
   ControlApiServer: vi.fn().mockImplementation(function () {
     return {
@@ -155,6 +178,7 @@ describe('main', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    callOrder.length = 0;
     process.argv = ['node', 'drone-gateway'];
     mockLoadGatewayConfig.mockResolvedValue({
       coordinatorUrl: 'http://localhost:8080',
@@ -187,5 +211,77 @@ describe('main', () => {
     // server was started without awaiting completion.
     void main();
     await vi.waitFor(() => expect(mockControlApiStart).toHaveBeenCalled());
+  });
+
+  it('does not create an extension node without a coordinator', async () => {
+    mockEngineStart.mockResolvedValue(undefined);
+    mockLoadGatewayConfig.mockResolvedValue({
+      coordinatorUrl: '',
+      serviceAdapters: [],
+    });
+
+    void main();
+    await vi.waitFor(() => expect(mockEngineStart).toHaveBeenCalled());
+    await new Promise(resolve => setImmediate(resolve));
+
+    expect(mockNodeStart).not.toHaveBeenCalled();
+  });
+
+  it('starts the extension node without awaiting it', async () => {
+    mockEngineStart.mockResolvedValue(undefined);
+    mockLoadGatewayConfig.mockResolvedValue({
+      coordinatorUrl: 'http://127.0.0.1:3456',
+      swarmExtension: {
+        id: 'drone-gateway',
+        name: 'Drone Gateway',
+        dataDir: '/tmp/ext',
+        requestTimeoutMs: 15000,
+      },
+      serviceAdapters: [],
+    });
+
+    void main();
+
+    await vi.waitFor(() => expect(mockNodeStart).toHaveBeenCalled());
+  });
+
+  it('shuts down control API, then engine, then the extension node', async () => {
+    mockEngineStart.mockResolvedValue(undefined);
+    mockLoadGatewayConfig.mockResolvedValue({
+      coordinatorUrl: 'http://127.0.0.1:3456',
+      swarmExtension: {
+        id: 'drone-gateway',
+        name: 'Drone Gateway',
+        dataDir: '/tmp/ext',
+        requestTimeoutMs: 15000,
+      },
+      serviceAdapters: [],
+      controlApi: { enabled: true, host: '127.0.0.1', port: 8090 },
+    });
+
+    const handlers = new Map<string, () => Promise<void>>();
+    const onSpy = vi.spyOn(process, 'on').mockImplementation(((
+      event: string,
+      handler: () => Promise<void>
+    ) => {
+      handlers.set(event, handler);
+      return process;
+    }) as never);
+
+    void main();
+    await vi.waitFor(() => expect(mockControlApiStart).toHaveBeenCalled());
+
+    const shutdown = handlers.get('SIGTERM');
+    expect(shutdown).toBeDefined();
+    await shutdown!();
+
+    expect(callOrder).toEqual([
+      'node.start',
+      'controlApi.stop',
+      'engine.stop',
+      'node.stop',
+    ]);
+    expect(mockExit).toHaveBeenCalledWith(0);
+    onSpy.mockRestore();
   });
 });

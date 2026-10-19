@@ -188,6 +188,37 @@ describe('LocalSpawnBackend', () => {
       expect(options).not.toHaveProperty('cwd');
     });
 
+    it('passes --extension-hint when an extension hint is supplied', async () => {
+      const mock = makeMockProcess(12345);
+      mockSpawn.mockReturnValue(mock.proc);
+
+      await backend.spawnSession('conv-1', 'coder', {
+        workingDir: '/srv/bots',
+        extensionHint: 'drone-gateway:conv-1',
+      });
+
+      const args = mockSpawn.mock.calls[0][1] as string[];
+      expect(args).toEqual([
+        '--output-json',
+        '--persona',
+        'coder',
+        '--working-dir',
+        '/srv/bots',
+        '--extension-hint',
+        'drone-gateway:conv-1',
+      ]);
+    });
+
+    it('omits --extension-hint when no hint is supplied', async () => {
+      const mock = makeMockProcess(12345);
+      mockSpawn.mockReturnValue(mock.proc);
+
+      await backend.spawnSession('conv-1', 'coder');
+
+      const args = mockSpawn.mock.calls[0][1] as string[];
+      expect(args).not.toContain('--extension-hint');
+    });
+
     it('dedupes concurrent spawns for the same conversation', async () => {
       const mock = makeMockProcess(12345);
       mockSpawn.mockReturnValue(mock.proc);

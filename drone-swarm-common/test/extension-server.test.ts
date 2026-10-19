@@ -36,16 +36,35 @@ vi.mock('../src/logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-const captured: { urls: string[]; bodies: unknown[] } = {
+const captured: {
+  urls: string[];
+  bodies: unknown[];
+  failuresRemaining: number;
+  gate: Promise<void> | null;
+  fetchArgs: unknown[][];
+} = {
   urls: [],
   bodies: [],
+  failuresRemaining: 0,
+  gate: null,
+  fetchArgs: [],
 };
 
 vi.mock('../src/coordinator-fetch.js', () => ({
-  createCoordinatorFetch: () => async (url: string, init?: RequestInit) => {
-    captured.urls.push(url);
-    if (init?.body) captured.bodies.push(JSON.parse(init.body as string));
-    return new Response(JSON.stringify({ hash: 'deadbeef' }), { status: 200 });
+  createCoordinatorFetch: (...args: unknown[]) => {
+    captured.fetchArgs.push(args);
+    return async (url: string, init?: RequestInit) => {
+      if (captured.gate) await captured.gate;
+      captured.urls.push(url);
+      if (init?.body) captured.bodies.push(JSON.parse(init.body as string));
+      if (captured.failuresRemaining > 0) {
+        captured.failuresRemaining--;
+        return new Response('nope', { status: 503 });
+      }
+      return new Response(JSON.stringify({ hash: 'deadbeef' }), {
+        status: 200,
+      });
+    };
   },
   buildCheckServerIdentity: () => () => undefined,
 }));
@@ -58,6 +77,9 @@ beforeEach(async () => {
   FakeWebSocket.instances = [];
   captured.urls = [];
   captured.bodies = [];
+  captured.failuresRemaining = 0;
+  captured.gate = null;
+  captured.fetchArgs = [];
   dataDir = await mkdtemp(path.join(os.tmpdir(), 'drone-ext-node-'));
 });
 
@@ -295,5 +317,85 @@ describe('createExtensionNode', () => {
     expect(FakeWebSocket.instances.length).toBeGreaterThan(1);
     await node.stop();
     vi.useRealTimers();
+  });
+
+  it('resolves before registration when awaitRegistration is false', async () => {
+    let releaseGate: () => void = () => {};
+    captured.gate = new Promise<void>(resolve => {
+      releaseGate = resolve;
+    });
+
+    const node = await createExtensionNode({
+      ...baseOpts,
+      dataDir,
+      awaitRegistration: false,
+    });
+
+    expect(captured.bodies).toHaveLength(0);
+    expect(FakeWebSocket.instances).toHaveLength(0);
+
+    releaseGate();
+    await new Promise(r => setImmediate(r));
+
+    expect(captured.bodies[0]).toMatchObject({ id: 'node-1' });
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    await node.stop();
+  });
+
+  it('retries registration in the background until it succeeds', async () => {
+    vi.useFakeTimers();
+    captured.failuresRemaining = 2;
+
+    const node = await createExtensionNode({
+      ...baseOpts,
+      dataDir,
+      awaitRegistration: false,
+    });
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(captured.urls).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(captured.urls).toHaveLength(2);
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(captured.urls).toHaveLength(3);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(captured.urls).toHaveLength(3);
+
+    await node.stop();
+    vi.useRealTimers();
+  });
+
+  it('does not connect when stopped during registration retry', async () => {
+    vi.useFakeTimers();
+    captured.failuresRemaining = 5;
+
+    const node = await createExtensionNode({
+      ...baseOpts,
+      dataDir,
+      awaitRegistration: false,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(captured.urls).toHaveLength(1);
+
+    await node.stop();
+    await vi.advanceTimersByTimeAsync(120000);
+
+    expect(captured.urls).toHaveLength(1);
+    expect(FakeWebSocket.instances).toHaveLength(0);
+    vi.useRealTimers();
+  });
+
+  it('passes requestTimeoutMs to the coordinator fetch', async () => {
+    const node = await createExtensionNode({
+      ...baseOpts,
+      dataDir,
+      requestTimeoutMs: 1234,
+    });
+    expect(captured.fetchArgs[0][4]).toBe(1234);
+    await node.stop();
   });
 });

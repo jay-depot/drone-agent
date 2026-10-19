@@ -137,8 +137,16 @@ The gateway-owned per-turn instruction delivered (only in a multi-user room) as 
 _Avoid_: group prompt, room prompt
 
 **Coordinator Client**:
-The HTTP client used by the gateway to communicate with the coordinator's web port (8080). Uses Bearer token authentication. Provides methods for spawning agents, listing beacons, and managing spawns.
+The HTTP client used by the gateway to communicate with the coordinator. It owns no transport: it takes a `CoordinatorFetch` in its constructor and sends every request through it. In practice that fetch is the **Swarm Extension** node's mTLS `getFetch()`, so the client authenticates with the gateway's own node identity and sends no Bearer token. Provides methods for spawning agents, listing beacons, and managing spawns.
 _Avoid_: Coordinator API, coordinator proxy, coordinator connector
+
+**Swarm Extension**:
+The gateway's role when `coordinatorUrl` is set. The gateway registers with the coordinator as an extension node (ADR [256](../docs/adr/256-gateway-swarm-extension.md)) and speaks the beacon protocol over mTLS, so one connection and one trust path replace the old web-port-plus-token pair. v0 is a **sender**: the node carries spawn and management requests only, and it declares an empty capability manifest. It does not yet expose callable capabilities or ship a front-end bundle. One node per gateway process, started without blocking and registered in the background with retry, so the gateway serves conversations before the coordinator answers. Until the node exists, coordinator requests reject with `coordinator unavailable: gateway extension node not connected`.
+_Avoid_: swarm connector, extension server, beacon mode
+
+**Extension Hint**:
+The value `drone-gateway:<conversationId>` stamped onto every agent the gateway spawns, so the gateway can identify the sessions it caused. It goes to both spawn backends: coordinator mode forwards it as `config.extensionHint`, local mode appends `--extension-hint`. The prefix is the **Swarm Extension** id. Stamp-only in v0 — nothing filters on it yet.
+_Avoid_: agent tag, spawn label
 
 **Injection**:
 Outbound posting of text into a conversation by an external process (a cron job, CI hook, or script). It bypasses control surfaces entirely — the text is handed straight to the adapter's `sendMessage` — and it does **not** serialize on the conversation's dispatch tail, so it may interleave with a live agent turn.
@@ -168,7 +176,19 @@ _Avoid_: poster, message sender
     coordinatorUrl: string            # Optional; required iff a loaded surface needs
                                       # the coordinator (a coordinator-mode spawner
                                       # or a swarm-console surface)
-    coordinatorToken?: string
+                                      # Presence ALSO enables the Swarm Extension:
+                                      # with it the gateway is an extension node;
+                                      # without it, a standalone chat agent runner.
+    swarmExtension?: {                # Optional tuning for the extension node.
+      id: string                      #   Default "drone-gateway".
+      name: string                    #   Default "Drone Gateway".
+      dataDir: string                 #   Default <configDir>/extension; resolves
+                                      #   against the config dir, "~" expanded.
+      requestTimeoutMs: number        #   Default 15000. Bounded coordinator fetch.
+    }
+                                      # coordinatorToken is REMOVED: a hard error
+                                      # when present. The gateway authenticates with
+                                      # its own mTLS node identity.
     idleTimeoutMs?: number            # Gateway-wide default idle timeout (ms)
                                       # for spawning surfaces; 0 disables.
                                       # Overridden per-surface (see below).

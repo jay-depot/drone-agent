@@ -11,6 +11,7 @@ import type {
   ResolvedConversation,
   ControlSurfaceSpec,
   ControlApiConfig,
+  SwarmExtensionConfig,
 } from '../types.js';
 import { isSurfaceMode, SURFACE_MODES } from '../surfaces/mode.js';
 import {
@@ -18,6 +19,12 @@ import {
   SURFACES_REQUIRING_COORDINATOR,
   resolveSurfaceSpawnMode,
 } from '../surfaces/requirements.js';
+import {
+  DEFAULT_EXTENSION_DATA_DIR_NAME,
+  DEFAULT_EXTENSION_REQUEST_TIMEOUT_MS,
+  DEFAULT_GATEWAY_EXTENSION_ID,
+  DEFAULT_GATEWAY_EXTENSION_NAME,
+} from '../extension-defaults.js';
 
 const MAX_WORKING_DIR_LENGTH = 4096;
 
@@ -271,6 +278,87 @@ function parseControlApi(
 }
 
 /**
+ * Expand a leading `~` to the home directory and resolve a relative path
+ * against the config directory.
+ */
+function resolveConfigRelativePath(value: string, configDir: string): string {
+  let expanded = value;
+  if (expanded === '~') {
+    expanded = os.homedir();
+  } else if (expanded.startsWith('~/')) {
+    expanded = path.join(os.homedir(), expanded.slice(2));
+  }
+  return path.resolve(configDir, expanded);
+}
+
+/**
+ * Resolve the `swarmExtension` block. Returns `undefined` when `coordinatorUrl`
+ * is absent — presence of the coordinator URL is what enables the extension, so
+ * a `swarmExtension` block without it is warned about and ignored. Defaults
+ * fill any absent or invalid field.
+ */
+function resolveSwarmExtension(
+  raw: unknown,
+  coordinatorUrl: string | undefined,
+  configDir: string
+): SwarmExtensionConfig | undefined {
+  if (!coordinatorUrl) {
+    if (raw !== undefined) {
+      logger.warn(
+        'Config field swarmExtension is only used when coordinatorUrl is set; ignoring.'
+      );
+    }
+    return undefined;
+  }
+
+  const warn = (msg: string) => logger.warn(`Config field ${msg}.`);
+  let bag: Record<string, unknown> = {};
+  if (raw !== undefined) {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+      warn('swarmExtension is not an object; using defaults');
+    } else {
+      bag = raw as Record<string, unknown>;
+    }
+  }
+
+  const readString = (key: string, fallback: string): string => {
+    const value = bag[key];
+    if (value === undefined) return fallback;
+    if (typeof value !== 'string' || value.trim() === '') {
+      warn(`swarmExtension.${key} must be a non-empty string; using default`);
+      return fallback;
+    }
+    return value;
+  };
+
+  const timeout = bag.requestTimeoutMs;
+  let requestTimeoutMs = DEFAULT_EXTENSION_REQUEST_TIMEOUT_MS;
+  if (timeout !== undefined) {
+    if (
+      typeof timeout !== 'number' ||
+      !Number.isFinite(timeout) ||
+      timeout <= 0
+    ) {
+      warn(
+        'swarmExtension.requestTimeoutMs must be a positive number; using default'
+      );
+    } else {
+      requestTimeoutMs = timeout;
+    }
+  }
+
+  return {
+    id: readString('id', DEFAULT_GATEWAY_EXTENSION_ID),
+    name: readString('name', DEFAULT_GATEWAY_EXTENSION_NAME),
+    dataDir: resolveConfigRelativePath(
+      readString('dataDir', DEFAULT_EXTENSION_DATA_DIR_NAME),
+      configDir
+    ),
+    requestTimeoutMs,
+  };
+}
+
+/**
  * Load and validate the full gateway configuration from a folder hierarchy.
  *
  * Layout:
@@ -324,6 +412,14 @@ export async function loadGatewayConfig(
     }
   }
 
+  if (gatewayConfig.coordinatorToken !== undefined) {
+    throw new Error(
+      'Removed config field "coordinatorToken": the gateway now authenticates ' +
+        'to the coordinator with its own mTLS identity as a swarm extension. ' +
+        'Delete "coordinatorToken" from config.json.'
+    );
+  }
+
   // coordinatorUrl is optional at this point; it becomes required if any
   // loaded surface needs the coordinator (enforced after adapters load).
   const coordinatorUrl = gatewayConfig.coordinatorUrl as string | undefined;
@@ -349,7 +445,11 @@ export async function loadGatewayConfig(
   // Build the base config
   const config: GatewayConfig = {
     coordinatorUrl: coordinatorUrl ?? '',
-    coordinatorToken: gatewayConfig.coordinatorToken as string | undefined,
+    swarmExtension: resolveSwarmExtension(
+      gatewayConfig.swarmExtension,
+      coordinatorUrl,
+      configDir
+    ),
     idleTimeoutMs,
     batch:
       batchDebounceMs !== undefined

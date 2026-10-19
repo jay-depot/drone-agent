@@ -31,25 +31,25 @@ Why: (1) one connection and one trust path replace two; (2) the node gives the g
 
 ## Decisions (locked in the planning session, Q1–Q15)
 
-| # | Decision |
-|---|---|
-| D1 | The gateway is the **sender**. The extension connection is its outbound pipe for spawn requests. The callee direction is a later phase. |
-| D2 | Re-plumb the **Coordinator Client** onto the node's mTLS `getFetch()`. Keep the `CoordinatorClient` class and the `SwarmApi` interface. Drop `coordinatorToken`. |
-| D3 | Extension hint value = `drone-gateway:<conversationId>`. |
-| D4 | `coordinatorUrl` **presence** enables the extension. There is no separate flag. `coordinatorToken` is a **removed key** (a hard error if present). |
-| D5 | Optional `swarmExtension` block: `id` (default `drone-gateway`), `name` (default `Drone Gateway`), `dataDir` (default `<configDir>/extension`), `requestTimeoutMs` (default `15000`). |
-| D6 | `coordinatorUrl` keeps its value (the primary/mTLS port, for example `http://127.0.0.1:3456`). The node makes the WebSocket URL from it. |
-| D7 | **One** extension node per gateway process. |
-| D8 | The gateway starts at once and registers in the background with retry. It does not wait for the coordinator. |
-| D9 | The manifest is **empty**: `{ protocolVersion: 1, capabilities: [], bundles: [] }`. |
-| D10 | The extension hint goes to **both** spawn backends (coordinator and local). In local mode it is inert today; the next phase needs it. |
-| D11 | `sessionStarted` / `sessionEnded` handlers are wired, but they only write a debug log. Filtering by hint is the next phase. |
-| D12 | The node's coordinator `fetch` has a **bounded request timeout**. Default `15000` ms. On timeout it rejects with `coordinator did not respond within <ms> ms`. |
-| D13 | Shutdown order: stop the **Injection API**, stop the **GatewayEngine** (the agents terminate over the live node), stop the node, then exit. Terminate stays best-effort. |
-| D14 | New module `src/extension-node.ts` with an `ExtensionNodeHandle`. `main()` owns the handle. The **Coordinator Client** stays a transport only. |
-| D15 | The SDK gains `awaitRegistration` (default `true`). The gateway passes `false` and gets background retry. |
-| D16 | No change to the coordinator or the beacon. Both `SpawnConfig` types already carry `extensionHint`. |
-| D17 | New ADR 256. Update `drone-gateway/CONTEXT.md`, `docs/agents/swarm-extensions.md`, and the swarm wiki. Add `drone-swarm-common` to the gateway's dependencies. |
+| #   | Decision                                                                                                                                                                              |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | The gateway is the **sender**. The extension connection is its outbound pipe for spawn requests. The callee direction is a later phase.                                               |
+| D2  | Re-plumb the **Coordinator Client** onto the node's mTLS `getFetch()`. Keep the `CoordinatorClient` class and the `SwarmApi` interface. Drop `coordinatorToken`.                      |
+| D3  | Extension hint value = `drone-gateway:<conversationId>`.                                                                                                                              |
+| D4  | `coordinatorUrl` **presence** enables the extension. There is no separate flag. `coordinatorToken` is a **removed key** (a hard error if present).                                    |
+| D5  | Optional `swarmExtension` block: `id` (default `drone-gateway`), `name` (default `Drone Gateway`), `dataDir` (default `<configDir>/extension`), `requestTimeoutMs` (default `15000`). |
+| D6  | `coordinatorUrl` keeps its value (the primary/mTLS port, for example `http://127.0.0.1:3456`). The node makes the WebSocket URL from it.                                              |
+| D7  | **One** extension node per gateway process.                                                                                                                                           |
+| D8  | The gateway starts at once and registers in the background with retry. It does not wait for the coordinator.                                                                          |
+| D9  | The manifest is **empty**: `{ protocolVersion: 1, capabilities: [], bundles: [] }`.                                                                                                   |
+| D10 | The extension hint goes to **both** spawn backends (coordinator and local). In local mode it is inert today; the next phase needs it.                                                 |
+| D11 | `sessionStarted` / `sessionEnded` handlers are wired, but they only write a debug log. Filtering by hint is the next phase.                                                           |
+| D12 | The node's coordinator `fetch` has a **bounded request timeout**. Default `15000` ms. On timeout it rejects with `coordinator did not respond within <ms> ms`.                        |
+| D13 | Shutdown order: stop the **Injection API**, stop the **GatewayEngine** (the agents terminate over the live node), stop the node, then exit. Terminate stays best-effort.              |
+| D14 | New module `src/extension-node.ts` with an `ExtensionNodeHandle`. `main()` owns the handle. The **Coordinator Client** stays a transport only.                                        |
+| D15 | The SDK gains `awaitRegistration` (default `true`). The gateway passes `false` and gets background retry.                                                                             |
+| D16 | No change to the coordinator or the beacon. Both `SpawnConfig` types already carry `extensionHint`.                                                                                   |
+| D17 | New ADR 256. Update `drone-gateway/CONTEXT.md`, `docs/agents/swarm-extensions.md`, and the swarm wiki. Add `drone-swarm-common` to the gateway's dependencies.                        |
 
 ## Key facts (verified against the code)
 
@@ -88,7 +88,9 @@ After the request is made, add:
 ```ts
 if (timeoutMs && timeoutMs > 0) {
   req.setTimeout(timeoutMs, () => {
-    req.destroy(new Error(`coordinator did not respond within ${timeoutMs} ms`));
+    req.destroy(
+      new Error(`coordinator did not respond within ${timeoutMs} ms`)
+    );
   });
 }
 ```
@@ -103,8 +105,8 @@ export interface CreateExtensionNodeOptions {
   name: string;
   capabilities: DroneExtensionCapability[];
   handlers?: ExtensionNodeHandlers;
-  awaitRegistration?: boolean;   // NEW; default true
-  requestTimeoutMs?: number;     // NEW; default undefined
+  awaitRegistration?: boolean; // NEW; default true
+  requestTimeoutMs?: number; // NEW; default undefined
 }
 ```
 
@@ -112,7 +114,11 @@ Give the fetch the timeout:
 
 ```ts
 const cfetch = createCoordinatorFetch(
-  opts.coordinatorUrl, undefined, undefined, tlsIdentity, opts.requestTimeoutMs
+  opts.coordinatorUrl,
+  undefined,
+  undefined,
+  tlsIdentity,
+  opts.requestTimeoutMs
 );
 ```
 
@@ -127,10 +133,14 @@ let registerTimer: NodeJS.Timeout | null = null;
 const scheduleRegisterRetry = (): void => {
   if (stopped || registerTimer) return;
   const delay = Math.min(
-    REGISTER_RETRY_MIN_MS * 2 ** registerAttempts, REGISTER_RETRY_MAX_MS
+    REGISTER_RETRY_MIN_MS * 2 ** registerAttempts,
+    REGISTER_RETRY_MAX_MS
   );
   registerAttempts++;
-  registerTimer = setTimeout(() => { registerTimer = null; void tryRegister(); }, delay);
+  registerTimer = setTimeout(() => {
+    registerTimer = null;
+    void tryRegister();
+  }, delay);
 };
 
 const tryRegister = async (): Promise<void> => {
@@ -152,7 +162,7 @@ Change the start block:
 if (opts.awaitRegistration === false) {
   void tryRegister();
 } else {
-  await register();     // unchanged default behavior
+  await register(); // unchanged default behavior
   connect();
 }
 ```
@@ -188,8 +198,10 @@ Add `swarmExtension?: SwarmExtensionConfig;` to `GatewayConfig` (present only wh
 export class ExtensionNodeHandle {
   private node: ExtensionNode | null = null;
   private stopped = false;
-  constructor(private readonly coordinatorUrl: string,
-              private readonly config: SwarmExtensionConfig) {}
+  constructor(
+    private readonly coordinatorUrl: string,
+    private readonly config: SwarmExtensionConfig
+  ) {}
   start(): void {
     void createExtensionNode({
       coordinatorUrl: this.coordinatorUrl,
@@ -200,20 +212,35 @@ export class ExtensionNodeHandle {
       awaitRegistration: false,
       requestTimeoutMs: this.config.requestTimeoutMs,
       handlers: {
-        onSessionStarted: s => logger.debug({ sessionId: s.sessionId }, 'session started'),
-        onSessionEnded: s => logger.debug({ sessionId: s.sessionId }, 'session ended'),
+        onSessionStarted: s =>
+          logger.debug({ sessionId: s.sessionId }, 'session started'),
+        onSessionEnded: s =>
+          logger.debug({ sessionId: s.sessionId }, 'session ended'),
       },
-    }).then(node => { if (this.stopped) { void node.stop(); return; } this.node = node; })
+    })
+      .then(node => {
+        if (this.stopped) {
+          void node.stop();
+          return;
+        }
+        this.node = node;
+      })
       .catch(err => logger.warn(`Extension node failed: ${err}`));
   }
-  isReady(): boolean { return this.node !== null; }
+  isReady(): boolean {
+    return this.node !== null;
+  }
   async fetch(url: string, init?: RequestInit): Promise<Response> {
-    if (!this.node) throw new Error('coordinator unavailable: gateway extension node not connected');
+    if (!this.node)
+      throw new Error(
+        'coordinator unavailable: gateway extension node not connected'
+      );
     return this.node.getFetch()(url, init);
   }
   async stop(): Promise<void> {
     this.stopped = true;
-    const node = this.node; this.node = null;
+    const node = this.node;
+    this.node = null;
     if (node) await node.stop();
   }
 }
@@ -226,7 +253,10 @@ export class ExtensionNodeHandle {
 **File: `drone-gateway/src/coordinator-client.ts`** — constructor becomes `(fetchFn: CoordinatorFetch, baseUrl: string)`; `request()` calls `this.fetchFn`; remove the Bearer header and the `token` field. Also widen `spawnAgent`'s config type to `{ workingDir?: string; extensionHint?: string }`.
 
 ```ts
-export type CoordinatorFetch = (url: string, init?: RequestInit) => Promise<Response>;
+export type CoordinatorFetch = (
+  url: string,
+  init?: RequestInit
+) => Promise<Response>;
 ```
 
 **Tests: `drone-gateway/test/coordinator-client.test.ts`** — pass a fake fetch in the constructor; remove the global `fetch` stub.
@@ -246,21 +276,26 @@ export type CoordinatorFetch = (url: string, init?: RequestInit) => Promise<Resp
 
 ```ts
 const nodeHandle = config.swarmExtension
-  ? new ExtensionNodeHandle(config.coordinatorUrl, config.swarmExtension) : undefined;
+  ? new ExtensionNodeHandle(config.coordinatorUrl, config.swarmExtension)
+  : undefined;
 const coordinatorClient = nodeHandle
-  ? new CoordinatorClient(nodeHandle.fetch.bind(nodeHandle), config.coordinatorUrl) : undefined;
+  ? new CoordinatorClient(
+      nodeHandle.fetch.bind(nodeHandle),
+      config.coordinatorUrl
+    )
+  : undefined;
 const backends = createSpawnBackends(config, coordinatorClient);
 const engine = new GatewayEngine(config, backends, coordinatorClient);
 
 const shutdown = async () => {
   await controlApi?.stop();
-  await engine.stop();          // agents terminate over the LIVE node
-  await nodeHandle?.stop();     // node stops LAST
+  await engine.stop(); // agents terminate over the LIVE node
+  await nodeHandle?.stop(); // node stops LAST
   process.exit(0);
 };
 
 await engine.start();
-nodeHandle?.start();            // NOT awaited
+nodeHandle?.start(); // NOT awaited
 ```
 
 **Tests: `drone-gateway/test/index.test.ts`** — mock `./extension-node.js`; assert the shutdown order (engine before node).
@@ -282,25 +317,25 @@ Walk every item in Validation Criteria. Run each command. Correct until all pass
 
 ## File split (reference)
 
-| File | Change |
-|---|---|
-| `drone-swarm-common/src/coordinator-fetch.ts` | add `timeoutMs` |
-| `drone-swarm-common/src/extension-server.ts` | `awaitRegistration`, `requestTimeoutMs`, registration retry |
-| `drone-swarm-common/test/extension-server.test.ts` | new tests |
-| `drone-gateway/src/types.ts` | remove `coordinatorToken`; add `SwarmExtensionConfig` |
-| `drone-gateway/src/config/load.ts` | removed key; resolve `swarmExtension` |
-| `drone-gateway/src/extension-node.ts` | NEW |
-| `drone-gateway/src/coordinator-client.ts` | transport swap |
-| `drone-gateway/src/spawn-backend.ts` | `SpawnSessionOptions.extensionHint` |
-| `drone-gateway/src/surfaces/types.ts` | `SurfaceContext.extensionHintPrefix` |
-| `drone-gateway/src/surfaces/lifecycle.ts` | compose the hint |
-| `drone-gateway/src/engine.ts` | set the prefix |
-| `drone-gateway/src/coordinator-spawn-backend.ts` | forward the hint |
-| `drone-gateway/src/local-spawn-backend.ts` | append the flag |
-| `drone-gateway/src/index.ts` | handle, wiring, shutdown order |
-| `drone-gateway/package.json` | add `drone-swarm-common` |
-| `docs/adr/256-gateway-swarm-extension.md` | NEW |
-| `drone-gateway/CONTEXT.md`, `docs/agents/swarm-extensions.md` | update |
+| File                                                          | Change                                                      |
+| ------------------------------------------------------------- | ----------------------------------------------------------- |
+| `drone-swarm-common/src/coordinator-fetch.ts`                 | add `timeoutMs`                                             |
+| `drone-swarm-common/src/extension-server.ts`                  | `awaitRegistration`, `requestTimeoutMs`, registration retry |
+| `drone-swarm-common/test/extension-server.test.ts`            | new tests                                                   |
+| `drone-gateway/src/types.ts`                                  | remove `coordinatorToken`; add `SwarmExtensionConfig`       |
+| `drone-gateway/src/config/load.ts`                            | removed key; resolve `swarmExtension`                       |
+| `drone-gateway/src/extension-node.ts`                         | NEW                                                         |
+| `drone-gateway/src/coordinator-client.ts`                     | transport swap                                              |
+| `drone-gateway/src/spawn-backend.ts`                          | `SpawnSessionOptions.extensionHint`                         |
+| `drone-gateway/src/surfaces/types.ts`                         | `SurfaceContext.extensionHintPrefix`                        |
+| `drone-gateway/src/surfaces/lifecycle.ts`                     | compose the hint                                            |
+| `drone-gateway/src/engine.ts`                                 | set the prefix                                              |
+| `drone-gateway/src/coordinator-spawn-backend.ts`              | forward the hint                                            |
+| `drone-gateway/src/local-spawn-backend.ts`                    | append the flag                                             |
+| `drone-gateway/src/index.ts`                                  | handle, wiring, shutdown order                              |
+| `drone-gateway/package.json`                                  | add `drone-swarm-common`                                    |
+| `docs/adr/256-gateway-swarm-extension.md`                     | NEW                                                         |
+| `drone-gateway/CONTEXT.md`, `docs/agents/swarm-extensions.md` | update                                                      |
 
 ## Validation Criteria
 

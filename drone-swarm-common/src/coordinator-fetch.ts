@@ -55,7 +55,8 @@ export function createCoordinatorFetch(
   baseUrl: string,
   expectedCoordinatorFingerprint?: string,
   onFirstFingerprint?: (fp: string) => void,
-  tlsIdentity?: TlsIdentity
+  tlsIdentity?: TlsIdentity,
+  timeoutMs?: number
 ): typeof fetch {
   const urlObj = new URL(baseUrl);
   const isHttps = urlObj.protocol === 'https:';
@@ -136,6 +137,14 @@ export function createCoordinatorFetch(
               onFirstFingerprint?.(observed);
             }
           });
+        });
+      }
+
+      if (timeoutMs && timeoutMs > 0) {
+        req.setTimeout(timeoutMs, () => {
+          req.destroy(
+            new Error(`coordinator did not respond within ${timeoutMs} ms`)
+          );
         });
       }
 
