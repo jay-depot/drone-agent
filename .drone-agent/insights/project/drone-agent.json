@@ -894,5 +894,17 @@
   {
     "timestamp": "2026-10-19T20:45:00.519Z",
     "insight": "Planning the drone-gateway swarm-extension migration surfaced a discovery-tooling trap: `swarm__wiki_list` returns the ENTIRE corpus (hundreds of pages, well over 500k tokens) — one unfiltered call nearly exhausted the context window. `swarm__wiki_search` is the long-known-empty defect, so the usual \"search first\" path is unavailable. Practical rule for orientation: do NOT call `swarm__wiki_list` unfiltered; read the specific page named in the system-prompt suggestions, and/or read the local project wiki index at /home/unleet/Obsidian/drone-agent-project/index.md. When a same-day wiki page exists for the exact topic (here: `drone-gateway-coordinator-spawn-and-optional-connection`, created the same day as the planning session), that single page is the highest-value read and beats broad exploration. Also: `self-improvement__insight` takes the `insight` parameter plus `targetId` for project scope — `text` is the wrong key."
+  },
+  {
+    "timestamp": "2026-10-19T21:01:39.433Z",
+    "insight": "drone-gateway's tests are not typechecked by any automated command. `drone-gateway/tsconfig.json` includes only `src/**/*`, so `pnpm -r run build`/`pnpm typecheck`'s per-package `tsc -b` never sees `test/`. The root `tsconfig.test.json` include list names drone-core, drone-beacon, drone-coordinator, drone-swarm-common, drone-swarm, drone-agent, mcp-swarm — but NOT drone-gateway. Consequence: a wrong-typed test mock or a stale required field in a test file survives build+typecheck+lint and only fails at runtime in vitest, or shows up solely as an LSP diagnostic. Fix direction: add `drone-gateway/{src,test}/**/*.ts` to the root tsconfig.test.json include list (and audit other packages against that list — drone-coordinator-ui is also absent)."
+  },
+  {
+    "timestamp": "2026-10-19T21:01:43.119Z",
+    "insight": "When a plan adds a REQUIRED field to a widely-constructed interface (here `SurfaceContext.extensionHintPrefix`), the edit list in the plan will undercount test files. Exact-value assertions are the second wave: after the type errors are fixed, tests using `toHaveBeenCalledWith({...})` with the old exact object still fail at runtime. Expect two sweeps — (1) typecheck/LSP for missing required fields in object literals, (2) a test run for exact-shape assertions. Do sweep 2 as a grep for the neighbouring field names (e.g. `catchUpIntervalMs`, `targetBeaconId`) before running anything."
+  },
+  {
+    "timestamp": "2026-10-19T21:01:43.121Z",
+    "insight": "Don't trust a plan's step ordering when a later step is a hard prerequisite for an earlier one's typecheck. Here Step 7 (\"add drone-swarm-common to drone-gateway deps\") sat after Step 3, but Step 3's new module imports that package — so the dependency had to move to Step 3 and Step 7 became verify-only. Rule: before starting a plan, scan every new import in the planned new files and confirm each resolves in the package.json as it stands today; hoist any dependency additions to just before their first consumer."
   }
 ]

@@ -357,3 +357,59 @@ Walk every item in Validation Criteria. Run each command. Correct until all pass
 - Remote extensions and the pre-approval-token flow.
 - A project-wide shutdown hardening: wait for terminate confirmation instead of best-effort.
 - A front-end bundle for the gateway.
+
+---
+
+## Completion Summary (2026-10-19)
+
+**Status: COMPLETE.** All 9 steps executed; every validation criterion passed.
+Branch `feat/swarm-extensions`. Commit `670a6905` (34 files, +1288/−117).
+
+### What was built
+
+| Step | Result |
+| --- | --- |
+| 1 | SDK: `createCoordinatorFetch` gained `timeoutMs` (rejects `coordinator did not respond within <ms> ms`); `createExtensionNode` gained `awaitRegistration` (default `true`) and `requestTimeoutMs`; registration retries 1 s→30 s without end; `stop()` clears the registration timer too. New `test/coordinator-fetch.test.ts` (3 tests) against a real `http` server. |
+| 2 | `GatewayConfig`: `coordinatorToken` removed (hard error with its own message), `swarmExtension?: SwarmExtensionConfig` added (present only when `coordinatorUrl` is set). New `src/extension-defaults.ts` holds the four D5 defaults. `resolveSwarmExtension` expands `~` and resolves `dataDir` against the config dir. |
+| 3 | New `src/extension-node.ts` — `ExtensionNodeHandle` (start non-blocking / `isReady` / `fetch` with a clear not-connected rejection / idempotent `stop`). 8 tests. |
+| 4 | `CoordinatorClient(fetchFn, baseUrl)` + exported `CoordinatorFetch`; no `Authorization` header, no `token` field; `spawnAgent` config widened with `extensionHint`. 34 tests. |
+| 5 | `SpawnSessionOptions.extensionHint`; `SurfaceContext.extensionHintPrefix`; lifecycle composes `${prefix}:${conversationId}`; engine sets the prefix from `swarmExtension.id`; coordinator backend forwards `config.extensionHint` (empty config bag omitted); local backend appends `--extension-hint`. |
+| 6 | `main()`: handle → client → backends → engine; `engine.start()` then `nodeHandle.start()` (not awaited); shutdown controlApi → engine → node → exit; the failure path also stops the node. Shutdown-order test asserts the exact sequence. |
+| 7 | `drone-swarm-common` added to the gateway's dependencies. |
+| 8 | ADR `256-gateway-swarm-extension.md` + `docs/adr/index.md` row; `drone-gateway/CONTEXT.md` (Coordinator Client rewritten, new **Swarm Extension** + **Extension Hint** terms, Config Layout updated); `docs/agents/swarm-extensions.md` gained "Gateway as an extension" and the deferral sentence was replaced; swarm wiki page `gateway-swarm-extension-migration`. |
+| 9 | Build, typecheck, lint, and the fast suite all green: **4205 passed / 0 failed** (16 skipped), 319 of 323 test files passed (4 skipped). |
+
+### Deviations from the plan (and why)
+
+1. **Dependency added early (Step 3, not Step 7).** `src/extension-node.ts` imports
+   `drone-swarm-common`, so the module could not typecheck without the dependency.
+   Step 7 then became a verify-only step.
+2. **Test-mock typing.** The plan's "pass a fake fetch in the constructor" needed
+   `let fetchMock: Mock<CoordinatorFetch>` — a bare `vi.fn()` is not assignable to the
+   `CoordinatorFetch` signature under `strict`.
+3. **More test sites than the plan listed.** Adding a required `extensionHintPrefix` to
+   `SurfaceContext` broke every literal `SurfaceContext` in tests (surface-registry,
+   persona-assignment-surface, swarm-console-surface, session-lifecycle), and the exact
+   `toHaveBeenCalledWith({targetBeaconId, workingDir})` assertions in engine.test.ts and
+   surface-registry.test.ts needed the hint added. This is the "sweep every consumer"
+   principle: the plan named three test files; seven needed edits.
+4. **`coordinator-fetch` test is new.** The plan asked for a "request timeout" test inside
+   `extension-server.test.ts`; because that file mocks `createCoordinatorFetch`, a real
+   timeout test is impossible there. A dedicated test against a real `http` server both
+   proves the timeout and keeps the mock-based passthrough assertion.
+5. **`logger.error`, not `warn`, for a node that fails to start.** The plan sketched
+   `logger.warn`; a failure to create the node means no coordinator capability at all,
+   so it is an error. (Background *registration* failures stay `warn` — they retry.)
+
+### Not done here (as planned)
+
+Behavioural acceptance criterion 8 is **manual** and needs a live coordinator plus beacon;
+it was not executed in this session. Everything code-side that criterion depends on is
+covered by unit tests. Host-side config edit (delete `coordinatorToken`) remains a manual
+out-of-repo step, matching ADR 224's precedent.
+
+### Deferred (unchanged)
+
+Callee direction; tool and prompt injection; gateway config UI; remote extensions and the
+pre-approval-token flow; project-wide shutdown hardening (wait for terminate confirmation);
+a gateway front-end bundle.
