@@ -914,5 +914,9 @@
   {
     "timestamp": "2026-10-19T21:11:17.804Z",
     "insight": "Root `tsconfig.test.json` now covers EVERY workspace package's src+test (was missing drone-gateway entirely, plus drone-beacon/test and drone-coordinator/test). The pre-existing `{src,test}` brace patterns for drone-swarm-common and drone-swarm were silently matching nothing, so those two packages' test files were NOT being typechecked either, despite the config implying otherwise. This retires the long-standing project insight \"drone-gateway tests are not typechecked by any automated gate; LSP is the only gate\" (logged repeatedly 2026-10-12, 2026-10-13, and again this session) — `lsp__get_diagnostics` is no longer mandatory as a substitute gate, though it remains useful for fast feedback."
+  },
+  {
+    "timestamp": "2026-10-19T22:24:48.009Z",
+    "insight": "Never conclude \"X is not a git repo\" by running `git rev-parse` from a parent directory. I checked `/home/unleet/Obsidian` (parent of the vault), got a failure, and told the user the vault at `/home/unleet/Obsidian/drone-agent-project` was not version controlled — it was, on `main`, the whole time. The user had to correct me. Correct probe: `cd <exact-dir> && git rev-parse --show-toplevel`. A parent-dir failure says nothing about a nested repo (and conversely, a parent-dir success can mask a nested repo being a SEPARATE one). Also: before committing someone else's vault/tree, diff every file — I found two long-uncommitted leftovers (a never-added ADR 255 stub and a coordinator-ui row dated a week earlier) that were not mine; committing them silently inside my own feature commit would have obscured provenance, so splitting them out was the right call."
   }
 ]
