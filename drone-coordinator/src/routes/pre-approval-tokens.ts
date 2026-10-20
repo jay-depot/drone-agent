@@ -27,12 +27,10 @@ export default function preApprovalTokenRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const { durableId, clientKey, pubKey, sig } = request.body ?? {};
       if (!durableId || !clientKey || !pubKey || !sig) {
-        return reply
-          .code(400)
-          .send({
-            error: 'Invalid redemption request',
-            code: 'INVALID_REQUEST',
-          });
+        return reply.code(400).send({
+          error: 'Invalid redemption request',
+          code: 'INVALID_REQUEST',
+        });
       }
       const token = db.getPreApprovalToken(durableId);
       if (!token) {
@@ -57,12 +55,10 @@ export default function preApprovalTokenRoutes(app: FastifyInstance) {
       }
       const trust = db.getBeaconTrustByPublicKey(clientKey);
       if (!trust) {
-        return reply
-          .code(404)
-          .send({
-            error: 'Client is not registered',
-            code: 'CLIENT_NOT_REGISTERED',
-          });
+        return reply.code(404).send({
+          error: 'Client is not registered',
+          code: 'CLIENT_NOT_REGISTERED',
+        });
       }
       if (!db.burnPreApprovalToken(durableId, trust.beaconId, Date.now())) {
         return reply

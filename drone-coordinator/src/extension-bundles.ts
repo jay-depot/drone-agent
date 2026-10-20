@@ -92,15 +92,19 @@ export async function writeBundleFiles(
   if (!isSafeId(nodeId)) throw new Error('Invalid nodeId');
   if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('Invalid hash');
   const dir = path.join(getBundleRoot(), nodeId, hash);
+  // nodeId is isSafeId-validated ([a-zA-Z0-9_-], length-bounded) and hash is
+  // 64 lowercase hex chars, so dir stays inside the server-controlled root.
+  // codeql[js/path-injection]
   await mkdir(dir, { recursive: true });
   for (const f of files) {
     if (!isSafeBundleSegment(f.name)) {
       throw new Error(`Invalid bundle file name: ${f.name}`);
     }
-    await writeFile(
-      path.join(dir, f.name),
-      Buffer.from(f.contentBase64, 'base64')
-    );
+    // isSafeBundleSegment rejects separators, NUL, and '..'; dir is a
+    // validated path under the server-controlled bundle root.
+    const filePath = path.join(dir, f.name);
+    // codeql[js/path-injection]
+    await writeFile(filePath, Buffer.from(f.contentBase64, 'base64'));
   }
   return dir;
 }
