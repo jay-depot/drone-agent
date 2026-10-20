@@ -926,5 +926,9 @@
   {
     "timestamp": "2026-10-20T01:51:12.801Z",
     "insight": "drone-coordinator builds two Fastify apps from one `buildApp()`, but some routes are conditionally registered by flag (`registerBeaconWebSocket` only inside `if (opts.enableMtls)`, `registerRoutes` always). So \"does route X exist on port Y\" is a per-route question that cannot be answered from the route table alone. When planning anything port-related, grep for the registration call site's guarding branch, not just the route definition. This mismatch is what produced the swarm-extension dead end: `POST /api/beacons` existed on both ports while `/ws/beacon` existed on only one."
+  },
+  {
+    "timestamp": "2026-10-20T02:19:01.778Z",
+    "insight": "The manual end-to-end check (the plan's section 4) caught a real defect that all unit tests missed: `createExtensionNode.uploadBundle` did not send the claimed node id, so bundle upload 401'd on the coordinator's unencrypted web port (ADR 257). The unit tests for `uploadBundle` mocked `createCoordinatorFetch` and asserted only the URL/body, never the headers, so the missing `x-node-id` was invisible. Lesson: when a transport change adds an identity header, assert the header in the SDK's own test — and always run the plan's manual E2E, because \"connected: true\" plus a non-empty `bundles` array is the only thing that proves the whole path."
   }
 ]
