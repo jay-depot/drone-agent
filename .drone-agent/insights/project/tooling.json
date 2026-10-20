@@ -30,5 +30,9 @@
   {
     "timestamp": "2026-10-09T02:00:11.992Z",
     "insight": "The self-improvement insight record tool currently fails on this host with `Invalid targetType \"undefined\"` even when targetType is explicitly passed (2026-10-09); the tool schema the host reports omits the parameter. Workaround: append {timestamp, insight} entries directly to .drone-agent/insights/project/<target>.json matching the existing 2-space-indented array format. Verify the roundtrip (json.dumps(data, indent=2) equals the raw file) before rewriting so the diff stays minimal."
+  },
+  {
+    "timestamp": "2026-10-20T17:53:51.792Z",
+    "insight": "Running the ROOT `pnpm run lint` rewrites files you never touched. On a 4-file change it reformatted `drone-coordinator/src/routes/pre-approval-tokens.ts` (chained `.code(400).send({` collapsed to one line) and added trailing newlines to two `.drone-agent/insights/*.json` files. Harmless content-wise, but it silently bundles unrelated churn into the next commit and muddies provenance. Correct habit: after `pnpm run lint`, run `git status --porcelain` and inspect the full diff BEFORE `git add`, and either commit the reformat separately or call it out in the commit body (as done in 92e7c126). Note this is a formatting side effect, not a defect — prettier is the project's formatter by design (see AGENTS.md), so the reformats are correct; they just need to be visible."
   }
 ]
