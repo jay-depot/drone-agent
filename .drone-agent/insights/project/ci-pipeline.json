@@ -2,5 +2,9 @@
   {
     "timestamp": "2026-07-11T18:10:51.891Z",
     "insight": "The CI pipeline's unit-tests job runs `pnpm test` (vitest) and `pnpm lint` but NOT `pnpm build` or `pnpm typecheck`. Since vitest uses esbuild (not tsc) to transpile, TypeScript compilation errors in packages like drone-gateway pass through the unit-tests job undetected. The Docker build step in the integration-tests job would catch them, but that's a heavier, slower job. Adding a `pnpm typecheck` step to the unit-tests job would catch these errors cheaply on every PR."
+  },
+  {
+    "timestamp": "2026-10-20T17:53:45.968Z",
+    "insight": "CodeQL reports a `js/path-injection` alert on the line of the PATH ARGUMENT EXPRESSION, not the fs-call line. Evidence: the original `await writeFile(\\n  path.join(dir, f.name),\\n  Buffer.from(...)\\n);` was reported at line 101 — which is `path.join(dir, f.name)`, while `await writeFile(` sat on line 100. So a dismissal comment placed directly above the call line (100) would have been on the wrong line and could fail to bind. Practical rule: put the `// codeql[<rule>]` comment immediately above the line the alert cites; when the sink's tainted argument is a multi-line expression, first hoist it to a named const (`const filePath = path.join(dir, f.name);`) so the sink call and its path argument share one line, then dismiss that single line. This also makes the dismissal readable. The AlertSuppression.ql pack is already configured in `.github/workflows/codeql.yml`, so in-source dismissal is the supported path — but there is no `codeql` CLI on the dev host, so a green local run proves nothing; only the next CI run confirms the dismissal binds."
   }
 ]

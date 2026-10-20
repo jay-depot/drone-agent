@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-10-20T17:53:45.968Z",
+    "insight": "CodeQL `js/path-injection` dismissals are PER-SINK, not per-function or per-file. Commit 240b2765 (2026-10-19) added `// codeql[js/path-injection]` to the READ sink in `bundle-serving.ts` (`readFile(resolvedPath)`) but not to the two WRITE sinks in `extension-bundles.ts` (`mkdir(dir)` and `writeFile(path.join(dir, f.name), …)`), even though all three share the identical validated-path taint shape. CodeQL re-reported the write sinks later. Correct assumption: when adding in-source dismissal for a taint finding, sweep EVERY sink that consumes the same tainted value, not just the one the alert happened to point at. Here that means both the write and read sides of the bundle path (`extension-bundles.ts` + `bundle-serving.ts`). Grep the tainted identifier across the package before declaring the dismissal complete. Fixed 2026-10-20 in commit 92e7c126."
+  }
+]
