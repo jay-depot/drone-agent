@@ -148,6 +148,10 @@ _Avoid_: swarm connector, extension server, beacon mode
 The value `drone-gateway:<conversationId>` stamped onto every agent the gateway spawns, so the gateway can identify the sessions it caused. It goes to both spawn backends: coordinator mode forwards it as `config.extensionHint`, local mode appends `--extension-hint`. The prefix is the **Swarm Extension** id. Stamp-only in v0 — nothing filters on it yet.
 _Avoid_: agent tag, spawn label
 
+**Pre-approval token**:
+A one-time credential that pre-approves a remote node without manual approval (ADR [258](../docs/adr/258-pre-approval-tokens.md)). The gateway accepts `--pre-approval-token-path <path>` (both `=value` and ` value` forms); with the flag it performs a one-shot run — register, redeem, write `<dataDir>/coordinator-trust.json`, exit 0 — and does not serve. The token file is a sensitive credential.
+_Avoid_: approval token, pre-auth token
+
 **Injection**:
 Outbound posting of text into a conversation by an external process (a cron job, CI hook, or script). It bypasses control surfaces entirely — the text is handed straight to the adapter's `sendMessage` — and it does **not** serialize on the conversation's dispatch tail, so it may interleave with a live agent turn.
 _Avoid_: push, publish, post

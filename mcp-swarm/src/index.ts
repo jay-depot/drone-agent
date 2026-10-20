@@ -18,7 +18,11 @@
 
 import os from 'node:os';
 import path from 'node:path';
-import { createExtensionNode, type ExtensionNode } from 'drone-swarm-common';
+import {
+  createExtensionNode,
+  redeemPreApprovalToken,
+  type ExtensionNode,
+} from 'drone-swarm-common';
 import { SWARM_CAPABILITIES, isTokenCapability } from './mapping.js';
 import { createInvoker } from './mcp-server.js';
 import { startMcpHttpServer, type McpHttpServer } from './http-server.js';
@@ -32,10 +36,12 @@ export interface McpSwarmConfig {
   id: string;
   host: string;
   port: number;
+  preApprovalTokenPath?: string;
 }
 
 /** Resolve config from env with sensible defaults. */
 export function resolveConfig(env = process.env): McpSwarmConfig {
+  const preApprovalTokenPath = parsePreApprovalTokenPath();
   return {
     coordinatorUrl: env.MCP_SWARM_COORDINATOR_URL ?? 'http://127.0.0.1:8080',
     dataDir:
@@ -44,7 +50,28 @@ export function resolveConfig(env = process.env): McpSwarmConfig {
     id: env.MCP_SWARM_ID ?? 'mcp-swarm',
     host: env.MCP_SWARM_HOST ?? '127.0.0.1',
     port: Number(env.MCP_SWARM_PORT ?? 3460),
+    ...(preApprovalTokenPath ? { preApprovalTokenPath } : {}),
   };
+}
+
+/**
+ * Parse `--pre-approval-token-path` from argv. Accepts both the `=value` and
+ * space-separated forms.
+ */
+export function parsePreApprovalTokenPath(
+  argv: string[] = process.argv.slice(2)
+): string | undefined {
+  const flag = '--pre-approval-token-path';
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === flag) {
+      return argv[i + 1];
+    }
+    if (arg?.startsWith(`${flag}=`)) {
+      return arg.slice(flag.length + 1);
+    }
+  }
+  return undefined;
 }
 
 /** Run a UI-only `token.*` capability against the token store. */
@@ -176,5 +203,24 @@ export async function startMcpSwarm(
 
 /** Process entry point. */
 export async function main(): Promise<void> {
+  const config = resolveConfig();
+  if (config.preApprovalTokenPath) {
+    try {
+      await redeemPreApprovalToken({
+        coordinatorUrl: config.coordinatorUrl,
+        dataDir: config.dataDir,
+        id: config.id,
+        name: config.id,
+        tokenPath: config.preApprovalTokenPath,
+      });
+    } catch (err) {
+      console.error(
+        `Pre-approval failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+      process.exit(1);
+    }
+    console.log('Pre-approval complete. Exiting.');
+    return;
+  }
   await startMcpSwarm();
 }

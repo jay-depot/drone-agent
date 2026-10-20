@@ -69,19 +69,24 @@ export async function redeemPreApprovalToken(
     clientKey: identity.publicKey,
     pubKey: token.pubKey,
   };
-  const redeem = await cfetch(`${opts.coordinatorUrl}/api/beacons/trust/redeem`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      ...redemption,
-      sig: signBeaconPayload(
-        token.burnKey,
-        buildRedemptionSignaturePayload(redemption)
-      ),
-    }),
-  });
+  const redeem = await cfetch(
+    `${opts.coordinatorUrl}/api/beacons/trust/redeem`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...redemption,
+        sig: signBeaconPayload(
+          token.burnKey,
+          buildRedemptionSignaturePayload(redemption)
+        ),
+      }),
+    }
+  );
   if (!redeem.ok) {
-    throw new Error(`Redemption failed: ${redeem.status} ${await redeem.text()}`);
+    throw new Error(
+      `Redemption failed: ${redeem.status} ${await redeem.text()}`
+    );
   }
 
   await saveCoordinatorTrust(opts.dataDir, {

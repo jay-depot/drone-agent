@@ -264,6 +264,13 @@ export default function TopologyPage() {
         <div className="flex items-center gap-2">
           {/* Extension-contributed topology toolbar widgets. */}
           <RegionSlot region="topology-widget" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/pre-approval-tokens')}
+          >
+            Pre-approval tokens
+          </Button>
           <Badge
             variant={status === 'connected' ? 'default' : 'secondary'}
             className="text-xs"

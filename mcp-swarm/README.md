@@ -67,6 +67,31 @@ Register it with an MCP client (e.g. Claude Code):
 | `MCP_SWARM_HOST`            | `127.0.0.1`                | HTTP bind host.                |
 | `MCP_SWARM_PORT`            | `3460`                     | HTTP bind port.                |
 
+## Pre-approval tokens
+
+A **pre-approval token** pre-approves this node on a **remote** coordinator
+(one that does not see the node as a loopback caller), without manual approval
+in the UI.
+
+The token file is a **sensitive credential**. Store it securely. It is shown
+one time only, in the coordinator UI.
+
+```bash
+node mcp-swarm/bin/mcp-swarm --pre-approval-token-path=./token.json
+# or
+node mcp-swarm/bin/mcp-swarm --pre-approval-token-path ./token.json
+```
+
+With the flag the node performs a **one-shot run**: it registers, redeems the
+token, writes `<data-dir>/coordinator-trust.json`, and exits 0. Without the
+flag it serves the daemon as usual. Later runs pin the coordinator's TLS
+fingerprint from the trust file (no trust-on-first-use window).
+
+The coordinator mints tokens from the **Pre-approval tokens** page, linked from
+the Topology page. See
+[ADR 258](../../docs/adr/258-pre-approval-tokens.md) and the
+[swarm extensions guide](../../docs/agents/swarm-extensions.md).
+
 ## Auth tokens
 
 Every `POST /mcp` needs `Authorization: Bearer mcpsw_…`. Tokens are **named**,

@@ -1,7 +1,6 @@
 ---
 key: plan-pre-approval-tokens
-tags:
-  []
+tags: []
 created: 2026-10-20T15:20:44.557Z
 updated: 2026-10-20T15:20:44.557Z
 ---
@@ -47,24 +46,24 @@ The token is a **sensitive credential**. The UI shows a warning. The UI shows th
 
 ## 3. Locked decisions
 
-| # | Decision |
-| --- | --- |
-| Q1 | The coordinator gets a **dedicated Ed25519 identity**. Load it with `loadOrCreateIdentity('coordinator', configDir, 'coordinator-identity.json')`. Sign with `signBeaconPayload(identity.privateKeyPem, payload)`. The token `pubKey` is `identity.publicKey` (base64 SPKI). |
-| Q2 | The token file **is** the trust anchor. The node checks only the self-signature against the embedded `pubKey`. The token is a sensitive credential. The UI must warn. |
-| Q3 | `burnKey` is an Ed25519 **private key as PKCS#8 PEM**. The coordinator stores the public half (base64 SPKI) with the `durableId`. The token carries only the private half. |
-| Q4 | The token run does a **normal registration, then a redemption**. The redemption approves the trust row whose `public_key` equals `clientKey`. `durableId` is the token database primary key. It is **not** the node id. |
-| Q5 | Use a dedicated route: `POST /api/beacons/trust/redeem`. The body is `{durableId, clientKey, pubKey, sig}`. The route is mTLS-exempt. It needs no web token. The burn-key signature **is** the credential. |
-| Q6 | Use a **dedicated UI page** at `/pre-approval-tokens`. The Topology page links to it. There is **no** nav item. The page has a list, a create form (one-time display, copy, download, warning), and a revoke action. |
-| Q7 | The token file is JSON. The flag `--pre-approval-token-path` accepts both `=value` and ` value` forms. |
-| Q8 | Add the flag to **`mcp-swarm` and `drone-gateway`**. Put the shared logic in one helper in `drone-swarm-common`. `drone-beacon` is deferred. |
-| Q9 | The token expires **30 days** after issue. The lifetime is a hardcoded constant. The table has `issued_at` and `expires_at` columns. Revoke deletes the row. |
-| Q10 | Use `durableId` (camelCase) everywhere. The table is `pre_approval_tokens`. |
-| Q11 | Signatures are `:`-joined in schema order. This matches the existing `beaconId + ':' + timestamp` convention. |
-| Q12 | The token targets **remote (non-loopback) nodes** for now. A loopback node is already auto-approved. The plan must not assume loopback. |
-| Q13 | Add an optional `label`. The label lives in the database row and the UI only. The token file stays at its fixed field set. |
-| Q14 | The redemption treats the burn-key verification **as** the fingerprint confirmation. It sets both `status='approved'` and `fingerprint_confirmed_at`. |
-| Q15 | The token carries the coordinator **TLS fingerprint**. The node **pins** it. There is no TOFU. |
-| Q16 | The one-shot run writes `{coordinatorUrl, tlsFingerprint}` to `<dataDir>/coordinator-trust.json`. `createExtensionNode` reads that file when it receives no explicit fingerprint. |
+| #   | Decision                                                                                                                                                                                                                                                                     |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q1  | The coordinator gets a **dedicated Ed25519 identity**. Load it with `loadOrCreateIdentity('coordinator', configDir, 'coordinator-identity.json')`. Sign with `signBeaconPayload(identity.privateKeyPem, payload)`. The token `pubKey` is `identity.publicKey` (base64 SPKI). |
+| Q2  | The token file **is** the trust anchor. The node checks only the self-signature against the embedded `pubKey`. The token is a sensitive credential. The UI must warn.                                                                                                        |
+| Q3  | `burnKey` is an Ed25519 **private key as PKCS#8 PEM**. The coordinator stores the public half (base64 SPKI) with the `durableId`. The token carries only the private half.                                                                                                   |
+| Q4  | The token run does a **normal registration, then a redemption**. The redemption approves the trust row whose `public_key` equals `clientKey`. `durableId` is the token database primary key. It is **not** the node id.                                                      |
+| Q5  | Use a dedicated route: `POST /api/beacons/trust/redeem`. The body is `{durableId, clientKey, pubKey, sig}`. The route is mTLS-exempt. It needs no web token. The burn-key signature **is** the credential.                                                                   |
+| Q6  | Use a **dedicated UI page** at `/pre-approval-tokens`. The Topology page links to it. There is **no** nav item. The page has a list, a create form (one-time display, copy, download, warning), and a revoke action.                                                         |
+| Q7  | The token file is JSON. The flag `--pre-approval-token-path` accepts both `=value` and ` value` forms.                                                                                                                                                                       |
+| Q8  | Add the flag to **`mcp-swarm` and `drone-gateway`**. Put the shared logic in one helper in `drone-swarm-common`. `drone-beacon` is deferred.                                                                                                                                 |
+| Q9  | The token expires **30 days** after issue. The lifetime is a hardcoded constant. The table has `issued_at` and `expires_at` columns. Revoke deletes the row.                                                                                                                 |
+| Q10 | Use `durableId` (camelCase) everywhere. The table is `pre_approval_tokens`.                                                                                                                                                                                                  |
+| Q11 | Signatures are `:`-joined in schema order. This matches the existing `beaconId + ':' + timestamp` convention.                                                                                                                                                                |
+| Q12 | The token targets **remote (non-loopback) nodes** for now. A loopback node is already auto-approved. The plan must not assume loopback.                                                                                                                                      |
+| Q13 | Add an optional `label`. The label lives in the database row and the UI only. The token file stays at its fixed field set.                                                                                                                                                   |
+| Q14 | The redemption treats the burn-key verification **as** the fingerprint confirmation. It sets both `status='approved'` and `fingerprint_confirmed_at`.                                                                                                                        |
+| Q15 | The token carries the coordinator **TLS fingerprint**. The node **pins** it. There is no TOFU.                                                                                                                                                                               |
+| Q16 | The one-shot run writes `{coordinatorUrl, tlsFingerprint}` to `<dataDir>/coordinator-trust.json`. `createExtensionNode` reads that file when it receives no explicit fingerprint.                                                                                            |
 
 ## 4. Interfaces
 
@@ -110,19 +109,32 @@ The token signature uses the **coordinator private key**. The redemption signatu
 
 ### 4.4 HTTP routes
 
-| Method | Path | Auth | Purpose |
-| --- | --- | --- | --- |
-| `POST` | `/api/beacons/trust/redeem` | none (burn-key signature) | Redeem a token and approve the node |
-| `POST` | `/api/pre-approval-tokens` | web token | Mint a token |
-| `GET` | `/api/pre-approval-tokens` | web token | List tokens |
-| `DELETE` | `/api/pre-approval-tokens/:durableId` | web token | Revoke a token |
+| Method   | Path                                  | Auth                      | Purpose                             |
+| -------- | ------------------------------------- | ------------------------- | ----------------------------------- |
+| `POST`   | `/api/beacons/trust/redeem`           | none (burn-key signature) | Redeem a token and approve the node |
+| `POST`   | `/api/pre-approval-tokens`            | web token                 | Mint a token                        |
+| `GET`    | `/api/pre-approval-tokens`            | web token                 | List tokens                         |
+| `DELETE` | `/api/pre-approval-tokens/:durableId` | web token                 | Revoke a token                      |
 
 The mint response returns the full token object one time:
 
 ```json
 {
-  "token": { "durableId": "…", "pubKey": "…", "tlsFingerprint": "…", "burnKey": "…", "sig": "…" },
-  "entry": { "durableId": "…", "label": "gateway on the pi", "issuedAt": 0, "expiresAt": 0, "burnedAt": null, "burnedBy": null }
+  "token": {
+    "durableId": "…",
+    "pubKey": "…",
+    "tlsFingerprint": "…",
+    "burnKey": "…",
+    "sig": "…"
+  },
+  "entry": {
+    "durableId": "…",
+    "label": "gateway on the pi",
+    "issuedAt": 0,
+    "expiresAt": 0,
+    "burnedAt": null,
+    "burnedBy": null
+  }
 }
 ```
 
@@ -165,13 +177,13 @@ Path: `<dataDir>/coordinator-trust.json`, mode `0600`.
 
 ### 4.8 Error codes
 
-| Code | Name | Cause |
-| --- | --- | --- |
-| `404` | `TOKEN_NOT_FOUND` | No row with that `durableId` |
-| `410` | `TOKEN_EXPIRED` | `expires_at` is in the past |
-| `409` | `TOKEN_ALREADY_BURNED` | The row already has `burned_at` |
-| `400` | `INVALID_SIGNATURE` | The redemption signature does not verify |
-| `404` | `CLIENT_NOT_REGISTERED` | No trust row has that `public_key` |
+| Code  | Name                    | Cause                                    |
+| ----- | ----------------------- | ---------------------------------------- |
+| `404` | `TOKEN_NOT_FOUND`       | No row with that `durableId`             |
+| `410` | `TOKEN_EXPIRED`         | `expires_at` is in the past              |
+| `409` | `TOKEN_ALREADY_BURNED`  | The row already has `burned_at`          |
+| `400` | `INVALID_SIGNATURE`     | The redemption signature does not verify |
+| `404` | `CLIENT_NOT_REGISTERED` | No trust row has that `public_key`       |
 
 ## 5. Steps
 
@@ -199,7 +211,12 @@ export interface PreApprovalToken {
 export function buildTokenSignaturePayload(
   token: Omit<PreApprovalToken, 'sig'>
 ): string {
-  return [token.durableId, token.pubKey, token.tlsFingerprint, token.burnKey].join(':');
+  return [
+    token.durableId,
+    token.pubKey,
+    token.tlsFingerprint,
+    token.burnKey,
+  ].join(':');
 }
 
 export function buildRedemptionSignaturePayload(input: {
@@ -211,10 +228,17 @@ export function buildRedemptionSignaturePayload(input: {
 }
 
 export function verifyPreApprovalToken(token: PreApprovalToken): boolean {
-  return verifyBeaconSignature(token.pubKey, buildTokenSignaturePayload(token), token.sig);
+  return verifyBeaconSignature(
+    token.pubKey,
+    buildTokenSignaturePayload(token),
+    token.sig
+  );
 }
 
-export function generateBurnKey(): { publicKey: string; privateKeyPem: string } {
+export function generateBurnKey(): {
+  publicKey: string;
+  privateKeyPem: string;
+} {
   const burn = generateIdentity('burn');
   return { publicKey: burn.publicKey, privateKeyPem: burn.privateKeyPem };
 }
@@ -242,10 +266,16 @@ export async function saveCoordinatorTrust(
   dataDir: string,
   trust: CoordinatorTrust
 ): Promise<void> {
-  await writeFile(join(dataDir, TRUST_FILENAME), JSON.stringify(trust, null, 2), { mode: 0o600 });
+  await writeFile(
+    join(dataDir, TRUST_FILENAME),
+    JSON.stringify(trust, null, 2),
+    { mode: 0o600 }
+  );
 }
 
-export async function loadCoordinatorTrust(dataDir: string): Promise<CoordinatorTrust | undefined> {
+export async function loadCoordinatorTrust(
+  dataDir: string
+): Promise<CoordinatorTrust | undefined> {
   try {
     const raw = await readFile(join(dataDir, TRUST_FILENAME), 'utf8');
     return JSON.parse(raw) as CoordinatorTrust;
@@ -333,7 +363,9 @@ export function createPreApprovalToken(row: {
   expiresAt: number;
 }): PreApprovalTokenRow;
 
-export function getPreApprovalToken(durableId: string): PreApprovalTokenRow | undefined;
+export function getPreApprovalToken(
+  durableId: string
+): PreApprovalTokenRow | undefined;
 
 export function listPreApprovalTokens(): PreApprovalTokenRow[];
 
@@ -365,7 +397,9 @@ Dep: B1.
 File: `drone-coordinator/src/db/beacon-trust.ts`.
 
 ```ts
-export function getBeaconTrustByPublicKey(publicKey: string): BeaconTrust | undefined {
+export function getBeaconTrustByPublicKey(
+  publicKey: string
+): BeaconTrust | undefined {
   const row = getDatabase()
     .prepare('SELECT * FROM beacon_trust WHERE public_key = ?')
     .get(publicKey) as BeaconTrustRow | undefined;
@@ -395,27 +429,47 @@ Handler for `POST /beacons/trust/redeem`:
 ```ts
 const { durableId, clientKey, pubKey, sig } = request.body;
 if (!durableId || !clientKey || !pubKey || !sig) {
-  return reply.code(400).send({ error: 'Invalid redemption request', code: 'INVALID_REQUEST' });
+  return reply
+    .code(400)
+    .send({ error: 'Invalid redemption request', code: 'INVALID_REQUEST' });
 }
 const token = db.getPreApprovalToken(durableId);
-if (!token) return reply.code(404).send({ error: 'Unknown token', code: 'TOKEN_NOT_FOUND' });
+if (!token)
+  return reply
+    .code(404)
+    .send({ error: 'Unknown token', code: 'TOKEN_NOT_FOUND' });
 if (token.expiresAt < Date.now()) {
-  return reply.code(410).send({ error: 'Token expired', code: 'TOKEN_EXPIRED' });
+  return reply
+    .code(410)
+    .send({ error: 'Token expired', code: 'TOKEN_EXPIRED' });
 }
-const payload = buildRedemptionSignaturePayload({ durableId, clientKey, pubKey });
+const payload = buildRedemptionSignaturePayload({
+  durableId,
+  clientKey,
+  pubKey,
+});
 if (!verifyBeaconSignature(token.burnPublicKey, payload, sig)) {
-  return reply.code(400).send({ error: 'Invalid signature', code: 'INVALID_SIGNATURE' });
+  return reply
+    .code(400)
+    .send({ error: 'Invalid signature', code: 'INVALID_SIGNATURE' });
 }
 const trust = db.getBeaconTrustByPublicKey(clientKey);
 if (!trust) {
-  return reply.code(404).send({ error: 'Client is not registered', code: 'CLIENT_NOT_REGISTERED' });
+  return reply
+    .code(404)
+    .send({ error: 'Client is not registered', code: 'CLIENT_NOT_REGISTERED' });
 }
 if (!db.burnPreApprovalToken(durableId, trust.beaconId, Date.now())) {
-  return reply.code(409).send({ error: 'Token already used', code: 'TOKEN_ALREADY_BURNED' });
+  return reply
+    .code(409)
+    .send({ error: 'Token already used', code: 'TOKEN_ALREADY_BURNED' });
 }
 db.confirmBeaconFingerprint(trust.beaconId);
 db.approveBeaconById(trust.beaconId);
-publishMutationEvent({ eventType: 'beacon.approved', payload: { beaconId: trust.beaconId } });
+publishMutationEvent({
+  eventType: 'beacon.approved',
+  payload: { beaconId: trust.beaconId },
+});
 return reply.code(200).send({ status: 'approved', beaconId: trust.beaconId });
 ```
 
@@ -452,7 +506,9 @@ File: `drone-coordinator/src/routes/pre-approval-tokens.ts`. Mount under `/api`.
 ```ts
 const identity = getSigningIdentity();
 if (!identity) {
-  return reply.code(500).send({ error: 'Coordinator signing identity is not available' });
+  return reply
+    .code(500)
+    .send({ error: 'Coordinator signing identity is not available' });
 }
 const durableId = randomUUID();
 const burn = generateBurnKey();
@@ -466,7 +522,10 @@ const base = {
 };
 const token: PreApprovalToken = {
   ...base,
-  sig: signBeaconPayload(identity.privateKeyPem, buildTokenSignaturePayload(base)),
+  sig: signBeaconPayload(
+    identity.privateKeyPem,
+    buildTokenSignaturePayload(base)
+  ),
 };
 db.createPreApprovalToken({
   durableId,
@@ -477,7 +536,14 @@ db.createPreApprovalToken({
 });
 return reply.code(201).send({
   token,
-  entry: { durableId, label: request.body?.label ?? null, issuedAt, expiresAt, burnedAt: null, burnedBy: null },
+  entry: {
+    durableId,
+    label: request.body?.label ?? null,
+    issuedAt,
+    expiresAt,
+    burnedAt: null,
+    burnedBy: null,
+  },
 });
 ```
 
@@ -520,9 +586,10 @@ ws.on('upgrade', res => {
     destroy?: () => void;
   };
   const cert = socket.getPeerCertificate?.();
-  const fp = cert && typeof cert !== 'boolean'
-    ? cert.fingerprint256?.replace(/:/g, '').toLowerCase()
-    : undefined;
+  const fp =
+    cert && typeof cert !== 'boolean'
+      ? cert.fingerprint256?.replace(/:/g, '').toLowerCase()
+      : undefined;
   if (pinnedFingerprint && fp && fp !== pinnedFingerprint) {
     socket.destroy?.();
     logger.warn(`Coordinator TLS fingerprint mismatch; refusing socket`);
@@ -552,7 +619,11 @@ export async function redeemPreApprovalToken(
   if (!verifyPreApprovalToken(token)) {
     throw new Error('Pre-approval token signature is invalid');
   }
-  const identity = await loadOrCreateIdentity(opts.id, opts.dataDir, 'node-identity.json');
+  const identity = await loadOrCreateIdentity(
+    opts.id,
+    opts.dataDir,
+    'node-identity.json'
+  );
   const tlsIdentity = await loadOrCreateTlsIdentity(opts.dataDir, 'node');
   const cfetch = createCoordinatorFetch(
     opts.coordinatorUrl,
@@ -574,23 +645,33 @@ export async function redeemPreApprovalToken(
     }),
   });
   if (!register.ok) {
-    throw new Error(`Registration failed: ${register.status} ${await register.text()}`);
+    throw new Error(
+      `Registration failed: ${register.status} ${await register.text()}`
+    );
   }
   const redemption = {
     durableId: token.durableId,
     clientKey: identity.publicKey,
     pubKey: token.pubKey,
   };
-  const redeem = await cfetch(`${opts.coordinatorUrl}/api/beacons/trust/redeem`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      ...redemption,
-      sig: signBeaconPayload(token.burnKey, buildRedemptionSignaturePayload(redemption)),
-    }),
-  });
+  const redeem = await cfetch(
+    `${opts.coordinatorUrl}/api/beacons/trust/redeem`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...redemption,
+        sig: signBeaconPayload(
+          token.burnKey,
+          buildRedemptionSignaturePayload(redemption)
+        ),
+      }),
+    }
+  );
   if (!redeem.ok) {
-    throw new Error(`Redemption failed: ${redeem.status} ${await redeem.text()}`);
+    throw new Error(
+      `Redemption failed: ${redeem.status} ${await redeem.text()}`
+    );
   }
   await saveCoordinatorTrust(opts.dataDir, {
     coordinatorUrl: opts.coordinatorUrl,
@@ -692,7 +773,9 @@ export async function copyText(text: string): Promise<void> {
 }
 
 export function downloadJson(filename: string, data: unknown): void {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: 'application/json',
+  });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;

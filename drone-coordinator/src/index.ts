@@ -625,9 +625,7 @@ export async function main() {
     'coordinator-identity.json'
   );
   setSigningIdentity(signingIdentity);
-  logger.info(
-    `Coordinator signing identity: ${signingIdentity.publicKeyHex}`
-  );
+  logger.info(`Coordinator signing identity: ${signingIdentity.publicKeyHex}`);
 
   const uiDistPath = resolveUiDistPath();
   logger.info(`Serving UI from: ${uiDistPath}`);

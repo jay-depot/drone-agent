@@ -20,7 +20,9 @@ interface PreApprovalTokenDbRow {
   burned_by: string | null;
 }
 
-function rowToPreApprovalToken(row: PreApprovalTokenDbRow): PreApprovalTokenRow {
+function rowToPreApprovalToken(
+  row: PreApprovalTokenDbRow
+): PreApprovalTokenRow {
   return {
     durableId: row.durable_id,
     burnPublicKey: row.burn_public_key,

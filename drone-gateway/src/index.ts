@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { redeemPreApprovalToken } from 'drone-swarm-common';
 import { logger } from './logger.js';
 import { GatewayEngine } from './engine.js';
 import { LocalSpawnBackend } from './local-spawn-backend.js';
@@ -21,6 +22,7 @@ interface CliConfig {
   configPath: string;
   command: 'serve' | 'cleanup';
   cleanupAdapterId?: string;
+  preApprovalTokenPath?: string;
 }
 
 export function parseArgs(): CliConfig {
@@ -29,6 +31,8 @@ export function parseArgs(): CliConfig {
     configPath: path.join(DEFAULT_CONFIG_DIR, DEFAULT_CONFIG_FILE),
     command: 'serve',
   };
+
+  const tokenFlag = '--pre-approval-token-path';
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -44,6 +48,7 @@ export function parseArgs(): CliConfig {
           `Options:\n` +
           `  --config <path>  Path to config file (default: ~/.drone-gateway/config.json)\n` +
           `  --adapter <id>   Adapter ID to clean up (for cleanup command)\n` +
+          `  --pre-approval-token-path <path>  Redeem a pre-approval token, then exit\n` +
           `  --help           Show this help message\n`
       );
       process.exit(0);
@@ -51,6 +56,10 @@ export function parseArgs(): CliConfig {
       cliConfig.command = 'cleanup';
     } else if (arg === '--adapter' && i + 1 < args.length) {
       cliConfig.cleanupAdapterId = args[++i];
+    } else if (arg === tokenFlag && i + 1 < args.length) {
+      cliConfig.preApprovalTokenPath = args[++i];
+    } else if (arg.startsWith(`${tokenFlag}=`)) {
+      cliConfig.preApprovalTokenPath = arg.slice(tokenFlag.length + 1);
     }
   }
 
@@ -135,6 +144,31 @@ export async function main(): Promise<void> {
   // Default: serve command
   logger.info(`Loading config from: ${cliConfig.configPath}`);
   const config = await loadConfig(cliConfig.configPath);
+
+  if (cliConfig.preApprovalTokenPath) {
+    if (!config.swarmExtension) {
+      console.error(
+        'Error: --pre-approval-token-path requires a coordinatorUrl in the config'
+      );
+      process.exit(1);
+    }
+    try {
+      await redeemPreApprovalToken({
+        coordinatorUrl: config.coordinatorUrl,
+        dataDir: config.swarmExtension.dataDir,
+        id: config.swarmExtension.id,
+        name: config.swarmExtension.name,
+        tokenPath: cliConfig.preApprovalTokenPath,
+      });
+    } catch (err) {
+      console.error(
+        `Pre-approval failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+      process.exit(1);
+    }
+    console.log('Pre-approval complete. Exiting.');
+    return;
+  }
 
   // `coordinatorUrl` presence is the extension gate (D4): with a coordinator the
   // gateway is a swarm extension and the node's mTLS fetch carries all

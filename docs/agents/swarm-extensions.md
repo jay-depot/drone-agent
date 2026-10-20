@@ -274,6 +274,51 @@ Behaviour:
 See ADR
 [`256-gateway-swarm-extension`](../adr/256-gateway-swarm-extension.md).
 
+## Pre-approval tokens
+
+A **pre-approval token** pre-approves a remote node. The user mints the token in
+the coordinator UI, gives the token file to the node, and runs the node once
+with `--pre-approval-token-path`. The node registers, redeems the token, and
+exits. The coordinator marks the node approved. A later start of the same node
+connects without manual work. See ADR
+[`258-pre-approval-tokens`](../adr/258-pre-approval-tokens.md).
+
+The token is a **sensitive credential**. The UI shows a warning and shows the
+token one time only.
+
+### The token file
+
+```json
+{
+  "durableId": "3f2a…-uuid",
+  "pubKey": "<coordinator Ed25519 public key, base64 SPKI>",
+  "tlsFingerprint": "<coordinator TLS cert SHA-256, hex, no colons>",
+  "burnKey": "-----BEGIN PRIVATE KEY-----\n…\n-----END PRIVATE KEY-----\n",
+  "sig": "<base64 Ed25519 signature>"
+}
+```
+
+### The flag
+
+`mcp-swarm` and `drone-gateway` accept `--pre-approval-token-path` in both the
+`=value` and the ` value` forms.
+
+```
+mcp-swarm --pre-approval-token-path=./token.json
+drone-gateway --pre-approval-token-path ./token.json
+```
+
+With the flag the node performs a one-shot run: it registers, redeems the token,
+writes the trust file, and exits 0. Without the flag it serves as usual.
+
+### The trust file and pinning
+
+The one-shot run writes `{coordinatorUrl, tlsFingerprint}` to
+`<dataDir>/coordinator-trust.json` (mode `0600`). `createExtensionNode` reads
+that file when it receives no explicit fingerprint. The node **pins** the
+coordinator's TLS fingerprint, so there is no trust-on-first-use window. A
+mismatch is refused.
+
 ## Constraints (v0)
 
 - **Local-only**: same host as the coordinator. Remote extensions are deferred

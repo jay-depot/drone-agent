@@ -42,9 +42,8 @@ vi.mock('../src/logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-const { redeemPreApprovalToken } = await import(
-  '../src/pre-approval-redeem.js'
-);
+const { redeemPreApprovalToken } =
+  await import('../src/pre-approval-redeem.js');
 
 describe('redeemPreApprovalToken', () => {
   let dataDir: string;
@@ -165,6 +164,8 @@ describe('redeemPreApprovalToken', () => {
         tokenPath,
       })
     ).rejects.toThrow();
-    await expect(readFile(path.join(dataDir, 'coordinator-trust.json'))).rejects.toThrow();
+    await expect(
+      readFile(path.join(dataDir, 'coordinator-trust.json'))
+    ).rejects.toThrow();
   });
 });

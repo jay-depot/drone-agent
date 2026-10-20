@@ -65,9 +65,7 @@ async function seedToken(durableId: string, expiresAt = Date.now() + 100000) {
       buildTokenSignaturePayload(base)
     ),
   };
-  const { createPreApprovalToken } = await import(
-    '../../src/db/index.js'
-  );
+  const { createPreApprovalToken } = await import('../../src/db/index.js');
   createPreApprovalToken({
     durableId,
     burnPublicKey: burn.publicKey,
@@ -281,7 +279,9 @@ describe('coordinator signing identity loading', () => {
   it('generates a persistent identity', async () => {
     const identity = await loadOrCreateIdentity(
       'coordinator',
-      await (await import('node:fs/promises')).mkdtemp(
+      await (
+        await import('node:fs/promises')
+      ).mkdtemp(
         (await import('node:path')).join(
           (await import('node:os')).tmpdir(),
           'coord-id-'

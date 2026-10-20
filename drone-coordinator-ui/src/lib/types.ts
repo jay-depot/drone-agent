@@ -1,5 +1,22 @@
 // Types matching the coordinator's API responses
 
+export interface PreApprovalToken {
+  durableId: string;
+  pubKey: string;
+  tlsFingerprint: string;
+  burnKey: string;
+  sig: string;
+}
+
+export interface PreApprovalTokenEntry {
+  durableId: string;
+  label: string | null;
+  issuedAt: number;
+  expiresAt: number;
+  burnedAt: number | null;
+  burnedBy: string | null;
+}
+
 export interface Beacon {
   id: string;
   name: string;

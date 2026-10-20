@@ -33,6 +33,7 @@ import WikiTagPage from '@/pages/wiki-tag';
 import SettingsPage from '@/pages/settings';
 import IdentityPage from '@/pages/identity';
 import LoginPage from '@/pages/login';
+import PreApprovalTokensPage from '@/pages/pre-approval-tokens';
 
 const navItems = [
   { to: '/', label: 'Topology', icon: '◉' },
@@ -158,6 +159,10 @@ function AppLayout() {
           <Route path="/config" element={<Navigate to="/settings" replace />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/identity" element={<IdentityPage />} />
+          <Route
+            path="/pre-approval-tokens"
+            element={<PreApprovalTokensPage />}
+          />
           {/* Extension-contributed routes. */}
           {pluginRoutes.map(route => (
             <Route
