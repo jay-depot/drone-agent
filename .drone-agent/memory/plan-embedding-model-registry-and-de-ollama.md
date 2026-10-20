@@ -307,3 +307,70 @@ G2 (reviewer) - Check every item in section 7. Fix until all pass. Dep: all.
 - `drone-beacon/Dockerfile` is already `node:22-slim`; `smoke-test`, `dummy-agent`, `echo-llm`, `drone-agent`, `drone-coordinator` are `node:22-alpine`.
 - `replaceWikiChunks` exists and is exported from `db/index.ts` but `indexWiki` does not call it.
 - `onnxruntime-node` ships a linux-arm64 (aarch64) prebuilt CPU binary since v1.10.0. `@huggingface/transformers` ~4.3.1 hard-depends on `onnxruntime-node@1.30.0` on Node; there is no automatic WASM fallback on Node. `env.cacheDir` is NOT read from `HF_HOME`/`TRANSFORMERS_CACHE`; set it explicitly.
+
+---
+
+## Outcome (2026-10-20) — COMPLETE
+
+Branch `feat/ollama-free-embedding`. All phases A-G executed. Commits:
+`a7568e2a` (plan + insights), `13a93be0` (phases A-E), `fea87a06` (phase F docs/docker).
+
+### Shipped
+- **A** `drone-core/src/embedding-models.ts` — `DroneEmbeddingModelSpec`,
+  `NOMIC_EMBED_TEXT_V1_5`, `EMBEDDING_MODELS`, `getEmbeddingModel`,
+  `listEmbeddingModels`, `listEmbeddingModelIds`. `DroneEmbeddingProvider` gains
+  `spec`/`embedQuery`/`embedDocument`. `DroneSearchCapability` and the dead config
+  fields deleted. Test: `drone-core/test/embedding-models.test.ts` (6).
+- **B** `drone-swarm-common/src/embedding/` — `types.ts`, `fingerprint.ts`,
+  `provider.ts`, `backend-onnx.ts`, `backend-ollama.ts`, `configure.ts`, `index.ts`.
+  `search-provider-ollama.ts` deleted. `config-file.ts` gains `EmbeddingConfig`,
+  `'embedding'` in `ALLOWED_KEYS`, `validateEmbedding`. Dep
+  `@huggingface/transformers ^4.3.1`. Tests: fingerprint (2), provider (5),
+  backend-ollama (7), config-file embedding block (26 total).
+- **C** `drone-beacon/src/db/embedding-meta.ts` — `getEmbeddingMeta`,
+  `setEmbeddingMeta`, `rebuildVecTables(dimensions)`. `embedding_meta` DDL.
+  `initDatabase(dbPath, dimensions)` — dimension is a parameter, not hardcoded 768.
+  `replaceWikiChunks` -> `replaceWikiPage(...)`; new `replaceFileChunks` in
+  `db/search.ts`. Tests: embedding-meta (6), wiki-chunks (10).
+- **D** Both indexers embed ALL chunks first, then write chunks + hash in one
+  transaction; hashes are salted with the fingerprint; the wiki indexer skips only
+  when the hash matches AND chunk count > 0; the four prefix literals become
+  `embedQuery`/`embedDocument`. Tests: bug-A and bug-B proofs for both indexers.
+- **E** `drone-beacon/src/embedding-init.ts` — `initEmbedding` / `resolveEmbeddingSpec`;
+  fatal on unknown model or a backend that cannot start; reconciles `embedding_meta`
+  and rebuilds the vec tables on a dimension change. `index.ts` wires it.
+  Test: `embedding-wiring.test.ts` (6).
+- **F** ADR `docs/adr/259-embedding-model-registry-and-de-ollama.md` + index row;
+  new `docs/agents/embedding-providers.md` + AGENTS.md entry; README updated (Ollama
+  no longer required); `docker/smoke-test.Dockerfile` -> `node:22-slim`
+  (`drone-beacon.Dockerfile` was already slim). Wiki pages
+  `drone-agent-node-only-embedding-providers`, `beacon-semantic-search`,
+  `beacon-wiki-vector-index` updated to as-built.
+
+### Validation (all green)
+- `pnpm -r run build` OK; `pnpm run lint:eslint` OK; `pnpm run lint:prettier` OK;
+  `tsc -p tsconfig.test.json` OK; `pnpm run test` = **4326 passed / 16 skipped**;
+  LSP zero diagnostics.
+- Live checks: an unknown `embedding.model` stops the beacon with
+  `Unknown embedding model "<id>"` and exit 1; `embedding.backend: "wasm"` fails
+  config validation with `"embedding.backend" must be "onnx" or "ollama"`; the
+  in-process ONNX backend fails hard (as designed, D5) when the model cannot be
+  downloaded.
+
+### Deviations / limits
+- **G1 items 1-2 could not run on this host.** Hugging Face returns 401 to a plain
+  `curl` for the model files, so the ~137 MB ONNX download cannot happen here. The
+  hard-fail path (D5) is what was observed; the download + semantic-search walk-through
+  needs a host with HF Hub access.
+- **F5 partial:** the two 2026-10-13 bug wiki pages could not be located —
+  `swarm__wiki_search` returns empty for every query on this beacon (a known
+  recurring defect; `wiki_list`/`wiki_read` work). The three named embedding pages
+  were updated; the bug pages remain to be marked fixed by a librarian.
+- The `embedDocument(text, { title })` second argument is unused by Nomic
+  (`supportsTitle: false`) but is part of the shape a title-using model needs.
+- The fingerprint change is **not** announced on first startup; a model/backend/dtype
+  change silently discards the index on the next pass.
+
+### Deferred (unchanged)
+EmbeddingGemma 2 as a shipped registry entry; request-level role parameters;
+a model-menu surface; an async wiki reindex route.

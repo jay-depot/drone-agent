@@ -966,5 +966,17 @@
   {
     "timestamp": "2026-10-20T22:13:36.030Z",
     "insight": "The embedding path has a declared-but-never-wired seam: `DroneSearchCapability` (registerEmbeddingProvider/resolveProvider) is declared in drone-core and exported, but never offered by any plugin, and the beacon instead instantiates `createOllamaEmbeddingProvider` directly in drone-beacon/src/index.ts. The agent-side `search.userEmbeddingProvider` / `search.projectEmbeddingProvider` / `DroneSearchPath.embeddingProvider` config fields likewise have zero readers. These fields look authoritative but silently do nothing — a real trap, since setting them appears to configure the embedder."
+  },
+  {
+    "timestamp": "2026-10-20T22:40:11.116Z",
+    "insight": "The LSP typescript diagnostics in this workspace can go STALE after edits made through tools that bypass the LSP file watcher (e.g. `exec__run` with python/node heredocs, and `file__set`-style raw writes). During the ADR-259 embedding work, `lsp__get_diagnostics` repeatedly reported errors that matched OLD line numbers (e.g. \"search-indexer.test.ts:88 is missing spec/embedQuery/embedDocument\" when line 88 was a `describe`) while `tsc -b` and `tsc -p tsconfig.test.json` exited clean. Trust `pnpm --filter <pkg> exec tsc -b` / `tsc -p tsconfig.test.json` over a stale-looking LSP panel, and re-read the file to confirm the edit actually landed before chasing a phantom."
+  },
+  {
+    "timestamp": "2026-10-20T22:40:11.119Z",
+    "insight": "Running vitest per-package (`cd drone-beacon && npx vitest run`) uses a DIFFERENT config than the repo root: the root `vitest.config.ts` aliases `drone-core`/`drone-swarm-common` to SOURCE, but a per-package run resolves them to built `dist/`, so a test that looks green in one and red in the other (or vice versa) is a config-resolution artifact, not a real regression. During the embedding work, two `wiki-indexer.test.ts` cases \"failed\" per-package but passed under the root run because the per-package run loaded a stale `drone-swarm-common/dist`. Always run workspace tests via `pnpm run test` (root config) or pass an explicit alias config."
+  },
+  {
+    "timestamp": "2026-10-20T22:40:11.123Z",
+    "insight": "`pnpm` does NOT read `pnpm.onlyBuiltDependencies` from the root `package.json` on pnpm 11 — the allowlist for install/postinstall scripts lives in `pnpm-workspace.yaml` under `onlyBuiltDependencies` (or the newer `allowBuilds` map). Installing `@huggingface/transformers` failed with `ERR_PNPM_IGNORED_BUILDS` for `onnxruntime-node` and `protobufjs` until the allowlist was added there; and on this host the `@huggingface/transformers` install step prints an alarming `Unauthorized access to file: https://huggingface.co/...` on first run because Hugging Face returns HTTP 401 to the sandbox — that is the intended hard-fail (ADR 259 D5), not a code bug."
   }
 ]
