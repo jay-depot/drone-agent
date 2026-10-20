@@ -930,5 +930,17 @@
   {
     "timestamp": "2026-10-20T02:19:01.778Z",
     "insight": "The manual end-to-end check (the plan's section 4) caught a real defect that all unit tests missed: `createExtensionNode.uploadBundle` did not send the claimed node id, so bundle upload 401'd on the coordinator's unencrypted web port (ADR 257). The unit tests for `uploadBundle` mocked `createCoordinatorFetch` and asserted only the URL/body, never the headers, so the missing `x-node-id` was invisible. Lesson: when a transport change adds an identity header, assert the header in the SDK's own test — and always run the plan's manual E2E, because \"connected: true\" plus a non-empty `bundles` array is the only thing that proves the whole path."
+  },
+  {
+    "timestamp": "2026-10-20T15:21:16.234Z",
+    "insight": "The coordinator's mTLS exemption list in `drone-coordinator/src/mtls.ts` (`createMtlsMiddleware`) is a hardcoded allowlist of URL STRING comparisons (`req.url === '/api/beacons'`, `req.url.startsWith('/api/beacons/trust/') && ...`). Any new route that a not-yet-approved node must reach (e.g. the planned `POST /api/beacons/trust/redeem`) silently 403s until it is added here. The `startsWith('/api/beacons/trust/')` clause with its `.endsWith('/approve') === false` exclusions is already brittle. Consider refactoring this to an explicit route list (method + path pattern) so a new bootstrap route is a one-line addition rather than a string-matching puzzle."
+  },
+  {
+    "timestamp": "2026-10-20T15:21:16.236Z",
+    "insight": "`getSigningKey(identity: SwarmNodeIdentity): crypto.KeyObject` in `drone-swarm-common/src/identity.ts:99` is a misnomer — it calls `crypto.createPublicKey(identity.privateKeyPem)`, i.e. it returns the PUBLIC key object derived from the private PEM, not a private-key handle. Signing in the codebase uses `signBeaconPayload(identity.privateKeyPem, payload)` directly. Anyone reading `getSigningKey` expecting a signing handle will be misled; the name should be fixed or the function removed if unused."
+  },
+  {
+    "timestamp": "2026-10-20T15:21:16.238Z",
+    "insight": "There is no shared CLI argument parser in the repo — every binary hand-rolls a `for` loop over `process.argv.slice(2)` (drone-beacon/src/index.ts:113, drone-coordinator/src/index.ts:103, drone-gateway/src/index.ts:26, drone-swarm/src/index.ts:52, mcp-swarm has none at all and is env-only). None of them support the `--flag=value` form; they only split on whitespace, so a `--flag=value` token is read as a literal flag name containing `=`. Any new flag documented with the `=` form (e.g. `--pre-approval-token-path=./token.json`) needs bespoke `=`-aware parsing. A shared `= `-aware flag helper in `drone-swarm-common` would be a worthwhile follow-up."
   }
 ]
