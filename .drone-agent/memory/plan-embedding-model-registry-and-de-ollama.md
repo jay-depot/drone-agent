@@ -316,6 +316,7 @@ Branch `feat/ollama-free-embedding`. All phases A-G executed. Commits:
 `a7568e2a` (plan + insights), `13a93be0` (phases A-E), `fea87a06` (phase F docs/docker).
 
 ### Shipped
+
 - **A** `drone-core/src/embedding-models.ts` — `DroneEmbeddingModelSpec`,
   `NOMIC_EMBED_TEXT_V1_5`, `EMBEDDING_MODELS`, `getEmbeddingModel`,
   `listEmbeddingModels`, `listEmbeddingModelIds`. `DroneEmbeddingProvider` gains
@@ -348,6 +349,7 @@ Branch `feat/ollama-free-embedding`. All phases A-G executed. Commits:
   `beacon-wiki-vector-index` updated to as-built.
 
 ### Validation (all green)
+
 - `pnpm -r run build` OK; `pnpm run lint:eslint` OK; `pnpm run lint:prettier` OK;
   `tsc -p tsconfig.test.json` OK; `pnpm run test` = **4326 passed / 16 skipped**;
   LSP zero diagnostics.
@@ -358,10 +360,26 @@ Branch `feat/ollama-free-embedding`. All phases A-G executed. Commits:
   downloaded.
 
 ### Deviations / limits
-- **G1 items 1-2 could not run on this host.** Hugging Face returns 401 to a plain
-  `curl` for the model files, so the ~137 MB ONNX download cannot happen here. The
-  hard-fail path (D5) is what was observed; the download + semantic-search walk-through
-  needs a host with HF Hub access.
+
+- **CORRECTION (2026-10-20, post-report).** An earlier version of this section
+  claimed G1 items 1-2 "could not run on this host" because Hugging Face was
+  unreachable. That was wrong. HF is reachable here (`bert-base-uncased` fetches
+  fine); the real cause was a **bad repo id**. The spec shipped
+  `Xenova/nomic-embed-text-v1.5`, which is not a real repo — HF answers `401` for a
+  nonexistent public repo, which is what the beacon surfaced. Fixed to
+  `nomic-ai/nomic-embed-text-v1.5` (the official Nomic repo, which publishes ONNX
+  files). G1 items 1, 2 and 5 now pass end-to-end on this host: no `embedding` block
+  -> 132 MB downloaded -> ready in ~10 s -> `GET /agents/:id/search` ranks the
+  expected file first with no Ollama in the path. The Ollama backend also verifies
+  (`nomic-embed-text-v1.5:768:ollama:gguf`).
+- **dtype fidelity (new finding).** The ONNX and Ollama builds of nomic are the same
+  weights, but the shipped default `dtype: "q8"` is NOT bit-faithful to Ollama:
+  cosine(fp32, ollama) = 1.000000, fp16 = 0.999999, **q8 = 0.974**. On 12 unrelated
+  probe sentences, q8 changed the top-1 result on 6 — but every flip was a near-tie
+  in fp32 (top1-top2 gap < 0.02), so the honest claim is "q8 perturbs the vectors and
+  can flip genuine near-ties", not "q8 reorders results". fp16 is ~exact at 262 MB
+  and is the better default if the ~131 MB q8 saving does not matter. Left at q8 for
+  now (smaller download, faster) — revisit before relying on cross-backend parity.
 - **F5 partial:** the two 2026-10-13 bug wiki pages could not be located —
   `swarm__wiki_search` returns empty for every query on this beacon (a known
   recurring defect; `wiki_list`/`wiki_read` work). The three named embedding pages
@@ -372,5 +390,6 @@ Branch `feat/ollama-free-embedding`. All phases A-G executed. Commits:
   change silently discards the index on the next pass.
 
 ### Deferred (unchanged)
+
 EmbeddingGemma 2 as a shipped registry entry; request-level role parameters;
 a model-menu surface; an async wiki reindex route.

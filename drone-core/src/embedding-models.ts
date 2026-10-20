@@ -46,7 +46,7 @@ export const NOMIC_EMBED_TEXT_V1_5: DroneEmbeddingModelSpec = {
   tasks: ['search_query', 'search_document', 'classification', 'clustering'],
   backends: {
     ollama: 'nomic-embed-text:v1.5',
-    onnx: 'Xenova/nomic-embed-text-v1.5',
+    onnx: 'nomic-ai/nomic-embed-text-v1.5',
   },
   formatQuery: text => `search_query: ${text}`,
   formatDocument: text => `search_document: ${text}`,

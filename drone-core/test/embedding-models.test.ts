@@ -42,7 +42,7 @@ describe('embedding model registry', () => {
   it('declares a backend id for every registered backend', () => {
     expect(NOMIC_EMBED_TEXT_V1_5.backends.ollama).toBe('nomic-embed-text:v1.5');
     expect(NOMIC_EMBED_TEXT_V1_5.backends.onnx).toBe(
-      'Xenova/nomic-embed-text-v1.5'
+      'nomic-ai/nomic-embed-text-v1.5'
     );
   });
 });
