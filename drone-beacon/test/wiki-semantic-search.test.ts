@@ -15,7 +15,7 @@ import {
 } from '../../drone-swarm-common/src/index.js';
 import { buildTestApp } from './app-helper.js';
 import type { FastifyInstance } from 'fastify';
-import type { DroneEmbeddingProvider } from 'drone-core';
+import { NOMIC_EMBED_TEXT_V1_5, type DroneEmbeddingProvider } from 'drone-core';
 
 const proxyWikiToCoordinator = vi.fn();
 
@@ -45,18 +45,22 @@ function keywordToIndex(keyword: string): number {
 
 /** Deterministic keyword-based embedder for both document and query sides. */
 function makeProvider(): DroneEmbeddingProvider {
+  const embed = async (text: string) => {
+    const lowered = text.toLowerCase();
+    for (const kw of ['fragment', 'persona', 'spawn']) {
+      if (lowered.includes(kw)) return fakeEmbedding(keywordToIndex(kw));
+    }
+    return fakeEmbedding(keywordToIndex('unmatched'));
+  };
   return {
     id: 'fake',
     name: 'Fake Embedder',
+    spec: NOMIC_EMBED_TEXT_V1_5,
     dimensions: 768,
     maxTokens: 8192,
-    getEmbedding: async (text: string) => {
-      const lowered = text.toLowerCase();
-      for (const kw of ['fragment', 'persona', 'spawn']) {
-        if (lowered.includes(kw)) return fakeEmbedding(keywordToIndex(kw));
-      }
-      return fakeEmbedding(keywordToIndex('unmatched'));
-    },
+    getEmbedding: embed,
+    embedQuery: embed,
+    embedDocument: embed,
   };
 }
 

@@ -11,7 +11,7 @@ import {
   setKnowledgeBaseDir,
   writePage,
 } from '../../drone-swarm-common/src/index.js';
-import type { DroneEmbeddingProvider } from 'drone-core';
+import { NOMIC_EMBED_TEXT_V1_5, type DroneEmbeddingProvider } from 'drone-core';
 
 function fakeEmbedding(activeIndex: number): Float32Array {
   const v = new Float32Array(768);
@@ -30,21 +30,25 @@ function keywordToIndex(keyword: string): number {
 /** Deterministic fake embedder: keyword in text maps to a basis vector. */
 function makeProvider(): DroneEmbeddingProvider & { calls: string[] } {
   const calls: string[] = [];
+  const embed = vi.fn(async (text: string) => {
+    calls.push(text);
+    for (const kw of ['fragment', 'persona', 'beacon']) {
+      if (text.toLowerCase().includes(kw)) {
+        return fakeEmbedding(keywordToIndex(kw));
+      }
+    }
+    return fakeEmbedding(keywordToIndex('unmatched'));
+  });
   return {
     id: 'fake',
     name: 'Fake Embedder',
+    spec: NOMIC_EMBED_TEXT_V1_5,
     dimensions: 768,
     maxTokens: 8192,
     calls,
-    getEmbedding: vi.fn(async (text: string) => {
-      calls.push(text);
-      for (const kw of ['fragment', 'persona', 'beacon']) {
-        if (text.toLowerCase().includes(kw)) {
-          return fakeEmbedding(keywordToIndex(kw));
-        }
-      }
-      return fakeEmbedding(keywordToIndex('unmatched'));
-    }),
+    getEmbedding: embed,
+    embedQuery: embed,
+    embedDocument: embed,
   };
 }
 
@@ -134,6 +138,71 @@ describe('WikiIndexer', () => {
 
     const src = listWikiSources().find(s => s.origin === 'beacon');
     expect(src).toBeDefined();
+  });
+
+  it('does not double the chunk count when a page changes', async () => {
+    const indexer = new WikiIndexer(makeProvider());
+    const first = await indexer.indexWiki([
+      {
+        page: BEACON_PAGE_META,
+        origin: 'beacon',
+        content: '# Fragments\n\nBeacon fragment details.',
+      },
+    ]);
+    expect(first.pagesIndexed).toBe(1);
+    const before = getWikiChunks('fragments-guide', 'beacon').length;
+    expect(before).toBe(1);
+
+    const changed = { ...BEACON_PAGE_META, updatedAt: '2026-02-02T00:00:00Z' };
+    const second = await indexer.indexWiki([
+      {
+        page: changed,
+        origin: 'beacon',
+        content: '# Fragments\n\nChanged fragment details.',
+      },
+    ]);
+    expect(second.pagesIndexed).toBe(1);
+
+    const chunks = getWikiChunks('fragments-guide', 'beacon');
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].text).toContain('Changed fragment details');
+  });
+
+  it('leaves no source row when an embed throws, then recovers on retry', async () => {
+    let fail = true;
+    const provider: DroneEmbeddingProvider = {
+      id: 'flaky',
+      name: 'Flaky',
+      spec: NOMIC_EMBED_TEXT_V1_5,
+      dimensions: 768,
+      maxTokens: 8192,
+      getEmbedding: async () => fakeEmbedding(1),
+      embedQuery: async () => fakeEmbedding(1),
+      embedDocument: async () => {
+        if (fail) throw new Error('boom');
+        return fakeEmbedding(keywordToIndex('fragment'));
+      },
+    };
+    const indexer = new WikiIndexer(provider);
+    const pages: WikiPageInput[] = [
+      {
+        page: BEACON_PAGE_META,
+        origin: 'beacon',
+        content: '# Fragments\n\nBeacon fragment details.',
+      },
+    ];
+
+    const first = await indexer.indexWiki(pages);
+    expect(first.pagesIndexed).toBe(0);
+    expect(
+      listWikiSources().find(s => s.page_id === 'fragments-guide')
+    ).toBeUndefined();
+    expect(getWikiChunks('fragments-guide', 'beacon')).toHaveLength(0);
+
+    fail = false;
+    const second = await indexer.indexWiki(pages);
+    expect(second.pagesIndexed).toBe(1);
+    expect(getWikiChunks('fragments-guide', 'beacon').length).toBeGreaterThan(0);
   });
 
   it('removes pages absent from a later authoritative set (local delete → reconcile)', async () => {

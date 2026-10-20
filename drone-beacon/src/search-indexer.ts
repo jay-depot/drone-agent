@@ -17,16 +17,19 @@ const CHUNK_TARGET_TOKENS = 480;
 
 export class SearchIndexer {
   private provider: DroneEmbeddingProvider | null;
+  private fingerprint: string;
   private indexing: Set<string> = new Set();
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
   private sweepIntervalMs: number;
 
   constructor(
     provider?: DroneEmbeddingProvider,
-    sweepIntervalMs: number = 5 * 60 * 1000
+    sweepIntervalMs: number = 5 * 60 * 1000,
+    fingerprint: string = ''
   ) {
     this.provider = provider ?? null;
     this.sweepIntervalMs = sweepIntervalMs;
+    this.fingerprint = fingerprint;
   }
 
   setProvider(provider: DroneEmbeddingProvider): void {
@@ -97,7 +100,7 @@ export class SearchIndexer {
       // Index each file
       for (const filePath of allFiles) {
         try {
-          const hash = await computeFileHash(filePath);
+          const hash = await computeFileHash(filePath, this.fingerprint);
           const storedHash = db.getFileHash(absDir, filePath);
 
           if (storedHash === hash) {
@@ -113,17 +116,23 @@ export class SearchIndexer {
             Math.min(CHUNK_TARGET_TOKENS, provider.maxTokens)
           );
 
-          // Delete old chunks and update file metadata
-          db.deleteChunksForFile(absDir, filePath);
-          db.upsertFile(absDir, filePath, hash);
-
-          // Embed and insert chunks
+          // Embed every chunk first. A throw here must leave no file hash and
+          // no chunks behind, so a failed file is retried on the next pass
+          // instead of being recorded as indexed.
+          const embeddings: Float32Array[] = [];
           for (let i = 0; i < chunks.length; i++) {
-            const prefixed = `search_document: ${chunks[i]}`;
-            const embedding = await provider.getEmbedding(prefixed);
-            db.insertChunk(absDir, filePath, i, chunks[i], embedding);
-            result.chunksCreated++;
+            embeddings.push(await provider.embedDocument(chunks[i]));
           }
+
+          // One transaction: drop the old chunks, insert the new ones, and
+          // record the hash.
+          db.replaceFileChunks(
+            absDir,
+            filePath,
+            hash,
+            chunks.map((text, index) => ({ index, text, embedding: embeddings[index] }))
+          );
+          result.chunksCreated += chunks.length;
 
           result.filesIndexed++;
         } catch (err) {
@@ -203,9 +212,16 @@ export class SearchIndexer {
 
 // ── File helpers ───────────────────────────────────────────────────
 
-async function computeFileHash(filePath: string): Promise<string> {
+async function computeFileHash(
+  filePath: string,
+  fingerprint: string
+): Promise<string> {
   const content = await readFile(filePath);
-  return createHash('sha256').update(content).digest('hex');
+  return createHash('sha256')
+    .update(fingerprint)
+    .update('\u0000')
+    .update(content)
+    .digest('hex');
 }
 
 // Never index these directories, regardless of any include flag.

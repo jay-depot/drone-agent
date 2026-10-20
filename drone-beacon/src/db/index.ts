@@ -127,6 +127,7 @@ export {
   removeStaleFiles,
   insertChunk,
   deleteChunksForFile,
+  replaceFileChunks,
   getAllChunks,
   getChunkCount,
   searchChunksByVector,
@@ -158,7 +159,7 @@ export {
   deleteChunksForWikiPage,
   getWikiChunks,
   searchWikiChunksByVector,
-  replaceWikiChunks,
+  replaceWikiPage,
   getWikiSourcesWithChunkCounts,
   backfillWikiVecChunks,
 } from './wiki-chunks.js';
@@ -169,3 +170,9 @@ export type {
   WikiChunkRow,
   WikiSourceWithChunkCount,
 } from './wiki-chunks.js';
+export {
+  getEmbeddingMeta,
+  setEmbeddingMeta,
+  rebuildVecTables,
+} from './embedding-meta.js';
+export type { EmbeddingMeta, EmbeddingMetaRow } from './embedding-meta.js';

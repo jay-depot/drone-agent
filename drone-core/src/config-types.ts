@@ -10,7 +10,6 @@ export type DroneSearchPath = {
    * enabled (it performs the beacon registration). Default false.
    */
   ragSource?: boolean;
-  embeddingProvider?: string;
   /**
    * Intended future functionality — not yet honored. `.git` and `node_modules`
    * are always excluded from indexing regardless of this flag.
@@ -33,8 +32,6 @@ export type DroneSearchPath = {
 export type DroneSearchConfig = {
   enabled: boolean;
   paths: DroneSearchPath[];
-  userEmbeddingProvider?: string;
-  projectEmbeddingProvider?: string;
 };
 import { deepMerge, type MergeSpec } from './deep-merge.js';
 

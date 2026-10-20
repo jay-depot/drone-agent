@@ -284,7 +284,7 @@ export default function wikiRoutes(app: FastifyInstance) {
     );
     const parsedMinScore = minScore !== undefined ? parseFloat(minScore) : NaN;
 
-    const queryEmbedding = await provider.getEmbedding(`search_query: ${q}`);
+    const queryEmbedding = await provider.embedQuery(q);
     const overfetch = Math.min(k * OVERFETCH_FACTOR, 200);
     const hits = searchWikiChunksByVector(queryEmbedding, overfetch);
     const filtered =

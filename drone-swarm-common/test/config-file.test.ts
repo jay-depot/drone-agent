@@ -159,6 +159,54 @@ describe('validateConfigFile', () => {
       })
     ).toEqual(['unknown key "spawnRoots.extra"']);
   });
+  it('accepts a valid embedding config', () => {
+    expect(
+      validateConfigFile({
+        embedding: {
+          backend: 'onnx',
+          model: 'nomic-embed-text-v1.5',
+          onnx: { dtype: 'q8', device: 'cpu', cacheDir: '/tmp/models' },
+        },
+      })
+    ).toEqual([]);
+    expect(
+      validateConfigFile({
+        embedding: { backend: 'ollama', model: 'nomic-embed-text-v1.5' },
+      })
+    ).toEqual([]);
+  });
+
+  it('rejects an unknown embedding backend', () => {
+    expect(
+      validateConfigFile({ embedding: { backend: 'wasm', model: 'x' } })
+    ).toEqual(['"embedding.backend" must be "onnx" or "ollama"']);
+  });
+
+  it('rejects an empty embedding model', () => {
+    expect(
+      validateConfigFile({ embedding: { backend: 'onnx', model: '   ' } })
+    ).toEqual(['"embedding.model" must be a non-empty string']);
+  });
+
+  it('rejects a non-object embedding block or sub-block', () => {
+    expect(validateConfigFile({ embedding: 'onnx' })).toEqual([
+      '"embedding" must be an object',
+    ]);
+    expect(
+      validateConfigFile({
+        embedding: { backend: 'onnx', model: 'x', ollama: 'host' },
+      })
+    ).toEqual(['"embedding.ollama" must be an object']);
+  });
+
+  it('rejects unknown keys inside the embedding block', () => {
+    expect(
+      validateConfigFile({
+        embedding: { backend: 'onnx', model: 'x', extra: 1 },
+      })
+    ).toEqual(['unknown key "embedding.extra"']);
+  });
+
 });
 
 describe('loadConfigFile', () => {

@@ -1,32 +1,34 @@
 // ── Search capability types ─────────────────────────────────────────
 
+import type {
+  DroneEmbeddingModelSpec,
+  DroneEmbeddingTask,
+} from './embedding-models.js';
+
 /**
  * An embedding provider that generates vector embeddings for text.
  */
 export type DroneEmbeddingProvider = {
   id: string;
   name: string;
+  /** The model descriptor this provider implements. */
+  spec: DroneEmbeddingModelSpec;
   /** Get the embedding vector for a text string. */
   getEmbedding(text: string): Promise<Float32Array>;
+  /** Embed a search query, formatted the way the model expects. */
+  embedQuery(
+    text: string,
+    opts?: { task?: DroneEmbeddingTask }
+  ): Promise<Float32Array>;
+  /** Embed a document, formatted the way the model expects. */
+  embedDocument(
+    text: string,
+    opts?: { title?: string }
+  ): Promise<Float32Array>;
   /** Number of dimensions in the embedding vectors. */
   dimensions: number;
   /** Maximum number of tokens per chunk (for chunking). */
   maxTokens: number;
-};
-
-/**
- * Capability offered by the search plugin. Lets other plugins register
- * embedding providers and resolve which provider to use for a given scope.
- */
-export type DroneSearchCapability = {
-  registerEmbeddingProvider(provider: DroneEmbeddingProvider): void;
-  unregisterEmbeddingProvider(id: string): void;
-  getEmbeddingProviders(): DroneEmbeddingProvider[];
-  /** Get the provider to use for a given scope/dir. */
-  resolveProvider(
-    scope: 'user' | 'project',
-    dirPath?: string
-  ): DroneEmbeddingProvider | undefined;
 };
 
 /**

@@ -5,13 +5,25 @@ import path from 'node:path';
 import { collectFiles, SearchIndexer } from '../src/search-indexer.js';
 import { setupDb, teardownDb } from './setup.js';
 import * as db from '../src/db/index.js';
+import { NOMIC_EMBED_TEXT_V1_5 } from 'drone-core';
 
 const mockProvider = {
   id: 'mock',
   name: 'Mock Provider',
+  spec: NOMIC_EMBED_TEXT_V1_5,
   dimensions: 768,
   maxTokens: 8192,
   getEmbedding: async () => {
+    const arr = new Float32Array(768);
+    arr[0] = 1;
+    return arr;
+  },
+  embedQuery: async () => {
+    const arr = new Float32Array(768);
+    arr[0] = 1;
+    return arr;
+  },
+  embedDocument: async () => {
     const arr = new Float32Array(768);
     arr[0] = 1;
     return arr;
@@ -95,6 +107,36 @@ describe('SearchIndexer.indexDirectory', () => {
       const texts = chunks.map(c => c.text).join('\n');
       expect(texts).toContain('export function add');
       expect(texts).toContain('# Title');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('leaves no file hash when an embed throws, then recovers on retry', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'drone-index-fail-'));
+    try {
+      await writeFile(path.join(root, 'a.ts'), 'export const a = 1;\n');
+
+      let fail = true;
+      const flaky = {
+        ...mockProvider,
+        embedDocument: async () => {
+          if (fail) throw new Error('boom');
+          return mockProvider.embedDocument();
+        },
+      };
+      const indexer = new SearchIndexer(flaky);
+      const first = await indexer.indexDirectory(root);
+
+      expect(first.filesIndexed).toBe(0);
+      expect(db.getFileHash(root, path.join(root, 'a.ts'))).toBeUndefined();
+      expect(db.getAllChunks(root)).toHaveLength(0);
+
+      fail = false;
+      const second = await indexer.indexDirectory(root);
+      expect(second.filesIndexed).toBe(1);
+      expect(db.getFileHash(root, path.join(root, 'a.ts'))).toBeDefined();
+      expect(db.getAllChunks(root).length).toBeGreaterThan(0);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

@@ -8,7 +8,7 @@ import {
   insertWikiChunk,
   getWikiChunks,
   searchWikiChunksByVector,
-  replaceWikiChunks,
+  replaceWikiPage,
   listWikiSources,
   getWikiSourcesWithChunkCounts,
   backfillWikiVecChunks,
@@ -96,12 +96,12 @@ describe('wiki chunk store', () => {
     expect(getWikiChunks('dual', 'beacon')[0].text).toBe('beacon version');
   });
 
-  it('replaceWikiChunks swaps the chunk set transactionally', () => {
-    replaceWikiChunks('p1', 'beacon', [
+  it('replaceWikiPage swaps the chunk set transactionally', () => {
+    replaceWikiPage('p1', 'beacon', { title: 'Page', updatedAt: 'u', hash: 'h' }, [
       { index: 0, text: 'old a', embedding: fakeEmbedding(1) },
       { index: 1, text: 'old b', embedding: fakeEmbedding(2) },
     ]);
-    replaceWikiChunks('p1', 'beacon', [
+    replaceWikiPage('p1', 'beacon', { title: 'Page', updatedAt: 'u', hash: 'h' }, [
       { index: 0, text: 'new only', embedding: fakeEmbedding(3) },
     ]);
 
@@ -112,7 +112,7 @@ describe('wiki chunk store', () => {
 
   it('deleteChunksForWikiPage removes both chunk rows and vec mirror rows', async () => {
     const { deleteChunksForWikiPage } = await import('../src/db/index.js');
-    replaceWikiChunks('p1', 'beacon', [
+    replaceWikiPage('p1', 'beacon', { title: 'Page', updatedAt: 'u', hash: 'h' }, [
       { index: 0, text: 'a', embedding: fakeEmbedding(1) },
       { index: 1, text: 'b', embedding: fakeEmbedding(2) },
     ]);
@@ -128,7 +128,7 @@ describe('wiki chunk store', () => {
   });
 
   it('removeWikiSource deletes the source row and its chunks', () => {
-    replaceWikiChunks('gone', 'coordinator', [
+    replaceWikiPage('gone', 'coordinator', { title: 'Page', updatedAt: 'u', hash: 'h' }, [
       { index: 0, text: 'x', embedding: fakeEmbedding(4) },
     ]);
     removeWikiSource('gone', 'coordinator');
@@ -138,10 +138,10 @@ describe('wiki chunk store', () => {
   });
 
   it('searchWikiChunksByVector ranks by cosine similarity', () => {
-    replaceWikiChunks('p1', 'beacon', [
+    replaceWikiPage('p1', 'beacon', { title: 'Page', updatedAt: 'u', hash: 'h' }, [
       { index: 0, text: 'target chunk', embedding: fakeEmbedding(42) },
     ]);
-    replaceWikiChunks('p2', 'beacon', [
+    replaceWikiPage('p2', 'beacon', { title: 'Page', updatedAt: 'u', hash: 'h' }, [
       { index: 0, text: 'other chunk', embedding: fakeEmbedding(400) },
     ]);
 
@@ -158,7 +158,7 @@ describe('wiki chunk store', () => {
 
   it('getWikiSourcesWithChunkCounts reports chunk counts', () => {
     upsertWikiSource('p1', 'beacon', 'Page One', 'u', 'h');
-    replaceWikiChunks('p1', 'beacon', [
+    replaceWikiPage('p1', 'beacon', { title: 'Page', updatedAt: 'u', hash: 'h' }, [
       { index: 0, text: 'a', embedding: fakeEmbedding(1) },
       { index: 1, text: 'b', embedding: fakeEmbedding(2) },
       { index: 2, text: 'c', embedding: fakeEmbedding(3) },
@@ -170,7 +170,7 @@ describe('wiki chunk store', () => {
   });
 
   it('backfillWikiVecChunks repopulates an empty vec table and no-ops when populated', () => {
-    replaceWikiChunks('p1', 'beacon', [
+    replaceWikiPage('p1', 'beacon', { title: 'Page', updatedAt: 'u', hash: 'h' }, [
       { index: 0, text: 'a', embedding: fakeEmbedding(7) },
     ]);
 

@@ -15,6 +15,7 @@ import * as db from '../src/db/index.js';
 import { getDatabase } from '../src/db/index.js';
 import { SearchIndexer } from '../src/search-indexer.js';
 import { setSearchIndexer } from '../src/routes/context.js';
+import { NOMIC_EMBED_TEXT_V1_5 } from 'drone-core';
 
 // Mock ws-server to avoid WebSocket dependency
 vi.mock('../src/ws-server.js', () => ({
@@ -1118,9 +1119,12 @@ describe('Search Routes', () => {
   const mockProvider = {
     id: 'mock',
     name: 'Mock Provider',
+    spec: NOMIC_EMBED_TEXT_V1_5,
     dimensions: 768,
     maxTokens: 8192,
     getEmbedding: async () => emb(1),
+    embedQuery: async () => emb(1),
+    embedDocument: async () => emb(1),
   };
 
   beforeEach(() => {
