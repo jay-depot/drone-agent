@@ -13,6 +13,8 @@ import messages from './messages.js';
 import spawn from './spawn.js';
 import config from './config.js';
 import secrets from './secrets.js';
+import extensions from './extensions.js';
+import preApprovalTokens from './pre-approval-tokens.js';
 
 export async function registerRoutes(app: FastifyInstance) {
   // Health stays at root level (exempted by SPA fallback)
@@ -34,6 +36,8 @@ export async function registerRoutes(app: FastifyInstance) {
       spawn(api);
       config(api);
       secrets(api);
+      extensions(api);
+      preApprovalTokens(api);
     },
     { prefix: '/api' }
   );

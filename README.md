@@ -26,6 +26,8 @@ The `drone` agent platform aims to be "the Arch of AI agents": minimalist out of
 - `drone-swarm-common`: Shared utilities for beacon and coordinator, including TLS certificate management, wiki filesystem storage, and database helpers.
 - `drone-swarm`: A standalone REST CLI for the swarm — drives the session pipeline (list/log/transcript/process/archive/restore) and the wiki (read/write/search) over the beacon or coordinator REST API. Used by the memory-ingestion pipeline on the coordinator host.
 - `drone-gateway` (in testing): A standalone service that can connect to chat APIs (Matrix, Discord, Slack, etc.) and relay messages into assigned personas in the swarm, launching new agent instances when needed to handle conversations. Currently in testing with Matrix adapter support.
+- `mcp-swarm`: A reference swarm extension — a beacon that declares a capability manifest and exposes swarm functions to MCP clients over stdio.
+- `drone-extension-ui-types`: A types-only package defining the coordinator UI extension-bundle contract (`PluginClientExport`, `UIRegion`, `UIExtensionApi`, `PluginClientRoute`).
 
 ## Current State
 

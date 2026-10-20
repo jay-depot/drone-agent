@@ -46,6 +46,7 @@ function makeSurface(
     ...ctxOverrides,
     mode: ctxOverrides.mode ?? 'active',
     catchUpIntervalMs: ctxOverrides.catchUpIntervalMs ?? 900_000,
+    extensionHintPrefix: ctxOverrides.extensionHintPrefix ?? 'drone-gateway',
   };
   return createPersonaAssignmentSurface(
     { type: 'persona-assignment', personaId: 'coder', ...specOverrides },
@@ -102,6 +103,7 @@ describe('createPersonaAssignmentSurface', () => {
         swarm: undefined,
         mode: 'active',
         catchUpIntervalMs: 900_000,
+        extensionHintPrefix: 'drone-gateway',
       })
     ).toThrow('persona-assignment control surface requires personaId');
   });
@@ -236,6 +238,7 @@ describe('createPersonaAssignmentSurface', () => {
     expect(backend.spawnSession).toHaveBeenCalledWith('conv-1', 'coder', {
       targetBeaconId: 'beacon-9',
       workingDir: '/srv/bots/coder',
+      extensionHint: 'drone-gateway:conv-1',
     });
   });
 

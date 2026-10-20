@@ -105,6 +105,23 @@ describe('createWebAuthMiddleware', () => {
     expect(reply._code()).toBe(401);
   });
 
+  it('blocks a wrong token of a different length', async () => {
+    const middleware = createWebAuthMiddleware(() => 'secret');
+    const reply = makeReply();
+    await middleware(
+      makeReq('8.8.8.8', '/api/sessions', 'Bearer secret-with-more-bytes'),
+      reply
+    );
+    expect(reply._code()).toBe(401);
+  });
+
+  it('blocks a missing auth header even when only the token is empty', async () => {
+    const middleware = createWebAuthMiddleware(() => 'secret');
+    const reply = makeReply();
+    await middleware(makeReq('8.8.8.8', '/api/sessions', 'Bearer '), reply);
+    expect(reply._code()).toBe(401);
+  });
+
   it('allows static asset paths without token', async () => {
     const middleware = createWebAuthMiddleware(() => 'secret');
     const reply = makeReply();

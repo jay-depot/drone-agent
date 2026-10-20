@@ -16,13 +16,21 @@
     "drone-core/src/**/*.ts",
     "drone-core/test/**/*.ts",
     "drone-beacon/src/**/*.ts",
+    "drone-beacon/test/**/*.ts",
     "drone-coordinator/src/**/*.ts",
-    "drone-swarm-common/{src,test}/**/*.ts",
-    "drone-swarm/{src,test}/**/*.ts",
+    "drone-coordinator/test/**/*.ts",
+    "drone-swarm-common/src/**/*.ts",
+    "drone-swarm-common/test/**/*.ts",
+    "drone-swarm/src/**/*.ts",
+    "drone-swarm/test/**/*.ts",
     "drone-agent/src/**/*.ts",
     "drone-agent/src/**/*.tsx",
     "drone-agent/test/**/*.ts",
     "drone-agent/test/**/*.tsx",
+    "drone-gateway/src/**/*.ts",
+    "drone-gateway/test/**/*.ts",
+    "mcp-swarm/src/**/*.ts",
+    "mcp-swarm/test/**/*.ts",
     "vitest.config.ts"
   ]
 }

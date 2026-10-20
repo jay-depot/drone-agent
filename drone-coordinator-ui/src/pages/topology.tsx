@@ -16,6 +16,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorBanner } from '@/components/error-banner';
+import { RegionSlot } from '@/extensions/ExtensionContext';
+import { ExtensionsSection } from '@/extensions/ExtensionsSection';
 
 export default function TopologyPage() {
   const navigate = useNavigate();
@@ -259,17 +261,30 @@ export default function TopologyPage() {
             Beacon overview and agent distribution
           </p>
         </div>
-        <Badge
-          variant={status === 'connected' ? 'default' : 'secondary'}
-          className="text-xs"
-        >
-          {status === 'connected'
-            ? '● Live'
-            : status === 'connecting'
-              ? '○ Connecting'
-              : '○ Disconnected'}
-        </Badge>
+        <div className="flex items-center gap-2">
+          {/* Extension-contributed topology toolbar widgets. */}
+          <RegionSlot region="topology-widget" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/pre-approval-tokens')}
+          >
+            Pre-approval tokens
+          </Button>
+          <Badge
+            variant={status === 'connected' ? 'default' : 'secondary'}
+            className="text-xs"
+          >
+            {status === 'connected'
+              ? '● Live'
+              : status === 'connecting'
+                ? '○ Connecting'
+                : '○ Disconnected'}
+          </Badge>
+        </div>
       </div>
+
+      <h2 className="text-lg font-semibold mb-3">Beacons</h2>
 
       <ErrorBanner message={error} />
 
@@ -321,7 +336,9 @@ export default function TopologyPage() {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Address</span>
                       <span>
-                        {beacon.host}:{beacon.port}
+                        {beacon.port === null
+                          ? beacon.host
+                          : `${beacon.host}:${beacon.port}`}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -415,8 +432,20 @@ export default function TopologyPage() {
               </Card>
             );
           })}
+          {/* Extension-contributed cards alongside the beacon grid. */}
+          <RegionSlot region="topology-card" />
         </div>
       )}
+
+      {/* Extensions section: the same node registry, filtered to nodes that
+          declared a capability manifest. */}
+      <h2 className="text-lg font-semibold mb-3 mt-8">Extensions</h2>
+      <ExtensionsSection />
+
+      {/* Extension-contributed full-width topology widgets. */}
+      <div className="mt-6">
+        <RegionSlot region="topology-page" />
+      </div>
 
       {/* Confirmation Dialog */}
       <Dialog

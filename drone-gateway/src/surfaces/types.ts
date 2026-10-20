@@ -56,6 +56,13 @@ export interface SurfaceContext {
    * injection.
    */
   catchUpIntervalMs: number;
+  /**
+   * Prefix for the extension hint stamped onto spawned agents. The lifecycle
+   * composes `${extensionHintPrefix}:${conversationId}`. Engine-resolved from
+   * `config.swarmExtension.id`, defaulting to the gateway extension id so local
+   * (coordinator-less) mode still stamps a stable hint.
+   */
+  extensionHintPrefix: string;
 }
 
 export type SurfaceFactory = (

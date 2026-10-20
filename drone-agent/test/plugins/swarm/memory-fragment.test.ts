@@ -9,6 +9,7 @@ import type { DroneSwarmCapability, DroneSwarmMemoryConfig } from 'drone-core';
 
 const capability: DroneSwarmCapability = {
   getBeaconUrl: () => 'http://beacon:3457',
+  registerWsHandler: () => () => {},
   getAgentId: () => 'agent-1',
 };
 

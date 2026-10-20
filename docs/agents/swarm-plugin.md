@@ -15,6 +15,9 @@ conflicts, and mutates the engine's shared config in place, so the llm
 broker and budget service observe the values before the first turn).
 Direction is strictly coordinator → beacon → agent. The agent injector
 normalizes the beacon's flat dotted-key rows into nested config keys and
+rides a single `DroneConfigInjector` at precedence 75 (coordinator-level
+config is 50, agent-local config is 100); there is no separate coordinator
+injector — the merged view rides the beacon underlay. The injector
 drops rows outside the underlay allowlist, rows that fail to parse, and rows
 whose `${VAR}` templates reference unset environment variables (one-time
 warning per row and failure kind).

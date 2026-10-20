@@ -6,6 +6,7 @@ import '@fastify/websocket';
 import {
   loadConfigFile,
   mergeConfig,
+  loadOrCreateIdentity,
   type ServerConfigFile,
   type SessionEndTrigger,
 } from 'drone-swarm-common';
@@ -36,6 +37,7 @@ import {
 import { initStorage } from './storage.js';
 import { registerRoutes } from './routes/index.js';
 import { setCoordinatorFingerprint } from './routes/health.js';
+import { setSigningIdentity } from './signing-identity.js';
 import { logger } from './logger.js';
 import {
   loadOrCreateTlsIdentity,
@@ -55,6 +57,7 @@ import { createMtlsMiddleware } from './mtls.js';
 import {
   registerBeaconWebSocket,
   startBeaconLivenessSweep,
+  stopBeaconLivenessSweep,
 } from './beacon-ws.js';
 import {
   seedDefaultAssets,
@@ -62,6 +65,8 @@ import {
 } from './default-assets.js';
 import { configureSessionEndHook } from './session-end.js';
 import { setAutoApproveBeacons } from './auto-approve.js';
+import { initExtensionBundleStorage } from './extension-bundles.js';
+import { registerBundleServingRoutes } from './routes/bundle-serving.js';
 
 const DEFAULT_PORT = 3456;
 const DEFAULT_HOST = '0.0.0.0';
@@ -387,12 +392,13 @@ export async function buildApp(opts?: {
       'onRequest',
       createMtlsMiddleware({ httpsEnabled: !!opts.https })
     );
-    // Register the WebSocket reverse channel used by beacons to receive
-    // spawn/message commands from the coordinator.
-    await app.register(import('@fastify/websocket'));
-    registerBeaconWebSocket(app);
-    startBeaconLivenessSweep();
   }
+
+  // The reverse channel serves beacons on the primary port (mTLS identity)
+  // and extensions on the web port (claimed identity, loopback-only, ADR 257).
+  await app.register(import('@fastify/websocket'));
+  registerBeaconWebSocket(app);
+  startBeaconLivenessSweep();
 
   // Register API routes
   await registerRoutes(app);
@@ -514,6 +520,9 @@ async function attachUi(
     return reply.sendFile('index.html', path.resolve(uiDistPath));
   });
 
+  // Serve extension bundle assets same-origin (public, like /assets/).
+  registerBundleServingRoutes(app);
+
   // SPA fallback
   app.setNotFoundHandler(async (request, reply) => {
     if (
@@ -588,6 +597,7 @@ export async function main() {
     logger.info(`Persona metadata: backfilled ${repairedPersonas} row(s)`);
   }
   await initStorage(config.configDir);
+  await initExtensionBundleStorage(config.configDir);
 
   // Initialize wiki storage under config dir
   setKnowledgeBaseDir(path.join(config.configDir, 'knowledge-base'));
@@ -608,6 +618,14 @@ export async function main() {
     setCoordinatorFingerprint(tlsIdentity.fingerprint);
     logger.info(`TLS certificate fingerprint: ${tlsIdentity.fingerprint}`);
   }
+
+  const signingIdentity = await loadOrCreateIdentity(
+    'coordinator',
+    config.configDir,
+    'coordinator-identity.json'
+  );
+  setSigningIdentity(signingIdentity);
+  logger.info(`Coordinator signing identity: ${signingIdentity.publicKeyHex}`);
 
   const uiDistPath = resolveUiDistPath();
   logger.info(`Serving UI from: ${uiDistPath}`);
@@ -640,6 +658,7 @@ export async function main() {
   const shutdown = async () => {
     logger.info('Shutting down...');
     clearInterval(staleCheckInterval);
+    stopBeaconLivenessSweep();
     await Promise.all([app.close(), webApp.close()]);
     closeDatabase();
     process.exit(0);

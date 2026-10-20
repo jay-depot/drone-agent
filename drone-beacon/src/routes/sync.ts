@@ -3,6 +3,7 @@ import { getCoordinatorClient } from './context.js';
 import { triggerCoordinatorSync } from './context.js';
 import { runSessionEndHook } from '../session-end.js';
 import { logger } from '../logger.js';
+import type { DroneSessionSnapshot } from 'drone-core';
 
 export default function syncRoutes(app: FastifyInstance) {
   // Trigger a sync from coordinator (manual endpoint)
@@ -48,16 +49,22 @@ export default function syncRoutes(app: FastifyInstance) {
       personaId?: string;
       beaconId: string;
       interactive?: boolean;
+      snapshot?: DroneSessionSnapshot;
     };
   }>('/sync/sessions/register', async (request, reply) => {
-    const { id, personaId, beaconId, interactive } = request.body;
+    const { id, personaId, beaconId, interactive, snapshot } = request.body;
     if (!id || !beaconId) {
       return reply.code(400).send({ error: 'id and beaconId are required' });
     }
     const client = getCoordinatorClient();
     if (client) {
       client
-        .registerSwarmSession(id, personaId ?? null, interactive === true)
+        .registerSwarmSession(
+          id,
+          personaId ?? null,
+          interactive === true,
+          snapshot
+        )
         .catch(err => {
           logger.warn(
             `Failed to proxy session registration to coordinator: ${err}`

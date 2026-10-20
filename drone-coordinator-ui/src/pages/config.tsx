@@ -41,7 +41,15 @@ function formatUpdated(updatedAt: number): string {
   }
 }
 
-export default function ConfigPage() {
+export default function ConfigPage({
+  embedded = false,
+}: {
+  /**
+   * When true, suppress the page-level heading so the caller (the Settings
+   * page) can supply a core-provided section heading instead.
+   */
+  embedded?: boolean;
+} = {}) {
   const authFetch = useAuthenticatedFetch();
   const { error: showError } = useToast();
   const [entries, setEntries] = useState<CoordinatorConfigEntry[]>([]);
@@ -183,13 +191,15 @@ export default function ConfigPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Config</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Global agent configuration distributed to the swarm
-          </p>
-        </div>
-        <div className="flex gap-2">
+        {!embedded && (
+          <div>
+            <h1 className="text-2xl font-bold">Config</h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              Global agent configuration distributed to the swarm
+            </p>
+          </div>
+        )}
+        <div className="flex gap-2 ml-auto">
           <Button variant="outline" onClick={() => setSecretsOpen(true)}>
             Stored Secrets
           </Button>

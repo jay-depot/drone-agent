@@ -2,11 +2,13 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { redeemPreApprovalToken } from 'drone-swarm-common';
 import { logger } from './logger.js';
 import { GatewayEngine } from './engine.js';
 import { LocalSpawnBackend } from './local-spawn-backend.js';
 import { CoordinatorSpawnBackend } from './coordinator-spawn-backend.js';
 import { CoordinatorClient } from './coordinator-client.js';
+import { ExtensionNodeHandle } from './extension-node.js';
 import { loadGatewayConfig } from './config/load.js';
 import { cleanupAdapter } from './cleanup.js';
 import { ControlApiServer } from './control-api/server.js';
@@ -20,6 +22,7 @@ interface CliConfig {
   configPath: string;
   command: 'serve' | 'cleanup';
   cleanupAdapterId?: string;
+  preApprovalTokenPath?: string;
 }
 
 export function parseArgs(): CliConfig {
@@ -28,6 +31,8 @@ export function parseArgs(): CliConfig {
     configPath: path.join(DEFAULT_CONFIG_DIR, DEFAULT_CONFIG_FILE),
     command: 'serve',
   };
+
+  const tokenFlag = '--pre-approval-token-path';
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -43,6 +48,7 @@ export function parseArgs(): CliConfig {
           `Options:\n` +
           `  --config <path>  Path to config file (default: ~/.drone-gateway/config.json)\n` +
           `  --adapter <id>   Adapter ID to clean up (for cleanup command)\n` +
+          `  --pre-approval-token-path <path>  Redeem a pre-approval token, then exit\n` +
           `  --help           Show this help message\n`
       );
       process.exit(0);
@@ -50,6 +56,10 @@ export function parseArgs(): CliConfig {
       cliConfig.command = 'cleanup';
     } else if (arg === '--adapter' && i + 1 < args.length) {
       cliConfig.cleanupAdapterId = args[++i];
+    } else if (arg === tokenFlag && i + 1 < args.length) {
+      cliConfig.preApprovalTokenPath = args[++i];
+    } else if (arg.startsWith(`${tokenFlag}=`)) {
+      cliConfig.preApprovalTokenPath = arg.slice(tokenFlag.length + 1);
     }
   }
 
@@ -135,8 +145,42 @@ export async function main(): Promise<void> {
   logger.info(`Loading config from: ${cliConfig.configPath}`);
   const config = await loadConfig(cliConfig.configPath);
 
-  const coordinatorClient = config.coordinatorUrl
-    ? new CoordinatorClient(config.coordinatorUrl, config.coordinatorToken)
+  if (cliConfig.preApprovalTokenPath) {
+    if (!config.swarmExtension) {
+      console.error(
+        'Error: --pre-approval-token-path requires a coordinatorUrl in the config'
+      );
+      process.exit(1);
+    }
+    try {
+      await redeemPreApprovalToken({
+        coordinatorUrl: config.coordinatorUrl,
+        dataDir: config.swarmExtension.dataDir,
+        id: config.swarmExtension.id,
+        name: config.swarmExtension.name,
+        tokenPath: cliConfig.preApprovalTokenPath,
+      });
+    } catch (err) {
+      console.error(
+        `Pre-approval failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+      process.exit(1);
+    }
+    console.log('Pre-approval complete. Exiting.');
+    return;
+  }
+
+  // `coordinatorUrl` presence is the extension gate (D4): with a coordinator the
+  // gateway is a swarm extension and the node's mTLS fetch carries all
+  // coordinator traffic; without one it is a standalone chat agent runner.
+  const nodeHandle = config.swarmExtension
+    ? new ExtensionNodeHandle(config.coordinatorUrl, config.swarmExtension)
+    : undefined;
+  const coordinatorClient = nodeHandle
+    ? new CoordinatorClient(
+        nodeHandle.fetch.bind(nodeHandle),
+        config.coordinatorUrl
+      )
     : undefined;
   const backends = createSpawnBackends(config, coordinatorClient);
   const engine = new GatewayEngine(config, backends, coordinatorClient);
@@ -146,7 +190,9 @@ export async function main(): Promise<void> {
   const shutdown = async () => {
     logger.info('Shutting down...');
     await controlApi?.stop();
+    // Agents terminate over the LIVE node, so the node stops last (D13).
     await engine.stop();
+    await nodeHandle?.stop();
     process.exit(0);
   };
 
@@ -155,6 +201,9 @@ export async function main(): Promise<void> {
 
   try {
     await engine.start();
+    // Not awaited: the gateway serves conversations before the coordinator
+    // answers, and the node retries registration in the background (D8).
+    nodeHandle?.start();
 
     if (config.controlApi?.enabled) {
       controlApi = new ControlApiServer({
@@ -172,6 +221,7 @@ export async function main(): Promise<void> {
     logger.error(err, 'Failed to start gateway');
     await controlApi?.stop();
     await engine.stop();
+    await nodeHandle?.stop();
     process.exit(1);
   }
 }

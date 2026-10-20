@@ -199,6 +199,7 @@ async function main(): Promise<void> {
       subagentId: invocation.options.subagentId,
       persona: invocation.options.persona,
       swarmSpawned: invocation.options.swarm,
+      extensionHint: invocation.options.extensionHint,
     },
     buildSystemMessages: () => budgetService.buildSystemMessages(),
     buildFooterMessages: () => budgetService.buildFooterMessages(),

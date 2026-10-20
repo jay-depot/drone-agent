@@ -662,6 +662,71 @@ describe('Beacon Routes', () => {
     expect(beacon.spawnRoots).toEqual(['/opt/work']);
     expect(beacon.defaultSpawnRoot).toBe('/opt/work');
   });
+
+  it('registers an extension with no port as approved and stores port: null', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: {
+        id: 'mcp-swarm',
+        name: 'mcp-swarm',
+        host: '127.0.0.1',
+        publicKey: 'key-ext',
+        extension: { protocolVersion: 1 },
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(JSON.parse(res.body).status).toBe('approved');
+
+    const list = JSON.parse(
+      (await app.inject({ method: 'GET', url: '/api/beacons' })).body
+    );
+    const node = list.find((b: { id: string }) => b.id === 'mcp-swarm');
+    expect(node.host).toBe('127.0.0.1');
+    expect(node.port).toBeNull();
+  });
+
+  it('rejects an unsupported extension protocol version with 400', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: {
+        id: 'mcp-swarm',
+        name: 'mcp-swarm',
+        host: '127.0.0.1',
+        publicKey: 'key-ext',
+        extension: { protocolVersion: 2 },
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('protocol version');
+  });
+
+  it('preserves the stored port when a re-registration omits it', async () => {
+    const payload = {
+      id: 'b-port',
+      name: 'B-Port',
+      host: 'localhost',
+      port: 3457,
+      publicKey: 'key-port',
+    };
+    await app.inject({ method: 'POST', url: '/api/beacons', payload });
+    await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: {
+        id: 'b-port',
+        name: 'B-Port',
+        host: 'localhost',
+        publicKey: 'key-port',
+      },
+    });
+    const list = JSON.parse(
+      (await app.inject({ method: 'GET', url: '/api/beacons' })).body
+    );
+    const node = list.find((b: { id: string }) => b.id === 'b-port');
+    expect(node.port).toBe(3457);
+  });
 });
 
 describe('beacon view fingerprintConfirmed + confirm-fingerprint announce', () => {

@@ -513,6 +513,7 @@ describe('GatewayEngine', () => {
       expect(spawnedOptions(backend)).toEqual({
         targetBeaconId: 'beacon-override',
         workingDir: undefined,
+        extensionHint: 'drone-gateway:dm:@me:server',
       });
     });
 
@@ -525,6 +526,7 @@ describe('GatewayEngine', () => {
       expect(spawnedOptions(backend)).toEqual({
         targetBeaconId: undefined,
         workingDir: undefined,
+        extensionHint: 'drone-gateway:dm:@me:server',
       });
     });
 
@@ -541,6 +543,7 @@ describe('GatewayEngine', () => {
       expect(spawnedOptions(backend)).toEqual({
         targetBeaconId: undefined,
         workingDir: '/srv/bots/me',
+        extensionHint: 'drone-gateway:dm:@me:server',
       });
     });
 

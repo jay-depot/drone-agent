@@ -59,6 +59,7 @@ describe('registerBuiltInSurfaces', () => {
       swarm: undefined,
       mode: 'active',
       catchUpIntervalMs: 900_000,
+      extensionHintPrefix: 'drone-gateway',
     });
     await expect(
       surface.handleMessage({
@@ -81,6 +82,7 @@ describe('registerBuiltInSurfaces', () => {
         swarm: undefined,
         mode: 'active',
         catchUpIntervalMs: 900_000,
+        extensionHintPrefix: 'drone-gateway',
       })
     ).toThrow('persona-assignment control surface requires personaId');
   });
@@ -109,6 +111,7 @@ describe('registerBuiltInSurfaces', () => {
         swarm: undefined,
         mode: 'active',
         catchUpIntervalMs: 900_000,
+        extensionHintPrefix: 'drone-gateway',
       }
     );
     const result = await surface.handleMessage({
@@ -121,6 +124,7 @@ describe('registerBuiltInSurfaces', () => {
     expect(spawnBackend.spawnSession).toHaveBeenCalledWith('conv-1', 'coder', {
       targetBeaconId: undefined,
       workingDir: undefined,
+      extensionHint: 'drone-gateway:conv-1',
     });
   });
 
@@ -149,6 +153,7 @@ describe('registerBuiltInSurfaces', () => {
         targetBeaconId: 'beacon-9',
         mode: 'active',
         catchUpIntervalMs: 900_000,
+        extensionHintPrefix: 'drone-gateway',
       }
     );
     await surface.handleMessage({
@@ -160,6 +165,7 @@ describe('registerBuiltInSurfaces', () => {
     expect(spawnBackend.spawnSession).toHaveBeenCalledWith('conv-1', 'coder', {
       targetBeaconId: 'beacon-9',
       workingDir: undefined,
+      extensionHint: 'drone-gateway:conv-1',
     });
   });
 
@@ -184,6 +190,7 @@ describe('registerBuiltInSurfaces', () => {
         swarm: undefined,
         mode: 'active',
         catchUpIntervalMs: 900_000,
+        extensionHintPrefix: 'drone-gateway',
       }
     );
     const result = await surface.handleMessage({

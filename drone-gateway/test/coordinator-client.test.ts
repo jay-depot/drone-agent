@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { CoordinatorClient } from '../src/coordinator-client.js';
+import type { Mock } from 'vitest';
+import {
+  CoordinatorClient,
+  type CoordinatorFetch,
+} from '../src/coordinator-client.js';
 
 function mockFetchResponse(status: number, body: unknown): Response {
   return {
@@ -13,16 +17,14 @@ function mockFetchResponse(status: number, body: unknown): Response {
 
 describe('CoordinatorClient', () => {
   let client: CoordinatorClient;
-  let fetchMock: ReturnType<typeof vi.fn>;
+  let fetchMock: Mock<CoordinatorFetch>;
 
   beforeEach(() => {
-    fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-    client = new CoordinatorClient('http://localhost:8080');
+    fetchMock = vi.fn<CoordinatorFetch>();
+    client = new CoordinatorClient(fetchMock, 'http://localhost:8080');
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -480,27 +482,7 @@ describe('CoordinatorClient', () => {
   });
 
   describe('auth header', () => {
-    it('includes Bearer token when provided', async () => {
-      const authedClient = new CoordinatorClient(
-        'http://localhost:8080',
-        'my-token'
-      );
-      fetchMock.mockResolvedValue(mockFetchResponse(200, []));
-
-      await authedClient.listBeacons();
-
-      expect(fetchMock).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer my-token',
-          },
-        })
-      );
-    });
-
-    it('does not include Authorization header when no token', async () => {
+    it('never sends an Authorization header', async () => {
       fetchMock.mockResolvedValue(mockFetchResponse(200, []));
 
       await client.listBeacons();
@@ -513,6 +495,25 @@ describe('CoordinatorClient', () => {
           },
         })
       );
+    });
+
+    it('speaks over the injected transport rather than the global fetch', async () => {
+      const transport = vi.fn().mockResolvedValue(mockFetchResponse(200, []));
+      const injected = new CoordinatorClient(
+        transport,
+        'http://127.0.0.1:3456'
+      );
+      const globalFetch = vi.fn();
+      vi.stubGlobal('fetch', globalFetch);
+
+      await injected.listBeacons();
+
+      expect(transport).toHaveBeenCalledWith(
+        'http://127.0.0.1:3456/api/beacons',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(globalFetch).not.toHaveBeenCalled();
+      vi.unstubAllGlobals();
     });
   });
 });

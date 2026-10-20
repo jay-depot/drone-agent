@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-10-13T23:31:49.092Z",
+    "insight": "The coordinator UI (drone-coordinator-ui) has no plugin/registry/region mechanism at all, no CSP, and its @fastify/static is locked to dist/assets. Any runtime front-end plugin work must add: a plugin-asset static route on the web app, a GET manifest endpoint, a client loader with dynamic import(), and a RegionSlot registry. The alice-assistant model (/home/unleet/Projects/alice-assistant/docs/plugin-web-ui.md) is the reference: server registerScript/registerStylesheet + /api/extensions manifest + client dynamic ESM import with React via globalThis.React."
+  }
+]

@@ -7,6 +7,7 @@ import {
   notifyConfigChanged,
   resetBeaconConnections,
   startBeaconLivenessSweep,
+  stopBeaconLivenessSweep,
   resolveBeaconWsAdmission,
   _registerTestConnection,
   _handleIncomingMessage,
@@ -150,7 +151,7 @@ describe('startBeaconLivenessSweep', () => {
     const deadWs = makeFakeWs();
     _registerTestConnection('dead', deadWs);
 
-    const sweep = startBeaconLivenessSweep(1000);
+    startBeaconLivenessSweep(1000);
     try {
       // First sweep pings the beacon and marks it not-alive.
       vi.advanceTimersByTime(1000);
@@ -161,7 +162,7 @@ describe('startBeaconLivenessSweep', () => {
       expect(deadWs.terminate).toHaveBeenCalledTimes(1);
       expect(isBeaconConnected('dead')).toBe(false);
     } finally {
-      clearInterval(sweep);
+      stopBeaconLivenessSweep();
       vi.useRealTimers();
     }
   });
@@ -178,7 +179,7 @@ describe('startBeaconLivenessSweep', () => {
       aliveWs.handlers.get('pong')?.();
     });
 
-    const sweep = startBeaconLivenessSweep(1000);
+    startBeaconLivenessSweep(1000);
     try {
       // First sweep pings; the beacon pongs back, restoring liveness.
       vi.advanceTimersByTime(1000);
@@ -188,9 +189,16 @@ describe('startBeaconLivenessSweep', () => {
       expect(aliveWs.terminate).not.toHaveBeenCalled();
       expect(isBeaconConnected('alive')).toBe(true);
     } finally {
-      clearInterval(sweep);
+      stopBeaconLivenessSweep();
       vi.useRealTimers();
     }
+  });
+
+  it('is idempotent: a second call reuses the existing timer', () => {
+    const first = startBeaconLivenessSweep(1000);
+    const second = startBeaconLivenessSweep(1000);
+    expect(second).toBe(first);
+    stopBeaconLivenessSweep();
   });
 });
 

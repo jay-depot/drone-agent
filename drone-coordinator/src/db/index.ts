@@ -1,4 +1,9 @@
-export { initDatabase, getDatabase, closeDatabase } from './init.js';
+export {
+  initDatabase,
+  getDatabase,
+  closeDatabase,
+  makeBeaconPortOptional,
+} from './init.js';
 export type { ToolDefinition } from './init.js';
 export {
   upsertToolDefinition,
@@ -39,12 +44,21 @@ export {
 export {
   registerBeaconTrust,
   getBeaconTrust,
+  getBeaconTrustByPublicKey,
   listBeaconTrust,
   approveBeaconById,
   confirmBeaconFingerprint,
   rejectBeacon,
   deleteBeaconTrust,
 } from './beacon-trust.js';
+export {
+  createPreApprovalToken,
+  getPreApprovalToken,
+  listPreApprovalTokens,
+  deletePreApprovalToken,
+  burnPreApprovalToken,
+} from './pre-approval-tokens.js';
+export type { PreApprovalTokenRow } from './pre-approval-tokens.js';
 export {
   createBeaconSession,
   getBeaconSession,
@@ -66,6 +80,7 @@ export {
   getSwarmSession,
   countSwarmSessions,
   listSwarmSessions,
+  listActiveSessionSnapshots,
   updateSwarmSessionStatus,
   transitionSessionStatus,
   archiveSwarmSession,
@@ -137,3 +152,18 @@ export {
   getWikiReadCounts,
   deleteWikiPageMetadata,
 } from './wiki-page-metadata.js';
+export {
+  upsertCapabilityCache,
+  getCapabilityCache,
+  listCapabilityCache,
+  deleteCapabilityCache,
+  upsertBundle,
+  getBundle,
+  deleteBundle,
+  listBundles,
+  listBundleDescriptors,
+} from './extensions.js';
+export type {
+  ExtensionCapabilityCacheRow,
+  ExtensionBundleRow,
+} from './extensions.js';

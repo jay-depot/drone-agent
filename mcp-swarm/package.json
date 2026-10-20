@@ -1,0 +1,30 @@
+{
+  "name": "mcp-swarm",
+  "version": "0.1.0",
+  "description": "Reference swarm extension: exposes swarm functions to MCP clients over stdio.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "mcp-swarm": "./bin/mcp-swarm"
+  },
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "private": true,
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "echo 'mcp-swarm tests run via root vitest (pnpm test at repo root)'",
+    "start": "node ./bin/mcp-swarm"
+  },
+  "dependencies": {
+    "drone-core": "workspace:*",
+    "drone-swarm-common": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.10"
+  }
+}

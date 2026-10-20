@@ -18,6 +18,7 @@ import sync from './sync.js';
 import sessions from './sessions.js';
 import coordinatorTrust from './coordinator-trust.js';
 import coordinator from './coordinator.js';
+import extensions from './extensions.js';
 import info from './info.js';
 
 // Re-export helpers from context for external use
@@ -51,4 +52,5 @@ export async function registerRoutes(app: FastifyInstance) {
   sessions(app);
   coordinatorTrust(app);
   coordinator(app);
+  extensions(app);
 }

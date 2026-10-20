@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/collapsible';
 import { Separator } from '@/components/ui/separator';
 import { SessionChat } from '@/components/chat/session-chat';
+import { RegionSlot } from '@/extensions/ExtensionContext';
 
 // A spawned agent registers its swarm session seconds after this page
 // mounts, so the first metadata fetch can legitimately 404. A bounded
@@ -357,6 +358,9 @@ export default function SessionDetailPage() {
           <div ref={eventsEndRef} />
         </div>
       )}
+
+      {/* Extension-contributed session-detail widgets. */}
+      <RegionSlot region="session-page" />
 
       {sendError && (
         <div className="mt-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">

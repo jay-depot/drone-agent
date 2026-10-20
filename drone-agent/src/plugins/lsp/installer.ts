@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { timingSafeEqualStrings } from 'drone-swarm-common';
 import { createGunzip } from 'node:zlib';
 import { execFile } from 'node:child_process';
 import { commandExistsOnPath } from 'drone-core';
@@ -249,17 +250,6 @@ export async function verifyIntegrity(
         `digest is shown above for that purpose.`
     );
   }
-}
-
-function timingSafeEqualStrings(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-  let mismatch = 0;
-  for (let index = 0; index < a.length; index += 1) {
-    mismatch |= a.charCodeAt(index) ^ b.charCodeAt(index);
-  }
-  return mismatch === 0;
 }
 
 async function withCacheLock<T>(

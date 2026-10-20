@@ -63,6 +63,11 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
     }
 
     const workingDir = opts?.workingDir;
+    const extensionHint = opts?.extensionHint;
+    const spawnConfig: { workingDir?: string; extensionHint?: string } = {
+      ...(workingDir ? { workingDir } : {}),
+      ...(extensionHint ? { extensionHint } : {}),
+    };
 
     logger.info(
       `Spawning agent on beacon "${targetBeaconId}" for conversation ${conversationId} (persona: ${personaId})`
@@ -73,9 +78,9 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
       targetBeaconId,
       personaId,
       spawnId,
-      // When no working dir is set, omit `config` entirely so the beacon
-      // applies its own `defaultSpawnRoot`.
-      ...(workingDir ? { config: { workingDir } } : {}),
+      // An empty config bag is omitted so the beacon applies its own
+      // `defaultSpawnRoot`.
+      ...(Object.keys(spawnConfig).length > 0 ? { config: spawnConfig } : {}),
     });
 
     const spawnResult = result as {

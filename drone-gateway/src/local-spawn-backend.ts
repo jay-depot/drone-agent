@@ -84,6 +84,10 @@ export class LocalSpawnBackend implements SpawnBackend {
       args.push('--working-dir', workingDir);
     }
 
+    if (opts?.extensionHint) {
+      args.push('--extension-hint', opts.extensionHint);
+    }
+
     const childProcess = spawn(resolvedPath, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env },

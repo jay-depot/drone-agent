@@ -850,5 +850,105 @@
   {
     "timestamp": "2026-10-13T18:35:24.635Z",
     "insight": "MCP `streamable_http` double-mount crash (fixed in ADR 252): the root cause was a *semantic* mismatch — the transport fired `onReconnected` from two places that are NOT reconnects (the first GET SSE stream-open, and the end of the initial connect), racing the caller's own mount, and the mount path (`listAndMountTools`) was not idempotent, so the second registration threw `Tool already registered` out of a fire-and-forget callback → unhandled rejection → process abort. Two generalizable lessons: (1) name callbacks by the *meaning* of the event, not the transport mechanism — a single `onReconnected` covering \"stream opened\", \"connect finished\", and \"child respawned\" is what allowed an initial connect to trigger a remount path; split it (`onStreamOpened` vs `onReconnected`). (2) Any callback invoked fire-and-forget from a transport must carry a `.catch`, or a future throw becomes a process-killing unhandled rejection far from its cause."
+  },
+  {
+    "timestamp": "2026-10-13T23:31:49.093Z",
+    "insight": "Planning-swarm-extensions finding: the coordinator's beacon WS inbound handler (drone-coordinator/src/beacon-ws.ts) is a one-line type gate, and the coordinator→beacon `sendBeaconCommand(beaconId, command, payload, timeoutMs)` UUID request/response primitive already exists. Both make \"add a new node type that speaks the beacon protocol\" far cheaper than it looks — worth knowing for any future 'new server type connects to the coordinator' work."
+  },
+  {
+    "timestamp": "2026-10-14T00:48:53.423Z",
+    "insight": "Adding a React context consumer (`useExtensionRegistry`) to widely-rendered pages (Topology/Sessions/SessionDetail) without a default context value breaks every existing page test with \"must be used within a Provider\". Provide a graceful EMPTY default via `createContext(EMPTY)` + a non-throwing hook so region slots render nothing when unwrapped — this preserves focused unit tests and is the better production posture anyway (a page should never crash because a decorative slot has no provider)."
+  },
+  {
+    "timestamp": "2026-10-14T00:48:53.425Z",
+    "insight": "Before attributing a test failure to your own change, verify against the stashed baseline with the same command: `git stash push -u`, run the test N times, `git stash pop`. drone-coordinator-ui's `sessions.test.tsx` \"debounces an event burst\" test is flaky on the baseline too (fails 4/4 in one run, passes 1/4 in another) — it is pre-existing, not introduced. A single green or red run is not evidence with fake-timer debounce tests."
+  },
+  {
+    "timestamp": "2026-10-14T00:48:53.427Z",
+    "insight": "For a testability seam where production uses a runtime `import(url)` that cannot be stubbed in jsdom, extract the logic into a pure function taking an injected `importModule` dep and keep the hook a thin wrapper. This is the same pattern as the `withKeyLock`/`coordinator-fetch` extractions: pure core + injected side effects = unit-testable without integration scaffolding."
+  },
+  {
+    "timestamp": "2026-10-14T00:48:53.429Z",
+    "insight": "The `git__commit` plugin tool fails (silently, non-zero) on commit messages containing em-dashes or multi-line bodies, while the identical message succeeds via `exec__run` + `git commit -m`. Also `git__commit all:true` does NOT stage untracked files (needs includeUntracked:true). When the plugin tool errors on a working tree that is NOT clean, fall back to the shell — do not assume \"clean tree\" from HOST.md is the only failure mode."
+  },
+  {
+    "timestamp": "2026-10-15T00:50:34.651Z",
+    "insight": "AGENTS.md drifts in two recurring ways: (1) hardcoded counts/numbers that go stale (it said \"ten packages\" in the intro, \"eight packages\" above a ten-row table, and \"recompile both packages\" after there were ten) — prefer count-free phrasing (\"a pnpm workspace monorepo\", \"the workspace\") so the doc can't contradict itself; and (2) changelog noise documenting past state (\"The `?` alias for /help has been removed\") — state current behavior only. Also: when AGENTS.md's \"Specialized Subsystems\" index grows, it accumulates dense inline prose that duplicates the linked doc — keep each entry a one-line pointer and move detail into the doc. And an audit should check the index against `ls docs/agents/`: three docs (memory-pipeline, provider-model-config, session-import, plus import-conventions) existed but were missing from the index."
+  },
+  {
+    "timestamp": "2026-10-16T19:20:23.079Z",
+    "insight": "Repeated pattern: authentication/credential logic is duplicated and slightly wrong across packages (constant-time compare exists privately in the LSP installer while the coordinator web-auth uses plain !==; token generation exists inline in db/web-token.ts with no shared helper). When a plan touches any credential code, sweep for sibling copies and consolidate into drone-swarm-common. Cheap to do while already in the area."
+  },
+  {
+    "timestamp": "2026-10-16T19:20:23.082Z",
+    "insight": "Planning rough edge: the extension capability catalog in mcp-swarm/src/mapping.ts drives BOTH the MCP tool surface and the coordinator-proxied action surface from one list. Adding any privileged capability (token management) to it silently promotes that capability to an MCP tool any client can call. Whenever a single source of truth feeds two surfaces with different trust levels, the catalog needs an explicit tier/permission field. Worth watching for this pattern elsewhere (skills/personas broker? tool registry?)."
+  },
+  {
+    "timestamp": "2026-10-16T19:37:12.878Z",
+    "insight": "`file__apply_diff` can silently no-op on a file even when it reports a hunk applied — during the mcp-swarm HTTP-token work a patch to `drone-core/src/extension-types.ts` reported \"additions: 0, deletions: 0\" and left the file unchanged, so the `exposed` field was never added and the dependent build failed with TS2353. Correct assumption: after every apply_diff, verify the change landed (re-read the file or check the reported insertion count is non-zero), and re-apply if the count is zero. A non-zero `additions` with matching `deletions` is the reliable success signal."
+  },
+  {
+    "timestamp": "2026-10-16T19:37:12.882Z",
+    "insight": "`node:http` response ordering: a body-size-limit guard that calls `req.destroy()` on the first over-limit chunk races the `413` response write — the client sees `ECONNRESET`/`fetch failed` instead of the status. Correct pattern: stop buffering and resolve a sentinel (do not destroy yet), write the 413 with `Connection: close`, then `req.destroy()`. Resolving first and draining the remaining request data (or closing the connection) is required for the client to read the status."
+  },
+  {
+    "timestamp": "2026-10-19T20:45:00.519Z",
+    "insight": "Planning the drone-gateway swarm-extension migration surfaced a discovery-tooling trap: `swarm__wiki_list` returns the ENTIRE corpus (hundreds of pages, well over 500k tokens) — one unfiltered call nearly exhausted the context window. `swarm__wiki_search` is the long-known-empty defect, so the usual \"search first\" path is unavailable. Practical rule for orientation: do NOT call `swarm__wiki_list` unfiltered; read the specific page named in the system-prompt suggestions, and/or read the local project wiki index at /home/unleet/Obsidian/drone-agent-project/index.md. When a same-day wiki page exists for the exact topic (here: `drone-gateway-coordinator-spawn-and-optional-connection`, created the same day as the planning session), that single page is the highest-value read and beats broad exploration. Also: `self-improvement__insight` takes the `insight` parameter plus `targetId` for project scope — `text` is the wrong key."
+  },
+  {
+    "timestamp": "2026-10-19T21:01:39.433Z",
+    "insight": "drone-gateway's tests are not typechecked by any automated command. `drone-gateway/tsconfig.json` includes only `src/**/*`, so `pnpm -r run build`/`pnpm typecheck`'s per-package `tsc -b` never sees `test/`. The root `tsconfig.test.json` include list names drone-core, drone-beacon, drone-coordinator, drone-swarm-common, drone-swarm, drone-agent, mcp-swarm — but NOT drone-gateway. Consequence: a wrong-typed test mock or a stale required field in a test file survives build+typecheck+lint and only fails at runtime in vitest, or shows up solely as an LSP diagnostic. Fix direction: add `drone-gateway/{src,test}/**/*.ts` to the root tsconfig.test.json include list (and audit other packages against that list — drone-coordinator-ui is also absent)."
+  },
+  {
+    "timestamp": "2026-10-19T21:01:43.119Z",
+    "insight": "When a plan adds a REQUIRED field to a widely-constructed interface (here `SurfaceContext.extensionHintPrefix`), the edit list in the plan will undercount test files. Exact-value assertions are the second wave: after the type errors are fixed, tests using `toHaveBeenCalledWith({...})` with the old exact object still fail at runtime. Expect two sweeps — (1) typecheck/LSP for missing required fields in object literals, (2) a test run for exact-shape assertions. Do sweep 2 as a grep for the neighbouring field names (e.g. `catchUpIntervalMs`, `targetBeaconId`) before running anything."
+  },
+  {
+    "timestamp": "2026-10-19T21:01:43.121Z",
+    "insight": "Don't trust a plan's step ordering when a later step is a hard prerequisite for an earlier one's typecheck. Here Step 7 (\"add drone-swarm-common to drone-gateway deps\") sat after Step 3, but Step 3's new module imports that package — so the dependency had to move to Step 3 and Step 7 became verify-only. Rule: before starting a plan, scan every new import in the planned new files and confirm each resolves in the package.json as it stands today; hoist any dependency additions to just before their first consumer."
+  },
+  {
+    "timestamp": "2026-10-19T21:11:17.800Z",
+    "insight": "tsc `include` does NOT support brace expansion. `\"drone-swarm-common/{src,test}/**/*.ts\"` in a tsconfig `include` array matches ZERO files and tsc reports no error — it silently typechecks nothing (contrast: the shell would expand it, and vitest/globs elsewhere may). This is a false-green trap: the config LOOKS like it covers both directories. Correct forms are explicit entries (`\"pkg/src/**/*.ts\"`, `\"pkg/test/**/*.ts\"`) or a real glob package. Verification method that catches it: `npx tsc -p tsconfig.test.json --listFiles | grep -c \"/<pkg>/test/\"` per package — a zero count on a package you believe is covered means the pattern matched nothing. Always pair any tsconfig `include` change with an injected deliberate type error to prove the gate bites; a clean exit code alone proves nothing when the include may match nothing."
+  },
+  {
+    "timestamp": "2026-10-19T21:11:17.804Z",
+    "insight": "Root `tsconfig.test.json` now covers EVERY workspace package's src+test (was missing drone-gateway entirely, plus drone-beacon/test and drone-coordinator/test). The pre-existing `{src,test}` brace patterns for drone-swarm-common and drone-swarm were silently matching nothing, so those two packages' test files were NOT being typechecked either, despite the config implying otherwise. This retires the long-standing project insight \"drone-gateway tests are not typechecked by any automated gate; LSP is the only gate\" (logged repeatedly 2026-10-12, 2026-10-13, and again this session) — `lsp__get_diagnostics` is no longer mandatory as a substitute gate, though it remains useful for fast feedback."
+  },
+  {
+    "timestamp": "2026-10-19T22:24:48.009Z",
+    "insight": "Never conclude \"X is not a git repo\" by running `git rev-parse` from a parent directory. I checked `/home/unleet/Obsidian` (parent of the vault), got a failure, and told the user the vault at `/home/unleet/Obsidian/drone-agent-project` was not version controlled — it was, on `main`, the whole time. The user had to correct me. Correct probe: `cd <exact-dir> && git rev-parse --show-toplevel`. A parent-dir failure says nothing about a nested repo (and conversely, a parent-dir success can mask a nested repo being a SEPARATE one). Also: before committing someone else's vault/tree, diff every file — I found two long-uncommitted leftovers (a never-added ADR 255 stub and a coordinator-ui row dated a week earlier) that were not mine; committing them silently inside my own feature commit would have obscured provenance, so splitting them out was the right call."
+  },
+  {
+    "timestamp": "2026-10-20T01:51:12.799Z",
+    "insight": "`createExtensionNode` in drone-swarm-common reimplements only *half* the beacon trust handshake: it POSTs /api/beacons (register) but never sends the signed `confirm-fingerprint` announce that approval requires. drone-beacon implements the whole loop (announce + 30s approval poll) in `coordinator-client.ts`/`fingerprint-announce.ts`. Any node that is not loopback thus deadlocks in `pending`. The durable fix is a shared `registerAndAwaitApproval()` primitive in drone-swarm-common used by both the beacon and the extension SDK, rather than two partial implementations of one protocol."
+  },
+  {
+    "timestamp": "2026-10-20T01:51:12.801Z",
+    "insight": "drone-coordinator builds two Fastify apps from one `buildApp()`, but some routes are conditionally registered by flag (`registerBeaconWebSocket` only inside `if (opts.enableMtls)`, `registerRoutes` always). So \"does route X exist on port Y\" is a per-route question that cannot be answered from the route table alone. When planning anything port-related, grep for the registration call site's guarding branch, not just the route definition. This mismatch is what produced the swarm-extension dead end: `POST /api/beacons` existed on both ports while `/ws/beacon` existed on only one."
+  },
+  {
+    "timestamp": "2026-10-20T02:19:01.778Z",
+    "insight": "The manual end-to-end check (the plan's section 4) caught a real defect that all unit tests missed: `createExtensionNode.uploadBundle` did not send the claimed node id, so bundle upload 401'd on the coordinator's unencrypted web port (ADR 257). The unit tests for `uploadBundle` mocked `createCoordinatorFetch` and asserted only the URL/body, never the headers, so the missing `x-node-id` was invisible. Lesson: when a transport change adds an identity header, assert the header in the SDK's own test — and always run the plan's manual E2E, because \"connected: true\" plus a non-empty `bundles` array is the only thing that proves the whole path."
+  },
+  {
+    "timestamp": "2026-10-20T15:21:16.234Z",
+    "insight": "The coordinator's mTLS exemption list in `drone-coordinator/src/mtls.ts` (`createMtlsMiddleware`) is a hardcoded allowlist of URL STRING comparisons (`req.url === '/api/beacons'`, `req.url.startsWith('/api/beacons/trust/') && ...`). Any new route that a not-yet-approved node must reach (e.g. the planned `POST /api/beacons/trust/redeem`) silently 403s until it is added here. The `startsWith('/api/beacons/trust/')` clause with its `.endsWith('/approve') === false` exclusions is already brittle. Consider refactoring this to an explicit route list (method + path pattern) so a new bootstrap route is a one-line addition rather than a string-matching puzzle."
+  },
+  {
+    "timestamp": "2026-10-20T15:21:16.236Z",
+    "insight": "`getSigningKey(identity: SwarmNodeIdentity): crypto.KeyObject` in `drone-swarm-common/src/identity.ts:99` is a misnomer — it calls `crypto.createPublicKey(identity.privateKeyPem)`, i.e. it returns the PUBLIC key object derived from the private PEM, not a private-key handle. Signing in the codebase uses `signBeaconPayload(identity.privateKeyPem, payload)` directly. Anyone reading `getSigningKey` expecting a signing handle will be misled; the name should be fixed or the function removed if unused."
+  },
+  {
+    "timestamp": "2026-10-20T15:21:16.238Z",
+    "insight": "There is no shared CLI argument parser in the repo — every binary hand-rolls a `for` loop over `process.argv.slice(2)` (drone-beacon/src/index.ts:113, drone-coordinator/src/index.ts:103, drone-gateway/src/index.ts:26, drone-swarm/src/index.ts:52, mcp-swarm has none at all and is env-only). None of them support the `--flag=value` form; they only split on whitespace, so a `--flag=value` token is read as a literal flag name containing `=`. Any new flag documented with the `=` form (e.g. `--pre-approval-token-path=./token.json`) needs bespoke `=`-aware parsing. A shared `= `-aware flag helper in `drone-swarm-common` would be a worthwhile follow-up."
+  },
+  {
+    "timestamp": "2026-10-20T15:38:02.586Z",
+    "insight": "Plan execution gap: `plan-pre-approval-tokens` said \"create the branch off main\", but the pre-approval feature depends on the swarm-extension infrastructure (mcp-swarm, createExtensionNode, the gateway extension node, ADRs 254/256/257) that lives only on `feat/swarm-extensions`, not on `main`. The plan's dependency graph was correct about *code* dependencies but wrong about its *base branch*. When a plan names a base branch, verify the branch actually contains the files the plan assumes before branching — else the first build step fails with missing modules."
+  },
+  {
+    "timestamp": "2026-10-20T15:38:02.590Z",
+    "insight": "drone-coordinator-ui tests fail with `TypeError: React.act is not a function` when run via bare `npx vitest` — the package's own `test` script sets `NODE_ENV=test` (React 19 + react-dom 19.2.7 requires it for the act shim). Run UI tests as `NODE_ENV=test npx vitest run <file>` in `drone-coordinator-ui/`, or via the package script. The root `pnpm test` does not include the UI package, so this bites only ad-hoc runs."
   }
 ]

@@ -42,6 +42,7 @@ function makeCtx(
     ...overrides,
     mode: overrides.mode ?? 'active',
     catchUpIntervalMs: overrides.catchUpIntervalMs ?? 900_000,
+    extensionHintPrefix: overrides.extensionHintPrefix ?? 'drone-gateway',
   };
 }
 
@@ -107,7 +108,26 @@ describe('SessionLifecycle', () => {
     expect(backend.spawnSession).toHaveBeenCalledWith('conv-1', 'coder', {
       targetBeaconId: 'beacon-9',
       workingDir: '/srv/bots',
+      extensionHint: 'drone-gateway:conv-1',
     });
+  });
+
+  it('composes the extension hint from the prefix and conversation id', async () => {
+    const backend = makeBackend();
+    const lifecycle = new SessionLifecycle({
+      surfaceType: 'persona-assignment',
+      conversationId: '!room:server',
+      personaId: 'coder',
+      ctx: makeCtx(backend, { extensionHintPrefix: 'gw-custom' }),
+    });
+
+    await lifecycle.send('hi');
+
+    expect(backend.spawnSession).toHaveBeenCalledWith(
+      '!room:server',
+      'coder',
+      expect.objectContaining({ extensionHint: 'gw-custom:!room:server' })
+    );
   });
 
   it('forwards send options to the backend and returns a null reply as-is', async () => {

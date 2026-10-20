@@ -13,6 +13,8 @@ import type {
   DroneSelfImprovementCapability,
   DronePersonaCapability,
 } from 'drone-core';
+import { EXTENSION_PROTOCOL_VERSION } from 'drone-core';
+import type { DroneSessionSnapshot } from 'drone-core';
 import type { DronePluginRegistration } from 'drone-core';
 import type { SwarmContext } from './context.js';
 import { reloadFromBeacon } from './providers.js';
@@ -169,6 +171,36 @@ export async function updateSwarmSessionPersona(
 /**
  * Register the swarm session with the beacon.
  */
+export function buildSessionSnapshot(
+  ctx: SwarmContext,
+  interactive: boolean
+): DroneSessionSnapshot {
+  const { registration } = ctx;
+  const runtime = registration.request<{
+    isSubagent?: boolean;
+    extensionHint?: string;
+  }>('runtime');
+  return {
+    protocolVersion: EXTENSION_PROTOCOL_VERSION,
+    sessionId: ctx.sessionId,
+    personaId: null,
+    beaconId: ctx.sessionId,
+    interactive,
+    isSubagent: runtime?.isSubagent === true,
+    cwd: process.cwd(),
+    enabledPlugins: registration
+      .listPlugins()
+      .filter(p => p.enabled)
+      .map(p => p.id),
+    mountedTools: registration.listMountedTools().map(t => t.name),
+    extensionHint: runtime?.extensionHint,
+  };
+}
+
+/**
+ * Register the swarm session with the beacon, forwarding a names-only session
+ * snapshot the coordinator pushes to every node on `sessionStarted`.
+ */
 export async function registerSwarmSession(
   ctx: SwarmContext,
   interactive = false
@@ -182,6 +214,7 @@ export async function registerSwarmSession(
         personaId: null,
         beaconId: ctx.sessionId,
         interactive,
+        snapshot: buildSessionSnapshot(ctx, interactive),
       }),
     });
     if (!res.ok) {

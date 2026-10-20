@@ -38,7 +38,7 @@ export function initDatabase(dataPath: string): Database.Database {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       host TEXT NOT NULL,
-      port INTEGER NOT NULL,
+      port INTEGER,
       connectedAt INTEGER NOT NULL,
       lastHeartbeat INTEGER NOT NULL,
       spawn_roots TEXT,
@@ -65,7 +65,7 @@ export function initDatabase(dataPath: string): Database.Database {
       name TEXT NOT NULL,
       public_key TEXT NOT NULL,
       host TEXT NOT NULL,
-      port INTEGER NOT NULL,
+      port INTEGER,
       status TEXT NOT NULL DEFAULT 'pending',
       approved_at INTEGER,
       tls_fingerprint TEXT,
@@ -276,6 +276,8 @@ export function initDatabase(dataPath: string): Database.Database {
     db.exec('ALTER TABLE beacons ADD COLUMN default_spawn_root TEXT');
   }
 
+  makeBeaconPortOptional(db);
+
   // Idempotent migration: add interactive flag to swarm_sessions.
   const swarmSessionCols = db
     .prepare('PRAGMA table_info(swarm_sessions)')
@@ -286,11 +288,114 @@ export function initDatabase(dataPath: string): Database.Database {
     );
   }
 
+  // Idempotent migration: add session_snapshot JSON to swarm_sessions.
+  if (!swarmSessionCols.some(c => c.name === 'session_snapshot')) {
+    db.exec('ALTER TABLE swarm_sessions ADD COLUMN session_snapshot TEXT');
+  }
+
+  // Extension capability cache + bundle registry.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS extension_capabilities (
+      node_id TEXT PRIMARY KEY,
+      manifest TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS extension_bundles (
+      node_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      version TEXT NOT NULL,
+      hash TEXT NOT NULL,
+      path TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (node_id, name)
+    );
+
+    CREATE TABLE IF NOT EXISTS pre_approval_tokens (
+      durable_id TEXT PRIMARY KEY,
+      burn_public_key TEXT NOT NULL,
+      label TEXT,
+      issued_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      burned_at INTEGER,
+      burned_by TEXT
+    );
+  `);
+
   // Seed built-in tool definitions
   seedBuiltinToolDefinitions();
 
   logger.info('Database initialized successfully');
   return db;
+}
+
+/**
+ * Rebuild `beacons` and `beacon_trust` so `port` is nullable. Extensions have
+ * no listen port, so their rows store NULL (ADR 257). SQLite cannot drop a NOT
+ * NULL constraint in place, so each table is copied into a replacement table
+ * with explicit DDL.
+ */
+export function makeBeaconPortOptional(db: Database.Database): void {
+  // DROP TABLE on a referenced parent fails while foreign_keys is ON, so the
+  // rebuild runs with enforcement suspended. The pragma is a no-op inside a
+  // transaction, so it must wrap the BEGIN/COMMIT blocks from the outside.
+  const fkWasOn = db.pragma('foreign_keys', { simple: true }) === 1;
+  db.pragma('foreign_keys = OFF');
+  try {
+    for (const table of ['beacons', 'beacon_trust'] as const) {
+      const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+        name: string;
+        notnull: number;
+      }>;
+      const port = cols.find(c => c.name === 'port');
+      if (!port || port.notnull === 0) continue;
+
+      const names = cols.map(c => c.name).join(', ');
+      const ddl =
+        table === 'beacons'
+          ? `CREATE TABLE beacons_new (
+             id TEXT PRIMARY KEY,
+             name TEXT NOT NULL,
+             host TEXT NOT NULL,
+             port INTEGER,
+             connectedAt INTEGER NOT NULL,
+             lastHeartbeat INTEGER NOT NULL,
+             spawn_roots TEXT,
+             default_spawn_root TEXT
+           )`
+          : `CREATE TABLE beacon_trust_new (
+             beacon_id TEXT PRIMARY KEY,
+             name TEXT NOT NULL,
+             public_key TEXT NOT NULL,
+             host TEXT NOT NULL,
+             port INTEGER,
+             status TEXT NOT NULL DEFAULT 'pending',
+             approved_at INTEGER,
+             tls_fingerprint TEXT,
+             fingerprint_confirmed_at INTEGER,
+             verification_code TEXT,
+             created_at INTEGER NOT NULL,
+             updated_at INTEGER NOT NULL
+           )`;
+
+      db.exec('BEGIN');
+      try {
+        db.exec(ddl);
+        db.exec(
+          `INSERT INTO ${table}_new (${names}) SELECT ${names} FROM ${table}`
+        );
+        db.exec(`DROP TABLE ${table}`);
+        db.exec(`ALTER TABLE ${table}_new RENAME TO ${table}`);
+        db.exec('COMMIT');
+        logger.info(`Migrated ${table}.port to nullable`);
+      } catch (err) {
+        db.exec('ROLLBACK');
+        throw err;
+      }
+    }
+  } finally {
+    if (fkWasOn) db.pragma('foreign_keys = ON');
+  }
 }
 
 export function getDatabase(): Database.Database {

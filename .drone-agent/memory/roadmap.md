@@ -72,12 +72,14 @@ A **swarm** is a personal AI workforce - multiple agents working in concert for 
 └─────────────────────────────────────────────────────┘
 ```
 
-**Full package set (8 workspace packages).** The four layers above are drawn from `drone-gateway`, `drone-coordinator`, `drone-beacon`, and `drone-agent`. Three supporting packages are not shown in the diagram:
+**Full package set.** The four layers above are drawn from `drone-gateway`, `drone-coordinator`, `drone-beacon`, and `drone-agent`. Supporting packages not shown in the diagram:
 
 - `drone-core` — shared types, contracts, config defaults, token estimation (used by every package)
 - `drone-swarm-common` — shared beacon/coordinator utilities (TLS, wiki storage, spawner, verification, config-file loader, search primitives)
 - `drone-coordinator-ui` — the coordinator's React/Vite web dashboard
-- `drone-swarm` — a standalone REST CLI for the session pipeline and wiki (also not shown)
+- `drone-swarm` — a standalone REST CLI for the session pipeline and wiki
+- `mcp-swarm` — reference swarm extension: a beacon exposing swarm functions to MCP clients over stdio
+- `drone-extension-ui-types` — types-only package for the coordinator UI extension-bundle contract
 
 **Failure Mode: Graceful Degradation**
 
