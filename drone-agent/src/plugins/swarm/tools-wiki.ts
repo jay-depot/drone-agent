@@ -167,14 +167,24 @@ function createWikiSearchTool(ctx: SwarmContext): DroneToolDefinition {
     name: 'wiki_search',
     description:
       'Semantically query wiki pages in the swarm knowledge base. Your query is ' +
-      'embedded with nomic, and the search works best if you format your query as ' +
-      'a well-formed question.',
+      'embedded into a vector and matched by meaning, so the search works best ' +
+      'if you format your query as a well-formed question or sentence. Returns ' +
+      'page metadata and the best-matching chunk for each page.',
     inputSchema: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
           description: 'Search query string',
+        },
+        maxResults: {
+          type: 'number',
+          description: 'Maximum number of pages to return (default 10, max 50)',
+        },
+        minScore: {
+          type: 'number',
+          description:
+            'Minimum cosine similarity score (0.0-1.0); lower-scoring pages are dropped',
         },
       },
       required: ['query'],
@@ -188,12 +198,32 @@ function createWikiSearchTool(ctx: SwarmContext): DroneToolDefinition {
         });
       }
       const query = params.query as string;
+
+      const searchParams = new URLSearchParams({ q: query });
+      if (typeof params.maxResults === 'number') {
+        searchParams.set('maxResults', String(params.maxResults));
+      }
+      if (typeof params.minScore === 'number') {
+        searchParams.set('minScore', String(params.minScore));
+      }
+
       try {
         const res = await fetch(
-          `${ctx.baseUrl}/wiki/search?q=${encodeURIComponent(query)}`
+          `${ctx.baseUrl}/wiki/semantic-search?${searchParams.toString()}`
         );
+        if (res.status === 503) {
+          return JSON.stringify({
+            success: false,
+            error:
+              'Semantic wiki search is unavailable: the beacon has no embedding provider. ' +
+              'Use wiki_list to browse pages instead.',
+          });
+        }
         if (!res.ok) {
-          return JSON.stringify({ success: false, error: 'Search failed' });
+          return JSON.stringify({
+            success: false,
+            error: `Wiki search failed (HTTP ${res.status})`,
+          });
         }
         return JSON.stringify({ success: true, results: await res.json() });
       } catch (err) {
