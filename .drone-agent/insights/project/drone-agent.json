@@ -978,5 +978,13 @@
   {
     "timestamp": "2026-10-20T22:40:11.123Z",
     "insight": "`pnpm` does NOT read `pnpm.onlyBuiltDependencies` from the root `package.json` on pnpm 11 — the allowlist for install/postinstall scripts lives in `pnpm-workspace.yaml` under `onlyBuiltDependencies` (or the newer `allowBuilds` map). Installing `@huggingface/transformers` failed with `ERR_PNPM_IGNORED_BUILDS` for `onnxruntime-node` and `protobufjs` until the allowlist was added there; and on this host the `@huggingface/transformers` install step prints an alarming `Unauthorized access to file: https://huggingface.co/...` on first run because Hugging Face returns HTTP 401 to the sandbox — that is the intended hard-fail (ADR 259 D5), not a code bug."
+  },
+  {
+    "timestamp": "2026-10-20T23:23:24.856Z",
+    "insight": "Hugging Face answers HTTP 401 Unauthorized for a *nonexistent* public repo. A hard-fail like `Unauthorized access to file: \"https://huggingface.co/Xenova/nomic-embed-text-v1.5/resolve/main/config.json\"` therefore reads as an auth/network failure but is almost always a bad repo id. During the ADR 259 embedding work this was misdiagnosed as \"the host cannot reach HF\"; the falsifier is cheap — fetch a known-good repo (`bert-base-uncased/config.json` returns 200) before blaming the environment. Check an id with `curl -s -o /dev/null -w \"%{http_code}\" https://huggingface.co/api/models/<id>` (200 = exists, 401 = does not). The correct ONNX id for nomic v1.5 is `nomic-ai/nomic-embed-text-v1.5`, not `Xenova/nomic-embed-text-v1.5`."
+  },
+  {
+    "timestamp": "2026-10-20T23:23:24.860Z",
+    "insight": "ONNX quantization is not free for embedding-parity claims. The ONNX build and the Ollama build of nomic-embed-text-v1.5 are the same weights, but measured cosine against Ollama is fp32 1.000000, fp16 0.999999, q8 0.974 — so `dtype: \"q8\"` (the default chosen for a 131 MB download) is NOT a drop-in equivalent to the Ollama vectors. When claiming \"identical vectors, no reindex needed\", measure against the incumbent backend at each dtype first. Also: a 12-sentence probe showed 6 top-1 flips at q8, but every flip was a near-tie (fp32 top1-top2 gap < 0.02), so a small unrelated corpus overstates the damage — report the margin, not just the flip count."
   }
 ]
