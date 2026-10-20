@@ -918,5 +918,13 @@
   {
     "timestamp": "2026-10-19T22:24:48.009Z",
     "insight": "Never conclude \"X is not a git repo\" by running `git rev-parse` from a parent directory. I checked `/home/unleet/Obsidian` (parent of the vault), got a failure, and told the user the vault at `/home/unleet/Obsidian/drone-agent-project` was not version controlled — it was, on `main`, the whole time. The user had to correct me. Correct probe: `cd <exact-dir> && git rev-parse --show-toplevel`. A parent-dir failure says nothing about a nested repo (and conversely, a parent-dir success can mask a nested repo being a SEPARATE one). Also: before committing someone else's vault/tree, diff every file — I found two long-uncommitted leftovers (a never-added ADR 255 stub and a coordinator-ui row dated a week earlier) that were not mine; committing them silently inside my own feature commit would have obscured provenance, so splitting them out was the right call."
+  },
+  {
+    "timestamp": "2026-10-20T01:51:12.799Z",
+    "insight": "`createExtensionNode` in drone-swarm-common reimplements only *half* the beacon trust handshake: it POSTs /api/beacons (register) but never sends the signed `confirm-fingerprint` announce that approval requires. drone-beacon implements the whole loop (announce + 30s approval poll) in `coordinator-client.ts`/`fingerprint-announce.ts`. Any node that is not loopback thus deadlocks in `pending`. The durable fix is a shared `registerAndAwaitApproval()` primitive in drone-swarm-common used by both the beacon and the extension SDK, rather than two partial implementations of one protocol."
+  },
+  {
+    "timestamp": "2026-10-20T01:51:12.801Z",
+    "insight": "drone-coordinator builds two Fastify apps from one `buildApp()`, but some routes are conditionally registered by flag (`registerBeaconWebSocket` only inside `if (opts.enableMtls)`, `registerRoutes` always). So \"does route X exist on port Y\" is a per-route question that cannot be answered from the route table alone. When planning anything port-related, grep for the registration call site's guarding branch, not just the route definition. This mismatch is what produced the swarm-extension dead end: `POST /api/beacons` existed on both ports while `/ws/beacon` existed on only one."
   }
 ]
