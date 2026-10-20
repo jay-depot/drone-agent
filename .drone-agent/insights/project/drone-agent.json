@@ -950,5 +950,21 @@
   {
     "timestamp": "2026-10-20T15:38:02.590Z",
     "insight": "drone-coordinator-ui tests fail with `TypeError: React.act is not a function` when run via bare `npx vitest` — the package's own `test` script sets `NODE_ENV=test` (React 19 + react-dom 19.2.7 requires it for the act shim). Run UI tests as `NODE_ENV=test npx vitest run <file>` in `drone-coordinator-ui/`, or via the package script. The root `pnpm test` does not include the UI package, so this bites only ad-hoc runs."
+  },
+  {
+    "timestamp": "2026-10-20T22:13:36.025Z",
+    "insight": "Semantic-index dimensions are hardcoded to 768 in the sqlite-vec DDL (drone-beacon/src/db/init.ts: vec_chunks FLOAT[768], vec_chunks_bq BIT[768], wiki_vec_chunks FLOAT[768]). Any feature that offers a menu of embedding models must make the dimension a parameter and rebuild the vec0 tables on change, because vec0 columns are fixed-width and a different-dimension insert throws."
+  },
+  {
+    "timestamp": "2026-10-20T22:13:36.027Z",
+    "insight": "Index identity is not recorded anywhere in the beacon DB, so a change of embedding model silently mixes vectors from two models in one index (unchanged files keep old-model vectors via the hash skip) and degrades retrieval with no error. The fix adopted: fold a fingerprint (model id, dimensions, backend, dtype) into the salted content hash so any change forces a full reindex, and keep an embedding_meta singleton row for observability and the dimension guard."
+  },
+  {
+    "timestamp": "2026-10-20T22:13:36.029Z",
+    "insight": "Two pre-existing beacon indexer bugs block any embedding-model change and are only discoverable via the swarm wiki, not from code comments: (1) both indexers commit the file/page content hash BEFORE the embedding loop, so a failed embed marks the unit \"indexed\" with zero or partial chunks and the hash-skip then makes reindex a permanent no-op; (2) wiki-indexer.ts's changed-content path inserts chunks with no delete first, so a reindex duplicates chunks (and their vec0 rows) and fills the semantic top-k with duplicates. `replaceWikiChunks` already exists and is exported but unused. Feature plans touching embeddings should state that these bugs block the feature."
+  },
+  {
+    "timestamp": "2026-10-20T22:13:36.030Z",
+    "insight": "The embedding path has a declared-but-never-wired seam: `DroneSearchCapability` (registerEmbeddingProvider/resolveProvider) is declared in drone-core and exported, but never offered by any plugin, and the beacon instead instantiates `createOllamaEmbeddingProvider` directly in drone-beacon/src/index.ts. The agent-side `search.userEmbeddingProvider` / `search.projectEmbeddingProvider` / `DroneSearchPath.embeddingProvider` config fields likewise have zero readers. These fields look authoritative but silently do nothing — a real trap, since setting them appears to configure the embedder."
   }
 ]
