@@ -49,13 +49,7 @@ export function setEmbeddingMeta(meta: {
          dtype = excluded.dtype,
          updated_at = excluded.updated_at`
     )
-    .run(
-      meta.modelId,
-      meta.dimensions,
-      meta.backend,
-      meta.dtype,
-      Date.now()
-    );
+    .run(meta.modelId, meta.dimensions, meta.backend, meta.dtype, Date.now());
 }
 
 /**

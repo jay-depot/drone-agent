@@ -40,9 +40,17 @@ describe('createOllamaBackend', () => {
     let body: unknown;
     mockFetch(async (_url, init) => {
       body = JSON.parse(String(init.body));
-      return new Response(JSON.stringify({ embeddings: [[1, 2], [3, 4]] }), {
-        status: 200,
-      });
+      return new Response(
+        JSON.stringify({
+          embeddings: [
+            [1, 2],
+            [3, 4],
+          ],
+        }),
+        {
+          status: 200,
+        }
+      );
     });
     const backend = createOllamaBackend({ host: 'http://h', model: 'm1' });
     await backend.embed(['a', 'b']);
@@ -52,9 +60,17 @@ describe('createOllamaBackend', () => {
   it('returns one Float32Array per input', async () => {
     mockFetch(
       async () =>
-        new Response(JSON.stringify({ embeddings: [[1, 2], [3, 4]] }), {
-          status: 200,
-        })
+        new Response(
+          JSON.stringify({
+            embeddings: [
+              [1, 2],
+              [3, 4],
+            ],
+          }),
+          {
+            status: 200,
+          }
+        )
     );
     const backend = createOllamaBackend({ host: 'http://h', model: 'm' });
     const vectors = await backend.embed(['a', 'b']);
@@ -79,7 +95,8 @@ describe('createOllamaBackend', () => {
 
   it('throws when the response has no embeddings', async () => {
     mockFetch(
-      async () => new Response(JSON.stringify({ embeddings: [] }), { status: 200 })
+      async () =>
+        new Response(JSON.stringify({ embeddings: [] }), { status: 200 })
     );
     const backend = createOllamaBackend({ host: 'http://h', model: 'm' });
     await expect(backend.embed(['a'])).rejects.toThrow(/empty embeddings/);

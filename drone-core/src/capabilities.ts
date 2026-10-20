@@ -21,10 +21,7 @@ export type DroneEmbeddingProvider = {
     opts?: { task?: DroneEmbeddingTask }
   ): Promise<Float32Array>;
   /** Embed a document, formatted the way the model expects. */
-  embedDocument(
-    text: string,
-    opts?: { title?: string }
-  ): Promise<Float32Array>;
+  embedDocument(text: string, opts?: { title?: string }): Promise<Float32Array>;
   /** Number of dimensions in the embedding vectors. */
   dimensions: number;
   /** Maximum number of tokens per chunk (for chunking). */

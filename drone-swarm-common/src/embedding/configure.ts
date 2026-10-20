@@ -1,4 +1,7 @@
-import type { DroneEmbeddingModelSpec, DroneEmbeddingProvider } from 'drone-core';
+import type {
+  DroneEmbeddingModelSpec,
+  DroneEmbeddingProvider,
+} from 'drone-core';
 import { getEmbeddingModel, listEmbeddingModelIds } from 'drone-core';
 
 import type { EmbeddingConfig } from '../config-file.js';

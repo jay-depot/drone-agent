@@ -17,6 +17,7 @@ updated: 2026-10-20T22:13:11.229Z
 ---
 
 ---
+
 # Plan: Embedding Model Registry + Removal of the Ollama Requirement
 
 **Status**: ready for execution. Next ADR number = 259.
@@ -36,6 +37,7 @@ Why: one process, not two. One place holds the model name, so it cannot drift fr
 ## 2. Scope
 
 ### In scope
+
 - Add a model descriptor registry in `drone-core`.
 - Add an ONNX backend. Add an Ollama backend that uses the same provider shape.
 - Add the `embedding` block to the beacon config file.
@@ -45,34 +47,41 @@ Why: one process, not two. One place holds the model name, so it cannot drift fr
 - Write tests, docs, and ADR 259.
 
 ### Out of scope
+
 - Adding EmbeddingGemma 2 as a shipped model (the registry makes it possible; this plan does not do it).
 - Request-level role parameters for remote APIs (example: Cohere `input_type`).
 - Changing the chunker, the `sqlite-vec` storage, or the bit-signature prefilter (ADR 181).
 
 ## 3. Locked decisions
 
-| # | Decision |
-| --- | --- |
-| D1 | The backend is a config switch. The in-process ONNX backend is the new default. Ollama stays as an optional backend. |
-| D2 | The model descriptor registry and the formatter functions live in `drone-core`. The provider gains `embedQuery` and `embedDocument`. The backends live in `drone-swarm-common/src/embedding/`. |
-| D3 | Selection is one beacon-global `embedding` block in the beacon config file. The value is a canonical model id, not a tag. `OLLAMA_HOST` stays as a deprecated override. |
-| D4 | The fingerprint is `model_id` + `dimensions` + `backend` + `dtype`. Salt the content hash with the fingerprint. Then a model change always makes a full reindex. |
-| D5 | A backend failure stops beacon startup. It does not fall back. The model download happens at startup. The cache directory is under the beacon config directory. |
-| D6 | Delete all dead embedding surface: `DroneSearchCapability`, `DroneSearchConfig.userEmbeddingProvider`, `DroneSearchConfig.projectEmbeddingProvider`, `DroneSearchPath.embeddingProvider`. |
+| #   | Decision                                                                                                                                                                                       |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | The backend is a config switch. The in-process ONNX backend is the new default. Ollama stays as an optional backend.                                                                           |
+| D2  | The model descriptor registry and the formatter functions live in `drone-core`. The provider gains `embedQuery` and `embedDocument`. The backends live in `drone-swarm-common/src/embedding/`. |
+| D3  | Selection is one beacon-global `embedding` block in the beacon config file. The value is a canonical model id, not a tag. `OLLAMA_HOST` stays as a deprecated override.                        |
+| D4  | The fingerprint is `model_id` + `dimensions` + `backend` + `dtype`. Salt the content hash with the fingerprint. Then a model change always makes a full reindex.                               |
+| D5  | A backend failure stops beacon startup. It does not fall back. The model download happens at startup. The cache directory is under the beacon config directory.                                |
+| D6  | Delete all dead embedding surface: `DroneSearchCapability`, `DroneSearchConfig.userEmbeddingProvider`, `DroneSearchConfig.projectEmbeddingProvider`, `DroneSearchPath.embeddingProvider`.      |
 
 ## 4. Interfaces
 
 ### 4.1 The model descriptor
+
 File: `drone-core/src/embedding-models.ts` (new).
 
 ```ts
 export type DroneEmbeddingTask =
-  | 'search_query' | 'search_document' | 'question_answering'
-  | 'fact_checking' | 'code_retrieval' | 'classification'
-  | 'clustering' | 'sentence_similarity';
+  | 'search_query'
+  | 'search_document'
+  | 'question_answering'
+  | 'fact_checking'
+  | 'code_retrieval'
+  | 'classification'
+  | 'clustering'
+  | 'sentence_similarity';
 
 export type DroneEmbeddingModelSpec = {
-  id: string;              // canonical id; config uses this
+  id: string; // canonical id; config uses this
   name: string;
   dimensions: number;
   maxTokens: number;
@@ -104,33 +113,45 @@ export const NOMIC_EMBED_TEXT_V1_5: DroneEmbeddingModelSpec = {
   formatDocument: text => `search_document: ${text}`,
 };
 
-export const EMBEDDING_MODELS: DroneEmbeddingModelSpec[] = [NOMIC_EMBED_TEXT_V1_5];
-export function getEmbeddingModel(id: string): DroneEmbeddingModelSpec | undefined;
+export const EMBEDDING_MODELS: DroneEmbeddingModelSpec[] = [
+  NOMIC_EMBED_TEXT_V1_5,
+];
+export function getEmbeddingModel(
+  id: string
+): DroneEmbeddingModelSpec | undefined;
 export function listEmbeddingModels(): DroneEmbeddingModelSpec[];
 ```
 
 INVARIANT: a change to any part of a spec that changes the vectors (example: `pooling`, `normalize`) MUST get a new `id`.
 
 ### 4.2 The provider
+
 File: `drone-core/src/capabilities.ts`. Change `DroneEmbeddingProvider` to add `spec: DroneEmbeddingModelSpec`, `embedQuery(text, opts?)`, `embedDocument(text, opts?)`. Add the new types to the `drone-core/src/index.ts` barrel.
 
 ### 4.3 The fingerprint
+
 File: `drone-swarm-common/src/embedding/fingerprint.ts` (new).
 
 ```ts
-export type EmbeddingIdentity = { modelId: string; dimensions: number; backend: string; dtype: string };
+export type EmbeddingIdentity = {
+  modelId: string;
+  dimensions: number;
+  backend: string;
+  dtype: string;
+};
 export function indexFingerprint(identity: EmbeddingIdentity): string {
   return `${identity.modelId}:${identity.dimensions}:${identity.backend}:${identity.dtype}`;
 }
 ```
 
 ### 4.4 The backend seam
+
 File: `drone-swarm-common/src/embedding/types.ts` (new).
 
 ```ts
 export interface EmbeddingBackend {
   readonly id: string;
-  readonly dtype: string;   // 'q8' for onnx; 'gguf' for ollama
+  readonly dtype: string; // 'q8' for onnx; 'gguf' for ollama
   init(): Promise<void>;
   embed(texts: string[]): Promise<Float32Array[]>;
   dispose(): Promise<void>;
@@ -138,29 +159,39 @@ export interface EmbeddingBackend {
 ```
 
 ### 4.5 The config block
+
 File: `drone-swarm-common/src/config-file.ts`.
 
 ```ts
 export type EmbeddingBackendId = 'onnx' | 'ollama';
 export type EmbeddingConfig = {
   backend: EmbeddingBackendId;
-  model: string;             // canonical model id
+  model: string; // canonical model id
   ollama?: { host?: string };
   onnx?: { dtype?: string; device?: string; cacheDir?: string };
 };
 ```
+
 Add `embedding?: EmbeddingConfig` to `ServerConfigFile`. Add `'embedding'` to `ALLOWED_KEYS`. Add `validateEmbedding` (reject an unknown backend, an empty model, a non-object sub-block).
 
 Config example:
+
 ```jsonc
 {
-  "spawnRoots": { "paths": ["/home/openhabian/"], "default": "/home/openhabian/" },
+  "spawnRoots": {
+    "paths": ["/home/openhabian/"],
+    "default": "/home/openhabian/",
+  },
   "embedding": {
     "backend": "onnx",
     "model": "nomic-embed-text-v1.5",
     "ollama": { "host": "http://127.0.0.1:11434" },
-    "onnx": { "dtype": "q8", "device": "cpu", "cacheDir": "/home/openhabian/.drone-beacon/embedding-models" }
-  }
+    "onnx": {
+      "dtype": "q8",
+      "device": "cpu",
+      "cacheDir": "/home/openhabian/.drone-beacon/embedding-models",
+    },
+  },
 }
 ```
 
@@ -231,6 +262,7 @@ G1 (tester) - Manual acceptance: (1) start the beacon with `embedding.backend = 
 G2 (reviewer) - Check every item in section 7. Fix until all pass. Dep: all.
 
 ## 6. Order and dependencies
+
 - A1, B2, C1, F2, F4 start in parallel.
 - A5 needs A1-A4. A6 needs A1. B1 needs A2. B3/B4 need B1. B5 needs B1-B4. B6 needs B1-B5. B7 needs B1-B6.
 - C2/C3 need C1. C4 needs C1,C3. D1 needs B1,C2. D2 needs B1,C3. D3 needs B1. D4 needs D1-D3.
@@ -238,6 +270,7 @@ G2 (reviewer) - Check every item in section 7. Fix until all pass. Dep: all.
 - Recommended order: A -> B -> C -> D -> E -> F -> G.
 
 ## 7. Validation criteria
+
 1. LSP: `lsp__get_diagnostics` shows zero errors and zero warnings for the whole workspace, tests included.
 2. Build: `pnpm -r run build` passes with zero errors (run after every drone-core / drone-swarm-common change; dependents read built `dist/`).
 3. Typecheck: `pnpm typecheck` passes.
@@ -251,18 +284,21 @@ G2 (reviewer) - Check every item in section 7. Fix until all pass. Dep: all.
 11. ADR 259 exists and is listed in docs/adr/index.md. README and agent docs correct.
 
 ## 8. Risks and known costs
+
 - Install size: `@huggingface/transformers` pulls `onnxruntime-node` (~300 MB across all platforms; only the matching binary loads).
 - First run: the first ONNX start downloads ~137 MB; needs network.
 - glibc only: no musl/Alpine for the ONNX runtime (F4 changes the beacon-starting images).
 - The model name is a canonical id, not a tag (removes the 2026-10-13 tag-drift failure; a tag lives only in `spec.backends`).
 
 ## 9. Deferred
+
 - Shipping EmbeddingGemma 2 as a registry entry.
 - Request-level role parameters for remote embedding APIs.
 - A model-menu slash command or TUI surface.
 - Making the wiki reindex route asynchronous.
 
 ## 10. Verified current-state facts (for the coder)
+
 - `DroneEmbeddingProvider` at `drone-core/src/capabilities.ts:6`.
 - Only implementation: `createOllamaEmbeddingProvider` in `drone-swarm-common/src/search-provider-ollama.ts`.
 - Beacon instantiates it directly (not via a capability) at `drone-beacon/src/index.ts:281-305`, twice. Host = `process.env.OLLAMA_HOST || 'http://127.0.0.1:11434'`.

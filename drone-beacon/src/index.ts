@@ -1,7 +1,6 @@
 import fastify from 'fastify';
 import '@fastify/websocket';
 import {
-  createConfiguredEmbeddingProvider,
   defaultEmbeddingConfig,
   loadConfigFile,
   mergeConfig,
@@ -10,7 +9,7 @@ import {
   type SessionEndTrigger,
   type SpawnRootsConfig,
 } from 'drone-swarm-common';
-import { getEmbeddingModel } from 'drone-core';
+import { initEmbedding, resolveEmbeddingSpec } from './embedding-init.js';
 import { SearchIndexer } from './search-indexer.js';
 import { WikiIndexer } from './wiki-indexer.js';
 import { runWikiIndexCycle, setWikiIndexer } from './wiki-index-support.js';
@@ -24,9 +23,6 @@ import {
   backfillVecChunks,
   backfillBqVecChunks,
   backfillPersonaMetadata,
-  getEmbeddingMeta,
-  setEmbeddingMeta,
-  rebuildVecTables,
 } from './db/index.js';
 import {
   registerRoutes,
@@ -272,13 +268,7 @@ async function main() {
   fs.mkdirSync(config.configDir, { recursive: true });
 
   const embeddingConfig = config.embedding ?? defaultEmbeddingConfig();
-  const embeddingSpec = getEmbeddingModel(embeddingConfig.model);
-  if (!embeddingSpec) {
-    console.error(
-      `Error: unknown embedding model "${embeddingConfig.model}". Set "embedding.model" in the beacon config file to a known id.`
-    );
-    process.exit(1);
-  }
+  const embeddingSpec = resolveEmbeddingSpec(embeddingConfig);
 
   // Initialize database at the model's vector width.
   initDatabase(config.dbPath, embeddingSpec.dimensions);
@@ -286,41 +276,32 @@ async function main() {
   // Build the embedding provider. Any failure is fatal: there is no fallback.
   let embedding;
   try {
-    embedding = await createConfiguredEmbeddingProvider(
+    embedding = await initEmbedding(
       embeddingConfig,
       path.join(config.configDir, 'embedding-models')
     );
   } catch (err) {
-    console.error(
-      `Error: embedding provider "${embeddingConfig.backend}" for model "${embeddingConfig.model}" failed to start: ${
-        err instanceof Error ? err.message : String(err)
-      }`
-    );
+    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
     console.error(
       'Fix the "embedding" block in the beacon config file, or set OLLAMA_HOST for the ollama backend.'
     );
     process.exit(1);
   }
-
-  const storedMeta = getEmbeddingMeta();
-  if (storedMeta && storedMeta.dimensions !== embedding.identity.dimensions) {
-    logger.info(
-      `Embedding dimensions changed (${storedMeta.dimensions} -> ${embedding.identity.dimensions}); rebuilding vector tables`
-    );
-    rebuildVecTables(embedding.identity.dimensions);
-  }
-  if (storedMeta?.dimensions !== embedding.identity.dimensions) {
-    backfillVecChunks();
-    backfillBqVecChunks();
-  }
-  setEmbeddingMeta(embedding.identity);
-  logger.info(
-    `Embedding provider ready: ${embedding.fingerprint}`
-  );
+  logger.info(`Embedding provider ready: ${embedding.fingerprint}`);
 
   const repairedPersonas = backfillPersonaMetadata();
   if (repairedPersonas > 0) {
     logger.info(`Persona metadata: backfilled ${repairedPersonas} row(s)`);
+  }
+  const backfilled = backfillVecChunks();
+  if (backfilled > 0) {
+    logger.info(`Search index: backfilled ${backfilled} chunk(s) into vec0`);
+  }
+  const backfilledBq = backfillBqVecChunks();
+  if (backfilledBq > 0) {
+    logger.info(
+      `Search index: backfilled ${backfilledBq} chunk signature(s) into vec_chunks_bq`
+    );
   }
   // Initialize search indexer
   const searchIndexer = new SearchIndexer(

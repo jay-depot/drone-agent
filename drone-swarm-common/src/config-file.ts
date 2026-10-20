@@ -177,7 +177,12 @@ function validateEmbedding(embedding: unknown, errors: string[]): void {
     errors.push('"embedding.model" must be a non-empty string');
   }
   for (const key of Object.keys(embedding)) {
-    if (key !== 'backend' && key !== 'model' && key !== 'ollama' && key !== 'onnx') {
+    if (
+      key !== 'backend' &&
+      key !== 'model' &&
+      key !== 'ollama' &&
+      key !== 'onnx'
+    ) {
       errors.push(`unknown key "embedding.${key}"`);
     }
   }

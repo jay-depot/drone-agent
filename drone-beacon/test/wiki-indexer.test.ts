@@ -202,7 +202,9 @@ describe('WikiIndexer', () => {
     fail = false;
     const second = await indexer.indexWiki(pages);
     expect(second.pagesIndexed).toBe(1);
-    expect(getWikiChunks('fragments-guide', 'beacon').length).toBeGreaterThan(0);
+    expect(getWikiChunks('fragments-guide', 'beacon').length).toBeGreaterThan(
+      0
+    );
   });
 
   it('removes pages absent from a later authoritative set (local delete → reconcile)', async () => {

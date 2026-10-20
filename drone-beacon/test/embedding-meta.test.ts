@@ -77,12 +77,9 @@ describe('rebuildVecTables', () => {
   it('accepts vectors of the new dimension', () => {
     rebuildVecTables(1024);
     insertChunk('/dir', '/dir/a.ts', 0, 'chunk', fakeEmbedding(1024));
-    replaceWikiPage(
-      'p1',
-      'beacon',
-      { title: 'P', updatedAt: 'u', hash: 'h' },
-      [{ index: 0, text: 'wiki chunk', embedding: fakeEmbedding(1024) }]
-    );
+    replaceWikiPage('p1', 'beacon', { title: 'P', updatedAt: 'u', hash: 'h' }, [
+      { index: 0, text: 'wiki chunk', embedding: fakeEmbedding(1024) },
+    ]);
 
     const hits = searchWikiChunksByVector(fakeEmbedding(1024), 5);
     expect(hits.map(hit => hit.text)).toContain('wiki chunk');
@@ -98,12 +95,9 @@ describe('rebuildVecTables', () => {
   it('clears indexed content so a stale index cannot survive a model change', () => {
     upsertFile('/dir', '/dir/a.ts', 'hash-1');
     insertChunk('/dir', '/dir/a.ts', 0, 'chunk', fakeEmbedding(768));
-    replaceWikiPage(
-      'p1',
-      'beacon',
-      { title: 'P', updatedAt: 'u', hash: 'h' },
-      [{ index: 0, text: 'wiki chunk', embedding: fakeEmbedding(768) }]
-    );
+    replaceWikiPage('p1', 'beacon', { title: 'P', updatedAt: 'u', hash: 'h' }, [
+      { index: 0, text: 'wiki chunk', embedding: fakeEmbedding(768) },
+    ]);
 
     rebuildVecTables(1024);
 

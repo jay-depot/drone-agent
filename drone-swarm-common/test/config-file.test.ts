@@ -206,7 +206,6 @@ describe('validateConfigFile', () => {
       })
     ).toEqual(['unknown key "embedding.extra"']);
   });
-
 });
 
 describe('loadConfigFile', () => {

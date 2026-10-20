@@ -130,7 +130,11 @@ export class SearchIndexer {
             absDir,
             filePath,
             hash,
-            chunks.map((text, index) => ({ index, text, embedding: embeddings[index] }))
+            chunks.map((text, index) => ({
+              index,
+              text,
+              embedding: embeddings[index],
+            }))
           );
           result.chunksCreated += chunks.length;
 

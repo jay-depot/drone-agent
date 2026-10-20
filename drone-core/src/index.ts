@@ -252,7 +252,10 @@ export type {
 
 // ── Embedding model registry ─────────────────────────────────────────
 
-export type { DroneEmbeddingTask, DroneEmbeddingModelSpec } from './embedding-models.js';
+export type {
+  DroneEmbeddingTask,
+  DroneEmbeddingModelSpec,
+} from './embedding-models.js';
 export {
   NOMIC_EMBED_TEXT_V1_5,
   EMBEDDING_MODELS,

@@ -97,13 +97,21 @@ describe('wiki chunk store', () => {
   });
 
   it('replaceWikiPage swaps the chunk set transactionally', () => {
-    replaceWikiPage('p1', 'beacon', { title: 'Page', updatedAt: 'u', hash: 'h' }, [
-      { index: 0, text: 'old a', embedding: fakeEmbedding(1) },
-      { index: 1, text: 'old b', embedding: fakeEmbedding(2) },
-    ]);
-    replaceWikiPage('p1', 'beacon', { title: 'Page', updatedAt: 'u', hash: 'h' }, [
-      { index: 0, text: 'new only', embedding: fakeEmbedding(3) },
-    ]);
+    replaceWikiPage(
+      'p1',
+      'beacon',
+      { title: 'Page', updatedAt: 'u', hash: 'h' },
+      [
+        { index: 0, text: 'old a', embedding: fakeEmbedding(1) },
+        { index: 1, text: 'old b', embedding: fakeEmbedding(2) },
+      ]
+    );
+    replaceWikiPage(
+      'p1',
+      'beacon',
+      { title: 'Page', updatedAt: 'u', hash: 'h' },
+      [{ index: 0, text: 'new only', embedding: fakeEmbedding(3) }]
+    );
 
     const chunks = getWikiChunks('p1', 'beacon');
     expect(chunks).toHaveLength(1);
@@ -112,10 +120,15 @@ describe('wiki chunk store', () => {
 
   it('deleteChunksForWikiPage removes both chunk rows and vec mirror rows', async () => {
     const { deleteChunksForWikiPage } = await import('../src/db/index.js');
-    replaceWikiPage('p1', 'beacon', { title: 'Page', updatedAt: 'u', hash: 'h' }, [
-      { index: 0, text: 'a', embedding: fakeEmbedding(1) },
-      { index: 1, text: 'b', embedding: fakeEmbedding(2) },
-    ]);
+    replaceWikiPage(
+      'p1',
+      'beacon',
+      { title: 'Page', updatedAt: 'u', hash: 'h' },
+      [
+        { index: 0, text: 'a', embedding: fakeEmbedding(1) },
+        { index: 1, text: 'b', embedding: fakeEmbedding(2) },
+      ]
+    );
 
     const before = searchWikiChunksByVector(fakeEmbedding(1), 10);
     expect(before.map(r => r.text)).toContain('a');
@@ -128,9 +141,12 @@ describe('wiki chunk store', () => {
   });
 
   it('removeWikiSource deletes the source row and its chunks', () => {
-    replaceWikiPage('gone', 'coordinator', { title: 'Page', updatedAt: 'u', hash: 'h' }, [
-      { index: 0, text: 'x', embedding: fakeEmbedding(4) },
-    ]);
+    replaceWikiPage(
+      'gone',
+      'coordinator',
+      { title: 'Page', updatedAt: 'u', hash: 'h' },
+      [{ index: 0, text: 'x', embedding: fakeEmbedding(4) }]
+    );
     removeWikiSource('gone', 'coordinator');
 
     expect(listWikiSources().find(s => s.page_id === 'gone')).toBeUndefined();
@@ -138,12 +154,18 @@ describe('wiki chunk store', () => {
   });
 
   it('searchWikiChunksByVector ranks by cosine similarity', () => {
-    replaceWikiPage('p1', 'beacon', { title: 'Page', updatedAt: 'u', hash: 'h' }, [
-      { index: 0, text: 'target chunk', embedding: fakeEmbedding(42) },
-    ]);
-    replaceWikiPage('p2', 'beacon', { title: 'Page', updatedAt: 'u', hash: 'h' }, [
-      { index: 0, text: 'other chunk', embedding: fakeEmbedding(400) },
-    ]);
+    replaceWikiPage(
+      'p1',
+      'beacon',
+      { title: 'Page', updatedAt: 'u', hash: 'h' },
+      [{ index: 0, text: 'target chunk', embedding: fakeEmbedding(42) }]
+    );
+    replaceWikiPage(
+      'p2',
+      'beacon',
+      { title: 'Page', updatedAt: 'u', hash: 'h' },
+      [{ index: 0, text: 'other chunk', embedding: fakeEmbedding(400) }]
+    );
 
     const results = searchWikiChunksByVector(fakeEmbedding(42), 5);
     expect(results.length).toBeGreaterThanOrEqual(1);
@@ -158,11 +180,16 @@ describe('wiki chunk store', () => {
 
   it('getWikiSourcesWithChunkCounts reports chunk counts', () => {
     upsertWikiSource('p1', 'beacon', 'Page One', 'u', 'h');
-    replaceWikiPage('p1', 'beacon', { title: 'Page', updatedAt: 'u', hash: 'h' }, [
-      { index: 0, text: 'a', embedding: fakeEmbedding(1) },
-      { index: 1, text: 'b', embedding: fakeEmbedding(2) },
-      { index: 2, text: 'c', embedding: fakeEmbedding(3) },
-    ]);
+    replaceWikiPage(
+      'p1',
+      'beacon',
+      { title: 'Page', updatedAt: 'u', hash: 'h' },
+      [
+        { index: 0, text: 'a', embedding: fakeEmbedding(1) },
+        { index: 1, text: 'b', embedding: fakeEmbedding(2) },
+        { index: 2, text: 'c', embedding: fakeEmbedding(3) },
+      ]
+    );
 
     const rows = getWikiSourcesWithChunkCounts();
     const row = rows.find(r => r.page_id === 'p1');
@@ -170,9 +197,12 @@ describe('wiki chunk store', () => {
   });
 
   it('backfillWikiVecChunks repopulates an empty vec table and no-ops when populated', () => {
-    replaceWikiPage('p1', 'beacon', { title: 'Page', updatedAt: 'u', hash: 'h' }, [
-      { index: 0, text: 'a', embedding: fakeEmbedding(7) },
-    ]);
+    replaceWikiPage(
+      'p1',
+      'beacon',
+      { title: 'Page', updatedAt: 'u', hash: 'h' },
+      [{ index: 0, text: 'a', embedding: fakeEmbedding(7) }]
+    );
 
     // Simulate a lost vec mirror: delete vec rows only.
     const db = getDatabase();

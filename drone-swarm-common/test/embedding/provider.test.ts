@@ -62,6 +62,8 @@ describe('createEmbeddingProvider', () => {
       embed: async () => [],
     };
     const provider = createEmbeddingProvider(NOMIC_EMBED_TEXT_V1_5, backend);
-    await expect(provider.embedQuery('x')).rejects.toThrow(/returned no vector/);
+    await expect(provider.embedQuery('x')).rejects.toThrow(
+      /returned no vector/
+    );
   });
 });

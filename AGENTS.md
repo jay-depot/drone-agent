@@ -142,6 +142,7 @@ The following subsystems have dedicated documentation in `docs/agents/`:
 - **Portable Context** (`docs/agents/portable-context.md`) — Versioned JSON context serialization + brand-new-session continuation; the `checkpoint` plugin and `--output-json` commands (ADR 246/247)
 - **Memory Pipeline** (`docs/agents/memory-pipeline.md`) — The session-collection → memory-retrieval pipeline and the opinionated `bootstrap__swarm-memory` default
 - **Provider / Model Config** (`docs/agents/provider-model-config.md`) — Protocols (code) vs providers (data) vs models, and the `config.providers` schema
+- **Embedding Providers** (`docs/agents/embedding-providers.md`) — The beacon's ONNX (default) and Ollama embedding backends, the `embedding` config block, the model registry, and the index fingerprint (ADR 259)
 - **Session Import** (`docs/agents/session-import.md`) — The `/swarm-session` import command
 - **Import Conventions** (`docs/agents/import-conventions.md`) — Monorepo build/type gotchas (e.g. `.js` imports for `.tsx` siblings)
 
