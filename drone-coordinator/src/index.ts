@@ -6,6 +6,7 @@ import '@fastify/websocket';
 import {
   loadConfigFile,
   mergeConfig,
+  loadOrCreateIdentity,
   type ServerConfigFile,
   type SessionEndTrigger,
 } from 'drone-swarm-common';
@@ -36,6 +37,7 @@ import {
 import { initStorage } from './storage.js';
 import { registerRoutes } from './routes/index.js';
 import { setCoordinatorFingerprint } from './routes/health.js';
+import { setSigningIdentity } from './signing-identity.js';
 import { logger } from './logger.js';
 import {
   loadOrCreateTlsIdentity,
@@ -616,6 +618,16 @@ export async function main() {
     setCoordinatorFingerprint(tlsIdentity.fingerprint);
     logger.info(`TLS certificate fingerprint: ${tlsIdentity.fingerprint}`);
   }
+
+  const signingIdentity = await loadOrCreateIdentity(
+    'coordinator',
+    config.configDir,
+    'coordinator-identity.json'
+  );
+  setSigningIdentity(signingIdentity);
+  logger.info(
+    `Coordinator signing identity: ${signingIdentity.publicKeyHex}`
+  );
 
   const uiDistPath = resolveUiDistPath();
   logger.info(`Serving UI from: ${uiDistPath}`);

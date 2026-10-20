@@ -87,6 +87,7 @@ export function createMtlsMiddleware(opts?: { httpsEnabled?: boolean }) {
     // - POST /api/beacons/trust/:id/confirm-fingerprint — announce
     if (
       (req.method === 'POST' && req.url === '/api/beacons') ||
+      (req.method === 'POST' && req.url === '/api/beacons/trust/redeem') ||
       (req.method === 'GET' &&
         req.url.startsWith('/api/beacons/trust/') &&
         req.url.endsWith('/approve') === false &&

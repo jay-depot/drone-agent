@@ -16,3 +16,6 @@ export * from './json-schema.js';
 export * from './extension-server.js';
 export * from './keyed-lock.js';
 export * from './token-crypto.js';
+export * from './pre-approval.js';
+export * from './coordinator-trust.js';
+export * from './pre-approval-redeem.js';

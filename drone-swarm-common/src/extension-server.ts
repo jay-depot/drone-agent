@@ -2,6 +2,7 @@ import WebSocket from 'ws';
 import { loadOrCreateIdentity } from './identity.js';
 import { loadOrCreateTlsIdentity, type TlsIdentity } from './tls.js';
 import { createCoordinatorFetch } from './coordinator-fetch.js';
+import { loadCoordinatorTrust } from './coordinator-trust.js';
 import { logger } from './logger.js';
 import {
   EXTENSION_PROTOCOL_VERSION,
@@ -117,6 +118,12 @@ export interface CreateExtensionNodeOptions {
   awaitRegistration?: boolean;
   /** Bounded timeout for coordinator HTTP requests. Unset means no timeout. */
   requestTimeoutMs?: number;
+  /**
+   * The coordinator's TLS certificate fingerprint (hex, no colons). When set,
+   * the node pins it and refuses a mismatch (no TOFU). When unset, the node
+   * reads `<dataDir>/coordinator-trust.json` if present.
+   */
+  expectedCoordinatorFingerprint?: string;
 }
 
 const RECONNECT_MIN_MS = 1000;
@@ -137,9 +144,12 @@ export async function createExtensionNode(
     opts.dataDir,
     'node'
   );
+  const pinnedFingerprint =
+    opts.expectedCoordinatorFingerprint ??
+    (await loadCoordinatorTrust(opts.dataDir))?.tlsFingerprint;
   const cfetch = createCoordinatorFetch(
     opts.coordinatorUrl,
-    undefined,
+    pinnedFingerprint,
     undefined,
     tlsIdentity,
     opts.requestTimeoutMs
@@ -286,6 +296,24 @@ export async function createExtensionNode(
     ws.on('open', () => {
       logger.info(`Extension node ${opts.id} socket open, awaiting admission`);
       send({ type: 'manifest', ...manifest });
+    });
+
+    ws.on('upgrade', res => {
+      const socket = res.socket as unknown as {
+        getPeerCertificate?: () => { fingerprint256?: string } | false;
+        destroy?: () => void;
+      };
+      const cert = socket.getPeerCertificate?.();
+      const fp =
+        cert && typeof cert !== 'boolean'
+          ? cert.fingerprint256?.replace(/:/g, '').toLowerCase()
+          : undefined;
+      if (pinnedFingerprint && fp && fp !== pinnedFingerprint.toLowerCase()) {
+        socket.destroy?.();
+        logger.warn(
+          `Coordinator TLS fingerprint mismatch on WS upgrade; refusing socket`
+        );
+      }
     });
 
     ws.on('message', data => {

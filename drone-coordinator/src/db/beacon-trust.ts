@@ -184,6 +184,15 @@ export function listBeaconTrust(): BeaconTrust[] {
   return rows.map(rowToBeaconTrust);
 }
 
+export function getBeaconTrustByPublicKey(
+  publicKey: string
+): BeaconTrust | undefined {
+  const row = getDatabase()
+    .prepare('SELECT * FROM beacon_trust WHERE public_key = ?')
+    .get(publicKey) as BeaconTrustRow | undefined;
+  return row ? rowToBeaconTrust(row) : undefined;
+}
+
 export function approveBeaconById(beaconId: string): BeaconTrust | null {
   const now = Date.now();
   const stmt = getDatabase().prepare(`

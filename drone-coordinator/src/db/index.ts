@@ -44,12 +44,21 @@ export {
 export {
   registerBeaconTrust,
   getBeaconTrust,
+  getBeaconTrustByPublicKey,
   listBeaconTrust,
   approveBeaconById,
   confirmBeaconFingerprint,
   rejectBeacon,
   deleteBeaconTrust,
 } from './beacon-trust.js';
+export {
+  createPreApprovalToken,
+  getPreApprovalToken,
+  listPreApprovalTokens,
+  deletePreApprovalToken,
+  burnPreApprovalToken,
+} from './pre-approval-tokens.js';
+export type { PreApprovalTokenRow } from './pre-approval-tokens.js';
 export {
   createBeaconSession,
   getBeaconSession,

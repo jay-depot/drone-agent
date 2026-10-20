@@ -310,6 +310,16 @@ export function initDatabase(dataPath: string): Database.Database {
       updated_at INTEGER NOT NULL,
       PRIMARY KEY (node_id, name)
     );
+
+    CREATE TABLE IF NOT EXISTS pre_approval_tokens (
+      durable_id TEXT PRIMARY KEY,
+      burn_public_key TEXT NOT NULL,
+      label TEXT,
+      issued_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      burned_at INTEGER,
+      burned_by TEXT
+    );
   `);
 
   // Seed built-in tool definitions
