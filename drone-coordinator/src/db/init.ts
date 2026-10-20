@@ -326,18 +326,24 @@ export function initDatabase(dataPath: string): Database.Database {
  * with explicit DDL.
  */
 export function makeBeaconPortOptional(db: Database.Database): void {
-  for (const table of ['beacons', 'beacon_trust'] as const) {
-    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{
-      name: string;
-      notnull: number;
-    }>;
-    const port = cols.find(c => c.name === 'port');
-    if (!port || port.notnull === 0) continue;
+  // DROP TABLE on a referenced parent fails while foreign_keys is ON, so the
+  // rebuild runs with enforcement suspended. The pragma is a no-op inside a
+  // transaction, so it must wrap the BEGIN/COMMIT blocks from the outside.
+  const fkWasOn = db.pragma('foreign_keys', { simple: true }) === 1;
+  db.pragma('foreign_keys = OFF');
+  try {
+    for (const table of ['beacons', 'beacon_trust'] as const) {
+      const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+        name: string;
+        notnull: number;
+      }>;
+      const port = cols.find(c => c.name === 'port');
+      if (!port || port.notnull === 0) continue;
 
-    const names = cols.map(c => c.name).join(', ');
-    const ddl =
-      table === 'beacons'
-        ? `CREATE TABLE beacons_new (
+      const names = cols.map(c => c.name).join(', ');
+      const ddl =
+        table === 'beacons'
+          ? `CREATE TABLE beacons_new (
              id TEXT PRIMARY KEY,
              name TEXT NOT NULL,
              host TEXT NOT NULL,
@@ -347,7 +353,7 @@ export function makeBeaconPortOptional(db: Database.Database): void {
              spawn_roots TEXT,
              default_spawn_root TEXT
            )`
-        : `CREATE TABLE beacon_trust_new (
+          : `CREATE TABLE beacon_trust_new (
              beacon_id TEXT PRIMARY KEY,
              name TEXT NOT NULL,
              public_key TEXT NOT NULL,
@@ -362,20 +368,23 @@ export function makeBeaconPortOptional(db: Database.Database): void {
              updated_at INTEGER NOT NULL
            )`;
 
-    db.exec('BEGIN');
-    try {
-      db.exec(ddl);
-      db.exec(
-        `INSERT INTO ${table}_new (${names}) SELECT ${names} FROM ${table}`
-      );
-      db.exec(`DROP TABLE ${table}`);
-      db.exec(`ALTER TABLE ${table}_new RENAME TO ${table}`);
-      db.exec('COMMIT');
-      logger.info(`Migrated ${table}.port to nullable`);
-    } catch (err) {
-      db.exec('ROLLBACK');
-      throw err;
+      db.exec('BEGIN');
+      try {
+        db.exec(ddl);
+        db.exec(
+          `INSERT INTO ${table}_new (${names}) SELECT ${names} FROM ${table}`
+        );
+        db.exec(`DROP TABLE ${table}`);
+        db.exec(`ALTER TABLE ${table}_new RENAME TO ${table}`);
+        db.exec('COMMIT');
+        logger.info(`Migrated ${table}.port to nullable`);
+      } catch (err) {
+        db.exec('ROLLBACK');
+        throw err;
+      }
     }
+  } finally {
+    if (fkWasOn) db.pragma('foreign_keys = ON');
   }
 }
 
