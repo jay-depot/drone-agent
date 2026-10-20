@@ -27,10 +27,10 @@ opens a WebSocket to `/ws/beacon`.
 
 The coordinator runs two HTTP servers:
 
-| Port | Default | Security | Has `/ws/beacon`? |
-| --- | --- | --- | --- |
-| Primary (swarm) | 3456 | TLS + mTLS client certificate | Yes |
-| Web | 8080 (bound 127.0.0.1) | none, or bearer token | **No** |
+| Port            | Default                | Security                      | Has `/ws/beacon`? |
+| --------------- | ---------------------- | ----------------------------- | ----------------- |
+| Primary (swarm) | 3456                   | TLS + mTLS client certificate | Yes               |
+| Web             | 8080 (bound 127.0.0.1) | none, or bearer token         | **No**            |
 
 `registerBeaconWebSocket(app)` is called only inside the `if (opts.enableMtls)`
 branch (`drone-coordinator/src/index.ts:369-380`). Therefore `/ws/beacon` does not
@@ -62,17 +62,17 @@ A new approval flow is planned for a later iteration. It will address all three.
 
 ## 2. Locked Decisions
 
-| # | Decision | Selection |
-| --- | --- | --- |
-| D1 | Target surface | Use the existing web port (8080). No new port. No third server. |
-| D2 | Where extensions run | Coordinator host only. Web port stays bound to 127.0.0.1. Loopback registration is auto-approved. |
-| D3 | Node identity on the certificate-less socket | None. The node claims its id. Local callers are trusted. No new auth scheme. |
-| D4 | mTLS path | Unchanged. Fix the web port only. The 3456 deadlock stays reachable, and the docs must say so. |
-| D5 | Bundle upload on the web port | Accept a claimed node id from a local caller. No signature. |
-| D6 | Node identification at the WebSocket upgrade | Query parameter `?beaconId=<id>`. |
-| D7 | Consumers to retarget | `mcp-swarm` default URL and the docs. No `drone-gateway` code change. |
-| D8 | SDK hygiene | Fix the false "connected" log and the reconnect backoff. |
-| D9 | Registration address fields | Beacons send their listen address and listen port. Extensions send their address only (always 127.0.0.1) and no port. `port` becomes optional and nullable. |
+| #   | Decision                                     | Selection                                                                                                                                                   |
+| --- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Target surface                               | Use the existing web port (8080). No new port. No third server.                                                                                             |
+| D2  | Where extensions run                         | Coordinator host only. Web port stays bound to 127.0.0.1. Loopback registration is auto-approved.                                                           |
+| D3  | Node identity on the certificate-less socket | None. The node claims its id. Local callers are trusted. No new auth scheme.                                                                                |
+| D4  | mTLS path                                    | Unchanged. Fix the web port only. The 3456 deadlock stays reachable, and the docs must say so.                                                              |
+| D5  | Bundle upload on the web port                | Accept a claimed node id from a local caller. No signature.                                                                                                 |
+| D6  | Node identification at the WebSocket upgrade | Query parameter `?beaconId=<id>`.                                                                                                                           |
+| D7  | Consumers to retarget                        | `mcp-swarm` default URL and the docs. No `drone-gateway` code change.                                                                                       |
+| D8  | SDK hygiene                                  | Fix the false "connected" log and the reconnect backoff.                                                                                                    |
+| D9  | Registration address fields                  | Beacons send their listen address and listen port. Extensions send their address only (always 127.0.0.1) and no port. `port` becomes optional and nullable. |
 
 ### Accepted risks (documented, not mitigated)
 
@@ -113,7 +113,9 @@ export function makeBeaconPortOptional(db: Database): void {
     db.exec('BEGIN');
     try {
       db.exec(`CREATE TABLE ${table}_new (...explicit DDL, port INTEGER...)`);
-      db.exec(`INSERT INTO ${table}_new (${names}) SELECT ${names} FROM ${table}`);
+      db.exec(
+        `INSERT INTO ${table}_new (${names}) SELECT ${names} FROM ${table}`
+      );
       db.exec(`DROP TABLE ${table}`);
       db.exec(`ALTER TABLE ${table}_new RENAME TO ${table}`);
       db.exec('COMMIT');
@@ -141,12 +143,12 @@ Agent: coder. Depends on: none. Runs parallel to Step 1.
 
 File: `drone-coordinator/src/types.ts`
 
-| Interface | Line | Change |
-| --- | --- | --- |
-| `Beacon` | 18 | `port: number` becomes `port: number \| null` |
-| `RegisterBeaconRequest` | 26 | `port: number` becomes `port?: number` |
-| `RegisterBeaconTrustRequest` | ~57 | `port: number` becomes `port?: number` |
-| `BeaconTrust` | ~40 | `port: number` becomes `port: number \| null` |
+| Interface                    | Line | Change                                        |
+| ---------------------------- | ---- | --------------------------------------------- |
+| `Beacon`                     | 18   | `port: number` becomes `port: number \| null` |
+| `RegisterBeaconRequest`      | 26   | `port: number` becomes `port?: number`        |
+| `RegisterBeaconTrustRequest` | ~57  | `port: number` becomes `port?: number`        |
+| `BeaconTrust`                | ~40  | `port: number` becomes `port: number \| null` |
 
 Add to `RegisterBeaconRequest`:
 
@@ -242,9 +244,7 @@ the routes.
  * header and then from a `beaconId` query parameter. The claim is trusted only
  * because the web port is bound to loopback (ADR 257).
  */
-export function resolveRequestNodeId(
-  req: FastifyRequest
-): string | undefined {
+export function resolveRequestNodeId(req: FastifyRequest): string | undefined {
   const fingerprint = getClientCertFingerprint(req);
   if (fingerprint) {
     return resolveBeaconIdByFingerprint(fingerprint);
@@ -339,22 +339,22 @@ Agent: coder. Depends on: Step 6.
 File: `drone-coordinator/src/index.ts`, `buildApp` (lines 366-381). Replace the block:
 
 ```ts
-  if (opts?.getToken) {
-    app.addHook('onRequest', createWebAuthMiddleware(opts.getToken));
-  }
+if (opts?.getToken) {
+  app.addHook('onRequest', createWebAuthMiddleware(opts.getToken));
+}
 
-  if (opts?.enableMtls) {
-    app.addHook(
-      'onRequest',
-      createMtlsMiddleware({ httpsEnabled: !!opts.https })
-    );
-  }
+if (opts?.enableMtls) {
+  app.addHook(
+    'onRequest',
+    createMtlsMiddleware({ httpsEnabled: !!opts.https })
+  );
+}
 
-  // The reverse channel serves beacons on the primary port (mTLS identity)
-  // and extensions on the web port (claimed identity, loopback-only, ADR 257).
-  await app.register(import('@fastify/websocket'));
-  registerBeaconWebSocket(app);
-  startBeaconLivenessSweep();
+// The reverse channel serves beacons on the primary port (mTLS identity)
+// and extensions on the web port (claimed identity, loopback-only, ADR 257).
+await app.register(import('@fastify/websocket'));
+registerBeaconWebSocket(app);
+startBeaconLivenessSweep();
 ```
 
 Make the liveness sweep idempotent. `connections` is a module-level map shared by both
@@ -403,7 +403,9 @@ Replace the inline certificate resolution in PUT (lines 166-175) and DELETE
 ```ts
 const nodeId = resolveRequestNodeId(request);
 if (!nodeId) {
-  return reply.code(401).send({ error: 'A registered node identity is required' });
+  return reply
+    .code(401)
+    .send({ error: 'A registered node identity is required' });
 }
 ```
 
@@ -472,7 +474,7 @@ change.
 `let policyCloseLogged = false;` next to `attempts`.
 
 - On open: `logger.info(\`Extension node ${opts.id} socket open, awaiting admission\`)`.
-  Do NOT reset `attempts`.
+Do NOT reset `attempts`.
 - In the `event` branch of `on('message')`: if `!admitted`, set `admitted = true`,
   `attempts = 0`, `policyCloseLogged = false`, and log "admitted to coordinator".
 - On close(code): capture `wasAdmitted = admitted`, then `admitted = false`. If
@@ -567,14 +569,14 @@ Agent: tester. Depends on: each step, delivered with that step.
 
 Every step lists its own tests. Add these integration tests at the end:
 
-| File | Test |
-| --- | --- |
-| `drone-coordinator/test/beacon-ws-web-port.test.ts` | Certificate-less `/ws/beacon?beaconId=...` for an approved node is admitted on a web app. |
-| `drone-coordinator/test/routes/extensions.test.ts` | Bundle PUT with `x-node-id` succeeds. DELETE with `x-node-id` succeeds. |
-| `drone-coordinator/test/routes/beacons.test.ts` | Extension registration records `port: null` and `host: '127.0.0.1'`. Protocol version mismatch returns 400. |
-| `drone-coordinator/test/db.test.ts` | Port merge-on-omit, and the nullable-port migration. |
-| `drone-swarm-common/test/extension-server.test.ts` | Payload shape, socket target per scheme, admitted log, backoff on 4001/4002, boot despite registration failure. |
-| `mcp-swarm/test/*.test.ts` | Default coordinator URL is port 8080. |
+| File                                                | Test                                                                                                            |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `drone-coordinator/test/beacon-ws-web-port.test.ts` | Certificate-less `/ws/beacon?beaconId=...` for an approved node is admitted on a web app.                       |
+| `drone-coordinator/test/routes/extensions.test.ts`  | Bundle PUT with `x-node-id` succeeds. DELETE with `x-node-id` succeeds.                                         |
+| `drone-coordinator/test/routes/beacons.test.ts`     | Extension registration records `port: null` and `host: '127.0.0.1'`. Protocol version mismatch returns 400.     |
+| `drone-coordinator/test/db.test.ts`                 | Port merge-on-omit, and the nullable-port migration.                                                            |
+| `drone-swarm-common/test/extension-server.test.ts`  | Payload shape, socket target per scheme, admitted log, backoff on 4001/4002, boot despite registration failure. |
+| `mcp-swarm/test/*.test.ts`                          | Default coordinator URL is port 8080.                                                                           |
 
 Use a waitUntil-style polling helper for asynchronous assertions. Never use fixed
 timers.

@@ -21,9 +21,28 @@ design (D1–D20).
 
 ### Registration
 
-An extension registers exactly like a beacon (`POST /api/beacons`, mTLS,
-Ed25519 identity + TLS cert). It additionally advertises
-`extension: { protocolVersion: 1 }` in the registration payload.
+An extension registers exactly like a beacon (`POST /api/beacons`), advertising
+`extension: { protocolVersion: 1 }` in the registration payload. On the primary
+port the request is mTLS-authenticated with an Ed25519 identity + TLS cert. On
+the unencrypted web port there is no client certificate, so the node id is
+claimed and the coordinator trusts it because the port is bound to loopback
+(ADR [257](../adr/257-extension-node-web-port-transport.md)).
+
+### Transport
+
+| Port            | Default                | Identity                | Has `/ws/beacon`? |
+| --------------- | ---------------------- | ----------------------- | ----------------- |
+| Primary (swarm) | 3456                   | mTLS client certificate | Yes               |
+| Web             | 8080 (bound 127.0.0.1) | claimed node id         | Yes               |
+
+An extension connects to the coordinator's **web port**, which is unencrypted
+and bound to loopback. Registration from loopback is auto-approved, and the
+reverse-channel socket claims its node id (via `?beaconId=` and the `x-node-id`
+header).
+
+The SDK does **not** implement the mTLS approval handshake
+(`confirm-fingerprint` then operator approval). Pointing an extension at the
+primary port (`https://…:3456`) leaves it pending forever. Use the web port.
 
 ### Manifest (over the reverse channel)
 
@@ -170,7 +189,7 @@ Use the SDK in `drone-swarm-common`:
 import { createExtensionNode } from 'drone-swarm-common';
 
 const node = await createExtensionNode({
-  coordinatorUrl: 'http://127.0.0.1:3456',
+  coordinatorUrl: 'http://127.0.0.1:8080',
   dataDir: '/var/lib/my-ext',
   id: 'my-ext',
   name: 'My Extension',
@@ -258,7 +277,10 @@ See ADR
 ## Constraints (v0)
 
 - **Local-only**: same host as the coordinator. Remote extensions are deferred
-  behind a future pre-approval token flow.
+  behind a future pre-approval token flow. Extensions connect to the
+  coordinator's **web port** (unencrypted, loopback-only); see
+  [ADR 257](../adr/257-extension-node-web-port-transport.md) for the accepted
+  risks of trusting a claimed node id on that port.
 - No sandbox for front-end bundles (same-origin, full page trust).
 - A disconnected node → 503; a timeout (15 s default, per-capability override)
   → 504 / tool-error; no retry.

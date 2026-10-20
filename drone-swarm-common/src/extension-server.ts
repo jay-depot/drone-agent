@@ -18,8 +18,12 @@ import {
  * WebSocket (connect + reconnect), manifest declaration, inbound command/event
  * dispatch, and injection/base upload helpers.
  *
- * v0 is local-only: the node registers like a beacon and is auto-approved when
- * it is on the same host as the coordinator.
+ * v0 is local-only. The node connects to the coordinator's unencrypted web
+ * port, which is bound to loopback. With no client certificate the node id is
+ * claimed (ADR 257), and registration is auto-approved because the caller is
+ * local. Pointing the node at an `https:` coordinator URL keeps the mTLS path,
+ * but the SDK does not implement the mTLS approval handshake, so such a node
+ * stays pending.
  */
 
 export interface InvokeCtx {
@@ -98,8 +102,17 @@ export interface CreateExtensionNodeOptions {
   capabilities: DroneExtensionCapability[];
   handlers?: ExtensionNodeHandlers;
   /**
+   * The address other swarm members should use to reach this node. Extensions
+   * have no listen port, so no port is registered. v0 extensions are
+   * local-only, so this defaults to loopback (ADR 257).
+   */
+  host?: string;
+  /**
    * When `false`, `createExtensionNode` resolves before registration completes
-   * and retries registration in the background with exponential backoff.
+   * and retries registration in the background with exponential backoff. When
+   * `true` (the default), a registration failure no longer rejects: the node
+   * opens the socket (which the coordinator will refuse until it is registered)
+   * and retries registration in the background.
    */
   awaitRegistration?: boolean;
   /** Bounded timeout for coordinator HTTP requests. Unset means no timeout. */
@@ -114,6 +127,7 @@ const REGISTER_RETRY_MAX_MS = 30000;
 export async function createExtensionNode(
   opts: CreateExtensionNodeOptions
 ): Promise<ExtensionNode> {
+  const host = opts.host ?? '127.0.0.1';
   const identity = await loadOrCreateIdentity(
     opts.id,
     opts.dataDir,
@@ -140,6 +154,8 @@ export async function createExtensionNode(
   let ws: WebSocket | null = null;
   let stopped = false;
   let attempts = 0;
+  let admitted = false;
+  let policyCloseLogged = false;
   let reconnectTimer: NodeJS.Timeout | null = null;
   let registerAttempts = 0;
   let registerTimer: NodeJS.Timeout | null = null;
@@ -151,8 +167,7 @@ export async function createExtensionNode(
       body: JSON.stringify({
         id: opts.id,
         name: opts.name,
-        host: new URL(opts.coordinatorUrl).hostname,
-        port: Number(new URL(opts.coordinatorUrl).port || 0),
+        host,
         publicKey: identity.publicKey,
         tlsFingerprint: tlsIdentity.fingerprint,
         fingerprintConfirmed: false,
@@ -248,13 +263,20 @@ export async function createExtensionNode(
   const connect = (): void => {
     if (stopped) return;
     const wsUrl = opts.coordinatorUrl.replace(/^http/, 'ws') + '/ws/beacon';
+    const certless = !opts.coordinatorUrl.startsWith('https:');
+    const target = certless
+      ? `${wsUrl}?beaconId=${encodeURIComponent(opts.id)}`
+      : wsUrl;
+    const wsOptions: WebSocket.ClientOptions = certless
+      ? { headers: { 'x-node-id': opts.id } }
+      : {
+          // codeql[js/disabling-certificate-verification]
+          rejectUnauthorized: false,
+          cert: tlsIdentity.certPem,
+          key: tlsIdentity.keyPem,
+        };
     try {
-      ws = new WebSocket(wsUrl, {
-        // codeql[js/disabling-certificate-verification]
-        rejectUnauthorized: false,
-        cert: tlsIdentity.certPem,
-        key: tlsIdentity.keyPem,
-      });
+      ws = new WebSocket(target, wsOptions);
     } catch (err) {
       logger.warn(`Extension node WS connect failed: ${err}`);
       scheduleReconnect();
@@ -262,8 +284,7 @@ export async function createExtensionNode(
     }
 
     ws.on('open', () => {
-      attempts = 0;
-      logger.info(`Extension node ${opts.id} connected to coordinator`);
+      logger.info(`Extension node ${opts.id} socket open, awaiting admission`);
       send({ type: 'manifest', ...manifest });
     });
 
@@ -273,6 +294,12 @@ export async function createExtensionNode(
         msg = JSON.parse(data.toString());
       } catch {
         return;
+      }
+      if (msg.type === 'event' && !admitted) {
+        admitted = true;
+        attempts = 0;
+        policyCloseLogged = false;
+        logger.info(`Extension node ${opts.id} admitted to coordinator`);
       }
       if (msg.type === 'command') {
         void dispatchCommand(
@@ -292,8 +319,23 @@ export async function createExtensionNode(
       }
     });
 
-    ws.on('close', () => {
+    ws.on('close', (code: number) => {
       ws = null;
+      const wasAdmitted = admitted;
+      admitted = false;
+      if (
+        !wasAdmitted &&
+        (code === 4001 || code === 4002) &&
+        !policyCloseLogged
+      ) {
+        logger.warn(
+          `Extension node ${opts.id} was not admitted by the coordinator (close code ${code}); retrying with backoff`
+        );
+        policyCloseLogged = true;
+      }
+      if (wasAdmitted) {
+        attempts = 0;
+      }
       scheduleReconnect();
     });
 
@@ -340,8 +382,14 @@ export async function createExtensionNode(
   if (opts.awaitRegistration === false) {
     void tryRegister();
   } else {
-    await register();
-    connect();
+    try {
+      await register();
+      connect();
+    } catch (err) {
+      logger.warn(`Extension node registration failed: ${err}`);
+      connect();
+      scheduleRegisterRetry();
+    }
   }
 
   return {
@@ -391,11 +439,17 @@ export async function createExtensionNode(
       send({ type: 'manifest', ...manifest });
     },
     async uploadBundle(input) {
+      const certless = !opts.coordinatorUrl.startsWith('https:');
       const res = await cfetch(
         `${opts.coordinatorUrl}/api/extensions/bundles/${encodeURIComponent(input.name)}`,
         {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            // On the unencrypted web port there is no client certificate, so
+            // the node claims its id (ADR 257).
+            ...(certless ? { 'x-node-id': opts.id } : {}),
+          },
           body: JSON.stringify({ version: input.version, files: input.files }),
         }
       );

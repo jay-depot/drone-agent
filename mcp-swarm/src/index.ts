@@ -9,7 +9,7 @@
  * mTLS-authenticated fetch.
  *
  * Config via env:
- *   MCP_SWARM_COORDINATOR_URL  (default http://127.0.0.1:3456)
+ *   MCP_SWARM_COORDINATOR_URL  (default http://127.0.0.1:8080)
  *   MCP_SWARM_DATA_DIR         (default ~/.drone-agent/mcp-swarm)
  *   MCP_SWARM_ID               (default mcp-swarm)
  *   MCP_SWARM_HOST             (default 127.0.0.1)
@@ -37,7 +37,7 @@ export interface McpSwarmConfig {
 /** Resolve config from env with sensible defaults. */
 export function resolveConfig(env = process.env): McpSwarmConfig {
   return {
-    coordinatorUrl: env.MCP_SWARM_COORDINATOR_URL ?? 'http://127.0.0.1:3456',
+    coordinatorUrl: env.MCP_SWARM_COORDINATOR_URL ?? 'http://127.0.0.1:8080',
     dataDir:
       env.MCP_SWARM_DATA_DIR ??
       path.join(os.homedir(), '.drone-agent', 'mcp-swarm'),

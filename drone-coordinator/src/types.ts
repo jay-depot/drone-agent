@@ -12,7 +12,7 @@ export interface Beacon {
   id: string;
   name: string;
   host: string;
-  port: number;
+  port: number | null;
   connectedAt: number;
   lastHeartbeat: number;
   spawnRoots?: string[];
@@ -23,12 +23,17 @@ export interface RegisterBeaconRequest {
   id: string;
   name: string;
   host: string;
-  port: number;
+  port?: number;
   publicKey?: string; // Ed25519 public key (base64)
   tlsFingerprint?: string; // SHA-256 of TLS cert for pinning
   fingerprintConfirmed?: boolean; // Beacon has confirmed coordinator fingerprint (TOFU)
   spawnRoots?: string[];
   defaultSpawnRoot?: string;
+  /**
+   * Present when the caller is a swarm extension: it declares a capability
+   * manifest over /ws/beacon. Extensions have no listen port.
+   */
+  extension?: { protocolVersion: number };
 }
 
 // === Beacon Trust Types ===
@@ -40,7 +45,7 @@ export interface BeaconTrust {
   name: string;
   publicKey: string; // Ed25519 public key (base64)
   host: string;
-  port: number;
+  port: number | null;
   status: BeaconTrustStatus;
   approvedAt: number | null;
   tlsFingerprint: string | null;
@@ -54,10 +59,15 @@ export interface RegisterBeaconTrustRequest {
   id: string;
   name: string;
   host: string;
-  port: number;
+  port?: number;
   publicKey: string;
   tlsFingerprint?: string;
   fingerprintConfirmed?: boolean; // Beacon has confirmed coordinator fingerprint (TOFU)
+  /**
+   * Present when the caller is a swarm extension: it declares a capability
+   * manifest over /ws/beacon. Extensions have no listen port.
+   */
+  extension?: { protocolVersion: number };
 }
 
 export interface BeaconStatusResponse {

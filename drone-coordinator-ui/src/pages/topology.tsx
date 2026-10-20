@@ -329,7 +329,9 @@ export default function TopologyPage() {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Address</span>
                       <span>
-                        {beacon.host}:{beacon.port}
+                        {beacon.port === null
+                          ? beacon.host
+                          : `${beacon.host}:${beacon.port}`}
                       </span>
                     </div>
                     <div className="flex justify-between">

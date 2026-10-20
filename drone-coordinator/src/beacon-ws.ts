@@ -2,10 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { FastifyRequest } from 'fastify';
 import type { WebSocket } from '@fastify/websocket';
 import { randomUUID } from 'node:crypto';
-import {
-  getClientCertFingerprint,
-  resolveBeaconIdByFingerprint,
-} from './mtls.js';
+import { getClientCertFingerprint, resolveRequestNodeId } from './mtls.js';
 import {
   getBeaconTrust,
   getSwarmSession,
@@ -51,10 +48,14 @@ export function resolveBeaconWsAdmission(
  * Reverse-channel WebSocket registry on the coordinator side.
  *
  * Beacons open an outbound WebSocket to the coordinator's `/ws/beacon`
- * endpoint, authenticating via their mTLS client certificate. The coordinator
- * resolves the beaconId from the certificate fingerprint and stores the
- * socket so it can push spawn/message commands down the channel — eliminating
- * the need for the coordinator to make inbound HTTP calls to the beacon.
+ * endpoint. On the primary port they authenticate via their mTLS client
+ * certificate, and the coordinator resolves the beaconId from the certificate
+ * fingerprint. On the unencrypted web port there is no certificate, so the
+ * node id is claimed by the caller (ADR 257); that port is bound to loopback,
+ * which is what makes the claim trustworthy. Either way the coordinator stores
+ * the socket so it can push spawn/message commands down the channel —
+ * eliminating the need for the coordinator to make inbound HTTP calls to the
+ * beacon.
  */
 
 interface BeaconConnection {
@@ -326,47 +327,53 @@ function replayActiveSessions(conn: BeaconConnection): void {
 }
 
 /**
- * Register the `/ws/beacon` endpoint on the coordinator's primary app.
- * The WebSocket plugin must already be registered on `app`.
+ * Admit a reverse-channel socket for a resolved node id, or refuse it and
+ * close. Shared by the certificate path (primary port) and the claimed-id path
+ * (web port, ADR 257).
+ */
+function admitBeaconSocket(
+  socket: WebSocket,
+  beaconId: string | undefined,
+  origin: 'certificate' | 'claim'
+): boolean {
+  if (!beaconId) {
+    const reason =
+      origin === 'certificate'
+        ? 'Unauthorized: client certificate not a registered beacon'
+        : 'Unauthorized: beaconId is missing or not registered';
+    logger.warn(`Rejected beacon WebSocket connection: ${reason}`);
+    socket.close(4001, reason);
+    return false;
+  }
+  const refusal = resolveBeaconWsAdmission(beaconId);
+  if (refusal) {
+    logger.warn(
+      `Rejected beacon WebSocket connection: beacon ${beaconId} not yet approved`
+    );
+    socket.close(refusal.code, refusal.reason);
+    return false;
+  }
+  registerBeaconConnection(beaconId, socket);
+  socket.on('message', (raw: Buffer) => {
+    dispatchIncoming(beaconId, raw.toString());
+  });
+  socket.on('close', () => {
+    unregisterBeaconConnection(beaconId);
+  });
+  return true;
+}
+
+/**
+ * Register the `/ws/beacon` endpoint on a coordinator app. The WebSocket
+ * plugin must already be registered on `app`.
  */
 export function registerBeaconWebSocket(app: FastifyInstance): void {
   app.get('/ws/beacon', { websocket: true }, (socket, request) => {
-    const fingerprint = getClientCertFingerprint(
-      request as unknown as FastifyRequest
-    );
-    const beaconId = fingerprint
-      ? resolveBeaconIdByFingerprint(fingerprint)
-      : undefined;
-
-    if (!beaconId) {
-      logger.warn(
-        'Rejected beacon WebSocket connection: client certificate not a registered beacon'
-      );
-      socket.close(
-        4001,
-        'Unauthorized: client certificate not a registered beacon'
-      );
-      return;
-    }
-
-    const refusal = resolveBeaconWsAdmission(beaconId);
-    if (refusal) {
-      logger.warn(
-        `Rejected beacon WebSocket connection: beacon ${beaconId} not yet approved`
-      );
-      socket.close(refusal.code, refusal.reason);
-      return;
-    }
-
-    registerBeaconConnection(beaconId, socket);
-
-    socket.on('message', (raw: Buffer) => {
-      dispatchIncoming(beaconId, raw.toString());
-    });
-
-    socket.on('close', () => {
-      unregisterBeaconConnection(beaconId);
-    });
+    const fastifyReq = request as unknown as FastifyRequest;
+    const origin = getClientCertFingerprint(fastifyReq)
+      ? 'certificate'
+      : 'claim';
+    admitBeaconSocket(socket, resolveRequestNodeId(fastifyReq), origin);
   });
 }
 
@@ -375,10 +382,15 @@ export function registerBeaconWebSocket(app: FastifyInstance): void {
  * channel. A beacon that fails to pong by the next sweep is terminated so dead
  * sockets don't keep `isBeaconConnected` reporting true forever.
  *
+ * Idempotent: the `connections` map is shared by both coordinator apps, so a
+ * second call returns the existing timer instead of doubling the sweep.
  * Returns the interval so callers can clear it on shutdown. The interval is
  * unref'd so it never keeps the process alive by itself.
  */
+let sweepTimer: NodeJS.Timeout | null = null;
+
 export function startBeaconLivenessSweep(intervalMs = 30000): NodeJS.Timeout {
+  if (sweepTimer) return sweepTimer;
   const interval = setInterval(() => {
     for (const conn of connections.values()) {
       if (!conn.isAlive) {
@@ -393,7 +405,16 @@ export function startBeaconLivenessSweep(intervalMs = 30000): NodeJS.Timeout {
     }
   }, intervalMs);
   interval.unref();
+  sweepTimer = interval;
   return interval;
+}
+
+/** Stop the liveness sweep timer, if one is running. */
+export function stopBeaconLivenessSweep(): void {
+  if (sweepTimer) {
+    clearInterval(sweepTimer);
+    sweepTimer = null;
+  }
 }
 
 /**

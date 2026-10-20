@@ -14,7 +14,7 @@ interface BeaconTrustRow {
   name: string;
   public_key: string;
   host: string;
-  port: number;
+  port: number | null;
   status: BeaconTrustStatus;
   approved_at: number | null;
   tls_fingerprint: string | null;
@@ -73,6 +73,7 @@ export function registerBeaconTrust(
       req.fingerprintConfirmed && existing.fingerprintConfirmedAt === null
         ? now
         : existing.fingerprintConfirmedAt;
+    const port = req.port ?? existing.port;
 
     // Update connection info but preserve status and public key
     const stmt = getDatabase().prepare(`
@@ -84,7 +85,7 @@ export function registerBeaconTrust(
     stmt.run({
       beaconId: existing.beaconId,
       host: req.host,
-      port: req.port,
+      port,
       tlsFingerprint: req.tlsFingerprint ?? null,
       verificationCode,
       fingerprintConfirmedAt,
@@ -98,7 +99,7 @@ export function registerBeaconTrust(
     return {
       ...existing,
       host: req.host,
-      port: req.port,
+      port,
       tlsFingerprint: req.tlsFingerprint ?? null,
       fingerprintConfirmedAt,
       verificationCode,
@@ -129,7 +130,7 @@ export function registerBeaconTrust(
     name: req.name,
     publicKey: req.publicKey,
     host: req.host,
-    port: req.port,
+    port: req.port ?? null,
     status,
     approvedAt,
     tlsFingerprint: req.tlsFingerprint ?? null,

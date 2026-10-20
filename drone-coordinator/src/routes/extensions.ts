@@ -9,10 +9,7 @@ import {
   isExtension,
   listExtensionNodeIds,
 } from '../extension-registry.js';
-import {
-  resolveBeaconIdByFingerprint,
-  getClientCertFingerprint,
-} from '../mtls.js';
+import { resolveRequestNodeId } from '../mtls.js';
 import { publishMutationEvent } from '../ws-pubsub.js';
 import {
   computeBundleHash,
@@ -172,14 +169,11 @@ export default function extensionRoutes(app: FastifyInstance) {
     Params: { name: string };
     Body: { version?: string; files?: BundleFile[] };
   }>('/extensions/bundles/:name', async (request, reply) => {
-    const fingerprint = getClientCertFingerprint(request);
-    const nodeId = fingerprint
-      ? resolveBeaconIdByFingerprint(fingerprint)
-      : undefined;
+    const nodeId = resolveRequestNodeId(request);
     if (!nodeId) {
       return reply
         .code(401)
-        .send({ error: 'A registered node certificate is required' });
+        .send({ error: 'A registered node identity is required' });
     }
     const { version, files } = request.body ?? {};
     if (
@@ -247,14 +241,11 @@ export default function extensionRoutes(app: FastifyInstance) {
   app.delete<{ Params: { name: string } }>(
     '/extensions/bundles/:name',
     async (request, reply) => {
-      const fingerprint = getClientCertFingerprint(request);
-      const nodeId = fingerprint
-        ? resolveBeaconIdByFingerprint(fingerprint)
-        : undefined;
+      const nodeId = resolveRequestNodeId(request);
       if (!nodeId) {
         return reply
           .code(401)
-          .send({ error: 'A registered node certificate is required' });
+          .send({ error: 'A registered node identity is required' });
       }
       const existing = db.getBundle(nodeId, request.params.name);
       if (!existing) {

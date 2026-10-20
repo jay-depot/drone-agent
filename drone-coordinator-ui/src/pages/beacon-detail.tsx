@@ -239,7 +239,9 @@ export default function BeaconDetailPage() {
             <div>
               <span className="text-muted-foreground">Address</span>
               <p className="font-mono mt-0.5">
-                {beacon.host}:{beacon.port}
+                {beacon.port === null
+                  ? beacon.host
+                  : `${beacon.host}:${beacon.port}`}
               </p>
             </div>
             <div>

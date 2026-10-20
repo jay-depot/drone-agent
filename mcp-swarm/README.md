@@ -16,7 +16,9 @@ serves a front-end bundle to the coordinator UI.
 
 1. **Registers** with the coordinator via `POST /api/beacons` (mTLS), using an
    Ed25519 identity + TLS cert generated under the data dir. On a local host
-   the coordinator auto-approves it.
+   the coordinator auto-approves it. The node connects to the coordinator's
+   **web port** (`http://127.0.0.1:8080`), which is unencrypted and bound to
+   loopback; registration is auto-approved because the caller is local.
 2. **Declares a capability catalog** over the `/ws/beacon` WebSocket:
    - `swarm.session.list` — list agent sessions (`GET /api/sessions`)
    - `swarm.wiki.read` — read a wiki page (`GET /api/wiki/:pageId`)
@@ -59,7 +61,7 @@ Register it with an MCP client (e.g. Claude Code):
 
 | Variable                    | Default                    | Purpose                        |
 | --------------------------- | -------------------------- | ------------------------------ |
-| `MCP_SWARM_COORDINATOR_URL` | `http://127.0.0.1:3456`    | Coordinator to connect to.     |
+| `MCP_SWARM_COORDINATOR_URL` | `http://127.0.0.1:8080`    | Coordinator to connect to.     |
 | `MCP_SWARM_DATA_DIR`        | `~/.drone-agent/mcp-swarm` | Identity, TLS, token storage.  |
 | `MCP_SWARM_ID`              | `mcp-swarm`                | Node id used for registration. |
 | `MCP_SWARM_HOST`            | `127.0.0.1`                | HTTP bind host.                |

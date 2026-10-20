@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { publishMutationEvent } from '../ws-pubsub.js';
+import { EXTENSION_PROTOCOL_VERSION } from 'drone-core';
 import { getClientCertFingerprint } from '../mtls.js';
 import { buildBeaconView } from '../beacon-view.js';
 import { isLoopbackIp } from '../ip.js';
@@ -20,6 +21,14 @@ export default function beaconRoutes(app: FastifyInstance) {
     '/beacons',
     async (request, reply) => {
       if (request.body.publicKey) {
+        if (
+          request.body.extension &&
+          request.body.extension.protocolVersion !== EXTENSION_PROTOCOL_VERSION
+        ) {
+          return reply.code(400).send({
+            error: `Unsupported extension protocol version: ${request.body.extension.protocolVersion}`,
+          });
+        }
         // Verify the presented client certificate matches the TLS fingerprint
         // the beacon claims. This prevents a beacon from registering with a
         // fingerprint it doesn't actually hold (spoofing).
@@ -43,6 +52,7 @@ export default function beaconRoutes(app: FastifyInstance) {
           publicKey: request.body.publicKey,
           tlsFingerprint: request.body.tlsFingerprint,
           fingerprintConfirmed: request.body.fingerprintConfirmed,
+          extension: request.body.extension,
         };
         try {
           const trust = db.registerBeaconTrust(trustReq, {
@@ -53,7 +63,7 @@ export default function beaconRoutes(app: FastifyInstance) {
             id: request.body.id,
             name: request.body.name,
             host: request.body.host,
-            port: request.body.port,
+            port: trust.port ?? undefined,
             spawnRoots: request.body.spawnRoots,
             defaultSpawnRoot: request.body.defaultSpawnRoot,
           });

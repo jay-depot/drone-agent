@@ -1,4 +1,9 @@
-export { initDatabase, getDatabase, closeDatabase } from './init.js';
+export {
+  initDatabase,
+  getDatabase,
+  closeDatabase,
+  makeBeaconPortOptional,
+} from './init.js';
 export type { ToolDefinition } from './init.js';
 export {
   upsertToolDefinition,

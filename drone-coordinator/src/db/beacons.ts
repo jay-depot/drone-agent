@@ -7,7 +7,7 @@ interface BeaconRow {
   id: string;
   name: string;
   host: string;
-  port: number;
+  port: number | null;
   connectedAt: number;
   lastHeartbeat: number;
   spawn_roots: string | null;
@@ -36,7 +36,9 @@ export function registerBeacon(req: RegisterBeaconRequest): Beacon {
     id: req.id,
     name: req.name,
     host: req.host,
-    port: req.port,
+    // Omitted fields preserve the existing row (merge-on-omit, ADR 200): a
+    // partial re-registration must not erase the advertised address or port.
+    port: req.port ?? existing?.port ?? null,
     connectedAt: now,
     lastHeartbeat: now,
     // Omitted fields preserve the existing row (merge-on-omit): a partial

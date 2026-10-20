@@ -11,8 +11,7 @@ import { getBundle, listBundles } from '../src/db/index.js';
 
 const sendBeaconCommand = vi.fn();
 const isBeaconConnected = vi.fn();
-const getClientCertFingerprint = vi.fn();
-const resolveBeaconIdByFingerprint = vi.fn();
+const resolveRequestNodeId = vi.fn();
 
 vi.mock('../src/beacon-ws.js', () => ({
   sendBeaconCommand: (...args: unknown[]) => sendBeaconCommand(...args),
@@ -20,10 +19,7 @@ vi.mock('../src/beacon-ws.js', () => ({
 }));
 
 vi.mock('../src/mtls.js', () => ({
-  getClientCertFingerprint: (...args: unknown[]) =>
-    getClientCertFingerprint(...args),
-  resolveBeaconIdByFingerprint: (...args: unknown[]) =>
-    resolveBeaconIdByFingerprint(...args),
+  resolveRequestNodeId: (...args: unknown[]) => resolveRequestNodeId(...args),
 }));
 
 let app: FastifyInstance;
@@ -53,8 +49,7 @@ beforeEach(async () => {
   resetExtensionRegistry();
   sendBeaconCommand.mockReset();
   isBeaconConnected.mockReset();
-  getClientCertFingerprint.mockReset();
-  resolveBeaconIdByFingerprint.mockReset();
+  resolveRequestNodeId.mockReset();
   isBeaconConnected.mockReturnValue(true);
 });
 
@@ -234,8 +229,7 @@ describe('bundle upload / serving / delete', () => {
   ];
 
   it('uploads a bundle and records the DB row', async () => {
-    getClientCertFingerprint.mockReturnValue('fp-1');
-    resolveBeaconIdByFingerprint.mockReturnValue('node-1');
+    resolveRequestNodeId.mockReturnValue('node-1');
     const res = await app.inject({
       method: 'PUT',
       url: '/api/extensions/bundles/panel',
@@ -250,7 +244,7 @@ describe('bundle upload / serving / delete', () => {
   });
 
   it('401s when no node certificate is presented', async () => {
-    getClientCertFingerprint.mockReturnValue(undefined);
+    resolveRequestNodeId.mockReturnValue(undefined);
     const res = await app.inject({
       method: 'PUT',
       url: '/api/extensions/bundles/panel',
@@ -260,8 +254,7 @@ describe('bundle upload / serving / delete', () => {
   });
 
   it('400s when files are missing', async () => {
-    getClientCertFingerprint.mockReturnValue('fp-1');
-    resolveBeaconIdByFingerprint.mockReturnValue('node-1');
+    resolveRequestNodeId.mockReturnValue('node-1');
     const res = await app.inject({
       method: 'PUT',
       url: '/api/extensions/bundles/panel',
@@ -271,8 +264,7 @@ describe('bundle upload / serving / delete', () => {
   });
 
   it('serves the uploaded bundle file same-origin', async () => {
-    getClientCertFingerprint.mockReturnValue('fp-1');
-    resolveBeaconIdByFingerprint.mockReturnValue('node-1');
+    resolveRequestNodeId.mockReturnValue('node-1');
     const upload = await app.inject({
       method: 'PUT',
       url: '/api/extensions/bundles/panel',
@@ -304,8 +296,7 @@ describe('bundle upload / serving / delete', () => {
   });
 
   it('rejects path traversal in the file name', async () => {
-    getClientCertFingerprint.mockReturnValue('fp-1');
-    resolveBeaconIdByFingerprint.mockReturnValue('node-1');
+    resolveRequestNodeId.mockReturnValue('node-1');
     const res = await app.inject({
       method: 'PUT',
       url: '/api/extensions/bundles/panel',
@@ -323,8 +314,7 @@ describe('bundle upload / serving / delete', () => {
   });
 
   it('deletes a bundle (row + disk)', async () => {
-    getClientCertFingerprint.mockReturnValue('fp-1');
-    resolveBeaconIdByFingerprint.mockReturnValue('node-1');
+    resolveRequestNodeId.mockReturnValue('node-1');
     await app.inject({
       method: 'PUT',
       url: '/api/extensions/bundles/panel',
@@ -339,8 +329,7 @@ describe('bundle upload / serving / delete', () => {
   });
 
   it('replaces a bundle and drops the superseded directory', async () => {
-    getClientCertFingerprint.mockReturnValue('fp-1');
-    resolveBeaconIdByFingerprint.mockReturnValue('node-1');
+    resolveRequestNodeId.mockReturnValue('node-1');
     const first = await app.inject({
       method: 'PUT',
       url: '/api/extensions/bundles/panel',

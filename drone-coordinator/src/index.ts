@@ -55,6 +55,7 @@ import { createMtlsMiddleware } from './mtls.js';
 import {
   registerBeaconWebSocket,
   startBeaconLivenessSweep,
+  stopBeaconLivenessSweep,
 } from './beacon-ws.js';
 import {
   seedDefaultAssets,
@@ -389,12 +390,13 @@ export async function buildApp(opts?: {
       'onRequest',
       createMtlsMiddleware({ httpsEnabled: !!opts.https })
     );
-    // Register the WebSocket reverse channel used by beacons to receive
-    // spawn/message commands from the coordinator.
-    await app.register(import('@fastify/websocket'));
-    registerBeaconWebSocket(app);
-    startBeaconLivenessSweep();
   }
+
+  // The reverse channel serves beacons on the primary port (mTLS identity)
+  // and extensions on the web port (claimed identity, loopback-only, ADR 257).
+  await app.register(import('@fastify/websocket'));
+  registerBeaconWebSocket(app);
+  startBeaconLivenessSweep();
 
   // Register API routes
   await registerRoutes(app);
@@ -646,6 +648,7 @@ export async function main() {
   const shutdown = async () => {
     logger.info('Shutting down...');
     clearInterval(staleCheckInterval);
+    stopBeaconLivenessSweep();
     await Promise.all([app.close(), webApp.close()]);
     closeDatabase();
     process.exit(0);

@@ -8,12 +8,14 @@ class FakeWebSocket extends EventEmitter {
   static instances: FakeWebSocket[] = [];
   static OPEN = 1;
   static CLOSED = 3;
+  static args: Array<[string, unknown]> = [];
   sent: string[] = [];
   readyState = FakeWebSocket.OPEN;
 
-  constructor() {
+  constructor(url?: string, options?: unknown) {
     super();
     FakeWebSocket.instances.push(this);
+    FakeWebSocket.args.push([url ?? '', options]);
   }
 
   send(data: string, cb?: (err?: Error) => void): void {
@@ -23,7 +25,7 @@ class FakeWebSocket extends EventEmitter {
 
   close(): void {
     this.readyState = FakeWebSocket.CLOSED;
-    this.emit('close');
+    this.emit('close', 1000, Buffer.from(''));
   }
 
   frames(): Array<Record<string, unknown>> {
@@ -39,12 +41,14 @@ vi.mock('../src/logger.js', () => ({
 const captured: {
   urls: string[];
   bodies: unknown[];
+  headers: Array<Record<string, unknown>>;
   failuresRemaining: number;
   gate: Promise<void> | null;
   fetchArgs: unknown[][];
 } = {
   urls: [],
   bodies: [],
+  headers: [],
   failuresRemaining: 0,
   gate: null,
   fetchArgs: [],
@@ -57,6 +61,7 @@ vi.mock('../src/coordinator-fetch.js', () => ({
       if (captured.gate) await captured.gate;
       captured.urls.push(url);
       if (init?.body) captured.bodies.push(JSON.parse(init.body as string));
+      captured.headers.push((init?.headers as Record<string, unknown>) ?? {});
       if (captured.failuresRemaining > 0) {
         captured.failuresRemaining--;
         return new Response('nope', { status: 503 });
@@ -70,16 +75,23 @@ vi.mock('../src/coordinator-fetch.js', () => ({
 }));
 
 const { createExtensionNode } = await import('../src/extension-server.js');
+const { logger } = (await import('../src/logger.js')) as unknown as {
+  logger: { info: ReturnType<typeof vi.fn>; warn: ReturnType<typeof vi.fn> };
+};
 
 let dataDir: string;
 
 beforeEach(async () => {
   FakeWebSocket.instances = [];
+  FakeWebSocket.args = [];
   captured.urls = [];
   captured.bodies = [];
+  captured.headers = [];
   captured.failuresRemaining = 0;
   captured.gate = null;
   captured.fetchArgs = [];
+  logger.info.mockClear();
+  logger.warn.mockClear();
   dataDir = await mkdtemp(path.join(os.tmpdir(), 'drone-ext-node-'));
 });
 
@@ -397,5 +409,137 @@ describe('createExtensionNode', () => {
     });
     expect(captured.fetchArgs[0][4]).toBe(1234);
     await node.stop();
+  });
+
+  it('sends its own address and no port in the registration payload', async () => {
+    const node = await createExtensionNode({ ...baseOpts, dataDir });
+    expect(captured.bodies[0]).toMatchObject({ host: '127.0.0.1' });
+    expect(captured.bodies[0]).not.toHaveProperty('port');
+    await node.stop();
+  });
+
+  it('honors an explicit host in the registration payload', async () => {
+    const node = await createExtensionNode({
+      ...baseOpts,
+      dataDir,
+      host: '10.0.0.9',
+    });
+    expect(captured.bodies[0]).toMatchObject({ host: '10.0.0.9' });
+    await node.stop();
+  });
+
+  it('targets the socket with a claimed id and no client cert over http', async () => {
+    const node = await createExtensionNode({ ...baseOpts, dataDir });
+    const [url, options] = FakeWebSocket.args[0];
+    expect(url).toBe('ws://127.0.0.1:3456/ws/beacon?beaconId=node-1');
+    expect(options).toMatchObject({ headers: { 'x-node-id': 'node-1' } });
+    expect(options).not.toHaveProperty('cert');
+    expect(options).not.toHaveProperty('key');
+    await node.stop();
+  });
+
+  it('targets the socket with a client cert and no query over https', async () => {
+    const node = await createExtensionNode({
+      ...baseOpts,
+      dataDir,
+      coordinatorUrl: 'https://127.0.0.1:3456',
+    });
+    const [url, options] = FakeWebSocket.args[0];
+    expect(url).toBe('wss://127.0.0.1:3456/ws/beacon');
+    expect(options).toMatchObject({ rejectUnauthorized: false });
+    expect(options).toHaveProperty('cert');
+    expect(options).toHaveProperty('key');
+    await node.stop();
+  });
+
+  it('claims its node id on a bundle upload over http', async () => {
+    const node = await createExtensionNode({ ...baseOpts, dataDir });
+    await node.uploadBundle({
+      name: 'panel',
+      version: '1.0.0',
+      files: [{ name: 'index.js', contentBase64: 'AA==' }],
+    });
+    const uploadHeaders = captured.headers.at(-1) as Record<string, unknown>;
+    expect(uploadHeaders['x-node-id']).toBe('node-1');
+    await node.stop();
+  });
+
+  it('does not claim a node id on a bundle upload over https', async () => {
+    const node = await createExtensionNode({
+      ...baseOpts,
+      dataDir,
+      coordinatorUrl: 'https://127.0.0.1:3456',
+    });
+    await node.uploadBundle({
+      name: 'panel',
+      version: '1.0.0',
+      files: [{ name: 'index.js', contentBase64: 'AA==' }],
+    });
+    const uploadHeaders = captured.headers.at(-1) as Record<string, unknown>;
+    expect(uploadHeaders['x-node-id']).toBeUndefined();
+    await node.stop();
+  });
+
+  it('does not log success before admission, and logs once on admission', async () => {
+    const node = await createExtensionNode({ ...baseOpts, dataDir });
+    const ws = FakeWebSocket.instances[0];
+    ws.emit('open');
+    expect(
+      logger.info.mock.calls.some(c => String(c[0]).includes('connected to'))
+    ).toBe(false);
+    expect(
+      logger.info.mock.calls.some(c =>
+        String(c[0]).includes('awaiting admission')
+      )
+    ).toBe(true);
+
+    ws.emit(
+      'message',
+      Buffer.from(
+        JSON.stringify({
+          type: 'event',
+          event: 'sessionStarted',
+          session: { sessionId: 's1' },
+        })
+      )
+    );
+    expect(
+      logger.info.mock.calls.some(c => String(c[0]).includes('admitted'))
+    ).toBe(true);
+    await node.stop();
+  });
+
+  it('logs one warning and escalates the backoff when never admitted (4002)', async () => {
+    vi.useFakeTimers();
+    const node = await createExtensionNode({ ...baseOpts, dataDir });
+    const first = FakeWebSocket.instances[0];
+    first.emit('open');
+    first.emit('close', 4002, Buffer.from('not approved'));
+
+    const warnings = logger.warn.mock.calls.filter(c =>
+      String(c[0]).includes('not admitted')
+    );
+    expect(warnings).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    const second = FakeWebSocket.instances[1];
+    second.emit('open');
+    second.emit('close', 4002, Buffer.from('not approved'));
+    // Still exactly one warning: the log is not repeated per attempt.
+    expect(
+      logger.warn.mock.calls.filter(c => String(c[0]).includes('not admitted'))
+    ).toHaveLength(1);
+
+    await node.stop();
+    vi.useRealTimers();
+  });
+
+  it('boots and opens the socket when registration fails with default options', async () => {
+    vi.useFakeTimers();
+    captured.failuresRemaining = 1;
+    const node = await createExtensionNode({ ...baseOpts, dataDir });
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    await node.stop();
+    vi.useRealTimers();
   });
 });

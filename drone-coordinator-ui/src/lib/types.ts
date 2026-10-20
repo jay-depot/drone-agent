@@ -4,7 +4,7 @@ export interface Beacon {
   id: string;
   name: string;
   host: string;
-  port: number;
+  port: number | null;
   connected?: boolean;
   connectedAt: number;
   lastHeartbeat: number;

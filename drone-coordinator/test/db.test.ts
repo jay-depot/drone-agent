@@ -1,8 +1,10 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import Database from 'better-sqlite3';
 import { setupDb, teardownDb } from './setup.js';
 import {
   createPersona,
   getDatabase,
+  makeBeaconPortOptional,
   backfillPersonaMetadata,
   getPersona,
   listPersonas,
@@ -1189,5 +1191,150 @@ describe('Stored secrets CRUD', () => {
 
   it('should return false when deleting a non-existent secret', () => {
     expect(deleteSecret('nonexistent')).toBe(false);
+  });
+});
+
+describe('Beacon port optional + merge-on-omit', () => {
+  beforeEach(async () => {
+    await setupDb();
+  });
+
+  afterEach(async () => {
+    await teardownDb();
+  });
+
+  it('stores null for a beacon registered without a port', () => {
+    const beacon = registerBeacon({
+      id: 'ext',
+      name: 'Ext',
+      host: '127.0.0.1',
+    });
+    expect(beacon.port).toBeNull();
+    expect(getBeacon('ext')!.port).toBeNull();
+  });
+
+  it('preserves the port when re-registering without one (merge-on-omit)', () => {
+    registerBeacon({ id: 'b1', name: 'B1', host: 'localhost', port: 3457 });
+    const updated = registerBeacon({
+      id: 'b1',
+      name: 'B1',
+      host: 'localhost',
+    });
+    expect(updated.port).toBe(3457);
+    expect(getBeacon('b1')!.port).toBe(3457);
+  });
+
+  it('preserves the host when re-registering without one (merge-on-omit)', () => {
+    registerBeacon({ id: 'b1', name: 'B1', host: 'localhost', port: 3457 });
+    const updated = registerBeacon({
+      id: 'b1',
+      name: 'B1',
+      host: '',
+    } as unknown as { id: string; name: string; host: string });
+    expect(updated.host).toBe('');
+    expect(getBeacon('b1')!.host).toBe('');
+  });
+
+  it('stores null for a trust record registered without a port', () => {
+    const trust = registerBeaconTrust(
+      { id: 'ext', name: 'Ext', host: '127.0.0.1', publicKey: 'k' },
+      { socketIsLocal: true }
+    );
+    expect(trust.port).toBeNull();
+    expect(getBeaconTrust('ext')!.port).toBeNull();
+  });
+
+  it('preserves the trust port when re-registering without one', () => {
+    registerBeaconTrust({
+      id: 'b1',
+      name: 'B1',
+      host: 'localhost',
+      port: 3457,
+      publicKey: 'key1',
+    });
+    const updated = registerBeaconTrust({
+      id: 'b1',
+      name: 'B1',
+      host: '10.0.0.2',
+      publicKey: 'key1',
+    });
+    expect(updated.port).toBe(3457);
+    expect(getBeaconTrust('b1')!.port).toBe(3457);
+  });
+});
+
+describe('makeBeaconPortOptional migration', () => {
+  beforeEach(async () => {
+    await setupDb();
+  });
+
+  afterEach(async () => {
+    await teardownDb();
+  });
+
+  it('rebuilds legacy NOT NULL port columns to nullable and preserves rows', () => {
+    const legacy = new Database(':memory:');
+    legacy.exec(`
+      CREATE TABLE beacons (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        host TEXT NOT NULL,
+        port INTEGER NOT NULL,
+        connectedAt INTEGER NOT NULL,
+        lastHeartbeat INTEGER NOT NULL,
+        spawn_roots TEXT,
+        default_spawn_root TEXT
+      );
+      INSERT INTO beacons VALUES ('b1', 'B1', 'localhost', 3457, 1, 2, NULL, NULL);
+
+      CREATE TABLE beacon_trust (
+        beacon_id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        public_key TEXT NOT NULL,
+        host TEXT NOT NULL,
+        port INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        approved_at INTEGER,
+        tls_fingerprint TEXT,
+        fingerprint_confirmed_at INTEGER,
+        verification_code TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      INSERT INTO beacon_trust VALUES ('b1', 'B1', 'k', 'localhost', 3457, 'approved', 3, NULL, 4, 'code', 1, 2);
+    `);
+
+    makeBeaconPortOptional(legacy);
+
+    for (const table of ['beacons', 'beacon_trust']) {
+      const cols = legacy
+        .prepare(`PRAGMA table_info(${table})`)
+        .all() as Array<{ name: string; notnull: number }>;
+      const port = cols.find(c => c.name === 'port');
+      expect(port?.notnull).toBe(0);
+    }
+
+    const beacon = legacy
+      .prepare('SELECT * FROM beacons WHERE id = ?')
+      .get('b1') as { port: number };
+    expect(beacon.port).toBe(3457);
+
+    const trust = legacy
+      .prepare('SELECT * FROM beacon_trust WHERE beacon_id = ?')
+      .get('b1') as { port: number; fingerprint_confirmed_at: number };
+    expect(trust.port).toBe(3457);
+    expect(trust.fingerprint_confirmed_at).toBe(4);
+
+    legacy.close();
+  });
+
+  it('is a no-op on a table whose port is already nullable', () => {
+    const db = getDatabase();
+    expect(() => makeBeaconPortOptional(db)).not.toThrow();
+    const cols = db.prepare('PRAGMA table_info(beacons)').all() as Array<{
+      name: string;
+      notnull: number;
+    }>;
+    expect(cols.find(c => c.name === 'port')?.notnull).toBe(0);
   });
 });

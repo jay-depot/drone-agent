@@ -35,6 +35,31 @@ export function resolveBeaconIdByFingerprint(
 }
 
 /**
+ * Resolve the calling node id. A client certificate wins when one is presented,
+ * and fails closed when it does not resolve. Without a certificate (the
+ * unencrypted web port) the caller's own claim is used, from the `x-node-id`
+ * header and then from a `beaconId` query parameter. The claim is trusted only
+ * because the web port is bound to loopback (ADR 257).
+ */
+export function resolveRequestNodeId(req: FastifyRequest): string | undefined {
+  const fingerprint = getClientCertFingerprint(req);
+  if (fingerprint) {
+    return resolveBeaconIdByFingerprint(fingerprint);
+  }
+  const header = req.headers['x-node-id'];
+  if (typeof header === 'string' && header) {
+    return getBeaconTrust(header) ? header : undefined;
+  }
+  const query = new URL(req.url ?? '', 'http://localhost').searchParams.get(
+    'beaconId'
+  );
+  if (query) {
+    return getBeaconTrust(query) ? query : undefined;
+  }
+  return undefined;
+}
+
+/**
  * Create an onRequest hook that authenticates requests to the coordinator's
  * primary API via mutual TLS. The presented client certificate's fingerprint
  * is pinned against the beacon's stored TLS fingerprint (beacon_trust).
