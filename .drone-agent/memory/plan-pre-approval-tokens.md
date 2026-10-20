@@ -885,4 +885,20 @@ Recommended order: A → B → C → D → E → F → G → H → Z.
 
 ## Outcome
 
-(Add an outcome note here after execution.)
+Executed 2026-10-20 on branch `feat/pre-approval-tokens` (two commits: `d13ba3f4` phases A–E, `1a9aeea8` phases F–H). All phases A–H done; Phase Z green.
+
+**Plan gap (deviation):** the plan said "create the branch off `main`", but the feature depends on the swarm-extension infrastructure (`mcp-swarm`, `createExtensionNode`, the gateway extension node, ADR 254/256/257) that exists only on `feat/swarm-extensions`, not on `main`. Branched off `feat/swarm-extensions` instead.
+
+**Delivered:**
+
+- A — `drone-swarm-common/src/pre-approval.ts` (token + redemption signature payloads, `verifyPreApprovalToken`, `generateBurnKey`, `PRE_APPROVAL_TOKEN_TTL_MS`) and `coordinator-trust.ts` (`save`/`loadCoordinatorTrust`); `drone-coordinator/src/signing-identity.ts` + startup load of `coordinator-identity.json`.
+- B — `pre_approval_tokens` table + `drone-coordinator/src/db/pre-approval-tokens.ts` accessors (race-safe `burnPreApprovalToken`); `getBeaconTrustByPublicKey`.
+- C/D — `drone-coordinator/src/routes/pre-approval-tokens.ts`: `POST /api/beacons/trust/redeem` (mTLS-exempt), mint/list/revoke; mounted under `/api`.
+- E — `createExtensionNode` fingerprint pinning (`expectedCoordinatorFingerprint` + trust-file fallback + WS peer-cert check); `drone-swarm-common/src/pre-approval-redeem.ts` helper.
+- F — `--pre-approval-token-path` (both `=` and space forms) on `mcp-swarm` and `drone-gateway`, one-shot redeem-then-exit.
+- G — coordinator UI page `/pre-approval-tokens` (create + one-time display + copy/download + warning + revoke), Topology link, **no** nav item; `lib/download.ts`.
+- H — ADR 258 + `docs/adr/index.md` + wiki pointer stub; `docs/agents/swarm-extensions.md` "Pre-approval tokens" section; `mcp-swarm/README.md`; `drone-gateway/CONTEXT.md` (the gateway has **no** README — documented the flag in the glossary instead); wiki module pages (`drone-coordinator`, `drone-swarm-common`, `drone-coordinator-ui`, `mcp-swarm`, `drone-gateway`).
+
+**Validation:** LSP clean; `pnpm -r run build` 0 errors; `pnpm typecheck` 0; `pnpm run lint` 0; `pnpm run test` 4289 passed / 16 skipped. New tests: 8 (crypto/trust), 7 (token store), 12 (routes), 5 (redeem helper), 14 (CLI), 5 (UI).
+
+**Notes for the record:** the UI test env needs `NODE_ENV=test` (the package's own `test` script sets it — `React.act is not a function` otherwise); the plan's `apply_diff` snippets omit hunk headers, so every diff needed a `@@` header added.

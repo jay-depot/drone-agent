@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-10-20T15:38:02.585Z",
+    "insight": "Plan bodies frequently embed code snippets in fenced blocks that read like apply_diff patches but omit the `@@ -N,M +N,M @@` hunk header. Pasting such a snippet straight into `file__apply_diff` fails with \"no hunks found in the patch string\". Fix: add a `@@ -<start>,<count> +<start>,<count> @@` line before the context/removed/added lines. Cheap habit: read the target file first to get real line numbers, then write the header."
+  }
+]

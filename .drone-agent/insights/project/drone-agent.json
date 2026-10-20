@@ -942,5 +942,13 @@
   {
     "timestamp": "2026-10-20T15:21:16.238Z",
     "insight": "There is no shared CLI argument parser in the repo — every binary hand-rolls a `for` loop over `process.argv.slice(2)` (drone-beacon/src/index.ts:113, drone-coordinator/src/index.ts:103, drone-gateway/src/index.ts:26, drone-swarm/src/index.ts:52, mcp-swarm has none at all and is env-only). None of them support the `--flag=value` form; they only split on whitespace, so a `--flag=value` token is read as a literal flag name containing `=`. Any new flag documented with the `=` form (e.g. `--pre-approval-token-path=./token.json`) needs bespoke `=`-aware parsing. A shared `= `-aware flag helper in `drone-swarm-common` would be a worthwhile follow-up."
+  },
+  {
+    "timestamp": "2026-10-20T15:38:02.586Z",
+    "insight": "Plan execution gap: `plan-pre-approval-tokens` said \"create the branch off main\", but the pre-approval feature depends on the swarm-extension infrastructure (mcp-swarm, createExtensionNode, the gateway extension node, ADRs 254/256/257) that lives only on `feat/swarm-extensions`, not on `main`. The plan's dependency graph was correct about *code* dependencies but wrong about its *base branch*. When a plan names a base branch, verify the branch actually contains the files the plan assumes before branching — else the first build step fails with missing modules."
+  },
+  {
+    "timestamp": "2026-10-20T15:38:02.590Z",
+    "insight": "drone-coordinator-ui tests fail with `TypeError: React.act is not a function` when run via bare `npx vitest` — the package's own `test` script sets `NODE_ENV=test` (React 19 + react-dom 19.2.7 requires it for the act shim). Run UI tests as `NODE_ENV=test npx vitest run <file>` in `drone-coordinator-ui/`, or via the package script. The root `pnpm test` does not include the UI package, so this bites only ad-hoc runs."
   }
 ]
