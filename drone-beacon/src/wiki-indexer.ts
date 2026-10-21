@@ -25,9 +25,12 @@ function pageHash(
   pageId: string,
   origin: string,
   updatedAt: string,
-  content: string
+  content: string,
+  fingerprint: string
 ): string {
   return createHash('sha256')
+    .update(fingerprint)
+    .update('\u0000')
     .update(`${pageId}\u0000${origin}\u0000${updatedAt}\u0000${content}`)
     .digest('hex');
 }
@@ -74,13 +77,16 @@ export class WikiIndexer {
   private provider: DroneEmbeddingProvider | null;
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
   private sweepIntervalMs: number;
+  private fingerprint: string;
 
   constructor(
     provider?: DroneEmbeddingProvider,
-    sweepIntervalMs: number = 5 * 60 * 1000
+    sweepIntervalMs: number = 5 * 60 * 1000,
+    fingerprint: string = ''
   ) {
     this.provider = provider ?? null;
     this.sweepIntervalMs = sweepIntervalMs;
+    this.fingerprint = fingerprint;
   }
 
   setProvider(provider: DroneEmbeddingProvider): void {
@@ -139,13 +145,16 @@ export class WikiIndexer {
           entry.page.id,
           entry.origin,
           entry.page.updatedAt,
-          content
+          content,
+          this.fingerprint
         );
         const stored = db
-          .listWikiSources()
+          .getWikiSourcesWithChunkCounts()
           .find(s => s.page_id === entry.page.id && s.origin === entry.origin);
 
-        if (stored && stored.hash === hash) {
+        // Skip only when the hash matches AND chunks exist. A page recorded as
+        // indexed with zero chunks (a previous failed embed) must be retried.
+        if (stored && stored.hash === hash && stored.chunk_count > 0) {
           result.pagesSkipped++;
           continue;
         }
@@ -156,28 +165,30 @@ export class WikiIndexer {
           result.pagesRemoved++;
           continue;
         }
+        // Embed every chunk first. A throw here leaves no source row and no
+        // chunks, so the page is retried on the next pass.
+        const embeddings: Float32Array[] = [];
+        for (const text of chunkTexts) {
+          embeddings.push(
+            await provider.embedDocument(text, { title: entry.page.title })
+          );
+        }
 
-        db.upsertWikiSource(
+        db.replaceWikiPage(
           entry.page.id,
           entry.origin,
-          entry.page.title,
-          entry.page.updatedAt,
-          hash
-        );
-        let index = 0;
-        for (const text of chunkTexts) {
-          const prefixed = `search_document: ${text}`;
-          const embedding = await provider.getEmbedding(prefixed);
-          db.insertWikiChunk(
-            entry.page.id,
-            entry.origin,
+          {
+            title: entry.page.title,
+            updatedAt: entry.page.updatedAt,
+            hash,
+          },
+          chunkTexts.map((text, index) => ({
             index,
             text,
-            embedding
-          );
-          index++;
-          result.chunksCreated++;
-        }
+            embedding: embeddings[index],
+          }))
+        );
+        result.chunksCreated += chunkTexts.length;
         result.pagesIndexed++;
       } catch (err) {
         logger.warn(

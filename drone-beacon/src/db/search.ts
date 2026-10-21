@@ -213,6 +213,33 @@ export function insertChunk(
   tx();
 }
 
+/**
+ * Replace a file's whole chunk set and record its hash in one transaction.
+ * Deleting before inserting keeps a reindex from doubling the chunk count.
+ */
+export function replaceFileChunks(
+  directoryPath: string,
+  filePath: string,
+  hash: string,
+  chunks: Array<{ index: number; text: string; embedding: Float32Array }>
+): void {
+  const db = getDatabase();
+  const tx = db.transaction(() => {
+    deleteChunksForFile(directoryPath, filePath);
+    upsertFile(directoryPath, filePath, hash);
+    for (const chunk of chunks) {
+      insertChunk(
+        directoryPath,
+        filePath,
+        chunk.index,
+        chunk.text,
+        chunk.embedding
+      );
+    }
+  });
+  tx();
+}
+
 export function deleteChunksForFile(
   directoryPath: string,
   filePath: string

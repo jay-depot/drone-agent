@@ -13,6 +13,8 @@ allowBuilds:
   better-sqlite3: true
   esbuild: true
   node-pty: true
+  onnxruntime-node: true
+  protobufjs: true
   # tree-sitter grammars are used via their WASM files (web-tree-sitter), so
   # their native node bindings are not needed and their build scripts are
   # intentionally ignored.

@@ -151,7 +151,7 @@ export default function searchRoutes(app: FastifyInstance) {
     }
 
     // Get query embedding
-    const queryEmbedding = await provider.getEmbedding(`search_query: ${q}`);
+    const queryEmbedding = await provider.embedQuery(q);
 
     const maxResultsVal = maxResults ?? 50;
 

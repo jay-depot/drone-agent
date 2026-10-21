@@ -1,13 +1,15 @@
 import fastify from 'fastify';
 import '@fastify/websocket';
 import {
-  createOllamaEmbeddingProvider,
+  defaultEmbeddingConfig,
   loadConfigFile,
   mergeConfig,
+  type EmbeddingConfig,
   type ServerConfigFile,
   type SessionEndTrigger,
   type SpawnRootsConfig,
 } from 'drone-swarm-common';
+import { initEmbedding, resolveEmbeddingSpec } from './embedding-init.js';
 import { SearchIndexer } from './search-indexer.js';
 import { WikiIndexer } from './wiki-indexer.js';
 import { runWikiIndexCycle, setWikiIndexer } from './wiki-index-support.js';
@@ -108,6 +110,7 @@ interface Config {
   rateLimitWindowMs: number;
   sessionEnd?: SessionEndTrigger;
   spawnRoots?: SpawnRootsConfig;
+  embedding?: EmbeddingConfig;
 }
 
 async function parseArgs(): Promise<Config> {
@@ -212,6 +215,9 @@ async function parseArgs(): Promise<Config> {
     if (merged.spawnRoots !== undefined) {
       config.spawnRoots = merged.spawnRoots as SpawnRootsConfig;
     }
+    if (merged.embedding !== undefined) {
+      config.embedding = merged.embedding as EmbeddingConfig;
+    }
   }
 
   if (config.coordinatorHost && !config.coordinatorPort) {
@@ -261,8 +267,28 @@ async function main() {
   // Ensure config directory exists
   fs.mkdirSync(config.configDir, { recursive: true });
 
-  // Initialize database
-  initDatabase(config.dbPath);
+  const embeddingConfig = config.embedding ?? defaultEmbeddingConfig();
+  const embeddingSpec = resolveEmbeddingSpec(embeddingConfig);
+
+  // Initialize database at the model's vector width.
+  initDatabase(config.dbPath, embeddingSpec.dimensions);
+
+  // Build the embedding provider. Any failure is fatal: there is no fallback.
+  let embedding;
+  try {
+    embedding = await initEmbedding(
+      embeddingConfig,
+      path.join(config.configDir, 'embedding-models')
+    );
+  } catch (err) {
+    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(
+      'Fix the "embedding" block in the beacon config file, or set OLLAMA_HOST for the ollama backend.'
+    );
+    process.exit(1);
+  }
+  logger.info(`Embedding provider ready: ${embedding.fingerprint}`);
+
   const repairedPersonas = backfillPersonaMetadata();
   if (repairedPersonas > 0) {
     logger.info(`Persona metadata: backfilled ${repairedPersonas} row(s)`);
@@ -278,31 +304,20 @@ async function main() {
     );
   }
   // Initialize search indexer
-  const ollamaHost = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';
-  let searchIndexer: SearchIndexer;
-  try {
-    const provider = createOllamaEmbeddingProvider({ host: ollamaHost });
-    searchIndexer = new SearchIndexer(provider);
-    logger.info(
-      `Search indexer initialized with Ollama embedding provider (${ollamaHost})`
-    );
-  } catch (err) {
-    searchIndexer = new SearchIndexer();
-    logger.warn(
-      `Search indexer initialized without embedding provider: ${err}`
-    );
-  }
+  const searchIndexer = new SearchIndexer(
+    embedding.provider,
+    5 * 60 * 1000,
+    embedding.fingerprint
+  );
   setSearchIndexer(searchIndexer);
   searchIndexer.startPeriodicSweep();
 
   // Initialize wiki indexer over the merged (beacon + coordinator) corpus
-  let wikiIndexer: WikiIndexer;
-  try {
-    const provider = createOllamaEmbeddingProvider({ host: ollamaHost });
-    wikiIndexer = new WikiIndexer(provider);
-  } catch {
-    wikiIndexer = new WikiIndexer();
-  }
+  const wikiIndexer = new WikiIndexer(
+    embedding.provider,
+    5 * 60 * 1000,
+    embedding.fingerprint
+  );
   setWikiIndexer(wikiIndexer);
   wikiIndexer.startPeriodicSweep(() => runWikiIndexCycle(wikiIndexer));
   // Initialize wiki storage under config dir

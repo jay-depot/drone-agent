@@ -1,7 +1,9 @@
 # Dockerfile for Smoke Test Runner
 # Runs automated smoke tests against the swarm services
 
-FROM node:22-alpine
+# Debian-based: the smoke image builds the workspace, which now pulls the
+# ONNX runtime (no musl build).
+FROM node:22-slim
 
 WORKDIR /app
 

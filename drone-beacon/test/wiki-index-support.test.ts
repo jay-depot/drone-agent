@@ -14,7 +14,7 @@ import {
   setKnowledgeBaseDir,
   writePage,
 } from '../../drone-swarm-common/src/index.js';
-import type { DroneEmbeddingProvider } from 'drone-core';
+import { NOMIC_EMBED_TEXT_V1_5, type DroneEmbeddingProvider } from 'drone-core';
 
 const proxyWikiToCoordinator = vi.fn();
 
@@ -38,9 +38,12 @@ function makeProvider(): DroneEmbeddingProvider {
   return {
     id: 'fake',
     name: 'Fake Embedder',
+    spec: NOMIC_EMBED_TEXT_V1_5,
     dimensions: 768,
     maxTokens: 8192,
     getEmbedding: async (text: string) => fakeEmbedding(text.length % 768),
+    embedQuery: async (text: string) => fakeEmbedding(text.length % 768),
+    embedDocument: async (text: string) => fakeEmbedding(text.length % 768),
   };
 }
 

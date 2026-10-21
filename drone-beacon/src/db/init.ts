@@ -15,7 +15,10 @@ const sqliteVec = require('sqlite-vec') as {
 
 let db: Database.Database | null = null;
 
-export function initDatabase(dataPath: string): Database.Database {
+export function initDatabase(
+  dataPath: string,
+  dimensions: number = 768
+): Database.Database {
   logger.info(`Initializing database at: ${dataPath}`);
   fs.mkdirSync(path.dirname(dataPath), { recursive: true });
   db = new Database(dataPath);
@@ -201,11 +204,11 @@ export function initDatabase(dataPath: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_search_directories_agent ON search_directories(agent_id);
 
     CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(
-      embedding FLOAT[768] distance_metric=cosine
+      embedding FLOAT[${dimensions}] distance_metric=cosine
     );
 
     CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks_bq USING vec0(
-      sig BIT[768]
+      sig BIT[${dimensions}]
     );
 
     CREATE TABLE IF NOT EXISTS wiki_pages (
@@ -241,7 +244,16 @@ export function initDatabase(dataPath: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_wiki_chunks_page ON wiki_chunks(page_id, origin);
 
     CREATE VIRTUAL TABLE IF NOT EXISTS wiki_vec_chunks USING vec0(
-      embedding FLOAT[768] distance_metric=cosine
+      embedding FLOAT[${dimensions}] distance_metric=cosine
+    );
+
+    CREATE TABLE IF NOT EXISTS embedding_meta (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      model_id TEXT NOT NULL,
+      dimensions INTEGER NOT NULL,
+      backend TEXT NOT NULL,
+      dtype TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS fragments (

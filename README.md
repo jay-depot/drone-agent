@@ -38,10 +38,10 @@ The `drone-agent`, `drone-beacon`, and `drone-coordinator` are all implemented a
 Currently, installation is a little annoying, by design. The drone-agent tools are absolutely ready for use by anyone interested in helping develop it, but it's not quite there for public consumption yet. If you're interested in using it, you will need the following:
 
 - node.js version 24.x or higher
-- ollama (Even if you use another AI provider, we use this for running embedding models for semantic search locally)
-- nomic-embed-text: `$ ollama pull nomic-embed-text:v1.5`
 - tailscale or a similar service is recommended
 - pnpm 11+
+
+Embeddings run in-process by default (no Ollama needed). The first beacon start downloads the embedding model (about 137 MB) into `<configDir>/embedding-models`.
 
 ### Installation steps:
 

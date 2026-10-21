@@ -243,13 +243,26 @@ export type {
   DronePrincipleStorageEngine,
   DroneSelfImprovementCapability,
   DroneEmbeddingProvider,
-  DroneSearchCapability,
   SearchResult,
   IndexResult,
   DroneSwarmCapability,
   DroneSessionImportCapability,
   DroneCheckpointCapability,
 } from './capabilities.js';
+
+// ── Embedding model registry ─────────────────────────────────────────
+
+export type {
+  DroneEmbeddingTask,
+  DroneEmbeddingModelSpec,
+} from './embedding-models.js';
+export {
+  NOMIC_EMBED_TEXT_V1_5,
+  EMBEDDING_MODELS,
+  getEmbeddingModel,
+  listEmbeddingModels,
+  listEmbeddingModelIds,
+} from './embedding-models.js';
 
 // ── Reference types ──────────────────────────────────────────────────
 

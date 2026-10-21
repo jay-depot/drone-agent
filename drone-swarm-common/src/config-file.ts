@@ -20,6 +20,19 @@ export interface SpawnRootsConfig {
   default: string;
 }
 
+export type EmbeddingBackendId = 'onnx' | 'ollama';
+
+/**
+ * Beacon-global embedding selection. `model` is a canonical model id from the
+ * drone-core registry, never a backend-specific tag.
+ */
+export interface EmbeddingConfig {
+  backend: EmbeddingBackendId;
+  model: string;
+  ollama?: { host?: string };
+  onnx?: { dtype?: string; device?: string; cacheDir?: string };
+}
+
 /**
  * Shape of a JSON config file accepted by drone-beacon and drone-coordinator
  * via `--config-file`. Keys are optional so partial files merge over defaults;
@@ -35,6 +48,7 @@ export interface ServerConfigFile {
   autoApproveBeacons?: boolean;
   sessionEnd?: SessionEndTrigger;
   spawnRoots?: SpawnRootsConfig;
+  embedding?: EmbeddingConfig;
   [key: string]: unknown;
 }
 
@@ -48,6 +62,7 @@ const ALLOWED_KEYS: ReadonlySet<string> = new Set([
   'autoApproveBeacons',
   'sessionEnd',
   'spawnRoots',
+  'embedding',
 ]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -132,6 +147,49 @@ function validateSpawnRoots(
   };
 }
 
+const EMBEDDING_BACKENDS: ReadonlySet<string> = new Set(['onnx', 'ollama']);
+
+function validateEmbeddingSubBlock(
+  value: unknown,
+  key: string,
+  errors: string[]
+): void {
+  if (value === undefined) {
+    return;
+  }
+  if (!isPlainObject(value)) {
+    errors.push(`"embedding.${key}" must be an object`);
+  }
+}
+
+function validateEmbedding(embedding: unknown, errors: string[]): void {
+  if (!isPlainObject(embedding)) {
+    errors.push('"embedding" must be an object');
+    return;
+  }
+  if (
+    typeof embedding.backend !== 'string' ||
+    !EMBEDDING_BACKENDS.has(embedding.backend)
+  ) {
+    errors.push('"embedding.backend" must be "onnx" or "ollama"');
+  }
+  if (typeof embedding.model !== 'string' || !embedding.model.trim()) {
+    errors.push('"embedding.model" must be a non-empty string');
+  }
+  for (const key of Object.keys(embedding)) {
+    if (
+      key !== 'backend' &&
+      key !== 'model' &&
+      key !== 'ollama' &&
+      key !== 'onnx'
+    ) {
+      errors.push(`unknown key "embedding.${key}"`);
+    }
+  }
+  validateEmbeddingSubBlock(embedding.ollama, 'ollama', errors);
+  validateEmbeddingSubBlock(embedding.onnx, 'onnx', errors);
+}
+
 /**
  * Validate a parsed config file object, returning a list of error strings
  * (empty when valid).
@@ -173,6 +231,9 @@ export function validateConfigFile(value: unknown): string[] {
   }
   if (value.spawnRoots !== undefined) {
     validateSpawnRoots(value.spawnRoots, errors);
+  }
+  if (value.embedding !== undefined) {
+    validateEmbedding(value.embedding, errors);
   }
   return errors;
 }

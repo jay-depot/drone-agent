@@ -950,5 +950,41 @@
   {
     "timestamp": "2026-10-20T15:38:02.590Z",
     "insight": "drone-coordinator-ui tests fail with `TypeError: React.act is not a function` when run via bare `npx vitest` — the package's own `test` script sets `NODE_ENV=test` (React 19 + react-dom 19.2.7 requires it for the act shim). Run UI tests as `NODE_ENV=test npx vitest run <file>` in `drone-coordinator-ui/`, or via the package script. The root `pnpm test` does not include the UI package, so this bites only ad-hoc runs."
+  },
+  {
+    "timestamp": "2026-10-20T22:13:36.025Z",
+    "insight": "Semantic-index dimensions are hardcoded to 768 in the sqlite-vec DDL (drone-beacon/src/db/init.ts: vec_chunks FLOAT[768], vec_chunks_bq BIT[768], wiki_vec_chunks FLOAT[768]). Any feature that offers a menu of embedding models must make the dimension a parameter and rebuild the vec0 tables on change, because vec0 columns are fixed-width and a different-dimension insert throws."
+  },
+  {
+    "timestamp": "2026-10-20T22:13:36.027Z",
+    "insight": "Index identity is not recorded anywhere in the beacon DB, so a change of embedding model silently mixes vectors from two models in one index (unchanged files keep old-model vectors via the hash skip) and degrades retrieval with no error. The fix adopted: fold a fingerprint (model id, dimensions, backend, dtype) into the salted content hash so any change forces a full reindex, and keep an embedding_meta singleton row for observability and the dimension guard."
+  },
+  {
+    "timestamp": "2026-10-20T22:13:36.029Z",
+    "insight": "Two pre-existing beacon indexer bugs block any embedding-model change and are only discoverable via the swarm wiki, not from code comments: (1) both indexers commit the file/page content hash BEFORE the embedding loop, so a failed embed marks the unit \"indexed\" with zero or partial chunks and the hash-skip then makes reindex a permanent no-op; (2) wiki-indexer.ts's changed-content path inserts chunks with no delete first, so a reindex duplicates chunks (and their vec0 rows) and fills the semantic top-k with duplicates. `replaceWikiChunks` already exists and is exported but unused. Feature plans touching embeddings should state that these bugs block the feature."
+  },
+  {
+    "timestamp": "2026-10-20T22:13:36.030Z",
+    "insight": "The embedding path has a declared-but-never-wired seam: `DroneSearchCapability` (registerEmbeddingProvider/resolveProvider) is declared in drone-core and exported, but never offered by any plugin, and the beacon instead instantiates `createOllamaEmbeddingProvider` directly in drone-beacon/src/index.ts. The agent-side `search.userEmbeddingProvider` / `search.projectEmbeddingProvider` / `DroneSearchPath.embeddingProvider` config fields likewise have zero readers. These fields look authoritative but silently do nothing — a real trap, since setting them appears to configure the embedder."
+  },
+  {
+    "timestamp": "2026-10-20T22:40:11.116Z",
+    "insight": "The LSP typescript diagnostics in this workspace can go STALE after edits made through tools that bypass the LSP file watcher (e.g. `exec__run` with python/node heredocs, and `file__set`-style raw writes). During the ADR-259 embedding work, `lsp__get_diagnostics` repeatedly reported errors that matched OLD line numbers (e.g. \"search-indexer.test.ts:88 is missing spec/embedQuery/embedDocument\" when line 88 was a `describe`) while `tsc -b` and `tsc -p tsconfig.test.json` exited clean. Trust `pnpm --filter <pkg> exec tsc -b` / `tsc -p tsconfig.test.json` over a stale-looking LSP panel, and re-read the file to confirm the edit actually landed before chasing a phantom."
+  },
+  {
+    "timestamp": "2026-10-20T22:40:11.119Z",
+    "insight": "Running vitest per-package (`cd drone-beacon && npx vitest run`) uses a DIFFERENT config than the repo root: the root `vitest.config.ts` aliases `drone-core`/`drone-swarm-common` to SOURCE, but a per-package run resolves them to built `dist/`, so a test that looks green in one and red in the other (or vice versa) is a config-resolution artifact, not a real regression. During the embedding work, two `wiki-indexer.test.ts` cases \"failed\" per-package but passed under the root run because the per-package run loaded a stale `drone-swarm-common/dist`. Always run workspace tests via `pnpm run test` (root config) or pass an explicit alias config."
+  },
+  {
+    "timestamp": "2026-10-20T22:40:11.123Z",
+    "insight": "`pnpm` does NOT read `pnpm.onlyBuiltDependencies` from the root `package.json` on pnpm 11 — the allowlist for install/postinstall scripts lives in `pnpm-workspace.yaml` under `onlyBuiltDependencies` (or the newer `allowBuilds` map). Installing `@huggingface/transformers` failed with `ERR_PNPM_IGNORED_BUILDS` for `onnxruntime-node` and `protobufjs` until the allowlist was added there; and on this host the `@huggingface/transformers` install step prints an alarming `Unauthorized access to file: https://huggingface.co/...` on first run because Hugging Face returns HTTP 401 to the sandbox — that is the intended hard-fail (ADR 259 D5), not a code bug."
+  },
+  {
+    "timestamp": "2026-10-20T23:23:24.856Z",
+    "insight": "Hugging Face answers HTTP 401 Unauthorized for a *nonexistent* public repo. A hard-fail like `Unauthorized access to file: \"https://huggingface.co/Xenova/nomic-embed-text-v1.5/resolve/main/config.json\"` therefore reads as an auth/network failure but is almost always a bad repo id. During the ADR 259 embedding work this was misdiagnosed as \"the host cannot reach HF\"; the falsifier is cheap — fetch a known-good repo (`bert-base-uncased/config.json` returns 200) before blaming the environment. Check an id with `curl -s -o /dev/null -w \"%{http_code}\" https://huggingface.co/api/models/<id>` (200 = exists, 401 = does not). The correct ONNX id for nomic v1.5 is `nomic-ai/nomic-embed-text-v1.5`, not `Xenova/nomic-embed-text-v1.5`."
+  },
+  {
+    "timestamp": "2026-10-20T23:23:24.860Z",
+    "insight": "ONNX quantization is not free for embedding-parity claims. The ONNX build and the Ollama build of nomic-embed-text-v1.5 are the same weights, but measured cosine against Ollama is fp32 1.000000, fp16 0.999999, q8 0.974 — so `dtype: \"q8\"` (the default chosen for a 131 MB download) is NOT a drop-in equivalent to the Ollama vectors. When claiming \"identical vectors, no reindex needed\", measure against the incumbent backend at each dtype first. Also: a 12-sentence probe showed 6 top-1 flips at q8, but every flip was a near-tie (fp32 top1-top2 gap < 0.02), so a small unrelated corpus overstates the damage — report the margin, not just the flip count."
   }
 ]

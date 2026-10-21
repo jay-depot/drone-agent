@@ -1,45 +1,45 @@
-import type { DroneEmbeddingProvider } from 'drone-core';
+import type { EmbeddingBackend } from './types.js';
 
-// ── Types ───────────────────────────────────────────────────────────
-
-export type OllamaEmbeddingConfig = {
+export type OllamaBackendConfig = {
   host: string;
-  model?: string;
+  model: string;
 };
 
-// ── Provider ─────────────────────────────────────────────────────────
+const MAX_HOST_LENGTH = 2048;
 
-export function createOllamaEmbeddingProvider(
-  config: OllamaEmbeddingConfig
-): DroneEmbeddingProvider {
+/**
+ * Ollama backend. Expects raw text — formatting is the provider's job.
+ */
+export function createOllamaBackend(
+  config: OllamaBackendConfig
+): EmbeddingBackend {
   // The host comes from config (user/project/beacon/coordinator layers), so
   // bound its length before running the trailing-slash regex to keep the
   // polynomial match from ever seeing unbounded input.
   const rawHost = config.host.trim();
-  if (rawHost.length > 2048) {
+  if (rawHost.length > MAX_HOST_LENGTH) {
     throw new Error(
       `Ollama host URL exceeds maximum length: ${rawHost.length}`
     );
   }
   const host = rawHost.replace(/\/+$/, '');
-  const model = config.model ?? 'nomic-embed-text:v1.5';
+  const { model } = config;
 
   return {
     id: 'ollama',
-    name: `Ollama (${model})`,
-    dimensions: 768,
-    maxTokens: 8192,
+    dtype: 'gguf',
 
-    async getEmbedding(text: string): Promise<Float32Array> {
+    async init(): Promise<void> {
+      // Ollama loads the model on first request; nothing to do here.
+    },
+
+    async embed(texts: string[]): Promise<Float32Array[]> {
       const url = `${host}/api/embed`;
 
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model,
-          input: text,
-        }),
+        body: JSON.stringify({ model, input: texts }),
       });
 
       if (!response.ok) {
@@ -59,9 +59,11 @@ export function createOllamaEmbeddingProvider(
         );
       }
 
-      // Ollama returns [[...]] — take the first embedding
-      const embedding = data.embeddings[0];
-      return new Float32Array(embedding);
+      return data.embeddings.map(embedding => new Float32Array(embedding));
+    },
+
+    async dispose(): Promise<void> {
+      // No local resources to release.
     },
   };
 }

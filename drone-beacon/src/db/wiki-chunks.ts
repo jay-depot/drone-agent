@@ -144,13 +144,20 @@ export function searchWikiChunksByVector(
   }));
 }
 
-export function replaceWikiChunks(
+/**
+ * Upsert the page's source row and replace its whole chunk set in one
+ * transaction. Deleting before inserting means a changed page never doubles
+ * its chunk count.
+ */
+export function replaceWikiPage(
   pageId: string,
   origin: WikiOrigin,
+  meta: { title: string; updatedAt: string; hash: PageHash },
   chunks: Array<{ index: number; text: string; embedding: Float32Array }>
 ): void {
   const db = getDatabase();
   const tx = db.transaction(() => {
+    upsertWikiSource(pageId, origin, meta.title, meta.updatedAt, meta.hash);
     deleteChunksForWikiPage(pageId, origin);
     for (const c of chunks) {
       insertWikiChunk(pageId, origin, c.index, c.text, c.embedding);

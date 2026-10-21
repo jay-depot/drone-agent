@@ -343,7 +343,6 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
                   'Include this folder in swarm-memory RAG retrieval. File hits compete with wiki entries for the same swarm.memory.topK slots. Default false.',
               })
             ),
-            embeddingProvider: Type.Optional(Type.String()),
             includeHidden: Type.Optional(
               Type.Boolean({
                 description:
@@ -365,8 +364,6 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
           })
         )
       ),
-      userEmbeddingProvider: Type.Optional(Type.String()),
-      projectEmbeddingProvider: Type.Optional(Type.String()),
     }),
     wakelock: Type.Object({
       enabled: Type.Optional(Type.Boolean()),

@@ -76,8 +76,6 @@ export const KNOWN_CONFIG_KEYS: string[] = [
   // search.*
   'search.enabled',
   'search.paths',
-  'search.userEmbeddingProvider',
-  'search.projectEmbeddingProvider',
   // wakelock.enabled
   'wakelock.enabled',
   // herdr.*
