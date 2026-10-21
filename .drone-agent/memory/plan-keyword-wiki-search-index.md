@@ -239,3 +239,31 @@ before the change.
 
 Coordinator corpus indexing; BM25/IDF weighting in place of plain coverage; RRF as an
 alternative fusion behind config; making the wiki reindex route asynchronous.
+
+## 14. Noted but deferred (from the `brillio-interview-rag-keyword-retrieval` precedent)
+
+A prior project on this host implemented the same lexical-retrieval idea
+(`/home/unleet/Projects/brillio-interview/packages/backend/src/rag/keywordSearch.ts`,
+verified from code 2026-10-21). Three of its scoring refinements are worth adopting but are
+**explicitly deferred** — ship the flat saturating coverage first, then measure and revisit:
+
+1. **Field weighting (title != body).** Their `TITLE_TERM_WEIGHT = 4` vs
+   `CONTENT_TERM_WEIGHT = 1`. Wiki page ids/titles are highly descriptive
+   (`drone-beacon-wiki-reindex-duplicate-chunks-on-hash-mismatch`), so title matches carry
+   real signal we currently ignore. FTS5 supports this natively via `bm25(table, 4.0, 1.0)`
+   column weights. Inside our envelope it would become:
+   `coverage = min(1, (2*titleMatches + bodyMatches) / 2)` — keeps `b = 0.08` intact while a
+   title hit alone earns full credit.
+2. **Occurrence counting, not distinct terms.** They use
+   `countOccurrences(stems, queryStem) * WEIGHT`. Frequency captures salience; our plan
+   counts each matched term once. Cheap to adopt.
+3. **Phrase boost.** Their `PHRASE_BOOST = 12` for quoted `"..."`/`'...'`. We get most of
+   this free: route quoted input to the existing `wiki_fts_trigram` table rather than the
+   porter one.
+
+**Deliberately NOT adopted:** their Lancaster stemmer (FTS5 ships Porter; a second token
+pipeline is not worth maintaining) and their product-name scoping
+(`detectReferencedProductIds` — solves a multi-tenant problem we do not have).
+
+**Constraint on (1):** any field weighting must stay inside the `0.08` boost envelope, since
+we add to cosine rather than sorting by a raw integer sum the way they do.
