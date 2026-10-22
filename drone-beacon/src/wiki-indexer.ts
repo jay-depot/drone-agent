@@ -145,6 +145,16 @@ export class WikiIndexer {
       }
     }
 
+    // Snapshot the stored source rows once. This query aggregates every source
+    // against every chunk, so calling it per page made a sweep O(pages²) —
+    // thousands of full GROUP BY scans per pass to answer a question whose
+    // answer does not change while the loop runs. Each (page_id, origin) is
+    // visited at most once below, so one snapshot is equivalent to a live
+    // lookup per page.
+    const storedByKey = new Map(
+      db.getWikiSourcesWithChunkCounts().map(s => [sourceKeyOf(s), s] as const)
+    );
+
     for (const entry of pages) {
       try {
         const content = await fetchPageContent(entry);
@@ -155,9 +165,7 @@ export class WikiIndexer {
           content,
           this.fingerprint
         );
-        const stored = db
-          .getWikiSourcesWithChunkCounts()
-          .find(s => s.page_id === entry.page.id && s.origin === entry.origin);
+        const stored = storedByKey.get(sourceKey(entry.page.id, entry.origin));
 
         // Skip only when the hash matches AND chunks exist. A page recorded as
         // indexed with zero chunks (a previous failed embed) must be retried.

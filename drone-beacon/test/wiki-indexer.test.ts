@@ -410,4 +410,66 @@ describe('WikiIndexer', () => {
       expect(provider.calls.length).toBe(callsAfterFirstPass);
     });
   });
+
+  describe('index-pass query cost', () => {
+    /** Runs `fn` with every prepared SQL statement recorded. */
+    async function recordingSql(fn: () => Promise<void>): Promise<string[]> {
+      const db = getDatabase();
+      const original = db.prepare.bind(db);
+      const seen: string[] = [];
+      (db as unknown as { prepare: (sql: string) => unknown }).prepare = (
+        sql: string
+      ) => {
+        seen.push(sql);
+        return original(sql);
+      };
+      try {
+        await fn();
+      } finally {
+        (db as unknown as { prepare: unknown }).prepare = original;
+      }
+      return seen;
+    }
+
+    function pageMeta(id: string) {
+      return { ...BEACON_PAGE_META, id, title: `Page ${id}` };
+    }
+
+    it('aggregates stored chunk counts once per pass, not once per page', async () => {
+      const indexer = new WikiIndexer(makeProvider());
+      const pages: WikiPageInput[] = Array.from({ length: 5 }, (_, i) => ({
+        page: pageMeta(`page-${i}`),
+        origin: 'beacon' as const,
+        content: `# Page ${i}\n\nBody text for page ${i}.`,
+      }));
+
+      const sql = await recordingSql(async () => {
+        await indexer.indexWiki(pages);
+      });
+
+      // The aggregate LEFT JOINs every source against every chunk, so calling
+      // it per page made a sweep O(pages²). One snapshot per pass is enough:
+      // each (page_id, origin) is visited at most once.
+      const aggregates = sql.filter(s => s.includes('COUNT(c.id)'));
+      expect(aggregates).toHaveLength(1);
+    });
+
+    it('still skips unchanged pages after the snapshot refactor', async () => {
+      const indexer = new WikiIndexer(makeProvider());
+      const pages: WikiPageInput[] = [
+        {
+          page: pageMeta('stable'),
+          origin: 'beacon',
+          content: '# Stable\n\nUnchanged body.',
+        },
+      ];
+
+      const first = await indexer.indexWiki(pages);
+      expect(first.pagesIndexed).toBe(1);
+
+      const second = await indexer.indexWiki(pages);
+      expect(second.pagesSkipped).toBe(1);
+      expect(second.pagesIndexed).toBe(0);
+    });
+  });
 });
