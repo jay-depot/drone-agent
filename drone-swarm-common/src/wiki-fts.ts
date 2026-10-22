@@ -20,6 +20,8 @@ export type WikiFtsHit = {
   origin: string;
   /** Relevance, higher is better. Negated from FTS5 `bm25()` (which is lower-is-better). */
   score: number;
+  /** Best-matching excerpt, present only when `withSnippet` was requested. */
+  snippet?: string;
 };
 
 export type WikiFtsPage = {
@@ -38,6 +40,21 @@ const TABLE_FOR_MODE: Record<WikiFtsMode, string> = {
 
 /** Trigram tokenization only matches runs of at least three characters. */
 const TRIGRAM_MIN_CHARS = 3;
+
+/** Tokens of context returned either side of a match by `snippet()`. */
+const SNIPPET_TOKENS = 12;
+
+/**
+ * Zero-based column index of `body` within each table's column list.
+ *
+ * `snippet()` takes a column index, and the two tables differ (only the
+ * stemmed table has `pitch`), so this cannot be a shared constant.
+ */
+function bodyColumnIndex(mode: WikiFtsMode): number {
+  // wiki_fts:         page_id, origin, title, tags, pitch, body
+  // wiki_fts_trigram: page_id, origin, title, tags,        body
+  return mode === 'stemmed' ? 5 : 4;
+}
 
 /**
  * Build an FTS5 MATCH expression from raw user input.
@@ -71,7 +88,13 @@ function buildMatchExpression(query: string, mode: WikiFtsMode): string | null {
 export function searchWikiFts(
   db: () => Database,
   query: string,
-  opts: { mode: WikiFtsMode; limit?: number; origin?: string }
+  opts: {
+    mode: WikiFtsMode;
+    limit?: number;
+    origin?: string;
+    /** Include a best-matching excerpt for each hit. */
+    withSnippet?: boolean;
+  }
 ): WikiFtsHit[] {
   const table = TABLE_FOR_MODE[opts.mode];
   const match = buildMatchExpression(query, opts.mode);
@@ -81,9 +104,15 @@ export function searchWikiFts(
   const originClause = opts.origin ? ' AND origin = ?' : '';
   const params: unknown[] = opts.origin ? [match, opts.origin] : [match];
 
+  // Column index of `body` varies by table (the trigram table has no `pitch`),
+  // so resolve it instead of hardcoding.
+  const snippetSelect = opts.withSnippet
+    ? `, snippet(${table}, ${bodyColumnIndex(opts.mode)}, '', '', '…', ${SNIPPET_TOKENS}) AS snippet`
+    : '';
+
   const rows = db()
     .prepare(
-      `SELECT page_id AS pageId, origin, bm25(${table}) AS rank
+      `SELECT page_id AS pageId, origin, bm25(${table}) AS rank${snippetSelect}
          FROM ${table}
         WHERE ${table} MATCH ?${originClause}
         ORDER BY rank
@@ -93,12 +122,14 @@ export function searchWikiFts(
     pageId: string;
     origin: string;
     rank: number;
+    snippet?: string;
   }>;
 
   return rows.map(r => ({
     pageId: r.pageId,
     origin: r.origin,
     score: -r.rank,
+    ...(opts.withSnippet ? { snippet: r.snippet ?? '' } : {}),
   }));
 }
 

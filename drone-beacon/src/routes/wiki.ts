@@ -3,7 +3,7 @@ import {
   proxyToCoordinatorDetailed,
   proxyWikiToCoordinator,
 } from './context.js';
-import { searchWikiChunksByVector } from '../db/index.js';
+import { getDatabase, searchWikiChunksByVector } from '../db/index.js';
 import type { WikiOrigin } from '../db/index.js';
 import {
   getWikiIndexer,
@@ -13,6 +13,7 @@ import {
 
 const OVERFETCH_FACTOR = 4;
 const MAX_SEMANTIC_RESULTS = 50;
+const MAX_KEYWORD_RESULTS = 50;
 
 type CoordinatorPageLike = Record<string, unknown> & { id?: string };
 
@@ -233,12 +234,40 @@ export default function wikiRoutes(app: FastifyInstance) {
     return { success: true, result };
   });
 
-  // Keyword search over the merged wiki corpus (naive substring, tagged origin)
+  // Keyword search over the merged wiki corpus, tagged by origin.
+  //
+  // Beacon-local results come from the FTS5 trigram index, which answers
+  // exact/navigational lookups (ids, commit hashes, "ADR 259", "v1.5") that
+  // stemming would destroy. Only the matched pages are read from disk, rather
+  // than the whole corpus per query.
   app.get<{ Querystring: { q: string } }>('/wiki/search', async request => {
-    const { searchPages } = await import('drone-swarm-common');
+    const { readPage, searchWikiFts } = await import('drone-swarm-common');
     const { q } = request.query;
     if (!q) return [];
-    const localResults = await searchPages(q);
+
+    const hits = searchWikiFts(() => getDatabase(), q, {
+      mode: 'trigram',
+      limit: MAX_KEYWORD_RESULTS,
+      origin: 'beacon',
+      withSnippet: true,
+    });
+    const localResults: Array<{
+      page: Record<string, unknown>;
+      snippet: string;
+      score: number;
+    }> = [];
+    for (const hit of hits) {
+      const page = await readPage(hit.pageId);
+      // A page deleted between the last index pass and this query is skipped;
+      // the next reconcile drops its index rows.
+      if (!page) continue;
+      const { content: _content, ...meta } = page;
+      localResults.push({
+        page: meta,
+        snippet: hit.snippet ?? '',
+        score: hit.score,
+      });
+    }
     const taggedLocal = localResults.map(r => ({
       ...r,
       origin: 'beacon' as WikiOrigin,

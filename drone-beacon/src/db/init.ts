@@ -254,7 +254,7 @@ export function initDatabase(
     );
 
     CREATE VIRTUAL TABLE IF NOT EXISTS wiki_fts_trigram USING fts5(
-      page_id UNINDEXED,
+      page_id,
       origin UNINDEXED,
       title,
       tags,
