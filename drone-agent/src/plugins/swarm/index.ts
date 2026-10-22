@@ -255,6 +255,19 @@ export function createSwarmPlugin(
       const memoryConfig = registration.getConfig().swarm.memory ?? {
         enabled: false,
       };
+      // Ranking moved to the beacon (its `ranking` config block): it is a
+      // property of the corpus, not of the asking agent. Warn once rather than
+      // silently ignoring a config an operator believes is still in effect.
+      const movedRankingKeys = (
+        ['topK', 'minScore', 'anchors'] as const
+      ).filter(k => memoryConfig[k] !== undefined);
+      if (movedRankingKeys.length > 0) {
+        registration.logger.warn(
+          `swarm.memory.${movedRankingKeys.join(
+            ', swarm.memory.'
+          )} moved to the beacon's "ranking" config block and is no longer read from agent config — remove it to silence this warning`
+        );
+      }
       // Workspace folders opted into RAG via `search.paths[].ragSource`. Read
       // once at register() time; `search.paths` is not underlay-allowed, so it
       // cannot change mid-session.

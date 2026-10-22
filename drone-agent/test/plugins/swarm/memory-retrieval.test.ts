@@ -13,9 +13,6 @@ function config(
 ): DroneSwarmMemoryConfig {
   return {
     enabled: true,
-    topK: 5,
-    minScore: 0.35,
-    anchors: { tags: [], boostPerTag: 0.08, boostTitle: 0.05 },
     window: { maxQueryTokens: 6000, maxQuerySegments: 3 },
     ...overrides,
   };
@@ -47,33 +44,37 @@ function asFile(entry: SwarmMemoryEntry | undefined) {
   return entry;
 }
 
-function searchResponse(
-  entries: Array<{
-    pageId: string;
-    title: string;
-    score: number;
-    matchedChunk: string;
-    tags?: string[];
-    origin?: 'beacon' | 'coordinator';
-    pitch?: string;
-  }>
-): unknown {
+/** A wiki entry shaped as the beacon returns it over the wire. */
+function wikiEntry(over: {
+  pageId: string;
+  title?: string;
+  score?: number;
+  origin?: string;
+  tags?: string[];
+  pitch?: string;
+}) {
   return {
-    query: 'q',
-    resultCount: entries.length,
-    pageCount: entries.length,
-    results: entries.map(e => ({ origin: 'beacon' as const, ...e })),
+    kind: 'wiki' as const,
+    pageId: over.pageId,
+    origin: over.origin ?? 'beacon',
+    title: over.title ?? over.pageId,
+    tags: over.tags ?? [],
+    score: over.score ?? 0.5,
+    pitch: over.pitch ?? '',
   };
 }
 
-function workspaceResponse(
-  entries: Array<{ file: string; score: number; content: string }>
-): unknown {
+/** A file entry shaped as the beacon returns it over the wire. */
+function fileEntry(over: {
+  filePath: string;
+  score?: number;
+  snippet?: string;
+}) {
   return {
-    query: 'q',
-    resultCount: entries.length,
-    truncated: false,
-    results: entries.map(e => ({ chunkIndex: 0, ...e })),
+    kind: 'file' as const,
+    filePath: over.filePath,
+    score: over.score ?? 0.5,
+    snippet: over.snippet ?? '',
   };
 }
 
@@ -108,11 +109,14 @@ describe('SwarmMemoryRetriever', () => {
     });
   }
 
-  /** URLs of every fetch call matching the given path fragment. */
-  function callsTo(fragment: string): string[] {
-    return fetchMock.mock.calls
-      .map(([url]) => String(url))
-      .filter(u => u.includes(fragment));
+  /** The parsed body of the single retrieve call, or undefined. */
+  function retrieveBody(): Record<string, unknown> | undefined {
+    const call = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes('/swarm-memory/retrieve')
+    );
+    if (!call) return undefined;
+    const init = call[1] as RequestInit | undefined;
+    return JSON.parse(String(init?.body ?? '{}'));
   }
 
   beforeEach(() => {
@@ -120,79 +124,123 @@ describe('SwarmMemoryRetriever', () => {
     notices.length = 0;
   });
 
-  it('retrieves, merges by max score, and caches', async () => {
+  it('retrieves the fused list in a single request', async () => {
     fetchMock.mockResolvedValue(
-      jsonResponse(
-        searchResponse([
-          {
-            pageId: 'fragments',
-            title: 'Fragment Guide',
-            score: 0.72,
-            matchedChunk:
-              'The TTL sweep deletes expired fragments every minute.',
-            tags: ['fragments'],
-          },
-        ])
-      )
+      jsonResponse([
+        wikiEntry({
+          pageId: 'fragments',
+          title: 'Fragment Guide',
+          score: 0.72,
+          tags: ['fragments'],
+          pitch: 'The TTL sweep deletes expired fragments every minute.',
+        }),
+      ])
     );
     const retriever = makeRetriever();
     const entries = await retriever.maybeRefresh(parts());
 
+    // The whole point of the collapse: exactly one network call.
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toBe(
+      'http://beacon:3457/swarm-memory/retrieve'
+    );
     expect(entries).toHaveLength(1);
     const entry = asWiki(entries[0]);
     expect(entry.pageId).toBe('fragments');
     expect(entry.pitch).toContain('TTL sweep');
-    expect(entry.pitch.length).toBeLessThanOrEqual(401);
   });
 
-  it('prefers the stored pitch over the matched chunk when both are present', async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse(
-        searchResponse([
-          {
-            pageId: 'fragments',
-            title: 'Fragment Guide',
-            score: 0.72,
-            matchedChunk: 'The TTL sweep deletes expired fragments.',
-            pitch: 'A curated one-sentence pitch about fragments.',
-          },
-        ])
-      )
-    );
+  it('sends the assembled query inputs and the agent id', async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
     const retriever = makeRetriever();
-    const entries = await retriever.maybeRefresh(parts());
 
-    expect(entries).toHaveLength(1);
-    expect(asWiki(entries[0]).pitch).toBe(
-      'A curated one-sentence pitch about fragments.'
+    await retriever.maybeRefresh(
+      parts({ currentQuery: 'first', prevResponse: 'second query' })
     );
+
+    const body = retrieveBody();
+    expect(body?.agentId).toBe('agent-1');
+    expect(Array.isArray(body?.inputs)).toBe(true);
+    expect((body?.inputs as string[]).length).toBeGreaterThan(0);
   });
 
-  it('falls back to the matched chunk when no stored pitch is present', async () => {
+  it('forwards ragSource paths with their exclude globs', async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+    const retriever = makeRetriever(config(), [
+      { path: '/proj/raw', exclude: ['*.log', '**/dist/**'] },
+      { path: '/proj/plain' },
+    ]);
+
+    await retriever.maybeRefresh(parts({ currentQuery: 'q' }));
+
+    // The beacon knows the registered directories but not their exclude
+    // globs, so they must travel with the request.
+    expect(retrieveBody()?.paths).toEqual([
+      { path: '/proj/raw', exclude: ['*.log', '**/dist/**'] },
+      { path: '/proj/plain' },
+    ]);
+  });
+
+  it('omits the exclude key for a path without globs', async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+    const retriever = makeRetriever(config(), [{ path: '/proj/plain' }]);
+
+    await retriever.maybeRefresh(parts({ currentQuery: 'q' }));
+
+    const paths = retrieveBody()?.paths as Array<Record<string, unknown>>;
+    expect(paths[0]).toEqual({ path: '/proj/plain' });
+    expect('exclude' in paths[0]).toBe(false);
+  });
+
+  it('narrows an unknown origin to beacon', async () => {
     fetchMock.mockResolvedValue(
-      jsonResponse(
-        searchResponse([
-          {
-            pageId: 'fragments',
-            title: 'Fragment Guide',
-            score: 0.72,
-            matchedChunk: 'The TTL sweep deletes expired fragments.',
-          },
-        ])
-      )
+      jsonResponse([wikiEntry({ pageId: 'p', origin: 'something-else' })])
     );
     const retriever = makeRetriever();
-    const entries = await retriever.maybeRefresh(parts());
 
-    expect(entries).toHaveLength(1);
-    expect(asWiki(entries[0]).pitch).toBe(
-      'The TTL sweep deletes expired fragments.'
+    const entries = await retriever.maybeRefresh(parts({ currentQuery: 'q' }));
+
+    expect(asWiki(entries[0]).origin).toBe('beacon');
+  });
+
+  it('preserves a coordinator origin', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([wikiEntry({ pageId: 'p', origin: 'coordinator' })])
     );
+    const retriever = makeRetriever();
+
+    const entries = await retriever.maybeRefresh(parts({ currentQuery: 'q' }));
+
+    expect(asWiki(entries[0]).origin).toBe('coordinator');
+  });
+
+  it('passes file entries through unchanged', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([
+        fileEntry({ filePath: '/proj/a.ts', score: 0.8, snippet: 'body' }),
+      ])
+    );
+    const retriever = makeRetriever();
+
+    const entries = await retriever.maybeRefresh(parts({ currentQuery: 'q' }));
+
+    const file = asFile(entries[0]);
+    expect(file.filePath).toBe('/proj/a.ts');
+    expect(file.snippet).toBe('body');
+  });
+
+  it('rejects a non-array payload rather than caching garbage', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ error: 'nope' }));
+    const retriever = makeRetriever();
+
+    const entries = await retriever.maybeRefresh(parts({ currentQuery: 'q' }));
+
+    expect(entries).toEqual([]);
+    expect(retriever.getCache()).toBeNull();
   });
 
   it('debounces identical windows with zero additional network calls', async () => {
-    fetchMock.mockResolvedValue(jsonResponse(searchResponse([])));
+    fetchMock.mockResolvedValue(jsonResponse([]));
     const retriever = makeRetriever();
 
     await retriever.maybeRefresh(
@@ -209,18 +257,7 @@ describe('SwarmMemoryRetriever', () => {
   });
 
   it('emits a notice line once per real retrieval, with the match count', async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse(
-        searchResponse([
-          {
-            pageId: 'fragments',
-            title: 'Fragment Guide',
-            score: 0.72,
-            matchedChunk: 'TTL sweep',
-          },
-        ])
-      )
-    );
+    fetchMock.mockResolvedValue(jsonResponse([wikiEntry({ pageId: 'p' })]));
     const retriever = makeRetriever();
 
     await retriever.maybeRefresh(parts({ currentQuery: 'window A' }));
@@ -228,7 +265,7 @@ describe('SwarmMemoryRetriever', () => {
 
     expect(notices).toEqual(['[swarm.memory: found 1 match]']);
 
-    fetchMock.mockResolvedValue(jsonResponse(searchResponse([])));
+    fetchMock.mockResolvedValue(jsonResponse([]));
     await retriever.maybeRefresh(parts({ currentQuery: 'window B' }));
     expect(notices).toEqual([
       '[swarm.memory: found 1 match]',
@@ -236,98 +273,9 @@ describe('SwarmMemoryRetriever', () => {
     ]);
   });
 
-  it('merges duplicate pages across multiple query inputs by max score', async () => {
-    fetchMock.mockImplementation(async (url: string | URL) => {
-      const u = String(url);
-      if (u.includes('q=first')) {
-        return jsonResponse(
-          searchResponse([
-            {
-              pageId: 'p1',
-              title: 'P1',
-              score: 0.42,
-              matchedChunk: 'first hit',
-            },
-          ])
-        );
-      }
-      return jsonResponse(
-        searchResponse([
-          {
-            pageId: 'p1',
-            title: 'P1',
-            score: 0.88,
-            matchedChunk: 'better hit',
-          },
-          { pageId: 'p2', title: 'P2', score: 0.5, matchedChunk: 'other' },
-        ])
-      );
-    });
-    const retriever = makeRetriever();
-    const entries = await retriever.maybeRefresh(
-      parts({ currentQuery: 'first', prevResponse: 'second query' })
-    );
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const p1 = asWiki(
-      entries.find(e => e.kind === 'wiki' && e.pageId === 'p1')
-    );
-    expect(p1.score).toBe(0.88);
-    expect(p1.pitch).toBe('better hit');
-  });
-
-  it('applies additive anchor boosts for matching tags and titles', async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse(
-        searchResponse([
-          {
-            pageId: 'beacon-doc',
-            title: 'Beacon internals',
-            score: 0.5,
-            matchedChunk: 'stuff',
-            tags: ['beacon'],
-          },
-          {
-            pageId: 'other-doc',
-            title: 'Unrelated',
-            score: 0.5,
-            matchedChunk: 'stuff',
-            tags: ['unrelated'],
-          },
-        ])
-      )
-    );
-    const retriever = makeRetriever(
-      config({
-        anchors: { tags: ['beacon'], boostPerTag: 0.08, boostTitle: 0.05 },
-      })
-    );
-    const entries = await retriever.maybeRefresh(parts());
-
-    const beaconEntry = asWiki(
-      entries.find(e => e.kind === 'wiki' && e.pageId === 'beacon-doc')
-    );
-    const otherEntry = asWiki(
-      entries.find(e => e.kind === 'wiki' && e.pageId === 'other-doc')
-    );
-    expect(beaconEntry.score).toBeCloseTo(0.63, 5);
-    expect(otherEntry.score).toBeCloseTo(0.5, 5);
-  });
-
   it('keeps the previous cache when retrieval fails', async () => {
     fetchMock
-      .mockResolvedValueOnce(
-        jsonResponse(
-          searchResponse([
-            {
-              pageId: 'good',
-              title: 'Good',
-              score: 0.9,
-              matchedChunk: 'cached entry',
-            },
-          ])
-        )
-      )
+      .mockResolvedValueOnce(jsonResponse([wikiEntry({ pageId: 'good' })]))
       .mockRejectedValueOnce(new Error('beacon down'));
 
     const retriever = makeRetriever();
@@ -339,6 +287,24 @@ describe('SwarmMemoryRetriever', () => {
     );
     expect(afterFailure).toHaveLength(1);
     expect(asWiki(retriever.getCache()?.entries[0]).pageId).toBe('good');
+  });
+
+  it('keeps the previous cache on a non-OK response', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse([wikiEntry({ pageId: 'good' })]))
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        json: async () => ({}),
+      } as unknown as Response);
+
+    const retriever = makeRetriever();
+    await retriever.maybeRefresh(parts({ currentQuery: 'first topic' }));
+
+    const after = await retriever.maybeRefresh(
+      parts({ currentQuery: 'different topic now' })
+    );
+    expect(asWiki(after[0]).pageId).toBe('good');
   });
 
   it('makes zero network calls when disabled (config or session override or no swarm)', async () => {
@@ -365,7 +331,7 @@ describe('SwarmMemoryRetriever', () => {
   });
 
   it('forceRefresh bypasses the debounce hash', async () => {
-    fetchMock.mockResolvedValue(jsonResponse(searchResponse([])));
+    fetchMock.mockResolvedValue(jsonResponse([]));
     const retriever = makeRetriever();
 
     await retriever.maybeRefresh(parts({ currentQuery: 'stable' }));
@@ -375,137 +341,14 @@ describe('SwarmMemoryRetriever', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('issues one workspace query per (input × ragSource dir)', async () => {
-    fetchMock.mockResolvedValue(jsonResponse(workspaceResponse([])));
-    const retriever = makeRetriever(config(), [
-      { path: '/proj/one' },
-      { path: '/proj/two' },
-    ]);
-
-    await retriever.maybeRefresh(
-      parts({ currentQuery: 'first', prevResponse: 'second query' })
-    );
-
-    // Two query inputs × two ragSource dirs = four workspace calls.
-    expect(callsTo('/agents/agent-1/search')).toHaveLength(4);
-    // Wiki calls are separate and still one per input.
-    expect(callsTo('/wiki/semantic-search')).toHaveLength(2);
-  });
-
-  it('sends the raw configured path and forwards exclude globs', async () => {
-    fetchMock.mockResolvedValue(jsonResponse(workspaceResponse([])));
-    const retriever = makeRetriever(config(), [
-      { path: '/proj/raw', exclude: ['*.log', '**/dist/**'] },
-    ]);
+  it('does not call the old per-source search routes', async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+    const retriever = makeRetriever(config(), [{ path: '/proj' }]);
 
     await retriever.maybeRefresh(parts({ currentQuery: 'q' }));
 
-    const url = callsTo('/agents/agent-1/search')[0];
-    const sp = new URL(url).searchParams;
-    expect(sp.get('path')).toBe('/proj/raw');
-    expect(sp.getAll('exclude')).toEqual(['*.log', '**/dist/**']);
-    expect(sp.get('maxResults')).toBe('5');
-    expect(sp.get('minScore')).toBe('0.35');
-  });
-
-  it('merges file and wiki hits into one pool truncated to topK', async () => {
-    fetchMock.mockImplementation(async (url: string | URL) => {
-      const u = String(url);
-      if (u.includes('/wiki/semantic-search')) {
-        return jsonResponse(
-          searchResponse([
-            {
-              pageId: 'wiki-high',
-              title: 'Wiki High',
-              score: 0.9,
-              matchedChunk: 'wiki high',
-            },
-            {
-              pageId: 'wiki-low',
-              title: 'Wiki Low',
-              score: 0.2,
-              matchedChunk: 'wiki low',
-            },
-          ])
-        );
-      }
-      return jsonResponse(
-        workspaceResponse([
-          { file: '/proj/file-a.ts', score: 0.8, content: 'file a' },
-          { file: '/proj/file-b.ts', score: 0.1, content: 'file b' },
-        ])
-      );
-    });
-    const retriever = makeRetriever(config({ topK: 2 }), [{ path: '/proj' }]);
-
-    const entries = await retriever.maybeRefresh(parts({ currentQuery: 'q' }));
-
-    // topK=2 — no extra slots for the extra source.
-    expect(entries).toHaveLength(2);
-    expect(asWiki(entries[0]).pageId).toBe('wiki-high');
-    expect(asFile(entries[1]).filePath).toBe('/proj/file-a.ts');
-  });
-
-  it('applies anchor title boosts to file paths', async () => {
-    fetchMock.mockImplementation(async (url: string | URL) => {
-      const u = String(url);
-      if (u.includes('/wiki/semantic-search')) {
-        return jsonResponse(searchResponse([]));
-      }
-      return jsonResponse(
-        workspaceResponse([
-          { file: '/proj/beacon/thing.ts', score: 0.5, content: 'x' },
-          { file: '/proj/other/thing.ts', score: 0.5, content: 'y' },
-        ])
-      );
-    });
-    const retriever = makeRetriever(
-      config({
-        anchors: { tags: ['beacon'], boostPerTag: 0.08, boostTitle: 0.05 },
-      }),
-      [{ path: '/proj' }]
-    );
-
-    const entries = await retriever.maybeRefresh(parts({ currentQuery: 'q' }));
-
-    const hit = asFile(
-      entries.find(e => e.kind === 'file' && e.filePath.includes('beacon'))
-    );
-    const miss = asFile(
-      entries.find(e => e.kind === 'file' && e.filePath.includes('other'))
-    );
-    expect(hit.score).toBeCloseTo(0.55, 5);
-    expect(miss.score).toBeCloseTo(0.5, 5);
-  });
-
-  it('keeps the previous cache when a workspace query fails', async () => {
-    let workspaceDown = false;
-    fetchMock.mockImplementation(async (url: string | URL) => {
-      const u = String(url);
-      if (u.includes('/wiki/semantic-search')) {
-        return jsonResponse(
-          searchResponse([
-            {
-              pageId: 'good',
-              title: 'Good',
-              score: 0.9,
-              matchedChunk: 'cached entry',
-            },
-          ])
-        );
-      }
-      if (workspaceDown) throw new Error('workspace down');
-      return jsonResponse(workspaceResponse([]));
-    });
-
-    const retriever = makeRetriever(config(), [{ path: '/proj' }]);
-    await retriever.maybeRefresh(parts({ currentQuery: 'first topic' }));
-    expect(asWiki(retriever.getCache()?.entries[0]).pageId).toBe('good');
-
-    workspaceDown = true;
-    const afterFailure = await retriever.maybeRefresh(
-      parts({ currentQuery: 'different topic now' })
-    );
-    expect(asWiki(afterFailure[0]).pageId).toBe('good');
+    const urls = fetchMock.mock.calls.map(([u]) => String(u));
+    expect(urls.some(u => u.includes('/wiki/semantic-search'))).toBe(false);
+    expect(urls.some(u => u.includes('/agents/agent-1/search'))).toBe(false);
   });
 });

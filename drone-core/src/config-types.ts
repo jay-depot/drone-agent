@@ -797,17 +797,20 @@ export function createDefaultAgentConfig(
 export type DroneSwarmMemoryConfig = {
   /** Master switch. Disabled = the fragment is hidden and no network calls are made. */
   enabled: boolean;
-  /** Maximum number of wiki entries injected per refresh. */
+  /**
+   * @deprecated Moved to the beacon's `ranking` config block. Ignored here.
+   */
   topK?: number;
-  /** Minimum semantic similarity (cosine) for an entry to be injected. */
+  /**
+   * @deprecated Moved to the beacon's `ranking` config block. Ignored here.
+   */
   minScore?: number;
-  /** Static per-project relevance anchors applied as additive score boosts. */
+  /**
+   * @deprecated Moved to the beacon's `ranking` config block. Ignored here.
+   */
   anchors?: {
-    /** Anchor tags matched (fully, case-insensitive) against page tags. */
     tags: string[];
-    /** Score boost per matching anchor tag. */
     boostPerTag?: number;
-    /** Score boost when the anchor tag appears in the page title. */
     boostTitle?: number;
   };
   /** Query assembly budgeting (client-side; the embedder truncates from the end). */
