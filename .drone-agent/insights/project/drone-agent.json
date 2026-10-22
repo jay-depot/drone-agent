@@ -986,5 +986,21 @@
   {
     "timestamp": "2026-10-20T23:23:24.860Z",
     "insight": "ONNX quantization is not free for embedding-parity claims. The ONNX build and the Ollama build of nomic-embed-text-v1.5 are the same weights, but measured cosine against Ollama is fp32 1.000000, fp16 0.999999, q8 0.974 — so `dtype: \"q8\"` (the default chosen for a 131 MB download) is NOT a drop-in equivalent to the Ollama vectors. When claiming \"identical vectors, no reindex needed\", measure against the incumbent backend at each dtype first. Also: a 12-sentence probe showed 6 top-1 flips at q8, but every flip was a near-tie (fp32 top1-top2 gap < 0.02), so a small unrelated corpus overstates the damage — report the margin, not just the flip count."
+  },
+  {
+    "timestamp": "2026-10-22T02:52:00.191Z",
+    "insight": "Squash merges make vault/wiki checkpoints routinely non-ancestral — three occurrences now (ADRs 258, 259, 260). `git merge-base --is-ancestor <checkpoint> HEAD` returns FALSE for a checkpoint that was squash-merged, because the original commits are not ancestors of main, only the squashed copy is. Every ingest log entry and meta.json note must record the checkpoint AND state whether it is ancestral, plus the true shared ancestor. Same trap applies to branch cleanup: `git branch --merged main` returns nothing useful, and `git cherry` reports every commit as \"not upstream\", because squash rewrites patch-ids. The only reliable merge proof found was \"the upstream branch was deleted by GitHub\" plus a name match against the merged-PR list."
+  },
+  {
+    "timestamp": "2026-10-22T02:52:00.196Z",
+    "insight": "FTS5 facts that shaped the keyword index, worth not re-deriving: (1) `tokenize` is a TABLE option, not a column option, so \"stem some columns, trigram others\" is impossible in one table — two tokenizers require two tables. (2) `bm25()` is negative and unbounded (lower = better), so it must be negated for a \"higher is better\" score; only the ORDERING is meaningful and the magnitude must never be compared against a cosine threshold. (3) Raw user input cannot be passed to `MATCH` unquoted — `\"`, `-`, `*`, `(`, `:`, `^` are operators and a bare pass-through is a SQL parse error; quote each token and double any embedded quote. (4) `snippet(table, colIndex, ...)` takes a column index resolved per table. (5) A trigram index needs the id column INDEXED (not UNINDEXED) if the point is finding a page by a literal id substring. All verified empirically against better-sqlite3 11.10.0 / SQLite 3.49.2."
+  },
+  {
+    "timestamp": "2026-10-22T02:52:07.357Z",
+    "insight": "Recurring perf bug class in the beacon: calling an aggregate/GROUP BY helper INSIDE a per-item loop. `indexWiki` called `getWikiSourcesWithChunkCounts()` (a GROUP BY over `wiki_sources` LEFT JOIN `wiki_chunks`) once per page, so a sweep ran ~2,400 identical aggregates of unchanging data — O(pages²), each blocking the event loop. Measured: 52ms per call, ~125s of pure query time per 5-minute sweep on a 2,399-source/17,987-chunk corpus. Hoisting to one snapshot Map keyed by `page_id|origin` fixed it. Rule: before writing a DB call inside a loop, ask whether its result changes during the loop; if not, snapshot it. The regression test counts SQL statements prepared during a pass, not wall-clock — deterministic and immune to machine speed."
+  },
+  {
+    "timestamp": "2026-10-22T02:52:07.360Z",
+    "insight": "`runtime__list_tools` lists tools AVAILABLE in a plugin, not tools currently MOUNTED — a tool can appear there and still be absent from the active tool list, and every call to it fails as an unmounted tool. Check the actual tool list before assuming a tool is callable; if it is missing, `runtime__mount_tool` first. Corollary: when a call fails repeatedly, verify mounting before blaming parameters — I misdiagnosed two `self-improvement__insight` failures as a missing `targetType` argument when the tool had never been mounted."
   }
 ]
