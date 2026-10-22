@@ -84,6 +84,19 @@ const STOP_WORDS: ReadonlySet<string> = new Set([
 const SATURATION_TERMS = 2;
 
 /**
+ * Convert a count of matched query terms into a coverage score in [0, 1],
+ * saturating at `SATURATION_TERMS`.
+ *
+ * Saturating rather than dividing by the term count keeps a single solid match
+ * meaningful on a long query: one match earns half credit regardless of how
+ * many terms the query had.
+ */
+export function saturatingCoverage(matchedTerms: number): number {
+  if (matchedTerms <= 0) return 0;
+  return Math.min(1, matchedTerms / SATURATION_TERMS);
+}
+
+/**
  * Extract the content terms of a query: lowercased alphanumeric tokens longer
  * than two characters, with stopwords removed and duplicates collapsed.
  *
@@ -124,5 +137,5 @@ export function keywordCoverage(terms: string[], text: string): number {
       matched += 1;
     }
   }
-  return Math.min(1, matched / SATURATION_TERMS);
+  return saturatingCoverage(matched);
 }

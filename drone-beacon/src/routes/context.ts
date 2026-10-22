@@ -1,5 +1,7 @@
 import type { SearchIndexer } from '../search-indexer.js';
 import type { CoordinatorClient } from '../coordinator-client.js';
+import type { RankingConfig } from 'drone-swarm-common';
+import { defaultRankingConfig } from 'drone-swarm-common';
 import { logger } from '../logger.js';
 import * as db from '../db/index.js';
 import { setSecretOverlay } from '../secret-overlay.js';
@@ -45,6 +47,20 @@ export function setSearchIndexer(indexer: SearchIndexer | undefined) {
 
 export function getSearchIndexer(): SearchIndexer | undefined {
   return searchIndexer;
+}
+
+let rankingConfig: RankingConfig = defaultRankingConfig();
+
+/**
+ * Ranking is beacon-global: it is a property of the corpus, not of the agent
+ * asking. Set once at startup from the server config file.
+ */
+export function setRankingConfig(config: RankingConfig): void {
+  rankingConfig = config;
+}
+
+export function getRankingConfig(): RankingConfig {
+  return rankingConfig;
 }
 
 export function setBeaconAddress(host: string, port: number) {

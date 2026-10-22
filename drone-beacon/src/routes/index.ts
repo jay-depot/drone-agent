@@ -25,6 +25,7 @@ import info from './info.js';
 export {
   setCoordinatorClient,
   setSearchIndexer,
+  setRankingConfig,
   setBeaconAddress,
   setBeaconInfo,
   triggerCoordinatorSync,

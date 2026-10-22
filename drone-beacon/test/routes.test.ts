@@ -14,7 +14,11 @@ import type { CoordinatorClient } from '../src/coordinator-client.js';
 import * as db from '../src/db/index.js';
 import { getDatabase } from '../src/db/index.js';
 import { SearchIndexer } from '../src/search-indexer.js';
-import { setSearchIndexer } from '../src/routes/context.js';
+import { WikiIndexer } from '../src/wiki-indexer.js';
+import { setWikiIndexer } from '../src/wiki-index-support.js';
+import { setSearchIndexer, setRankingConfig } from '../src/routes/context.js';
+import { defaultRankingConfig } from 'drone-swarm-common';
+import { replaceWikiFtsRows } from '../../drone-swarm-common/src/index.js';
 import { NOMIC_EMBED_TEXT_V1_5 } from 'drone-core';
 
 // Mock ws-server to avoid WebSocket dependency
@@ -1231,6 +1235,217 @@ describe('Search Routes', () => {
     expect(body.resultCount).toBe(2);
     expect(body.results[0].file).toBe('/proj/src/keep.ts');
     expect(body.results[1].file).toBe('/proj/src/other.ts');
+  });
+});
+
+// ── Swarm-memory retrieval route ────────────────────────────────────
+
+describe('Swarm-memory retrieval route', () => {
+  const DIMS = 768;
+
+  /** Unit vector along dim 0 — the query direction. */
+  const queryVec = () => {
+    const arr = new Float32Array(DIMS);
+    arr[0] = 1;
+    return arr;
+  };
+
+  /**
+   * A unit vector at a chosen cosine to the query direction.
+   * cos=0.30 -> [0.30, 0.9539, 0, ...]
+   */
+  const vecAtCosine = (cos: number) => {
+    const arr = new Float32Array(DIMS);
+    arr[0] = cos;
+    arr[1] = Math.sqrt(1 - cos * cos);
+    return arr;
+  };
+
+  const mockProvider = {
+    id: 'mock',
+    name: 'Mock Provider',
+    spec: NOMIC_EMBED_TEXT_V1_5,
+    dimensions: DIMS,
+    maxTokens: 8192,
+    getEmbedding: async () => queryVec(),
+    embedQuery: async () => queryVec(),
+    embedDocument: async () => queryVec(),
+  };
+
+  async function registerAgent(id: string) {
+    await app.inject({
+      method: 'POST',
+      url: '/agents',
+      payload: { id, personaId: null },
+    });
+  }
+
+  function seedWikiPage(pageId: string, cosine: number, body: string) {
+    db.insertWikiChunk(pageId, 'beacon', 0, body, vecAtCosine(cosine));
+    replaceWikiFtsRows(() => getDatabase(), {
+      pageId,
+      origin: 'beacon',
+      title: body.slice(0, 40),
+      tags: '',
+      body,
+    });
+  }
+
+  beforeEach(() => {
+    setSearchIndexer(new SearchIndexer(mockProvider));
+    setWikiIndexer(new WikiIndexer(mockProvider));
+    setRankingConfig(defaultRankingConfig());
+  });
+
+  afterEach(() => {
+    setSearchIndexer(undefined);
+    setWikiIndexer(undefined);
+    setRankingConfig(defaultRankingConfig());
+  });
+
+  it('404s for an unknown agent', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/swarm-memory/retrieve',
+      payload: { agentId: 'nobody', inputs: ['anything'] },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('400s when no non-empty input is supplied', async () => {
+    await registerAgent('agent-a');
+    for (const inputs of [[], ['   '], ['', '  ']]) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/swarm-memory/retrieve',
+        payload: { agentId: 'agent-a', inputs },
+      });
+      expect(res.statusCode).toBe(400);
+    }
+  });
+
+  it('503s when no embedding provider is available', async () => {
+    await registerAgent('agent-b');
+    setWikiIndexer(undefined);
+    setSearchIndexer(undefined);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/swarm-memory/retrieve',
+      payload: { agentId: 'agent-b', inputs: ['anything'] },
+    });
+    expect(res.statusCode).toBe(503);
+  });
+
+  it('lets keyword coverage rescue a page below the cosine floor', async () => {
+    await registerAgent('agent-c');
+    // Cosine 0.30 sits below the 0.35 floor. Full keyword coverage adds 0.08
+    // (saturating at two matched content terms), lifting it to 0.38.
+    seedWikiPage('reindex-page', 0.3, 'The reindex caused duplication errors.');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/swarm-memory/retrieve',
+      payload: { agentId: 'agent-c', inputs: ['reindex duplication'] },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as Array<{
+      kind: string;
+      pageId?: string;
+      score: number;
+    }>;
+    expect(body).toHaveLength(1);
+    expect(body[0].kind).toBe('wiki');
+    expect(body[0].pageId).toBe('reindex-page');
+    expect(body[0].score).toBeCloseTo(0.38, 2);
+  });
+
+  it('filters a below-floor page with no keyword overlap', async () => {
+    await registerAgent('agent-d');
+    seedWikiPage('unrelated-page', 0.3, 'Sourdough fermentation notes.');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/swarm-memory/retrieve',
+      payload: { agentId: 'agent-d', inputs: ['reindex duplication'] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual([]);
+  });
+
+  it('returns file hits alongside wiki entries', async () => {
+    await registerAgent('agent-e');
+    db.registerSearchPath('agent-e', '/proj');
+    db.insertChunk('/proj', '/proj/src/keep.ts', 0, 'keep me', queryVec());
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/swarm-memory/retrieve',
+      payload: {
+        agentId: 'agent-e',
+        inputs: ['anything'],
+        paths: [{ path: '/proj' }],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as Array<{ kind: string }>;
+    expect(body.some(e => e.kind === 'file')).toBe(true);
+  });
+
+  it('skips a workspace folder the agent never registered', async () => {
+    await registerAgent('agent-f');
+    db.insertChunk('/secret', '/secret/x.ts', 0, 'secret', queryVec());
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/swarm-memory/retrieve',
+      payload: {
+        agentId: 'agent-f',
+        inputs: ['anything'],
+        paths: [{ path: '/secret' }],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual([]);
+  });
+
+  it('applies the exclude globs supplied with the path', async () => {
+    await registerAgent('agent-g');
+    db.registerSearchPath('agent-g', '/proj2');
+    db.insertChunk('/proj2', '/proj2/keep.ts', 0, 'keep', queryVec());
+    db.insertChunk('/proj2', '/proj2/skip.log', 0, 'skip', queryVec());
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/swarm-memory/retrieve',
+      payload: {
+        agentId: 'agent-g',
+        inputs: ['anything'],
+        paths: [{ path: '/proj2', exclude: ['**/*.log'] }],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as Array<{ filePath?: string }>;
+    expect(body.map(e => e.filePath)).toEqual(['/proj2/keep.ts']);
+  });
+
+  it('honours a topK override', async () => {
+    await registerAgent('agent-h');
+    for (let i = 0; i < 4; i++) {
+      seedWikiPage(`page-${i}`, 0.9, `reindex duplication number ${i}`);
+    }
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/swarm-memory/retrieve',
+      payload: {
+        agentId: 'agent-h',
+        inputs: ['reindex duplication'],
+        topK: 2,
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toHaveLength(2);
   });
 });
 

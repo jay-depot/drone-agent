@@ -12,6 +12,7 @@
  */
 
 import type { Database } from './db-helpers.js';
+import { saturatingCoverage } from './keyword-coverage.js';
 
 export type WikiFtsMode = 'stemmed' | 'trigram';
 
@@ -184,6 +185,100 @@ export function countWikiFtsRows(db: () => Database): number {
   const row = db().prepare('SELECT count(*) AS n FROM wiki_fts').get() as
     { n: number } | undefined;
   return row?.n ?? 0;
+}
+
+export type WikiFtsMeta = {
+  pageId: string;
+  origin: string;
+  title: string;
+  tags: string[];
+  pitch?: string;
+};
+
+/**
+ * Read page metadata for the given keys in one query.
+ *
+ * The keyword index already stores title/tags/pitch alongside the body, so
+ * callers ranking keyword hits can enrich them from SQLite instead of reading
+ * every page from disk. Unknown keys are simply absent from the result.
+ */
+export function getWikiFtsMeta(
+  db: () => Database,
+  keys: Array<{ pageId: string; origin: string }>
+): Map<string, WikiFtsMeta> {
+  const out = new Map<string, WikiFtsMeta>();
+  if (keys.length === 0) return out;
+
+  const stmt = db().prepare(
+    `SELECT page_id AS pageId, origin, title, tags, pitch
+       FROM wiki_fts
+      WHERE page_id = ? AND origin = ?`
+  );
+  for (const key of keys) {
+    const row = stmt.get(key.pageId, key.origin) as
+      | {
+          pageId: string;
+          origin: string;
+          title: string;
+          tags: string;
+          pitch: string;
+        }
+      | undefined;
+    if (!row) continue;
+    out.set(`${row.origin}\u0000${row.pageId}`, {
+      pageId: row.pageId,
+      origin: row.origin,
+      title: row.title,
+      tags: row.tags ? row.tags.split(/\s+/).filter(Boolean) : [],
+      ...(row.pitch ? { pitch: row.pitch } : {}),
+    });
+  }
+  return out;
+}
+
+/** Per-term hit-set cap. Candidates are bounded by the caller's overfetch. */
+const COVERAGE_TERM_LIMIT = 500;
+
+/**
+ * Keyword coverage per candidate page: how many of the query's content terms
+ * the page contains, saturating at two matches.
+ *
+ * Each content term is looked up once against the stemmed index, so the cost is
+ * proportional to the number of query terms rather than to the corpus. Coverage
+ * is only computed for `candidates`, keeping the result bounded.
+ *
+ * `terms` must already be content terms (see `contentTerms`) — this function
+ * does not strip stopwords, so the caller controls what counts as a term.
+ */
+export function computeKeywordCoverage(
+  db: () => Database,
+  terms: string[],
+  candidates: Array<{ pageId: string; origin: string }>
+): Map<string, number> {
+  const out = new Map<string, number>();
+  if (terms.length === 0 || candidates.length === 0) return out;
+
+  const hitsByTerm = terms.map(term => {
+    const hits = searchWikiFts(db, term, {
+      mode: 'stemmed',
+      limit: COVERAGE_TERM_LIMIT,
+    });
+    return new Set(hits.map(h => `${h.origin}\u0000${h.pageId}`));
+  });
+
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    const key = `${candidate.origin}\u0000${candidate.pageId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const matched = hitsByTerm.reduce(
+      (n, set) => n + (set.has(key) ? 1 : 0),
+      0
+    );
+    const coverage = saturatingCoverage(matched);
+    if (coverage > 0) out.set(key, coverage);
+  }
+  return out;
 }
 
 /**

@@ -2,6 +2,7 @@ export * from './config-file.js';
 export * from './wiki-storage.js';
 export * from './wiki-fts.js';
 export * from './keyword-coverage.js';
+export * from './memory-fusion.js';
 export * from './tls.js';
 export * from './identity.js';
 export * from './coordinator-fetch.js';

@@ -34,6 +34,46 @@ export interface EmbeddingConfig {
 }
 
 /**
+ * Beacon-global swarm-memory ranking.
+ *
+ * Ranking is a property of the corpus rather than of the asking agent, so
+ * these knobs live here instead of in `.drone-agent/config.json`. The agent
+ * keeps only conversation-shaped settings (`enabled`, `window`).
+ */
+export interface RankingConfig {
+  /** Maximum entries returned per retrieval. */
+  topK: number;
+  /**
+   * Minimum score for an entry to be returned.
+   *
+   * Applied AFTER fusion, so a page whose cosine alone falls short can still
+   * qualify on keyword coverage.
+   */
+  minScore: number;
+  /** Additive boost for a page whose content matches the query's terms. */
+  keywordBoost: number;
+  /** Static per-project relevance anchors applied as additive score boosts. */
+  anchors?: {
+    tags: string[];
+    boostPerTag: number;
+    boostTitle: number;
+  };
+}
+
+/**
+ * Default ranking, matching the values the agent used to hold so that moving
+ * ranking to the beacon does not silently change result ordering.
+ */
+export function defaultRankingConfig(): RankingConfig {
+  return {
+    topK: 5,
+    minScore: 0.35,
+    keywordBoost: 0.08,
+    anchors: { tags: [], boostPerTag: 0.08, boostTitle: 0.05 },
+  };
+}
+
+/**
  * Shape of a JSON config file accepted by drone-beacon and drone-coordinator
  * via `--config-file`. Keys are optional so partial files merge over defaults;
  * unknown top-level keys are rejected to catch typos early.
@@ -49,6 +89,7 @@ export interface ServerConfigFile {
   sessionEnd?: SessionEndTrigger;
   spawnRoots?: SpawnRootsConfig;
   embedding?: EmbeddingConfig;
+  ranking?: RankingConfig;
   [key: string]: unknown;
 }
 
@@ -63,6 +104,7 @@ const ALLOWED_KEYS: ReadonlySet<string> = new Set([
   'sessionEnd',
   'spawnRoots',
   'embedding',
+  'ranking',
 ]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -190,6 +232,61 @@ function validateEmbedding(embedding: unknown, errors: string[]): void {
   validateEmbeddingSubBlock(embedding.onnx, 'onnx', errors);
 }
 
+const RANKING_NUMERIC_KEYS = ['topK', 'minScore', 'keywordBoost'] as const;
+
+function validateRankingAnchors(value: unknown, errors: string[]): void {
+  if (value === undefined) return;
+  if (!isPlainObject(value)) {
+    errors.push('"ranking.anchors" must be an object');
+    return;
+  }
+  for (const key of Object.keys(value)) {
+    if (key !== 'tags' && key !== 'boostPerTag' && key !== 'boostTitle') {
+      errors.push(`unknown key "ranking.anchors.${key}"`);
+    }
+  }
+  if (
+    value.tags !== undefined &&
+    (!Array.isArray(value.tags) ||
+      !value.tags.every(t => typeof t === 'string'))
+  ) {
+    errors.push('"ranking.anchors.tags" must be an array of strings');
+  }
+  for (const key of ['boostPerTag', 'boostTitle'] as const) {
+    if (
+      value[key] !== undefined &&
+      (typeof value[key] !== 'number' || !Number.isFinite(value[key]))
+    ) {
+      errors.push(`"ranking.anchors.${key}" must be a finite number`);
+    }
+  }
+}
+
+function validateRanking(ranking: unknown, errors: string[]): void {
+  if (!isPlainObject(ranking)) {
+    errors.push('"ranking" must be an object');
+    return;
+  }
+  for (const key of Object.keys(ranking)) {
+    if (
+      key !== 'anchors' &&
+      !(RANKING_NUMERIC_KEYS as readonly string[]).includes(key)
+    ) {
+      errors.push(`unknown key "ranking.${key}"`);
+    }
+  }
+  for (const key of RANKING_NUMERIC_KEYS) {
+    if (
+      ranking[key] !== undefined &&
+      (typeof ranking[key] !== 'number' ||
+        !Number.isFinite(ranking[key] as number))
+    ) {
+      errors.push(`"ranking.${key}" must be a finite number`);
+    }
+  }
+  validateRankingAnchors(ranking.anchors, errors);
+}
+
 /**
  * Validate a parsed config file object, returning a list of error strings
  * (empty when valid).
@@ -234,6 +331,9 @@ export function validateConfigFile(value: unknown): string[] {
   }
   if (value.embedding !== undefined) {
     validateEmbedding(value.embedding, errors);
+  }
+  if (value.ranking !== undefined) {
+    validateRanking(value.ranking, errors);
   }
   return errors;
 }

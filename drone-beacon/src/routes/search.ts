@@ -1,8 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 import type { DroneSearchPath } from 'drone-core';
-import { dedupeAndCombineChunks } from 'drone-swarm-common';
+import {
+  MAX_PITCH_CHARS,
+  computeKeywordCoverage,
+  contentTerms,
+  dedupeAndCombineChunks,
+  fuseMemoryResults,
+  getWikiFtsMeta,
+  type FileCandidate,
+  type WikiCandidate,
+} from 'drone-swarm-common';
 import { minimatch } from 'minimatch';
-import { getSearchIndexer } from './context.js';
+import { getRankingConfig, getSearchIndexer } from './context.js';
+import { getWikiIndexer } from '../wiki-index-support.js';
 import { getAgent } from '../db/agents.js';
 import * as db from '../db/index.js';
 import { logger } from '../logger.js';
@@ -242,4 +252,127 @@ export default function searchRoutes(app: FastifyInstance) {
       return { indexed: true, results };
     }
   );
+
+  // ── Swarm-memory retrieval (fused) ───────────────────────────────
+  //
+  // One call replaces the agent's previous 2N fan-out (one request per query
+  // input per source). The beacon fans out internally, fuses the results, and
+  // returns the final ranked list — so ranking stays a property of the corpus
+  // rather than of the asking agent.
+  app.post<{
+    Body: {
+      agentId: string;
+      inputs: string[];
+      /** Workspace folders to include, with their exclude globs. */
+      paths?: Array<{ path: string; exclude?: string[] }>;
+      /** Overrides the beacon's configured topK. */
+      topK?: number;
+    };
+  }>('/swarm-memory/retrieve', async (request, reply) => {
+    const { agentId, inputs, paths: requestedPaths, topK } = request.body;
+
+    if (!getAgent(agentId)) {
+      return reply.code(404).send({ error: 'Agent not found' });
+    }
+
+    const cleanInputs = (inputs ?? [])
+      .map(i => (typeof i === 'string' ? i.trim() : ''))
+      .filter(i => i.length > 0);
+    if (cleanInputs.length === 0) {
+      return reply.code(400).send({ error: 'inputs must contain a query' });
+    }
+
+    const provider =
+      getWikiIndexer()?.getProvider() ?? getSearchIndexer()?.getProvider();
+    if (!provider) {
+      return reply.code(503).send({ error: 'No embedding provider available' });
+    }
+
+    const ranking = { ...getRankingConfig() };
+    if (typeof topK === 'number' && Number.isFinite(topK) && topK > 0) {
+      ranking.topK = Math.floor(topK);
+    }
+    const overfetch = Math.min(ranking.topK * OVERFETCH_FACTOR, 200);
+
+    // Authorize the requested workspace folders against what this agent
+    // actually registered. A folder the agent no longer owns is skipped with a
+    // warning rather than failing the whole retrieval — a stale path must not
+    // take down memory injection.
+    const allowedDirs = db.listSearchPaths(agentId).map(p => p.directory_path);
+    const dirs: Array<{ directoryPath: string; exclude: string[] }> = [];
+    for (const entry of requestedPaths ?? []) {
+      const absPath = path.resolve(entry.path);
+      const matchingDir = allowedDirs.find(d => absPath.startsWith(d));
+      if (!matchingDir) {
+        logger.warn(
+          `swarm-memory: agent ${agentId} is not registered for ${entry.path} — skipping`
+        );
+        continue;
+      }
+      dirs.push({
+        directoryPath: matchingDir,
+        exclude: entry.exclude ?? [],
+      });
+    }
+
+    const wikiCandidates: WikiCandidate[] = [];
+    const fileCandidates: FileCandidate[] = [];
+    const wikiIndexer = getWikiIndexer();
+
+    for (const input of cleanInputs) {
+      const embedding = await provider.embedQuery(input);
+
+      if (wikiIndexer) {
+        const hits = db.searchWikiChunksByVector(embedding, overfetch);
+        const meta = getWikiFtsMeta(
+          () => db.getDatabase(),
+          hits.map(h => ({ pageId: h.pageId, origin: h.origin }))
+        );
+        for (const hit of hits) {
+          const m = meta.get(`${hit.origin}\u0000${hit.pageId}`);
+          wikiCandidates.push({
+            pageId: hit.pageId,
+            origin: hit.origin,
+            title: m?.title ?? hit.pageId,
+            tags: m?.tags ?? [],
+            score: hit.score,
+            ...(m?.pitch ? { pitch: m.pitch } : {}),
+            matchedChunk: hit.text,
+          });
+        }
+      }
+
+      for (const dir of dirs) {
+        const hits = db.searchChunksByVector(
+          embedding,
+          overfetch,
+          dir.directoryPath
+        );
+        for (const hit of hits) {
+          if (isExcluded(hit.filePath, hit.directoryPath, dir.exclude))
+            continue;
+          fileCandidates.push({
+            filePath: hit.filePath,
+            score: hit.score,
+            snippet: hit.text,
+          });
+        }
+      }
+    }
+
+    // Keyword coverage is scored against the CURRENT query only. The other
+    // inputs are assembled window text, where a content-term denominator would
+    // drive coverage to ~0 for every page.
+    const terms = contentTerms(cleanInputs[0] ?? '');
+    const coverage = computeKeywordCoverage(
+      () => db.getDatabase(),
+      terms,
+      wikiCandidates.map(c => ({ pageId: c.pageId, origin: c.origin }))
+    );
+
+    return fuseMemoryResults(
+      { wiki: wikiCandidates, files: fileCandidates, coverage, ranking },
+      MAX_PITCH_CHARS
+    );
+  });
 }
