@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  contentTerms,
-  keywordCoverage,
-} from '../src/keyword-coverage.js';
+import { contentTerms, keywordCoverage } from '../src/keyword-coverage.js';
 
 describe('contentTerms', () => {
   it('lowercases and drops stopwords', () => {

@@ -110,7 +110,10 @@ export function searchWikiFts(
  * here because it runs only for pages that actually changed during a background
  * sweep, and it avoids the collision risk of a derived rowid.
  */
-export function replaceWikiFtsRows(db: () => Database, page: WikiFtsPage): void {
+export function replaceWikiFtsRows(
+  db: () => Database,
+  page: WikiFtsPage
+): void {
   deleteWikiFtsRows(db, page.pageId, page.origin);
 
   const pitch = page.pitch ?? '';
@@ -147,8 +150,27 @@ export function deleteWikiFtsRows(
 
 /** Number of distinct pages in the stemmed index; used to detect a needed backfill. */
 export function countWikiFtsRows(db: () => Database): number {
-  const row = db()
-    .prepare('SELECT count(*) AS n FROM wiki_fts')
-    .get() as { n: number } | undefined;
+  const row = db().prepare('SELECT count(*) AS n FROM wiki_fts').get() as
+    { n: number } | undefined;
   return row?.n ?? 0;
+}
+
+/**
+ * Whether a page has keyword-index rows.
+ *
+ * The indexer uses this to repair pages that were embedded before the keyword
+ * index existed: the chunk data is already in the database, so the rows can be
+ * rebuilt without re-embedding.
+ */
+export function hasWikiFtsRows(
+  db: () => Database,
+  pageId: string,
+  origin: string
+): boolean {
+  const row = db()
+    .prepare(
+      'SELECT 1 AS present FROM wiki_fts WHERE page_id = ? AND origin = ?'
+    )
+    .get(pageId, origin) as { present: number } | undefined;
+  return row !== undefined;
 }

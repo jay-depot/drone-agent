@@ -37,17 +37,17 @@ request per refresh instead of 2N.
 
 ## 2. Locked decisions
 
-| # | Decision |
-| --- | --- |
-| D1 | **Additive, saturating fusion**: `score = cos + 0.08 * min(1, matched / 2)`. Not convex, not RRF. |
-| D2 | `b = 0.08` matches the existing bonus scale (`boostPerTag`). Saturation at 2 matches so one hit is worth half credit. |
-| D3 | **Coverage is computed against the current user query only**, never the 6000-token window. |
-| D4 | Stopwords stripped; denominator = **content** term count. |
-| D5 | **Two FTS5 tables**: `wiki_fts` (`tokenize='porter'`) and `wiki_fts_trigram` (`tokenize='trigram'`). |
-| D6 | **`minScore` stays 0.35** and the filter moves to **after** fusion. |
-| D7 | Fusion + workspace fan-out move **into the beacon**; ranking config moves to **beacon config**. |
-| D8 | Beacon-only for now; the coordinator corpus is out of scope. |
-| D9 | FTS maintenance rides the **existing wiki index cycle**, not write-through. |
+| #   | Decision                                                                                                              |
+| --- | --------------------------------------------------------------------------------------------------------------------- |
+| D1  | **Additive, saturating fusion**: `score = cos + 0.08 * min(1, matched / 2)`. Not convex, not RRF.                     |
+| D2  | `b = 0.08` matches the existing bonus scale (`boostPerTag`). Saturation at 2 matches so one hit is worth half credit. |
+| D3  | **Coverage is computed against the current user query only**, never the 6000-token window.                            |
+| D4  | Stopwords stripped; denominator = **content** term count.                                                             |
+| D5  | **Two FTS5 tables**: `wiki_fts` (`tokenize='porter'`) and `wiki_fts_trigram` (`tokenize='trigram'`).                  |
+| D6  | **`minScore` stays 0.35** and the filter moves to **after** fusion.                                                   |
+| D7  | Fusion + workspace fan-out move **into the beacon**; ranking config moves to **beacon config**.                       |
+| D8  | Beacon-only for now; the coordinator corpus is out of scope.                                                          |
+| D9  | FTS maintenance rides the **existing wiki index cycle**, not write-through.                                           |
 
 ### Why not convex or RRF (recorded so it is not relitigated)
 
@@ -61,12 +61,12 @@ request per refresh instead of 2N.
 
 Measured on the local beacon (2,235 pages):
 
-| observation | value |
-| --- | --- |
-| cosine, rank 1 → last returned | 0.801 → 0.638 (q1 spread **0.163**); q2 0.064; q3 0.085 |
-| results in the 0.35–0.50 band | **0** |
-| linear coverage at `b=0.08`, 1 of 5 terms | **+0.016** (too weak) |
-| saturating coverage at `b=0.08`, 1 of 2+ terms | **+0.04** (meaningful) |
+| observation                                    | value                                                   |
+| ---------------------------------------------- | ------------------------------------------------------- |
+| cosine, rank 1 → last returned                 | 0.801 → 0.638 (q1 spread **0.163**); q2 0.064; q3 0.085 |
+| results in the 0.35–0.50 band                  | **0**                                                   |
+| linear coverage at `b=0.08`, 1 of 5 terms      | **+0.016** (too weak)                                   |
+| saturating coverage at `b=0.08`, 1 of 2+ terms | **+0.04** (meaningful)                                  |
 
 The 0.35 floor is nearly inert for wiki results (everything ≥ 0.638), which is why keeping it
 is safe.
@@ -106,11 +106,21 @@ export function searchWikiFts(
 
 export function replaceWikiFtsRows(
   db: () => Database,
-  page: { pageId: string; origin: string; title: string; tags: string;
-          pitch?: string; body: string }
+  page: {
+    pageId: string;
+    origin: string;
+    title: string;
+    tags: string;
+    pitch?: string;
+    body: string;
+  }
 ): void;
 
-export function deleteWikiFtsRows(db: () => Database, pageId: string, origin: string): void;
+export function deleteWikiFtsRows(
+  db: () => Database,
+  pageId: string,
+  origin: string
+): void;
 ```
 
 Structural `Database`/`Statement` interfaces already exist in `db-helpers.ts` —
@@ -119,7 +129,7 @@ reuse them, do not add a native dependency.
 ## 6. New module: `drone-swarm-common/src/keyword-coverage.ts`
 
 ```ts
-export function contentTerms(query: string): string[];   // lowercase, strip stopwords, len > 2
+export function contentTerms(query: string): string[]; // lowercase, strip stopwords, len > 2
 export function keywordCoverage(terms: string[], text: string): number;
 // = min(1, matched / 2)   — D2 saturation
 ```
@@ -146,11 +156,15 @@ Add a one-shot backfill on first run for existing pages (detect by counting FTS 
 Replaces the agent's 2N fan-out. Body:
 
 ```jsonc
-{ "agentId": "agent-123", "inputs": ["<current query>", "<window segment>", "..."],
-  "topK": 5 }
+{
+  "agentId": "agent-123",
+  "inputs": ["<current query>", "<window segment>", "..."],
+  "topK": 5,
+}
 ```
 
 Steps:
+
 1. Resolve the agent's search paths via `db.listSearchPaths(agentId)` (the beacon already does this).
 2. For **each** input: cosine search over `wiki_vec_chunks` and over `vec_chunks` (per path).
 3. For **input[0] only** (D3): FTS search over `wiki_fts`, compute coverage, and add
@@ -172,10 +186,14 @@ Mirror the `embedding` block pattern (add to `ServerConfigFile`, `ALLOWED_KEYS`,
 `validateRanking` that reuses `validateEmbeddingSubBlock`'s shape):
 
 ```jsonc
-{ "ranking": {
-    "topK": 5, "minScore": 0.35,
+{
+  "ranking": {
+    "topK": 5,
+    "minScore": 0.35,
     "keywordBoost": 0.08,
-    "anchors": { "tags": [], "boostPerTag": 0.08, "boostTitle": 0.05 } } }
+    "anchors": { "tags": [], "boostPerTag": 0.08, "boostTitle": 0.05 },
+  },
+}
 ```
 
 ## 8. Agent changes (`memory-retrieval.ts`)
@@ -191,6 +209,7 @@ Mirror the `embedding` block pattern (add to `ServerConfigFile`, `ALLOWED_KEYS`,
 ## 9. ADR 260
 
 `docs/adr/260-keyword-wiki-index-and-beacon-fusion.md`:
+
 - **Supersedes ADR 245 D1** ("no lexical/BM25/FTS stage") and **D2** ("agent-side fan-out").
   Record that D1/D2 were explicitly temporary.
 - D1–D9 above, the rejection rationale for convex/RRF, the measured spreads, and the

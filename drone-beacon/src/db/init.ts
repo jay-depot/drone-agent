@@ -243,6 +243,25 @@ export function initDatabase(
 
     CREATE INDEX IF NOT EXISTS idx_wiki_chunks_page ON wiki_chunks(page_id, origin);
 
+    CREATE VIRTUAL TABLE IF NOT EXISTS wiki_fts USING fts5(
+      page_id UNINDEXED,
+      origin UNINDEXED,
+      title,
+      tags,
+      pitch,
+      body,
+      tokenize = 'porter'
+    );
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS wiki_fts_trigram USING fts5(
+      page_id UNINDEXED,
+      origin UNINDEXED,
+      title,
+      tags,
+      body,
+      tokenize = 'trigram'
+    );
+
     CREATE VIRTUAL TABLE IF NOT EXISTS wiki_vec_chunks USING vec0(
       embedding FLOAT[${dimensions}] distance_metric=cosine
     );

@@ -127,7 +127,9 @@ describe('wiki-fts', () => {
   describe('operator-safety in stemmed mode', () => {
     it('does not throw on quotes, parens, asterisks, or colons', () => {
       for (const q of ['"unbalanced', 'a(b)c', 'wild*card', 'tag:value']) {
-        expect(() => searchWikiFts(() => db, q, { mode: 'stemmed' })).not.toThrow();
+        expect(() =>
+          searchWikiFts(() => db, q, { mode: 'stemmed' })
+        ).not.toThrow();
       }
     });
 
@@ -160,9 +162,9 @@ describe('wiki-fts', () => {
     it('deletes from both indexes', () => {
       deleteWikiFtsRows(() => db, 'reindex-bug', 'beacon');
       expect(countWikiFtsRows(() => db)).toBe(0);
-      expect(
-        searchWikiFts(() => db, 'reindex', { mode: 'trigram' })
-      ).toEqual([]);
+      expect(searchWikiFts(() => db, 'reindex', { mode: 'trigram' })).toEqual(
+        []
+      );
     });
 
     it('is a no-op when deleting an unknown page', () => {
