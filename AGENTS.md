@@ -129,7 +129,7 @@ All slash commands (built-in and plugin-registered) are dispatched through the e
 
 The following subsystems have dedicated documentation in `docs/agents/`:
 
-- **Config System** (`docs/agents/config-system.md`) — `enabledPlugins` override map, `mergeMaps` merge rule, key sections, `search.paths[].ragSource` (ADR 251, ADR 245)
+- **Config System** (`docs/agents/config-system.md`) — `enabledPlugins` override map, `mergeMaps` merge rule, key sections, `search.paths[].ragSource` (ADR 251, ADR 245), and which `swarm.memory` keys stay agent-side now that ranking lives on the beacon (ADR 260)
 - **Hook Ordering** (`docs/agents/hook-ordering.md`) — the `onAfterToolCall` ordering guarantee, `DroneAfterToolCallPayload` contract, and the per-iteration tool-call loop order
 - **Slash Commands** (`docs/agents/slash-commands.md`) — registry/dispatch, `/steer`/`/btw`, the `busyBehavior` deferral contract, and the `--now` escape hatch
 - **Reference Expansion** (`docs/agents/reference-expansion.md`) — `@`-references (`@file`, `@skill:`, images, `~/`/cwd, dir/glob) plus TUI tab completion
@@ -141,6 +141,7 @@ The following subsystems have dedicated documentation in `docs/agents/`:
 - **Herdr Plugin** (`docs/agents/herdr-plugin.md`) — Agent `idle`/`working` state + session resume command for the Herdr multiplexer (ADR 239)
 - **Portable Context** (`docs/agents/portable-context.md`) — Versioned JSON context serialization + brand-new-session continuation; the `checkpoint` plugin and `--output-json` commands (ADR 246/247)
 - **Memory Pipeline** (`docs/agents/memory-pipeline.md`) — The session-collection → memory-retrieval pipeline and the opinionated `bootstrap__swarm-memory` default
+- **Keyword Wiki Index** (`docs/adr/260-keyword-wiki-index-and-beacon-fusion.md`) — the beacon's FTS5 keyword index (porter for coverage, trigram for exact lookup) and beacon-side retrieval fusion; supersedes ADR 245 D1/D2
 - **Provider / Model Config** (`docs/agents/provider-model-config.md`) — Protocols (code) vs providers (data) vs models, and the `config.providers` schema
 - **Embedding Providers** (`docs/agents/embedding-providers.md`) — The beacon's ONNX (default) and Ollama embedding backends, the `embedding` config block, the model registry, and the index fingerprint (ADR 259)
 - **Session Import** (`docs/agents/session-import.md`) — The `/swarm-session` import command
