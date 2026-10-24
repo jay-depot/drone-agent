@@ -1042,12 +1042,18 @@ export function createDronePluginEngine({
                 ) => import('drone-core').DroneToolDescriptor[];
               }
             | undefined;
-          if (personaCap) {
-            descriptors = personaCap.getFilteredTools(descriptors);
-          } else {
-            // No persona plugin: honor default visibility by hiding defaultHidden tools.
-            descriptors = descriptors.filter(t => !t.defaultHidden);
-          }
+
+          const declaredAvailableTools = (
+            personaCap
+              ? personaCap.getFilteredTools(descriptors)
+              : descriptors.filter(t => !t.defaultHidden)
+          ).map(t => t.name);
+
+          descriptors = descriptors.filter(
+            t =>
+              toolRegistry.isMounted(t.name) ||
+              declaredAvailableTools.includes(t.name)
+          );
 
           // Build the response, stripping schemas unless requested.
           const tools = descriptors.map(t => {
