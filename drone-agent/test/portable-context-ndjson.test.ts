@@ -33,7 +33,7 @@ function makeEngine(importImpl?: (data: unknown) => Promise<unknown>) {
   }));
   const importContext = vi.fn(
     importImpl ??
-      (async () => ({ warnings: ['w1'], unavailableTools: ['gone__tool'] }))
+      (async () => ({ warnings: ['w1'], unregisteredTools: ['gone__tool'] }))
   );
   const runHooks = vi.fn(async () => {});
   return {
@@ -85,7 +85,7 @@ describe('NDJSON portable-context control commands', () => {
     expect(out).not.toContain('"turnComplete"');
   });
 
-  it('importContext emits a contextImport with warnings + unavailableTools, no turnComplete', async () => {
+  it('importContext emits a contextImport with warnings + unregisteredTools, no turnComplete', async () => {
     INPUT_LINES.push(
       JSON.stringify({ type: 'importContext', context: { version: 1 } })
     );
@@ -99,7 +99,7 @@ describe('NDJSON portable-context control commands', () => {
     expect(importContext).toHaveBeenCalledOnce();
     const out = written();
     expect(out).toContain('"kind":"contextImport"');
-    expect(out).toContain('"unavailableTools":["gone__tool"]');
+    expect(out).toContain('"unregisteredTools":["gone__tool"]');
     expect(out).not.toContain('"turnComplete"');
     // Control commands never run the prompt hooks.
     expect(runHooks).not.toHaveBeenCalledWith('onBeforePrompt');

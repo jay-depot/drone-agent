@@ -85,7 +85,7 @@ export type DronePortableContextContributor = {
 
 export type DronePortableContextImportResult = {
   warnings: string[];
-  unavailableTools: string[];
+  unregisteredTools: string[];
 };
 
 export type DronePortableContextCapability = {

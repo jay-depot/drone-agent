@@ -629,7 +629,7 @@ export function createDronePluginEngine({
       if (gained.length > 0) {
         dispatchConversationEvent({
           kind: 'notice',
-          content: `[${gained.length} tool(s) became unavailable]`,
+          content: `[${gained.length} tool(s) are no longer callable]`,
         }).catch(err => logger.error(`disclosure notice failed: ${err}`));
       }
     });
@@ -1010,7 +1010,7 @@ export function createDronePluginEngine({
       {
         name: 'runtime__list_tools',
         description:
-          'List all available tools. Optionally filter by plugin (e.g. "file"). Pass includeSchemas=true to include input schemas.',
+          'List all registered tools and their mount status. Optionally filter by plugin (e.g. "file"). Pass includeSchemas=true to include input schemas.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -1193,7 +1193,7 @@ export function createDronePluginEngine({
         const lines = shown.map(name =>
           toolRegistry.get(name)
             ? `- ${name} (Automatically unmounted, mount again if needed)`
-            : `- ${name} (Removed from available set, do not attempt to call or mount again)`
+            : `- ${name} (Unregistered, do not attempt to call or mount again)`
         );
         const extra = unavailable.length - shown.length;
         if (extra > 0) {
@@ -1201,7 +1201,7 @@ export function createDronePluginEngine({
             `- …and ${extra} more (call runtime__list_tools for the current set)`
           );
         }
-        return `# Unavailable tools\n\nThe following tools were available earlier in the session but are no longer available.\n\n${lines.join('\n')}`;
+        return `# No-longer callable tools\n\nThe following tools were callable earlier in the session but are no longer callable.\n\n${lines.join('\n')}`;
       },
     });
   }

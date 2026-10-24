@@ -25,7 +25,7 @@ function makeCapture(): Capture {
     unregisterContributor: (id: string) => contributors.delete(id),
     getContributors: () => [...contributors.values()],
     exportContext: async () => ({}) as never,
-    importContext: async () => ({ warnings: [], unavailableTools: [] }),
+    importContext: async () => ({ warnings: [], unregisteredTools: [] }),
   };
   const registration: DronePluginRegistration = {
     logger: silentLogger(),

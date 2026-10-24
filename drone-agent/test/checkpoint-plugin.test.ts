@@ -178,7 +178,7 @@ function makeCapability(): {
     },
     importContext: async data => {
       imports.push(data);
-      return { warnings: [], unavailableTools: [] };
+      return { warnings: [], unregisteredTools: [] };
     },
   };
   return { capability, exports, imports };
