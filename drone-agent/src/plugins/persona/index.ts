@@ -145,6 +145,7 @@ export const personaPlugin: DronePlugin = {
         t => filteredSet.has(t.name) || premountedNames.has(t.name)
       );
     }
+
     function getFilteredSkills(
       allSkills: DroneSkillDefinition[]
     ): DroneSkillDefinition[] {

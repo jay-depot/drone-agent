@@ -1032,7 +1032,7 @@ export function createDronePluginEngine({
           const includeSchemas = input.includeSchemas === true;
 
           // Always build full descriptors (with real defaultHidden) for filtering.
-          let descriptors = toolRegistry.listUnmountedWithSchemas(pluginFilter);
+          let descriptors = toolRegistry.listAll(pluginFilter);
 
           // Filter by persona visibility (default-hidden + allowedTools overlay).
           const personaCap = capabilities.get('persona') as
@@ -1050,14 +1050,26 @@ export function createDronePluginEngine({
           }
 
           // Build the response, stripping schemas unless requested.
-          const tools = includeSchemas
-            ? descriptors
-            : descriptors.map(({ name, description }) => ({
-                name,
-                description,
-              }));
+          const tools = descriptors.map(t => {
+            const d: DroneToolDescriptor = {
+              name: t.name,
+              description: t.description,
+              mounted: toolRegistry.isMounted(t.name),
+            };
+            if (includeSchemas) {
+              d.inputSchema = t.inputSchema;
+              d.defaultHidden = t.defaultHidden;
+            }
+            return d;
+          });
 
-          return JSON.stringify({ toolCount: tools.length, tools }, null, 2);
+          const mounted = tools.filter(t => t.mounted).length;
+          const unmounted = tools.length - mounted;
+          return JSON.stringify(
+            { toolCount: { total: tools.length, mounted, unmounted }, tools },
+            null,
+            2
+          );
         },
       },
       {

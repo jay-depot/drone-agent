@@ -104,6 +104,7 @@ export type DroneToolDescriptor = {
    * `DroneToolDefinition.defaultHidden` through the plugin engine.
    */
   defaultHidden?: boolean;
+  mounted?: boolean;
 };
 
 /**
