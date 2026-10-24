@@ -28,9 +28,13 @@ export class ToolRegistry {
    * List all tools (mounted + unmounted) as `DroneToolDescriptor` objects.
    * Used by the `/tools --all` slash command to show everything registered.
    */
-  listAll(): DroneToolDescriptor[] {
+  listAll(pluginFilter?: string): DroneToolDescriptor[] {
     const result: DroneToolDescriptor[] = [];
     for (const [canonicalName, entry] of this.tools) {
+      if (pluginFilter && !canonicalName.startsWith(`${pluginFilter}__`)) {
+        continue;
+      }
+
       result.push({
         name: canonicalName,
         description: entry.definition.description,

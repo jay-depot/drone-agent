@@ -26,7 +26,7 @@ export type OutputEvent =
       kind: 'contextImport';
       ok: true;
       warnings: string[];
-      unavailableTools: string[];
+      unregisteredTools: string[];
     }
   | { kind: 'contextImport'; ok: false; error: string };
 

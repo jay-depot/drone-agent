@@ -61,16 +61,16 @@ function toolSnapshot(
 function buildContinuationDisclosure(
   sourceSessionId: string,
   createdAt: string,
-  unavailableTools: string[]
+  unregisteredTools: string[]
 ): string {
   const lines: string[] = [
     '<system-reminder>',
     `The preceding ${CONTINUATION_DISCLOSURE_MARKER} taken from session ${sourceSessionId} at ${createdAt}.`,
   ];
-  if (unavailableTools.length > 0) {
+  if (unregisteredTools.length > 0) {
     lines.push('');
     lines.push(
-      `The following tools were mounted in the prior session but are not currently available: ${unavailableTools.join(
+      `The following tools were mounted in the prior session but are no longer registered: ${unregisteredTools.join(
         ', '
       )}.`
     );
@@ -191,13 +191,13 @@ export function createPortableContextCapability(
       }
     }
 
-    const unavailableTools: string[] = [];
+    const unregisteredTools: string[] = [];
     for (const tool of data.tools) {
       if (!tool.mounted) {
         continue;
       }
       if (!deps.isToolRegistered(tool.name)) {
-        unavailableTools.push(tool.name);
+        unregisteredTools.push(tool.name);
         continue;
       }
       deps.mountTool(tool.name);
@@ -208,7 +208,7 @@ export function createPortableContextCapability(
       buildContinuationDisclosure(
         sourceSessionId,
         data.createdAt,
-        unavailableTools
+        unregisteredTools
       )
     );
     deps.emitEvent({
@@ -216,7 +216,7 @@ export function createPortableContextCapability(
       content: `Context restored from checkpoint (session ${sourceSessionId}, ${data.createdAt}).`,
     });
 
-    return { warnings, unavailableTools };
+    return { warnings, unregisteredTools };
   }
 
   return {

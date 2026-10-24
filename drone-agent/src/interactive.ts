@@ -304,7 +304,7 @@ export async function runJsonListenMode(
               kind: 'contextImport',
               ok: true,
               warnings: result.warnings,
-              unavailableTools: result.unavailableTools,
+              unregisteredTools: result.unregisteredTools,
             });
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);

@@ -629,7 +629,7 @@ export function createDronePluginEngine({
       if (gained.length > 0) {
         dispatchConversationEvent({
           kind: 'notice',
-          content: `[${gained.length} tool(s) became unavailable]`,
+          content: `[${gained.length} tool(s) are no longer callable]`,
         }).catch(err => logger.error(`disclosure notice failed: ${err}`));
       }
     });
@@ -1010,7 +1010,7 @@ export function createDronePluginEngine({
       {
         name: 'runtime__list_tools',
         description:
-          'List all available tools. Optionally filter by plugin (e.g. "file"). Pass includeSchemas=true to include input schemas.',
+          'List all registered tools and their mount status. Optionally filter by plugin (e.g. "file"). Pass includeSchemas=true to include input schemas.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -1032,7 +1032,7 @@ export function createDronePluginEngine({
           const includeSchemas = input.includeSchemas === true;
 
           // Always build full descriptors (with real defaultHidden) for filtering.
-          let descriptors = toolRegistry.listUnmountedWithSchemas(pluginFilter);
+          let descriptors = toolRegistry.listAll(pluginFilter);
 
           // Filter by persona visibility (default-hidden + allowedTools overlay).
           const personaCap = capabilities.get('persona') as
@@ -1042,22 +1042,40 @@ export function createDronePluginEngine({
                 ) => import('drone-core').DroneToolDescriptor[];
               }
             | undefined;
-          if (personaCap) {
-            descriptors = personaCap.getFilteredTools(descriptors);
-          } else {
-            // No persona plugin: honor default visibility by hiding defaultHidden tools.
-            descriptors = descriptors.filter(t => !t.defaultHidden);
-          }
+
+          const declaredAvailableTools = (
+            personaCap
+              ? personaCap.getFilteredTools(descriptors)
+              : descriptors.filter(t => !t.defaultHidden)
+          ).map(t => t.name);
+
+          descriptors = descriptors.filter(
+            t =>
+              toolRegistry.isMounted(t.name) ||
+              declaredAvailableTools.includes(t.name)
+          );
 
           // Build the response, stripping schemas unless requested.
-          const tools = includeSchemas
-            ? descriptors
-            : descriptors.map(({ name, description }) => ({
-                name,
-                description,
-              }));
+          const tools = descriptors.map(t => {
+            const d: DroneToolDescriptor = {
+              name: t.name,
+              description: t.description,
+              mounted: toolRegistry.isMounted(t.name),
+            };
+            if (includeSchemas) {
+              d.inputSchema = t.inputSchema;
+              d.defaultHidden = t.defaultHidden;
+            }
+            return d;
+          });
 
-          return JSON.stringify({ toolCount: tools.length, tools }, null, 2);
+          const mounted = tools.filter(t => t.mounted).length;
+          const unmounted = tools.length - mounted;
+          return JSON.stringify(
+            { toolCount: { total: tools.length, mounted, unmounted }, tools },
+            null,
+            2
+          );
         },
       },
       {
@@ -1175,7 +1193,7 @@ export function createDronePluginEngine({
         const lines = shown.map(name =>
           toolRegistry.get(name)
             ? `- ${name} (Automatically unmounted, mount again if needed)`
-            : `- ${name} (Removed from available set, do not attempt to call or mount again)`
+            : `- ${name} (Unregistered, do not attempt to call or mount again)`
         );
         const extra = unavailable.length - shown.length;
         if (extra > 0) {
@@ -1183,7 +1201,7 @@ export function createDronePluginEngine({
             `- …and ${extra} more (call runtime__list_tools for the current set)`
           );
         }
-        return `# Unavailable tools\n\nThe following tools were available earlier in the session but are no longer available.\n\n${lines.join('\n')}`;
+        return `# No-longer callable tools\n\nThe following tools were callable earlier in the session but are no longer callable.\n\n${lines.join('\n')}`;
       },
     });
   }

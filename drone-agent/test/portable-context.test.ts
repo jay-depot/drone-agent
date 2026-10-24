@@ -141,7 +141,7 @@ describe('portable-context capability', () => {
       pluginData: {},
     };
     const result = await h.capability.importContext(exported);
-    expect(result.unavailableTools).toEqual(['gone__tool']);
+    expect(result.unregisteredTools).toEqual(['gone__tool']);
     expect(h.mounted().has('file__read')).toBe(true);
     expect(h.mounted().has('unmounted__tool')).toBe(false);
   });

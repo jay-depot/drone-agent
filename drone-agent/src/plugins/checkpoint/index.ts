@@ -95,9 +95,9 @@ export const checkpointPlugin: DronePlugin = {
       try {
         const result = await capability.importContext(data);
         const lines = [`Restored checkpoint "${name}".`];
-        if (result.unavailableTools.length > 0) {
+        if (result.unregisteredTools.length > 0) {
           lines.push(
-            `Unavailable tools: ${result.unavailableTools.join(', ')}`
+            `Unregistered tools: ${result.unregisteredTools.join(', ')}`
           );
         }
         for (const warning of result.warnings) {
@@ -258,9 +258,9 @@ export const checkpointPlugin: DronePlugin = {
         try {
           const result = await capability.importContext(data);
           const parts = [`Restored checkpoint "${name}" at startup.`];
-          if (result.unavailableTools.length > 0) {
+          if (result.unregisteredTools.length > 0) {
             parts.push(
-              `Unavailable tools: ${result.unavailableTools.join(', ')}`
+              `Unregistered tools: ${result.unregisteredTools.join(', ')}`
             );
           }
           return { ok: true, summary: parts.join(' ') };

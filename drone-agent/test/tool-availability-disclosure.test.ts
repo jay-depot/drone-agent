@@ -48,7 +48,7 @@ describe('engine tool-availability disclosure', () => {
     engine.unmountTool('test__alpha');
 
     const footer = await footerText(engine);
-    expect(footer).toContain('# Unavailable tools');
+    expect(footer).toContain('# No-longer callable tools');
     expect(footer).toContain(
       'test__alpha (Automatically unmounted, mount again if needed)'
     );
@@ -62,7 +62,7 @@ describe('engine tool-availability disclosure', () => {
 
     const footer = await footerText(engine);
     expect(footer).toContain(
-      'test__alpha (Removed from available set, do not attempt to call or mount again)'
+      'test__alpha (Unregistered, do not attempt to call or mount again)'
     );
   });
 
@@ -71,10 +71,12 @@ describe('engine tool-availability disclosure', () => {
     await engine.initialize();
     engine.mountTool('test__alpha');
     engine.unmountTool('test__alpha');
-    expect(await footerText(engine)).toContain('# Unavailable tools');
+    expect(await footerText(engine)).toContain('# No-longer callable tools');
 
     engine.mountTool('test__alpha');
-    expect(await footerText(engine)).not.toContain('# Unavailable tools');
+    expect(await footerText(engine)).not.toContain(
+      '# No-longer callable tools'
+    );
   });
 
   it('does not list a tool the model unmounted itself via runtime__unmount_tool', async () => {
@@ -83,7 +85,9 @@ describe('engine tool-availability disclosure', () => {
     engine.mountTool('test__alpha');
     await engine.executeTool('runtime__unmount_tool', { tool: 'test__alpha' });
 
-    expect(await footerText(engine)).not.toContain('# Unavailable tools');
+    expect(await footerText(engine)).not.toContain(
+      '# No-longer callable tools'
+    );
   });
 
   it('never lists when session.announceToolRemovals is false', async () => {
@@ -92,7 +96,9 @@ describe('engine tool-availability disclosure', () => {
     engine.mountTool('test__alpha');
     engine.unmountTool('test__alpha');
 
-    expect(await footerText(engine)).not.toContain('# Unavailable tools');
+    expect(await footerText(engine)).not.toContain(
+      '# No-longer callable tools'
+    );
   });
 
   it('caps the disclosure at 20 entries with an overflow line', async () => {
@@ -132,7 +138,7 @@ describe('engine tool-availability disclosure', () => {
     expect(notices).toHaveLength(1);
     expect(notices[0]).toMatchObject({
       kind: 'notice',
-      content: '[2 tool(s) became unavailable]',
+      content: '[2 tool(s) are no longer callable]',
     });
   });
 
@@ -157,9 +163,11 @@ describe('engine tool-availability disclosure', () => {
     await engine.initialize();
     engine.mountTool('test__alpha');
     engine.unmountTool('test__alpha');
-    expect(await footerText(engine)).toContain('# Unavailable tools');
+    expect(await footerText(engine)).toContain('# No-longer callable tools');
 
     await engine.clearSession();
-    expect(await footerText(engine)).not.toContain('# Unavailable tools');
+    expect(await footerText(engine)).not.toContain(
+      '# No-longer callable tools'
+    );
   });
 });
