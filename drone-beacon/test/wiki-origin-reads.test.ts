@@ -5,9 +5,11 @@ import path from 'node:path';
 
 import { setupDb, teardownDb } from './setup.js';
 import {
+  replaceWikiFtsRows,
   setKnowledgeBaseDir,
   writePage,
 } from '../../drone-swarm-common/src/index.js';
+import { getDatabase } from '../src/db/index.js';
 import { buildTestApp } from './app-helper.js';
 import type { FastifyInstance } from 'fastify';
 
@@ -229,6 +231,16 @@ describe('origin-tagged wiki reads (S6)', () => {
       'beacon',
       '# Dual\n\nBeacon body.'
     );
+    // The keyword route reads the FTS index. In production the post-write
+    // reindex hook populates it; that hook is mocked in this file, so seed
+    // the index directly.
+    replaceWikiFtsRows(() => getDatabase(), {
+      pageId: 'dual-page',
+      origin: 'beacon',
+      title: 'Dual Page',
+      tags: 'dual',
+      body: '# Dual\n\nBeacon body.',
+    });
     mockCoordinatorWithDualPage();
 
     const res = await app.inject({
@@ -238,6 +250,99 @@ describe('origin-tagged wiki reads (S6)', () => {
     const search = JSON.parse(res.body) as Array<{ origin?: string }>;
     const origins = search.map(r => String(r.origin)).sort();
     expect(origins).toEqual(['beacon', 'coordinator']);
+  });
+
+  it('keyword search finds a page by a literal id fragment', async () => {
+    const id = 'drone-beacon-wiki-reindex-duplicate-chunks';
+    await writePage(
+      id,
+      'Reindex duplicated chunks',
+      'beacon',
+      '# Reindex\n\nBody.'
+    );
+    replaceWikiFtsRows(() => getDatabase(), {
+      pageId: id,
+      origin: 'beacon',
+      title: 'Reindex duplicated chunks',
+      tags: 'drone-beacon',
+      body: '# Reindex\n\nBody.',
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/wiki/search?q=reindex-duplicate',
+    });
+    const search = JSON.parse(res.body) as Array<{ page?: { id?: string } }>;
+    expect(search.map(r => r.page?.id)).toContain(id);
+  });
+
+  it('keyword search finds a commit hash that stemming would destroy', async () => {
+    await writePage('commit-page', 'Fix 5e313af9', 'beacon', 'See 5e313af9.');
+    replaceWikiFtsRows(() => getDatabase(), {
+      pageId: 'commit-page',
+      origin: 'beacon',
+      title: 'Fix 5e313af9',
+      tags: '',
+      body: 'See 5e313af9.',
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/wiki/search?q=5e313af9',
+    });
+    const search = JSON.parse(res.body) as Array<{ page?: { id?: string } }>;
+    expect(search.map(r => r.page?.id)).toEqual(['commit-page']);
+  });
+
+  it('keyword search returns a snippet and no page body', async () => {
+    await writePage(
+      'snippet-page',
+      'Snippet Page',
+      'beacon',
+      '# Snippet\n\nThe changed-content path inserted chunks with no delete.'
+    );
+    replaceWikiFtsRows(() => getDatabase(), {
+      pageId: 'snippet-page',
+      origin: 'beacon',
+      title: 'Snippet Page',
+      tags: '',
+      body: '# Snippet\n\nThe changed-content path inserted chunks with no delete.',
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/wiki/search?q=delete',
+    });
+    const search = JSON.parse(res.body) as Array<{
+      page?: Record<string, unknown>;
+      snippet?: string;
+    }>;
+    expect(search).toHaveLength(1);
+    expect(search[0].page?.content).toBeUndefined();
+    expect(typeof search[0].snippet).toBe('string');
+  });
+
+  it('keyword search returns [] for an empty query without hitting the index', async () => {
+    const res = await app.inject({ method: 'GET', url: '/wiki/search?q=' });
+    expect(JSON.parse(res.body)).toEqual([]);
+  });
+
+  it('keyword search returns [] when nothing matches', async () => {
+    await writePage('unrelated', 'Unrelated', 'beacon', 'Sourdough notes.');
+    replaceWikiFtsRows(() => getDatabase(), {
+      pageId: 'unrelated',
+      origin: 'beacon',
+      title: 'Unrelated',
+      tags: '',
+      body: 'Sourdough notes.',
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/wiki/search?q=zzqqxxnosuchtoken',
+    });
+    const search = JSON.parse(res.body) as Array<{ origin?: string }>;
+    expect(search.filter(r => r.origin === 'beacon')).toEqual([]);
   });
 });
 

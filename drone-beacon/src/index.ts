@@ -2,9 +2,11 @@ import fastify from 'fastify';
 import '@fastify/websocket';
 import {
   defaultEmbeddingConfig,
+  defaultRankingConfig,
   loadConfigFile,
   mergeConfig,
   type EmbeddingConfig,
+  type RankingConfig,
   type ServerConfigFile,
   type SessionEndTrigger,
   type SpawnRootsConfig,
@@ -31,6 +33,7 @@ import {
   setBeaconInfo,
   triggerCoordinatorSync,
   setSearchIndexer,
+  setRankingConfig,
 } from './routes/index.js';
 import {
   createCoordinatorClient,
@@ -111,6 +114,7 @@ interface Config {
   sessionEnd?: SessionEndTrigger;
   spawnRoots?: SpawnRootsConfig;
   embedding?: EmbeddingConfig;
+  ranking?: RankingConfig;
 }
 
 async function parseArgs(): Promise<Config> {
@@ -218,6 +222,21 @@ async function parseArgs(): Promise<Config> {
     if (merged.embedding !== undefined) {
       config.embedding = merged.embedding as EmbeddingConfig;
     }
+    if (merged.ranking !== undefined) {
+      // Merge over the defaults rather than replacing the block wholesale: a
+      // config file that sets only `topK` must not leave `minScore` or
+      // `keywordBoost` undefined.
+      const defaults = defaultRankingConfig();
+      const provided = merged.ranking as Partial<RankingConfig>;
+      config.ranking = {
+        ...defaults,
+        ...provided,
+        anchors: {
+          ...defaults.anchors,
+          ...provided.anchors,
+        } as RankingConfig['anchors'],
+      };
+    }
   }
 
   if (config.coordinatorHost && !config.coordinatorPort) {
@@ -311,6 +330,9 @@ async function main() {
   );
   setSearchIndexer(searchIndexer);
   searchIndexer.startPeriodicSweep();
+
+  // Ranking is beacon-global; set it before any route can serve a retrieval.
+  setRankingConfig(config.ranking ?? defaultRankingConfig());
 
   // Initialize wiki indexer over the merged (beacon + coordinator) corpus
   const wikiIndexer = new WikiIndexer(

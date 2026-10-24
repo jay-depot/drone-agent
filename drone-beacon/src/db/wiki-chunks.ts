@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { deleteWikiFtsRows } from 'drone-swarm-common';
 import { getDatabase } from './index.js';
 
 export type WikiOrigin = 'beacon' | 'coordinator';
@@ -54,6 +55,7 @@ export function upsertWikiSource(
 
 export function removeWikiSource(pageId: string, origin: WikiOrigin): void {
   deleteChunksForWikiPage(pageId, origin);
+  deleteWikiFtsRows(() => getDatabase(), pageId, origin);
   getDatabase()
     .prepare('DELETE FROM wiki_sources WHERE page_id = ? AND origin = ?')
     .run(pageId, origin);

@@ -25,7 +25,7 @@ interface Statement {
 }
 
 /** Minimal database interface matching the better-sqlite3 subset we use. */
-interface Database {
+export interface Database {
   prepare(sql: string): Statement;
 }
 

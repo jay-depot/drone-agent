@@ -82,13 +82,9 @@ function memoryConfig() {
   });
 }
 
-function searchResponse(entries: Array<Record<string, unknown>>): unknown {
-  return {
-    query: 'q',
-    resultCount: entries.length,
-    pageCount: entries.length,
-    results: entries,
-  };
+/** The beacon returns the fused entry list directly. */
+function retrieveResponse(entries: Array<Record<string, unknown>>): unknown {
+  return entries;
 }
 
 function jsonResponse(body: unknown): Response {
@@ -128,20 +124,27 @@ describe('swarm-memory retrieval trigger (userMessage)', () => {
     return capture;
   }
 
-  /** Counts /wiki/semantic-search calls in the mock and returns their URLs. */
+  /** URLs of the fused-retrieval calls the mock observed. */
   function searchCalls(): string[] {
     return fetchMock.mock.calls
       .map(([url]) => String(url))
-      .filter(u => u.includes('/wiki/semantic-search'));
+      .filter(u => u.includes('/swarm-memory/retrieve'));
   }
 
-  /** The `q` query string of a semantic-search URL (decoded from + as space). */
-  function queryOf(url: string): string {
-    return new URL(url).searchParams.get('q') ?? '';
+  /** The first query input of the most recent retrieval request body. */
+  function firstInput(): string {
+    const call = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes('/swarm-memory/retrieve')
+    );
+    const init = call?.[1] as RequestInit | undefined;
+    const body = JSON.parse(String(init?.body ?? '{}')) as {
+      inputs?: string[];
+    };
+    return body.inputs?.[0] ?? '';
   }
 
   it('does not retrieve before any user message', async () => {
-    const capture = await setup(() => jsonResponse(searchResponse([])));
+    const capture = await setup(() => jsonResponse(retrieveResponse([])));
 
     await capture.dispatch({ kind: 'roundComplete' });
 
@@ -149,7 +152,7 @@ describe('swarm-memory retrieval trigger (userMessage)', () => {
   });
 
   it('triggers retrieval on userMessage and uses the current message as a query', async () => {
-    const capture = await setup(() => jsonResponse(searchResponse([])));
+    const capture = await setup(() => jsonResponse(retrieveResponse([])));
 
     await capture.dispatch({
       kind: 'userMessage',
@@ -158,11 +161,11 @@ describe('swarm-memory retrieval trigger (userMessage)', () => {
 
     const calls = searchCalls();
     expect(calls).toHaveLength(1);
-    expect(queryOf(calls[0])).toBe('how does the fragment ttl sweep work');
+    expect(firstInput()).toBe('how does the fragment ttl sweep work');
   });
 
   it('retrieves for the first message of a session even with no prior round', async () => {
-    const capture = await setup(() => jsonResponse(searchResponse([])));
+    const capture = await setup(() => jsonResponse(retrieveResponse([])));
 
     await capture.dispatch({ kind: 'roundComplete' });
     await capture.dispatch({
@@ -174,11 +177,11 @@ describe('swarm-memory retrieval trigger (userMessage)', () => {
     expect(calls).toHaveLength(1);
     // The current message alone is a valid query input, so the request is
     // made even though no prior round existed (the empty-first-prompt bug).
-    expect(queryOf(calls[0])).toBe('first question of the session');
+    expect(firstInput()).toBe('first question of the session');
   });
 
   it('does not trigger retrieval for assistant/tool/round events', async () => {
-    const capture = await setup(() => jsonResponse(searchResponse([])));
+    const capture = await setup(() => jsonResponse(retrieveResponse([])));
 
     await capture.dispatch({
       kind: 'assistantMessage',
@@ -203,15 +206,15 @@ describe('swarm-memory retrieval trigger (userMessage)', () => {
   it('populates the cache and renders fragment entries once the async refresh resolves', async () => {
     const capture = await setup(() =>
       jsonResponse(
-        searchResponse([
+        retrieveResponse([
           {
+            kind: 'wiki',
             pageId: 'fragment-guide',
             title: 'Fragment Guide',
             origin: 'beacon',
             score: 0.91,
-            matchedChunk:
-              'The TTL sweep deletes expired fragments every minute.',
             tags: ['fragments'],
+            pitch: 'The TTL sweep deletes expired fragments every minute.',
           },
         ])
       )

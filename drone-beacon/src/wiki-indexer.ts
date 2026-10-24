@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 import type { DroneEmbeddingProvider, DroneWikiPageMeta } from 'drone-core';
-import { chunkMarkdown } from 'drone-swarm-common';
+import {
+  chunkMarkdown,
+  hasWikiFtsRows,
+  replaceWikiFtsRows,
+} from 'drone-swarm-common';
 
 import { logger } from './logger.js';
 import * as db from './db/index.js';
@@ -19,6 +23,8 @@ export interface WikiIndexResult {
   pagesSkipped: number;
   pagesRemoved: number;
   chunksCreated: number;
+  /** Pages whose keyword-index rows were rebuilt from stored chunks. */
+  ftsRepaired: number;
 }
 
 function pageHash(
@@ -41,6 +47,7 @@ function emptyResult(): WikiIndexResult {
     pagesSkipped: 0,
     pagesRemoved: 0,
     chunksCreated: 0,
+    ftsRepaired: 0,
   };
 }
 
@@ -138,6 +145,16 @@ export class WikiIndexer {
       }
     }
 
+    // Snapshot the stored source rows once. This query aggregates every source
+    // against every chunk, so calling it per page made a sweep O(pages²) —
+    // thousands of full GROUP BY scans per pass to answer a question whose
+    // answer does not change while the loop runs. Each (page_id, origin) is
+    // visited at most once below, so one snapshot is equivalent to a live
+    // lookup per page.
+    const storedByKey = new Map(
+      db.getWikiSourcesWithChunkCounts().map(s => [sourceKeyOf(s), s] as const)
+    );
+
     for (const entry of pages) {
       try {
         const content = await fetchPageContent(entry);
@@ -148,13 +165,30 @@ export class WikiIndexer {
           content,
           this.fingerprint
         );
-        const stored = db
-          .getWikiSourcesWithChunkCounts()
-          .find(s => s.page_id === entry.page.id && s.origin === entry.origin);
+        const stored = storedByKey.get(sourceKey(entry.page.id, entry.origin));
 
         // Skip only when the hash matches AND chunks exist. A page recorded as
         // indexed with zero chunks (a previous failed embed) must be retried.
         if (stored && stored.hash === hash && stored.chunk_count > 0) {
+          // The keyword index post-dates the vector index, so a page can be
+          // fully embedded yet absent from FTS. Rebuild those rows from chunk
+          // text already in the database — this needs no re-embedding.
+          if (
+            !hasWikiFtsRows(() => db.getDatabase(), entry.page.id, entry.origin)
+          ) {
+            const chunks = db.getWikiChunks(entry.page.id, entry.origin);
+            if (chunks.length > 0) {
+              replaceWikiFtsRows(() => db.getDatabase(), {
+                pageId: entry.page.id,
+                origin: entry.origin,
+                title: entry.page.title,
+                tags: entry.page.tags.join(' '),
+                ...(entry.page.pitch ? { pitch: entry.page.pitch } : {}),
+                body: chunks.map(c => c.text).join('\n\n'),
+              });
+              result.ftsRepaired++;
+            }
+          }
           result.pagesSkipped++;
           continue;
         }
@@ -188,6 +222,14 @@ export class WikiIndexer {
             embedding: embeddings[index],
           }))
         );
+        replaceWikiFtsRows(() => db.getDatabase(), {
+          pageId: entry.page.id,
+          origin: entry.origin,
+          title: entry.page.title,
+          tags: entry.page.tags.join(' '),
+          ...(entry.page.pitch ? { pitch: entry.page.pitch } : {}),
+          body: chunkTexts.join('\n\n'),
+        });
         result.chunksCreated += chunkTexts.length;
         result.pagesIndexed++;
       } catch (err) {
@@ -200,7 +242,7 @@ export class WikiIndexer {
     }
 
     logger.info(
-      `Wiki index: ${result.pagesIndexed} indexed, ${result.pagesSkipped} skipped, ${result.pagesRemoved} removed, ${result.chunksCreated} chunks`
+      `Wiki index: ${result.pagesIndexed} indexed, ${result.pagesSkipped} skipped, ${result.pagesRemoved} removed, ${result.chunksCreated} chunks, ${result.ftsRepaired} fts-repaired`
     );
     return result;
   }
