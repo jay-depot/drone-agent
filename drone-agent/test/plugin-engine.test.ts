@@ -1028,17 +1028,34 @@ describe('runtime__list_tools — tool visibility filtering', () => {
     });
   }
 
-  async function listToolNames(plugins: DronePlugin[]): Promise<string[]> {
-    const engine = createTestEngine({
+  function makeEngine(
+    plugins: DronePlugin[]
+  ): ReturnType<typeof createTestEngine> {
+    return createTestEngine({
       plugins,
       config: createDefaultAgentConfig(),
       logger: silentLogger(),
     });
-    await engine.initialize();
-    const result = JSON.parse(
+  }
+
+  type ListToolsResult = {
+    toolCount: { total: number; mounted: number; unmounted: number };
+    tools: Array<{ name: string; mounted: boolean; description: string }>;
+  };
+
+  async function listToolsResult(
+    engine: ReturnType<typeof createTestEngine>
+  ): Promise<ListToolsResult> {
+    return JSON.parse(
       toToolResultContent(await engine.executeTool('runtime__list_tools', {}))
     );
-    return (result.tools as Array<{ name: string }>).map(t => t.name);
+  }
+
+  async function listToolNames(plugins: DronePlugin[]): Promise<string[]> {
+    const engine = makeEngine(plugins);
+    await engine.initialize();
+    const result = await listToolsResult(engine);
+    return result.tools.map(t => t.name);
   }
 
   it('filters default-hidden tools when a persona is active without allowedTools', async () => {
@@ -1075,6 +1092,83 @@ describe('runtime__list_tools — tool visibility filtering', () => {
     const names = await listToolNames([makeToolPlugin()]);
     expect(names).toContain('term__list');
     expect(names).not.toContain('term__create');
+  });
+
+  it('includes mounted tools in the list, flagged mounted: true', async () => {
+    const plugin = createTestPlugin({
+      id: 'term',
+      tools: [
+        { name: 'alpha', description: 'alpha tool', execute: async () => 'ok' },
+        { name: 'beta', description: 'beta tool', execute: async () => 'ok' },
+      ],
+    });
+    const engine = makeEngine([plugin]);
+    await engine.initialize();
+    await engine.executeTool('runtime__mount_tool', { tool: 'term__alpha' });
+
+    const result = await listToolsResult(engine);
+    const byName = new Map(result.tools.map(t => [t.name, t.mounted]));
+    expect(byName.get('term__alpha')).toBe(true);
+    expect(byName.get('term__beta')).toBe(false);
+  });
+
+  it('reports total/mounted/unmounted counts consistent with the listed tools', async () => {
+    const engine = makeEngine([makeToolPlugin()]);
+    await engine.initialize();
+    await engine.executeTool('runtime__mount_tool', { tool: 'term__list' });
+
+    const { toolCount, tools } = await listToolsResult(engine);
+    expect(toolCount.total).toBe(tools.length);
+    expect(toolCount.mounted).toBe(tools.filter(t => t.mounted).length);
+    expect(toolCount.unmounted).toBe(tools.filter(t => !t.mounted).length);
+    // The always-mounted runtime__* meta-tools are listed and counted.
+    expect(toolCount.mounted).toBeGreaterThanOrEqual(RUNTIME_TOOL_COUNT);
+  });
+
+  it('lists a premounted default-hidden tool that allowedTools exclude', async () => {
+    const personaPlugin = createTestPlugin({
+      id: 'persona',
+      capability: makeAllowedToolsPersonaCap(['term__list']),
+    });
+    const engine = makeEngine([personaPlugin, makeToolPlugin()]);
+    await engine.initialize();
+    // Premounting mounts term__create even though the persona's allowedTools
+    // only cover term__list; a mounted tool is always listed.
+    await engine.executeTool('runtime__mount_tool', { tool: 'term__create' });
+
+    const result = await listToolsResult(engine);
+    const create = result.tools.find(t => t.name === 'term__create');
+    expect(create?.mounted).toBe(true);
+  });
+
+  it('omits an unmounted tool the persona does not declare available', async () => {
+    const personaPlugin = createTestPlugin({
+      id: 'persona',
+      capability: makeAllowedToolsPersonaCap(['term__list']),
+    });
+    const names = await listToolNames([personaPlugin, makeToolPlugin()]);
+    expect(names).toContain('term__list');
+    expect(names).not.toContain('term__create');
+  });
+
+  it('carries defaultHidden only when includeSchemas is requested', async () => {
+    const engine = makeEngine([makeToolPlugin()]);
+    await engine.initialize();
+    await engine.executeTool('runtime__mount_tool', { tool: 'term__create' });
+
+    const rich = (await JSON.parse(
+      toToolResultContent(
+        await engine.executeTool('runtime__list_tools', {
+          includeSchemas: true,
+        })
+      )
+    )) as { tools: Array<{ name: string; defaultHidden?: boolean }> };
+    const createRich = rich.tools.find(t => t.name === 'term__create');
+    expect(createRich?.defaultHidden).toBe(true);
+
+    const lean = await listToolsResult(engine);
+    const createLean = lean.tools.find(t => t.name === 'term__create');
+    expect(createLean).not.toHaveProperty('defaultHidden');
   });
 });
 

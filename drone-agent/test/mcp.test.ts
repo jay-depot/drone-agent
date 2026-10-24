@@ -272,7 +272,8 @@ describe('mcp plugin integration (stdio child)', () => {
         await engine.executeTool('runtime__list_tools', { plugin: 'mcp' })
       )
     );
-    expect(result.toolCount).toBeGreaterThanOrEqual(2);
+    expect(result.toolCount.total).toBeGreaterThanOrEqual(2);
+    expect(result.toolCount.mounted).toBeGreaterThanOrEqual(0);
     const toolList = result.tools as Array<{
       name: string;
       description: string;
