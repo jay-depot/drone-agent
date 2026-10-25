@@ -141,6 +141,7 @@ export default function StoredSecretsModal({
       title="Stored Secrets"
       description="Secrets referenced from settings via ${secret:NAME}. Values are stored on this coordinator and never shown in full."
       confirmLabel="Close"
+      width="lg"
     >
       <div className="space-y-3">
         <div className="flex justify-end">

@@ -2,6 +2,14 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from './button';
 
+const WIDTH_CLASSES = {
+  md: 'max-w-md',
+  lg: 'max-w-2xl',
+  xl: 'max-w-4xl',
+} as const;
+
+type DialogWidth = keyof typeof WIDTH_CLASSES;
+
 interface DialogProps {
   open: boolean;
   onClose: () => void;
@@ -12,6 +20,7 @@ interface DialogProps {
   cancelLabel?: string;
   variant?: 'default' | 'destructive';
   loading?: boolean;
+  width?: DialogWidth;
   children?: ReactNode;
 }
 
@@ -25,6 +34,7 @@ function Dialog({
   cancelLabel = 'Cancel',
   variant = 'default',
   loading = false,
+  width = 'md',
   children,
 }: DialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -56,7 +66,8 @@ function Dialog({
       <div
         ref={dialogRef}
         className={cn(
-          'relative z-50 w-full max-w-md rounded-xl bg-card p-6 shadow-lg ring-1 ring-foreground/10',
+          'relative z-50 w-full rounded-xl bg-card p-6 shadow-lg ring-1 ring-foreground/10',
+          WIDTH_CLASSES[width],
           'animate-in fade-in zoom-in-95 duration-200'
         )}
       >
