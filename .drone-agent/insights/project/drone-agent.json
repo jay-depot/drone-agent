@@ -1002,5 +1002,9 @@
   {
     "timestamp": "2026-10-22T02:52:07.360Z",
     "insight": "`runtime__list_tools` lists tools AVAILABLE in a plugin, not tools currently MOUNTED — a tool can appear there and still be absent from the active tool list, and every call to it fails as an unmounted tool. Check the actual tool list before assuming a tool is callable; if it is missing, `runtime__mount_tool` first. Corollary: when a call fails repeatedly, verify mounting before blaming parameters — I misdiagnosed two `self-improvement__insight` failures as a missing `targetType` argument when the tool had never been mounted."
+  },
+  {
+    "timestamp": "2026-10-25T22:52:22.526Z",
+    "insight": "The coordinator UI's shared `Dialog` primitive (drone-coordinator-ui/src/components/ui/dialog.tsx) hard-coded `max-w-md`, so any consumer with a wide body (the Stored Secrets table) clipped horizontally. When a modal's content overflows, check the shared primitive for a fixed max-width before patching the consumer. The primitive now exposes an optional `width` prop ('md' | 'lg' | 'xl', default 'md'), so consumers can widen without forking. Other consumers rendering wide content (the Add/Edit Config dialog, wiki dialogs) may still need `width` set."
   }
 ]
