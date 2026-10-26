@@ -591,8 +591,77 @@ describe('bootstrap swarm-memory workflow', () => {
     expect(flockIndex).toBeGreaterThan(-1);
     expect(envIndex).toBeGreaterThan(flockIndex);
 
-    // The hook script has no such guard (single trigger per session).
-    expect(hook).not.toContain('flock');
+    // The hook script has its OWN guard on a DIFFERENT lock file. Same fd
+    // number is fine: a child process gets its own fd table, and the file
+    // differs, so the hook cannot deadlock on its parent's catch-up lock.
+    expect(hook).toContain('flock -w');
+    expect(hook).toContain('.ingest.lock');
+    expect(hook).not.toContain('.catchup.lock');
+  });
+
+  it('hook takes the ingest lock BEFORE claiming the session', async () => {
+    const { buildHookScript } =
+      await import('../../../src/plugins/bootstrap/swarm-memory-scripts.js');
+    const hook = buildHookScript({
+      coordinatorUrl: 'http://127.0.0.1:8080',
+      webToken: '',
+      configureBeacon: false,
+      batchLimit: '5',
+      cronSchedule: '0 * * * *',
+      droneAgentPath: '/usr/local/bin/drone-agent',
+      droneSwarmPath: '/usr/local/bin/drone-swarm',
+    });
+
+    // Taking the lock after `session process` would strand the loser in
+    // 'processing' (claimed, never ingested). The guard must come first.
+    const lockIndex = hook.indexOf('flock -w');
+    const claimIndex = hook.indexOf('session process "$SESSION_ID"');
+    expect(lockIndex).toBeGreaterThan(-1);
+    expect(claimIndex).toBeGreaterThan(-1);
+    expect(lockIndex).toBeLessThan(claimIndex);
+
+    // The wait must stay under the coordinator's 300s command timeout, or the
+    // coordinator kills the hook and the "left ended" guarantee is broken.
+    const wait = Number(/INGEST_LOCK_WAIT_SECS:-(\d+)/.exec(hook)?.[1]);
+    expect(wait).toBeGreaterThan(0);
+    expect(wait).toBeLessThan(300);
+
+    // Giving up is exit 1 (so catch-up counts a failure and retries next
+    // tick), and the session is still 'ended' at that point.
+    expect(hook).toContain('left ended for retry');
+  });
+
+  it('catch-up drains the backlog in a loop within a time budget', async () => {
+    const { buildCatchupScript } =
+      await import('../../../src/plugins/bootstrap/swarm-memory-scripts.js');
+    const script = buildCatchupScript({
+      coordinatorUrl: 'http://127.0.0.1:8080',
+      webToken: '',
+      configureBeacon: false,
+      batchLimit: '5',
+      cronSchedule: '0 * * * *',
+      droneAgentPath: '/usr/local/bin/drone-agent',
+      droneSwarmPath: '/usr/local/bin/drone-swarm',
+    });
+
+    // One batch per hourly tick cannot clear a real backlog: the batch query
+    // must sit inside a loop bounded by wall-clock time.
+    expect(script).toContain('CATCHUP_BUDGET_SECS');
+    expect(script).toContain('deadline=$((SECONDS + CATCHUP_BUDGET_SECS))');
+    expect(script).toMatch(/while \[ "\$SECONDS" -lt "\$deadline" \]/);
+    // The budget must leave room inside the hourly cron window.
+    const budget = Number(/CATCHUP_BUDGET_SECS:-(\d+)/.exec(script)?.[1]);
+    expect(budget).toBeGreaterThan(0);
+    expect(budget).toBeLessThan(3600);
+
+    // A pass that moves nothing must stop, not hot-loop forever.
+    expect(script).toContain('if [ "$moved" -eq 0 ]');
+    expect(script).toContain('no progress in pass');
+
+    // The batch query runs once per pass, inside the loop.
+    const loopIndex = script.indexOf('while [ "$SECONDS" -lt "$deadline" ]');
+    const fetchIndex = script.indexOf('session list --status ended');
+    expect(fetchIndex).toBeGreaterThan(loopIndex);
   });
 
   it('generated scripts use the discovered absolute binary paths', async () => {

@@ -606,5 +606,17 @@ main().catch(error => {
   logger.error(
     error instanceof Error ? (error.stack ?? error.message) : String(error)
   );
-  process.exitCode = 1;
+  // MUST be process.exit(), not process.exitCode.
+  //
+  // Setting exitCode only marks the exit status; it does not end the process.
+  // Node then stays alive as long as anything holds the event loop open. The
+  // MCP plugin spawns long-lived children (mcp-searxng, lightpanda mcp), and
+  // their pipes keep the loop alive forever. Result: any startup or fatal
+  // error printed its message and then HUNG INDEFINITELY instead of exiting.
+  //
+  // That hang is not academic. `--once --output-json` is the one-shot mode the
+  // swarm memory ingest hook uses; a hung librarian pins the ingest lock and
+  // strands its session in `processing` forever. Verified live: a single
+  // malformed kickoff left a catch-up ingest blocked for 18 hours.
+  process.exit(1);
 });

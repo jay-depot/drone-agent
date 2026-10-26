@@ -38,6 +38,24 @@ ${ENV_SOURCE_BLOCK}
 
 SESSION_ID="\${1:?usage: ${HOOK_SCRIPT_NAME} <session_id>}"
 COORDINATOR_URL="${settings.coordinatorUrl}"
+
+# Single-instance guard: exactly ONE librarian may run at a time. The
+# librarian is the biggest memory consumer on the host, so a second
+# concurrent ingest is an OOM risk, not a speed-up. The lock is taken BEFORE
+# the session is claimed — giving up leaves the session 'ended', which the
+# next catch-up pass retries, and no session is stranded in 'processing'.
+# No ERR-trap notify on the give-up path: deferral is normal, not a failure.
+# The wait is kept well below the coordinator's session-end command timeout
+# (300s default) so that giving up happens with budget left: a hook that gave
+# up only after 240s would start ingesting and then be killed mid-run, which
+# strands the session in 'processing'. Giving up early leaves it 'ended' and
+# the next catch-up pass retries it.
+INGEST_LOCK_WAIT_SECS="\${INGEST_LOCK_WAIT_SECS:-120}"
+exec 9>"$HOME/.drone-swarm-memory/.ingest.lock"
+if ! flock -w "$INGEST_LOCK_WAIT_SECS" 9; then
+  echo "ingest: another ingest still running after \${INGEST_LOCK_WAIT_SECS}s; session $SESSION_ID left ended for retry" >&2
+  exit 1
+fi
 LIBRARIAN_PERSONA="${LIBRARIAN_PERSONA_ID}"
 DRONE_SWARM="${settings.droneSwarmPath}"
 DRONE_AGENT="${settings.droneAgentPath}"
@@ -65,11 +83,62 @@ transcript_json="$("$DRONE_SWARM" --coordinator "$COORDINATOR_URL" session trans
 
 kickoff="$(printf '%s' "$transcript_json" | ${TRANSCRIPT_TO_KICKOFF})"
 
-if printf '%s\\n' "$kickoff" | "$DRONE_AGENT" --output-json --once --persona "$LIBRARIAN_PERSONA" > /dev/null 2>&1; then
+# Hard wall-clock cap on the librarian. Without it a hung agent pins this hook
+# forever: main().catch in the agent used to set process.exitCode instead of
+# calling process.exit(), so after any fatal error the process kept running for
+# as long as the MCP child processes held the event loop open. One such hang
+# blocked the ingest lock for 18 hours and stranded every session behind it.
+#
+# MUST stay BELOW the coordinator's session-end command timeout
+# (DEFAULT_COMMAND_TIMEOUT_MS = 300000 in drone-coordinator/src/command-timeout.ts).
+# If it were larger the coordinator would kill this hook first and the failure
+# notification would never run — the silent-failure mode this guard exists for.
+LIBRARIAN_TIMEOUT_SECS="\${LIBRARIAN_TIMEOUT_SECS:-240}"
+LIBRARIAN_KILL_GRACE_SECS="\${LIBRARIAN_KILL_GRACE_SECS:-10}"
+TIMEOUT_BIN="$(command -v timeout || true)"
+
+# Build the launch vector outside-in so each wrapper is optional: the agent,
+# then choom, then timeout. An array keeps quoting safe when a wrapper is absent.
+LAUNCH=( "$DRONE_AGENT" --output-json --once --persona "$LIBRARIAN_PERSONA" )
+if [ -n "\${CHOOM:-}" ]; then
+  LAUNCH=( "$CHOOM" -n 1000 -- "\${LAUNCH[@]}" )
+fi
+if [ -n "$TIMEOUT_BIN" ]; then
+  LAUNCH=( "$TIMEOUT_BIN" -k "$LIBRARIAN_KILL_GRACE_SECS" \\
+    "$LIBRARIAN_TIMEOUT_SECS" "\${LAUNCH[@]}" )
+fi
+
+# 9>&- closes the lock fd for the librarian: a grandchild that outlives the
+# agent would otherwise inherit the open file description and pin the ingest
+# lock forever, starving every later ingest.
+#
+# stderr is CAPTURED, not discarded: a failing librarian used to leave no
+# evidence at all, so the notification could only say "the agent failed",
+# never why. The captured tail rides along with the notification.
+LIBRARIAN_STDERR="$HOME/.drone-swarm-memory/librarian-stderr.log"
+if printf '%s\\n' "$kickoff" | "\${LAUNCH[@]}" > /dev/null 2>"$LIBRARIAN_STDERR" 9>&-; then
   "$DRONE_SWARM" --coordinator "$COORDINATOR_URL" session processed "$SESSION_ID" \\
     --summary "ingested into memory wiki by ${HOOK_SCRIPT_NAME}"
 else
-  echo "librarian agent failed for session $SESSION_ID (left in processing)" >&2
+  rc=$?
+  if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+    reason="the librarian agent TIMED OUT after \${LIBRARIAN_TIMEOUT_SECS}s and was killed"
+  else
+    reason="the librarian agent failed (exit \${rc})"
+  fi
+  detail="$(grep -iE 'error|throw|cannot|undefined|invalid|denied|ENOENT|heap|out of memory' \\
+    "$LIBRARIAN_STDERR" 2>/dev/null | tail -3 | tr '\\n' ' ' | cut -c1-300)"
+  # Absolute $HOME path, like the drone-swarm/drone-agent references above:
+  # this hook runs under the coordinator's PATH and cron's minimal PATH, and
+  # neither contains ~/.local/bin.
+  SWARM_NOTIFY="$HOME/.local/bin/swarm-notify"
+  if [ -x "$SWARM_NOTIFY" ]; then
+    "$SWARM_NOTIFY" --source ingest \\
+      "❌ ingest: session $SESSION_ID — $reason; left in 'processing'.\${detail:+ Detail: $detail}" \\
+      >/dev/null 2>&1 || true
+  fi
+  echo "librarian agent failed for session $SESSION_ID ($reason; left in processing)" >&2
+  [ -n "$detail" ] && echo "  detail: $detail" >&2
   exit 1
 fi
 `;
@@ -78,13 +147,15 @@ fi
 export function buildCatchupScript(settings: SwarmMemorySettings): string {
   return `#!/usr/bin/env bash
 # Gradual catch-up ingest for the swarm memory pipeline.
-# Generated by bootstrap__swarm-memory. Grabs ended sessions newest-first
-# (batch limited) and feeds each through the session-end ingest hook.
+# Generated by bootstrap__swarm-memory. Drains ended sessions newest-first,
+# BATCH_LIMIT per query, until the backlog is empty or the time budget runs
+# out. Each session goes through the session-end ingest hook.
 set -euo pipefail
 
 # Single-instance guard: a hung librarian child must not stack concurrent
 # catch-up batches. Non-blocking flock on a dedicated fd; exit quietly so
-# cron noise stays clean.
+# cron noise stays clean. This is a DIFFERENT lock file from the ingest lock
+# below, so a child hook can take that one without deadlocking on this one.
 exec 9>"$HOME/.drone-swarm-memory/.catchup.lock"
 flock -n 9 || { echo "catch-up: another instance is running; exiting"; exit 0; }
 
@@ -96,35 +167,65 @@ INGEST_HOOK="$HOME/.drone-swarm-memory/bin/${HOOK_SCRIPT_NAME}"
 LIBRARIAN_PERSONA="${LIBRARIAN_PERSONA_ID}"
 DRONE_SWARM="${settings.droneSwarmPath}"
 
-sessions_json="$( "$DRONE_SWARM" --coordinator "$COORDINATOR_URL" session list --status ended --limit "$BATCH_LIMIT")"
-rows="$(printf '%s' "$sessions_json" | node -e 'const fs=require("node:fs");const d=JSON.parse(fs.readFileSync(0,"utf8"));for(const s of (d.sessions ?? []))process.stdout.write(String(s.id)+"\\t"+(s.personaId||"")+"\\n")')"
-
-if [ -z "$rows" ]; then
-  echo "catch-up: no ended sessions to ingest"
-  exit 0
-fi
+# Time budget for one cron tick. cron fires hourly, so keep this well under
+# 3600s. Without a drain loop a single batch per hour can never clear a real
+# backlog (235 ended sessions at 1/run = 235 hours). Each hook invocation is
+# serialized by the hook's own ingest lock, so this cannot start parallel
+# librarians - the budget buys throughput by not idling between batches.
+CATCHUP_BUDGET_SECS="\${CATCHUP_BUDGET_SECS:-2400}"
+deadline=$((SECONDS + CATCHUP_BUDGET_SECS))
 
 failed=0
-while IFS=$'\t' read -r id persona; do
-  [ -n "$id" ] || continue
-  if [ "$persona" = "$LIBRARIAN_PERSONA" ]; then
-    # Claim the session first (ended → processing) — /processed only allows
-    # processing → processed, so marking an ended session directly 409s. A
-    # concurrent run may have already claimed it (409) — that's fine, we just
-    # need it in 'processing' before marking processed.
-    "$DRONE_SWARM" --coordinator "$COORDINATOR_URL" session process "$id" > /dev/null || true
-    "$DRONE_SWARM" --coordinator "$COORDINATOR_URL" session processed "$id" \
-      --summary "skipped: librarian self-session (list-level guard)"
-    echo "catch-up: dismissed librarian session $id"
-    continue
-  fi
-  if ! bash "$INGEST_HOOK" "$id"; then
-    echo "catch-up: ingest failed for session $id (continuing)" >&2
-    failed=$((failed + 1))
-  fi
-done <<< "$rows"
+ingested=0
+dismissed=0
+pass=0
 
-echo "catch-up: batch complete ($failed failure(s))"
+while [ "$SECONDS" -lt "$deadline" ]; do
+  pass=$((pass + 1))
+  sessions_json="$( "$DRONE_SWARM" --coordinator "$COORDINATOR_URL" session list --status ended --limit "$BATCH_LIMIT")"
+  rows="$(printf '%s' "$sessions_json" | node -e 'const fs=require("node:fs");const d=JSON.parse(fs.readFileSync(0,"utf8"));for(const s of (d.sessions ?? []))process.stdout.write(String(s.id)+"\\t"+(s.personaId||"")+"\\n")')"
+
+  if [ -z "$rows" ]; then
+    echo "catch-up: no ended sessions to ingest"
+    break
+  fi
+
+  moved=0
+  while IFS=$'\t' read -r id persona; do
+    [ -n "$id" ] || continue
+    [ "$SECONDS" -lt "$deadline" ] || break
+    if [ "$persona" = "$LIBRARIAN_PERSONA" ]; then
+      # Claim the session first (ended → processing) — /processed only allows
+      # processing → processed, so marking an ended session directly 409s. A
+      # concurrent run may have already claimed it (409) — that's fine, we just
+      # need it in 'processing' before marking processed.
+      "$DRONE_SWARM" --coordinator "$COORDINATOR_URL" session process "$id" > /dev/null || true
+      "$DRONE_SWARM" --coordinator "$COORDINATOR_URL" session processed "$id" \\
+        --summary "skipped: librarian self-session (list-level guard)"
+      dismissed=$((dismissed + 1))
+      moved=$((moved + 1))
+      echo "catch-up: dismissed librarian session $id"
+      continue
+    fi
+    if bash "$INGEST_HOOK" "$id"; then
+      ingested=$((ingested + 1))
+      moved=$((moved + 1))
+    else
+      echo "catch-up: ingest failed for session $id (continuing)" >&2
+      failed=$((failed + 1))
+    fi
+  done <<< "$rows"
+
+  # A pass that changed nothing would re-read the same rows forever (a hook
+  # that fails before claiming leaves its session 'ended'). Stop and let the
+  # next cron tick retry rather than hot-looping the API.
+  if [ "$moved" -eq 0 ]; then
+    echo "catch-up: no progress in pass $pass; stopping so the next run retries" >&2
+    break
+  fi
+done
+
+echo "catch-up: drained $ingested session(s), dismissed $dismissed librarian session(s), $failed failure(s) in $pass pass(es); $SECONDS s of \${CATCHUP_BUDGET_SECS}s budget used"
 exit 0
 `;
 }
