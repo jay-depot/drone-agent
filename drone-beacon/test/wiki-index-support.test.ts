@@ -9,6 +9,8 @@ import { WikiIndexer } from '../src/wiki-indexer.js';
 import {
   runWikiIndexCycle,
   setWikiIndexer,
+  setWikiReindexDebounceMs,
+  triggerWikiReindex,
 } from '../src/wiki-index-support.js';
 import {
   setKnowledgeBaseDir,
@@ -195,6 +197,64 @@ describe('wiki index cycle (S3 wiring)', () => {
       }
     } finally {
       setWikiIndexer(undefined);
+    }
+  });
+
+  it('coalesces a burst of writes into a single reindex cycle', async () => {
+    vi.useFakeTimers();
+    try {
+      proxyWikiToCoordinator.mockImplementation(async () => null);
+      const indexer = new WikiIndexer(makeProvider());
+      setWikiIndexer(indexer);
+      setWikiReindexDebounceMs(5000);
+      const runCycle = vi.spyOn(indexer, 'runCycle');
+
+      triggerWikiReindex();
+      triggerWikiReindex();
+      triggerWikiReindex();
+      expect(runCycle).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(runCycle).toHaveBeenCalledTimes(1);
+    } finally {
+      setWikiIndexer(undefined);
+      vi.useRealTimers();
+    }
+  });
+
+  it('re-arms the debounced reindex when a cycle is skipped', async () => {
+    vi.useFakeTimers();
+    try {
+      const indexer = new WikiIndexer(makeProvider());
+      setWikiIndexer(indexer);
+      setWikiReindexDebounceMs(5000);
+      // First cycle is skipped (a periodic sweep holds the in-flight guard);
+      // the second succeeds once that sweep has finished.
+      const runCycle = vi
+        .spyOn(indexer, 'runCycle')
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          pagesIndexed: 0,
+          pagesSkipped: 0,
+          pagesRemoved: 0,
+          chunksCreated: 0,
+          ftsRepaired: 0,
+        });
+
+      triggerWikiReindex();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(runCycle).toHaveBeenCalledTimes(1);
+
+      // The skipped write is retried through the same debounce delay.
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(runCycle).toHaveBeenCalledTimes(2);
+
+      // A successful cycle does not re-arm: no tight loop.
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(runCycle).toHaveBeenCalledTimes(2);
+    } finally {
+      setWikiIndexer(undefined);
+      vi.useRealTimers();
     }
   });
 });

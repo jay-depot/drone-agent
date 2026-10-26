@@ -7,6 +7,7 @@ import fastify, { type FastifyInstance } from 'fastify';
 import fastifyCors from '@fastify/cors';
 import { registerRoutes } from '../src/routes/index.js';
 import { registerBundleServingRoutes } from '../src/routes/bundle-serving.js';
+import { resolveRateLimitKey } from '../src/rate-limit.js';
 
 export async function buildTestApp(opts?: {
   rateLimitMax?: number;
@@ -24,6 +25,7 @@ export async function buildTestApp(opts?: {
     await app.register(import('@fastify/rate-limit'), {
       max: opts.rateLimitMax,
       timeWindow: opts.rateLimitWindowMs ?? 60000,
+      keyGenerator: resolveRateLimitKey,
     });
   }
 

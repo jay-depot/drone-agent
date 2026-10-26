@@ -2,11 +2,13 @@ import { createHash } from 'node:crypto';
 import type { DroneEmbeddingProvider, DroneWikiPageMeta } from 'drone-core';
 import {
   chunkMarkdown,
+  defaultWikiIndexConfig,
   hasWikiFtsRows,
   replaceWikiFtsRows,
 } from 'drone-swarm-common';
 
 import { logger } from './logger.js';
+import { sleep } from './util.js';
 import * as db from './db/index.js';
 
 const CHUNK_TARGET_TOKENS = 480;
@@ -14,7 +16,11 @@ const CHUNK_TARGET_TOKENS = 480;
 export interface WikiPageInput {
   page: DroneWikiPageMeta;
   origin: db.WikiOrigin;
-  /** Page body. Optional for beacon pages (read from local storage when omitted); required for coordinator pages. */
+  /**
+   * Page body. When omitted the indexer reads it lazily — from local storage
+   * for beacon pages, or via a per-page coordinator fetch for coordinator
+   * pages.
+   */
   content?: string;
 }
 
@@ -31,13 +37,12 @@ function pageHash(
   pageId: string,
   origin: string,
   updatedAt: string,
-  content: string,
   fingerprint: string
 ): string {
   return createHash('sha256')
     .update(fingerprint)
     .update('\u0000')
-    .update(`${pageId}\u0000${origin}\u0000${updatedAt}\u0000${content}`)
+    .update(`${pageId}\u0000${origin}\u0000${updatedAt}`)
     .digest('hex');
 }
 
@@ -85,15 +90,19 @@ export class WikiIndexer {
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
   private sweepIntervalMs: number;
   private fingerprint: string;
+  private pacingMs: number;
+  private cycleRunning = false;
 
   constructor(
     provider?: DroneEmbeddingProvider,
-    sweepIntervalMs: number = 5 * 60 * 1000,
-    fingerprint: string = ''
+    sweepIntervalMs: number = defaultWikiIndexConfig().sweepIntervalMs,
+    fingerprint: string = '',
+    pacingMs: number = defaultWikiIndexConfig().pacingMs
   ) {
     this.provider = provider ?? null;
     this.sweepIntervalMs = sweepIntervalMs;
     this.fingerprint = fingerprint;
+    this.pacingMs = pacingMs;
   }
 
   setProvider(provider: DroneEmbeddingProvider): void {
@@ -102,6 +111,23 @@ export class WikiIndexer {
 
   getProvider(): DroneEmbeddingProvider | null {
     return this.provider;
+  }
+
+  /**
+   * Run one index cycle. A second call while a cycle runs is a no-op, so
+   * periodic ticks and write bursts cannot overlap into extra sweeps.
+   */
+  async runCycle<T>(fn: () => Promise<T>): Promise<T | null> {
+    if (this.cycleRunning) {
+      logger.info('Wiki index: cycle already running, skipping');
+      return null;
+    }
+    this.cycleRunning = true;
+    try {
+      return await fn();
+    } finally {
+      this.cycleRunning = false;
+    }
   }
 
   /**
@@ -157,12 +183,10 @@ export class WikiIndexer {
 
     for (const entry of pages) {
       try {
-        const content = await fetchPageContent(entry);
         const hash = pageHash(
           entry.page.id,
           entry.origin,
           entry.page.updatedAt,
-          content,
           this.fingerprint
         );
         const stored = storedByKey.get(sourceKey(entry.page.id, entry.origin));
@@ -193,6 +217,14 @@ export class WikiIndexer {
           continue;
         }
 
+        if (
+          entry.content === undefined &&
+          entry.origin === 'coordinator' &&
+          this.pacingMs > 0
+        ) {
+          await sleep(this.pacingMs);
+        }
+        const content = await fetchPageContent(entry);
         const chunkTexts = chunkMarkdown(content, CHUNK_TARGET_TOKENS);
         if (chunkTexts.length === 0) {
           db.removeWikiSource(entry.page.id, entry.origin);

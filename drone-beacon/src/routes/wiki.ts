@@ -231,6 +231,13 @@ export default function wikiRoutes(app: FastifyInstance) {
         .send({ error: 'Wiki indexer unavailable (no embedding provider)' });
     }
     const result = await runWikiIndexCycle(indexer);
+    if (!result) {
+      return {
+        success: true,
+        skipped: true,
+        note: 'index cycle already in progress',
+      };
+    }
     return { success: true, result };
   });
 

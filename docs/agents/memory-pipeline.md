@@ -64,8 +64,8 @@ Example `~/.drone-coordinator/config.json`:
 ```
 
 Recognized top-level keys: `port`, `host`, `webPort`/`webHost` (coordinator
-only), `dbPath`, `useHttps`, `sessionEnd`. Unknown keys are rejected at startup
-with every problem listed at once.
+only), `dbPath`, `useHttps`, `sessionEnd`, `wikiIndex` (beacon only). Unknown
+keys are rejected at startup with every problem listed at once.
 
 ### SessionEndTrigger
 

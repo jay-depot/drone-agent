@@ -1014,5 +1014,25 @@
   {
     "timestamp": "2026-10-26T01:57:23.588Z",
     "insight": "An incremental-sync skip test must run BEFORE the expensive fetch, or it is not a skip. drone-beacon's wiki indexer computes its page change hash from the downloaded body (wiki-indexer.ts:158-172), so the \"skip unchanged pages\" branch can never avoid the per-page GET /api/wiki/:id — every sweep re-downloads the whole coordinator corpus. Fix direction: derive the change hash from listing metadata only (pageId + origin + updatedAt + embedding fingerprint) and test it before fetching. Generalizable rule: a content-hash skip path is only a skip if the hash comes from cheap metadata, not from the payload it is meant to avoid fetching."
+  },
+  {
+    "timestamp": "2026-10-26T02:49:17.551Z",
+    "insight": "When a Fastify `keyGenerator` and a later `onRequest` hook (e.g. mTLS) both call the same expensive identity resolver, they run on the SAME request object (Fastify builds one `context.Request` per request; all hooks and the handler share it — verified in fastify/lib/route.js). Memoize resolution in a module-level `WeakMap<FastifyRequest, T>` so the trust-table scan happens once per request. Memoize MISSES too (`undefined`), and use `has()`-before-`get()` since a cached miss is indistinguishable from \"not cached\" otherwise. Caveat: a handler that resolves identity early and then mutates trust in the same request would read a stale miss — none do today, but note it."
+  },
+  {
+    "timestamp": "2026-10-26T02:49:17.554Z",
+    "insight": "Two quick wins for periodic/background indexers in this repo: (1) `setTimeout`-based debounce timers must be `.unref()`'d (pattern already in beacon-ws.ts) so a pending reindex can't outlive shutdown and fire against a closed DB or hold the process open. (2) When an in-flight guard makes a debounced write-reindex a no-op (a periodic sweep already holds the lock), re-arming through the SAME debounce delay picks the write up after the sweep finishes instead of dropping it until the next periodic tick (up to `sweepIntervalMs`). The re-arm must re-enter the debounced entry point, never call the cycle directly, to avoid a tight loop."
+  },
+  {
+    "timestamp": "2026-10-26T02:49:17.556Z",
+    "insight": "A regression test that also passes under the OLD implementation proves nothing. The first per-client rate-limit test (\"3 requests from IP A, 1 from IP B, expect 200\") passed under the previous plain-`req.ip` key, so it tested the library, not the change. When reviewing/authoring a fix test, name the assertion that discriminates: it must fail if the fix is reverted. The coordinator worker verified this empirically by reverting the key, rebuilding, and confirming 4 failures. Make \"would this test fail without the change?\" an explicit check."
+  },
+  {
+    "timestamp": "2026-10-26T02:49:17.558Z",
+    "insight": "A custom `@fastify/rate-limit` `keyGenerator` must normalize the IP fallback itself. The library's default key generator lowercases, de-maps `::ffff:1.2.3.4` → `1.2.3.4`, and collapses bare IPv6 to /64; a hand-rolled `req.ip` fallback does none of that, so an IPv6 client rotating within its own /64 gets a fresh bucket per address and silently evades the limit. `@fastify/rate-limit` v11 exports `normalizeIP(ip, ipv6Subnet?)` — import and reuse it rather than reimplementing. Also guard `!req.ip` (normalizeIP throws on undefined) and wrap the whole key function in try/catch: a key generator runs first in the pipeline, so a throw there turns every request into a 500 instead of a 429."
+  },
+  {
+    "timestamp": "2026-10-26T02:49:17.560Z",
+    "insight": "`pnpm run lint` runs `prettier --write .` repo-wide, and `.prettierignore` only listed `dist/` — so every lint run rewrote `pnpm-lock.yaml` into ~4600 lines of pure formatting churn that buries the actual change in review. Fixed by adding `pnpm-lock.yaml` to `.prettierignore`. General lesson: any large generated/lock file that prettier reformats but nobody hand-edits belongs in `.prettierignore`."
   }
 ]

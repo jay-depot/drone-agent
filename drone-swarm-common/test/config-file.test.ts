@@ -206,6 +206,39 @@ describe('validateConfigFile', () => {
       })
     ).toEqual(['unknown key "embedding.extra"']);
   });
+
+  it('accepts a valid wikiIndex block', () => {
+    expect(
+      validateConfigFile({
+        wikiIndex: {
+          sweepIntervalMs: 300000,
+          pacingMs: 50,
+          writeReindexDebounceMs: 5000,
+        },
+      })
+    ).toEqual([]);
+    expect(validateConfigFile({ wikiIndex: {} })).toEqual([]);
+  });
+
+  it('rejects an unknown key inside the wikiIndex block', () => {
+    expect(
+      validateConfigFile({
+        wikiIndex: { sweepIntervalMs: 300000, extra: 1 },
+      })
+    ).toEqual(['unknown key "wikiIndex.extra"']);
+  });
+
+  it('rejects a non-finite number inside the wikiIndex block', () => {
+    expect(validateConfigFile({ wikiIndex: { pacingMs: NaN } })).toEqual([
+      '"wikiIndex.pacingMs" must be a finite number',
+    ]);
+    expect(
+      validateConfigFile({ wikiIndex: { sweepIntervalMs: Infinity } })
+    ).toEqual(['"wikiIndex.sweepIntervalMs" must be a finite number']);
+    expect(
+      validateConfigFile({ wikiIndex: { writeReindexDebounceMs: '5000' } })
+    ).toEqual(['"wikiIndex.writeReindexDebounceMs" must be a finite number']);
+  });
 });
 
 describe('loadConfigFile', () => {

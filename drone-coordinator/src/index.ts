@@ -60,6 +60,11 @@ import {
   stopBeaconLivenessSweep,
 } from './beacon-ws.js';
 import {
+  DEFAULT_RATE_LIMIT_MAX,
+  DEFAULT_RATE_LIMIT_WINDOW_MS,
+  resolveRateLimitKey,
+} from './rate-limit.js';
+import {
   seedDefaultAssets,
   repairSeededLibrarianAssets,
 } from './default-assets.js';
@@ -75,8 +80,6 @@ const DEFAULT_WEB_HOST = '127.0.0.1';
 const DEFAULT_COMMAND_TIMEOUT_MS = 30000;
 const DEFAULT_CONFIG_DIR = path.join(os.homedir(), '.drone-coordinator');
 const DEFAULT_DB_FILENAME = 'drone-coordinator.db';
-const DEFAULT_RATE_LIMIT_MAX = 100;
-const DEFAULT_RATE_LIMIT_WINDOW_MS = 1000;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -379,6 +382,7 @@ export async function buildApp(opts?: {
   await app.register(import('@fastify/rate-limit'), {
     max: opts?.rateLimitMax ?? DEFAULT_RATE_LIMIT_MAX,
     timeWindow: opts?.rateLimitWindowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS,
+    keyGenerator: resolveRateLimitKey,
   });
 
   // Register auth middleware for the web port

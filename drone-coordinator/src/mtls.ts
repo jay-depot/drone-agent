@@ -42,6 +42,21 @@ export function resolveBeaconIdByFingerprint(
  * because the web port is bound to loopback (ADR 257).
  */
 export function resolveRequestNodeId(req: FastifyRequest): string | undefined {
+  if (nodeIdCache.has(req)) {
+    return nodeIdCache.get(req);
+  }
+  const nodeId = resolveRequestNodeIdUncached(req);
+  nodeIdCache.set(req, nodeId);
+  return nodeId;
+}
+
+// The rate limiter and the mTLS middleware both resolve the node id on every
+// request. Fastify reuses one request object across hooks (never across
+// requests), so caching here makes each request resolve at most once, trust
+// table scan included. Misses are cached too, deliberately.
+const nodeIdCache = new WeakMap<FastifyRequest, string | undefined>();
+
+function resolveRequestNodeIdUncached(req: FastifyRequest): string | undefined {
   const fingerprint = getClientCertFingerprint(req);
   if (fingerprint) {
     return resolveBeaconIdByFingerprint(fingerprint);

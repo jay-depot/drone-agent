@@ -13,7 +13,7 @@ updated: 2026-10-26T01:57:06.573Z
 
 # Plan: Per-Client Coordinator Rate Limit + Beacon Wiki Sweep Fix
 
-**Status:** ready for execution
+**Status:** completed
 **Branch:** `fix/wiki-rate-limit-problems`
 **Packages touched:** `drone-coordinator`, `drone-beacon`. No change to `drone-core` or `drone-swarm-common` source.
 **ADR:** `docs/adr/262-coordinator-per-client-rate-limit-and-beacon-wiki-sweep.md`
@@ -30,20 +30,20 @@ Three fixes:
 
 ## 2. Evidence found in the code
 
-| Fact | Location |
-|---|---|
-| Default limit is 100 requests per 1000 ms | `drone-coordinator/src/index.ts:78-79` |
-| `@fastify/rate-limit` is registered with `max` and `timeWindow` only. Default key = `req.ip`. Bucket is global. | `drone-coordinator/src/index.ts:379-382` |
-| Both ports get the same limit | `drone-coordinator/src/index.ts:637-638`, `:645-646` |
-| Middleware order in `buildApp()`: CORS, rate-limit, web-auth, mTLS, WebSocket, routes | `drone-coordinator/src/index.ts:371-405` |
-| `resolveRequestNodeId()`: client cert → beaconId, else `x-node-id` header, else `?beaconId=` query | `drone-coordinator/src/mtls.ts:47-62` |
-| Wiki sweep = 1 listing GET + N page GETs | `drone-beacon/src/wiki-index-support.ts:29`, `drone-beacon/src/wiki-indexer.ts:66-69` |
-| Skip test runs AFTER download, so it can never prevent a fetch | `drone-beacon/src/wiki-indexer.ts:158-172` |
-| Periodic sweep = bare `setInterval`, no in-flight guard → overlapping passes (~3× amplification) | `drone-beacon/src/wiki-indexer.ts:265-275` |
-| `triggerWikiReindex()` runs a FULL sweep on every local wiki write | `drone-beacon/src/wiki-index-support.ts:88-94`, `drone-beacon/src/routes/wiki.ts:157,187,197,220` |
-| No ETag / `If-None-Match` / `If-Modified-Since` | `drone-swarm-common/src/coordinator-fetch.ts`, `drone-coordinator/src/routes/wiki.ts` |
-| Hash folds in body + embedding fingerprint | `drone-beacon/src/wiki-indexer.ts:30-42` |
-| `SearchIndexer` has the model in-flight guard to copy | `drone-beacon/src/search-indexer.ts:21,52,75,149` |
+| Fact                                                                                                            | Location                                                                                          |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Default limit is 100 requests per 1000 ms                                                                       | `drone-coordinator/src/index.ts:78-79`                                                            |
+| `@fastify/rate-limit` is registered with `max` and `timeWindow` only. Default key = `req.ip`. Bucket is global. | `drone-coordinator/src/index.ts:379-382`                                                          |
+| Both ports get the same limit                                                                                   | `drone-coordinator/src/index.ts:637-638`, `:645-646`                                              |
+| Middleware order in `buildApp()`: CORS, rate-limit, web-auth, mTLS, WebSocket, routes                           | `drone-coordinator/src/index.ts:371-405`                                                          |
+| `resolveRequestNodeId()`: client cert → beaconId, else `x-node-id` header, else `?beaconId=` query              | `drone-coordinator/src/mtls.ts:47-62`                                                             |
+| Wiki sweep = 1 listing GET + N page GETs                                                                        | `drone-beacon/src/wiki-index-support.ts:29`, `drone-beacon/src/wiki-indexer.ts:66-69`             |
+| Skip test runs AFTER download, so it can never prevent a fetch                                                  | `drone-beacon/src/wiki-indexer.ts:158-172`                                                        |
+| Periodic sweep = bare `setInterval`, no in-flight guard → overlapping passes (~3× amplification)                | `drone-beacon/src/wiki-indexer.ts:265-275`                                                        |
+| `triggerWikiReindex()` runs a FULL sweep on every local wiki write                                              | `drone-beacon/src/wiki-index-support.ts:88-94`, `drone-beacon/src/routes/wiki.ts:157,187,197,220` |
+| No ETag / `If-None-Match` / `If-Modified-Since`                                                                 | `drone-swarm-common/src/coordinator-fetch.ts`, `drone-coordinator/src/routes/wiki.ts`             |
+| Hash folds in body + embedding fingerprint                                                                      | `drone-beacon/src/wiki-indexer.ts:30-42`                                                          |
+| `SearchIndexer` has the model in-flight guard to copy                                                           | `drone-beacon/src/search-indexer.ts:21,52,75,149`                                                 |
 
 ## 3. Decisions (all confirmed with the user)
 
@@ -67,20 +67,20 @@ Three fixes:
 
 ## 5. Execution steps
 
-| # | Step | Agent | Depends on |
-|---|---|---|---|
-| 1 | Add the shared rate-limit key module | coder | — |
-| 2 | Register the key generator and new defaults | coder | 1 |
-| 3 | Update the coordinator rate-limit tests | tester | 2 |
-| 4 | Add the `wikiIndex` server-config block | coder | — |
-| 5 | Skip before fetch in the wiki indexer | coder | 4 |
-| 6 | Add the in-flight guard | coder | 5 |
-| 7 | Add the debounced write reindex | coder | 6 |
-| 8 | Add fetch pacing | coder | 5 |
-| 9 | Wire the beacon config through startup | coder | 4,7,8 |
-| 10 | Update and add beacon tests | tester | 5-9 |
-| 11 | Update docs and write ADR 262 | coder | 1-10 |
-| 12 | Check the work against the validation criteria | reviewer | 1-11 |
+| #   | Step                                           | Agent    | Depends on |
+| --- | ---------------------------------------------- | -------- | ---------- |
+| 1   | Add the shared rate-limit key module           | coder    | —          |
+| 2   | Register the key generator and new defaults    | coder    | 1          |
+| 3   | Update the coordinator rate-limit tests        | tester   | 2          |
+| 4   | Add the `wikiIndex` server-config block        | coder    | —          |
+| 5   | Skip before fetch in the wiki indexer          | coder    | 4          |
+| 6   | Add the in-flight guard                        | coder    | 5          |
+| 7   | Add the debounced write reindex                | coder    | 6          |
+| 8   | Add fetch pacing                               | coder    | 5          |
+| 9   | Wire the beacon config through startup         | coder    | 4,7,8      |
+| 10  | Update and add beacon tests                    | tester   | 5-9        |
+| 11  | Update docs and write ADR 262                  | coder    | 1-10       |
+| 12  | Check the work against the validation criteria | reviewer | 1-11       |
 
 ### Step 1 — Add the shared rate-limit key module
 
@@ -213,7 +213,11 @@ In `drone-beacon/src/wiki-index-support.ts`, change `runWikiIndexCycle()` to run
 ```ts
 const result = await runWikiIndexCycle(indexer);
 if (!result) {
-  return { success: true, skipped: true, note: 'index cycle already in progress' };
+  return {
+    success: true,
+    skipped: true,
+    note: 'index cycle already in progress',
+  };
 }
 return { success: true, result };
 ```
@@ -265,7 +269,11 @@ constructor(
 2. In the `indexWiki()` loop, when the entry is a coordinator page with no inline content, wait `pacingMs` before `fetchPageContent()`:
 
 ```ts
-if (entry.content === undefined && entry.origin === 'coordinator' && this.pacingMs > 0) {
+if (
+  entry.content === undefined &&
+  entry.origin === 'coordinator' &&
+  this.pacingMs > 0
+) {
   await sleep(this.pacingMs);
 }
 const content = await fetchPageContent(entry);

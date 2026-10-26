@@ -15,7 +15,10 @@ import * as db from '../src/db/index.js';
 import { getDatabase } from '../src/db/index.js';
 import { SearchIndexer } from '../src/search-indexer.js';
 import { WikiIndexer } from '../src/wiki-indexer.js';
-import { setWikiIndexer } from '../src/wiki-index-support.js';
+import {
+  runWikiIndexCycle,
+  setWikiIndexer,
+} from '../src/wiki-index-support.js';
 import { setSearchIndexer, setRankingConfig } from '../src/routes/context.js';
 import { defaultRankingConfig } from 'drone-swarm-common';
 import { replaceWikiFtsRows } from '../../drone-swarm-common/src/index.js';
@@ -1235,6 +1238,56 @@ describe('Search Routes', () => {
     expect(body.resultCount).toBe(2);
     expect(body.results[0].file).toBe('/proj/src/keep.ts');
     expect(body.results[1].file).toBe('/proj/src/other.ts');
+  });
+});
+
+// ── Wiki reindex route ──────────────────────────────────────────────
+
+describe('POST /wiki/reindex', () => {
+  const provider = {
+    id: 'mock',
+    name: 'Mock Provider',
+    spec: NOMIC_EMBED_TEXT_V1_5,
+    dimensions: 768,
+    maxTokens: 8192,
+    getEmbedding: async () => new Float32Array(768),
+    embedQuery: async () => new Float32Array(768),
+    embedDocument: async () => new Float32Array(768),
+  };
+
+  it('reports a skipped cycle when one is already in progress', async () => {
+    const indexer = new WikiIndexer(provider);
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    // Hold the first cycle inside indexWiki so the in-flight guard is set when
+    // the route is called.
+    vi.spyOn(indexer, 'indexWiki').mockImplementation(async () => {
+      await gate;
+      return {
+        pagesIndexed: 0,
+        pagesSkipped: 0,
+        pagesRemoved: 0,
+        chunksCreated: 0,
+        ftsRepaired: 0,
+      };
+    });
+    setWikiIndexer(indexer);
+    try {
+      const inFlight = runWikiIndexCycle(indexer);
+      const res = await app.inject({ method: 'POST', url: '/wiki/reindex' });
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body)).toEqual({
+        success: true,
+        skipped: true,
+        note: 'index cycle already in progress',
+      });
+      release();
+      await inFlight;
+    } finally {
+      setWikiIndexer(undefined);
+    }
   });
 });
 
