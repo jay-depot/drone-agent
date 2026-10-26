@@ -64,7 +64,7 @@ type HookBuckets = {
   onSessionRecycle: Array<
     (payload: DroneSessionRecyclePayload) => Promise<void>
   >;
-  onShutdown: Array<() => Promise<void>>;
+  onShutdown: Array<{ fn: () => Promise<void>; priority?: number }>;
 };
 
 export type DronePluginEngine = {
@@ -911,7 +911,11 @@ export function createDronePluginEngine({
         onSessionClear: callback => hookBuckets.onSessionClear.push(callback),
         onSessionRecycle: callback =>
           hookBuckets.onSessionRecycle.push(callback),
-        onShutdown: callback => hookBuckets.onShutdown.push(callback),
+        onShutdown: (callback, options) =>
+          hookBuckets.onShutdown.push({
+            fn: callback,
+            priority: options?.priority,
+          }),
         onSessionSafetyTrimWillRun: callback =>
           sessionSafetyTrimWillRunHooks.push(callback),
         onSessionSafetyTrimApplied: callback =>
@@ -1329,6 +1333,24 @@ export function createDronePluginEngine({
       hookName: StandardHookName,
       payload?: DroneAfterToolCallPayload
     ) => {
+      if (hookName === 'onShutdown') {
+        // onShutdown hooks support an optional per-hook priority. Hooks with an
+        // explicit numeric priority run first, ascending; hooks without one run
+        // last, in registration order (stable). A missing priority preserves the
+        // legacy behavior of running after every prioritized hook.
+        const prioritized = hookBuckets.onShutdown.filter(
+          hook => hook.priority !== undefined
+        );
+        const implicit = hookBuckets.onShutdown.filter(
+          hook => hook.priority === undefined
+        );
+        prioritized.sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
+        for (const hook of [...prioritized, ...implicit]) {
+          await hook.fn();
+        }
+        return;
+      }
+
       const callbacks = hookBuckets[hookName] as Array<
         (p?: DroneAfterToolCallPayload) => Promise<void>
       >;
