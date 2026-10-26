@@ -20,6 +20,7 @@ import { loadAgentConfig } from './runtime/config.js';
 import { createReferenceCapability } from './runtime/reference-expansion/index.js';
 import { createDronePluginEngine } from './runtime/plugin-engine.js';
 import { createSessionManager } from './runtime/session-manager.js';
+import { armShutdownWatchdog } from './runtime/shutdown-watchdog.js';
 
 import { parseCliArgs } from './cli.js';
 import { makePlainOutputEventHandler } from './output-handlers.js';
@@ -584,7 +585,14 @@ async function main(): Promise<void> {
     await engine.runHooks('onAfterToolCall');
   }
 
-  await engine.runHooks('onShutdown');
+  const disarmShutdownWatchdog = armShutdownWatchdog(
+    resolvedConfig.config.session.shutdownTimeoutMs ?? 30000
+  );
+  try {
+    await engine.runHooks('onShutdown');
+  } finally {
+    disarmShutdownWatchdog();
+  }
 }
 
 // Exported for tests
