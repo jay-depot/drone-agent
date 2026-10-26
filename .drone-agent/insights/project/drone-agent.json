@@ -1058,5 +1058,9 @@
   {
     "timestamp": "2026-10-26T01:28:46.039Z",
     "insight": "Orchestration insight (plan-persona-always-visible-runtime-tools): the LSP tool served STALE diagnostics after a subagent rewrote ~57 files. It reported 50 type errors (`unmountTool` mocks returning `() => void`) that no longer existed on disk. `tsc -p tsconfig.test.json --noEmit` exited 0, `grep` showed the correct content, and `drone-core/dist` had the new signature — three independent sources disagreed with the LSP. Touching the edited files forced the LSP to re-read, after which it reported clean. Lesson: for a multi-file change made by another process, do NOT trust an LSP snapshot as the authoritative gate; `tsc` + `grep` are the source of truth, and a `touch` resyncs the LSP. Corollary: the LSP's server-held buffer can lag the filesystem indefinitely; a stale \"failure\" is not evidence the change is broken, and a fresh \"clean\" is not evidence it is correct."
+  },
+  {
+    "timestamp": "2026-10-26T03:03:48.252Z",
+    "insight": "ADR numbers collide when two workstreams are planned in parallel off the same base. Here, `plan-persona-always-visible-runtime-tools` and `plan-coordinator-per-client-rate-limit-and-beacon-wiki-sweep` both independently picked \"262\" (each saw 261 as the latest), and both landed. Detection: `ls docs/adr | sed 's/-.*//' | sort | uniq -d` must be empty. Resolution rule used: the ADR that landed on `main` FIRST keeps the number; the later, un-ingested one renumbers (here 262 -> 263). Check this BEFORE ingesting: the project wiki's pointer-stub filenames (`decisions/NNN-slug.md`) and its `[[decisions/…]]` links are keyed on the number, so renumbering after ingest is far more expensive than before. Also verify the incoming `docs/adr/index.md` row actually exists — `d084f224` wrote a stray description fragment instead of the engine-owned 262 row, leaving that ADR with no catalog entry."
   }
 ]
