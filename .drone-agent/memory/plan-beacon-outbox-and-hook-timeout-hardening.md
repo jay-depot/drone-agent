@@ -49,7 +49,9 @@ Step 1 must land first (drone-swarm-common types; dependent packages resolve typ
 ## Steps
 
 ### Step 1 — `drone-swarm-common`: `sessionEnd.commandTimeoutMs`
+
 File: `drone-swarm-common/src/config-file.ts`
+
 - Extend the `SessionEndTrigger` command variant: `{ type: 'command'; command: string; commandTimeoutMs?: number }`.
 - In `validateSessionEnd`: for the `command` variant, if `commandTimeoutMs` is present it must be a finite number > 0; error string `"sessionEnd.commandTimeoutMs" must be a positive number`. Keep the existing unknown-key rejection (the new key becomes an allowed key for the command variant only; the spawn variant still rejects it).
 - Note: `mergeConfig` deep-merges `sessionEnd` within a matching trigger type, so a partial file override keeps working.
@@ -57,24 +59,32 @@ File: `drone-swarm-common/src/config-file.ts`
 - After this step: `pnpm -r run build` before checking dependent-package types.
 
 ### Step 2 — Coordinator: default 5 min + read config key
+
 File: `drone-coordinator/src/index.ts`
+
 - Line ~80: `const DEFAULT_COMMAND_TIMEOUT_MS = 300000;`
 - In the `configureSessionEndHook({ ... })` call (~line 583): pass `commandTimeoutMs: config.sessionEnd.type === 'command' && config.sessionEnd.commandTimeoutMs !== undefined ? config.sessionEnd.commandTimeoutMs : DEFAULT_COMMAND_TIMEOUT_MS`.
 - `SessionEndHookConfig.commandTimeoutMs` already exists in both servers' `session-end.ts`; no signature change.
 
 ### Step 3 — Beacon: default 5 min + read config key
+
 File: `drone-beacon/src/index.ts`
+
 - Line ~99: `DEFAULT_COMMAND_TIMEOUT_MS = 300000`.
 - Same conditional read in `configureSessionEndHook` (~line 285). The beacon passes `beaconId` too — keep it.
 
 ### Step 4 — Outbox: delete-on-delivery
+
 File: `drone-beacon/src/db/outbox.ts`
+
 - `markOutboxDelivered` becomes: `DELETE FROM outbox WHERE id = ?` (was UPDATE … SET deliveredAt).
 - Keep the `deliveredAt IS NULL` filter in dequeue queries — the column stays in the schema (no migration) and the filter is harmless.
 - Tests (`drone-beacon/test/outbox.test.ts`): update/extend the "marks entries delivered" test to assert the row is gone (`SELECT` by id returns undefined) and pending count drops. Existing tests that only check `dequeueDueOutbox`/`countPendingOutbox` after delivery keep passing.
 
 ### Step 5 — Outbox: enqueue body cap
+
 File: `drone-beacon/src/db/outbox.ts`
+
 - New constant `MAX_OUTBOX_BODY_BYTES = 900 * 1024`.
 - In `enqueueOutbox`: serialize the body first, measure with `Buffer.byteLength(json, 'utf8')`; if over the cap, `logger.error(...)` (kind + endpoint + size) and return `undefined`.
 - Change return type to `OutboxEntry | undefined`. Sole caller is `sendFireAndForget` in `drone-beacon/src/coordinator-client.ts:37-50`, which ignores the return value — no sweep needed, but verify with LSP find-references on `enqueueOutbox`.
@@ -82,7 +92,9 @@ File: `drone-beacon/src/db/outbox.ts`
 - Test: enqueue a >900 KB body → returns undefined, `countPendingOutbox(true)` unchanged, no throw.
 
 ### Step 6 — Outbox: bounded dequeue
+
 File: `drone-beacon/src/db/outbox.ts`, `dequeueDueOutbox`
+
 - Replace the unbounded `SELECT * FROM outbox WHERE deliveredAt IS NULL` with two bounded queries:
   1. Fresh rows: `SELECT * FROM outbox WHERE deliveredAt IS NULL AND attempts = 0 ORDER BY createdAt ASC LIMIT ?` (limit param).
   2. Retry rows: `SELECT * FROM outbox WHERE deliveredAt IS NULL AND attempts > 0 ORDER BY lastAttemptAt ASC LIMIT ?` (limit param).
@@ -91,20 +103,26 @@ File: `drone-beacon/src/db/outbox.ts`, `dequeueDueOutbox`
 - Test: insert more undelivered rows than the limit, assert only the oldest `limit` are returned in `createdAt` order.
 
 ### Step 7 — WS backoff reset + connection logging
+
 File: `drone-beacon/src/coordinator-ws.ts`
+
 - In `connect()` (~line 98): change the log line to include cert presence, e.g. `Connecting to coordinator reverse channel at ${coordinatorUrl} (client certificate: ${tlsIdentity ? 'present' : 'ABSENT'})`.
 - In the `ws.on('open')` handler (~line 123): add `attempts = 0;` before `announceFingerprint()`. This is the one-line backoff-reset fix; the extension client (`extension-server.ts:328,365`) is the reference pattern.
 - Test if a unit test is feasible with the existing ws mocking in `drone-beacon/test/`; if the file has no existing test harness, a manual-verification note is acceptable (keep it honest in the commit message).
 
 ### Step 8 — Coordinator: idempotent session/event inserts
+
 Files: `drone-coordinator/src/db/swarm-sessions.ts`, routes in `drone-coordinator/src/routes/swarm.ts`
+
 - `createSwarmEvent` (~line 268): add `ON CONFLICT(id) DO NOTHING`. Keep returning the event. This kills the 500s when the outbox replays `/sync/events/push` with already-stored event ids (replay is by design idempotent — the 404-as-delivered rule depends on it).
 - `createSwarmSession` (~line 51): add `ON CONFLICT(id) DO NOTHING` and, when the insert is a no-op, fetch and return the existing row (`getSwarmSession(id)`) so `/sync/sessions/register` stays 201-without-duplicate instead of 500.
 - Check the route handlers do not assert on rows-affected; adjust if needed.
 - Tests in `drone-coordinator/test/db.test.ts` (existing `createSwarmEvent` block ~line 868): replay the same id twice → no throw, single row; register the same session id twice → returns the original row, no duplicate.
 
 ### Step 9 — Bootstrap template: flock guard
+
 File: `drone-agent/src/plugins/bootstrap/swarm-memory-scripts.ts`, `buildCatchupScript`
+
 - Near the top of the generated script, after `set -euo pipefail`:
   ```bash
   exec 9>"$HOME/.drone-swarm-memory/.catchup.lock"
@@ -115,6 +133,7 @@ File: `drone-agent/src/plugins/bootstrap/swarm-memory-scripts.ts`, `buildCatchup
 - Check `drone-agent/test/` for `buildCatchupScript` snapshot/shape tests and update them.
 
 ### Step 10 — Docs
+
 - `docs/adr/151-memory-pipeline-infra.md`: add a dated postscript — session-end timeout now defaults to 300000 ms, override with `sessionEnd.commandTimeoutMs` (command variant only); outbox rows are deleted on delivery; enqueue bodies over 900 KB are dropped with an error log; dequeue is bounded and index-driven.
 - Grep `docs/` for "30s" / "30000" near session-end and update any stale claims.
 - `docs/agents/memory-pipeline.md` if it documents the timeout or outbox retention.

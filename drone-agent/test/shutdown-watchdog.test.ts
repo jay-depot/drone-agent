@@ -54,13 +54,14 @@ describe('armShutdownWatchdog', () => {
 
   it('calls unref on the watchdog and residual timers', () => {
     const unrefSpies: Array<ReturnType<typeof vi.fn>> = [];
-    vi.spyOn(globalThis, 'setTimeout').mockImplementation(
-      ((_handler: TimerHandler, _timeout?: number) => {
-        const unref = vi.fn();
-        unrefSpies.push(unref);
-        return { unref, ref: vi.fn() };
-      }) as typeof setTimeout
-    );
+    vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
+      _handler: TimerHandler,
+      _timeout?: number
+    ) => {
+      const unref = vi.fn();
+      unrefSpies.push(unref);
+      return { unref, ref: vi.fn() };
+    }) as typeof setTimeout);
 
     const disarm = armShutdownWatchdog(30_000);
     disarm();
