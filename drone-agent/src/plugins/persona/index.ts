@@ -128,22 +128,28 @@ export const personaPlugin: DronePlugin = {
       allTools: DroneToolDescriptor[]
     ): DroneToolDescriptor[] {
       const premountedNames = new Set(expandPremountedCanonical());
-      if (!activePersona || !activePersona.allowedTools) {
-        // No active persona, or persona without explicit allowedTools:
-        // hide defaultHidden tools from the LLM.
-        return allTools.filter(
-          t => !t.defaultHidden || premountedNames.has(t.name)
-        );
-      }
-      // Persona has explicit allowedTools: apply glob filtering.
-      // The persona's patterns take full control - they can re-include
-      // defaultHidden tools by explicitly naming them.
+      const patterns = activePersona?.allowedTools;
       const names = allTools.map(t => t.name);
-      const filtered = filterByGlobPatterns(names, activePersona.allowedTools);
-      const filteredSet = new Set(filtered);
-      return allTools.filter(
-        t => filteredSet.has(t.name) || premountedNames.has(t.name)
-      );
+      const includedByAllowedTools = patterns
+        ? new Set(filterByGlobPatterns(names, patterns))
+        : undefined;
+      // filterByGlobPatterns with only exclusion patterns returns every name
+      // no `!` pattern excludes, so it yields the non-excluded set directly.
+      const notExcluded = patterns
+        ? new Set(
+            filterByGlobPatterns(
+              names,
+              patterns.filter(p => p.startsWith('!'))
+            )
+          )
+        : undefined;
+
+      return allTools.filter(t => {
+        if (premountedNames.has(t.name)) return true;
+        if (t.alwaysVisible) return notExcluded?.has(t.name) ?? true;
+        if (!includedByAllowedTools) return !t.defaultHidden;
+        return includedByAllowedTools.has(t.name);
+      });
     }
 
     function getFilteredSkills(

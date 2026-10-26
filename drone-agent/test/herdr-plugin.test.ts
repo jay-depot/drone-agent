@@ -51,7 +51,7 @@ function makeRegistration(env: {
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
     mountTool: () => undefined,
-    unmountTool: () => {},
+    unmountTool: () => ({ unmounted: true }),
     listMountedTools: () => [],
     emitEvent: (event: { kind: string; content?: string }) =>
       emitted.push(event),

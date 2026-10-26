@@ -104,6 +104,11 @@ export type DroneToolDescriptor = {
    * `DroneToolDefinition.defaultHidden` through the plugin engine.
    */
   defaultHidden?: boolean;
+  /**
+   * Exempt from persona `allowedTools` inclusion patterns. Propagated from
+   * `DroneToolDefinition.alwaysVisible` through the tool registry.
+   */
+  alwaysVisible?: boolean;
   mounted?: boolean;
 };
 
