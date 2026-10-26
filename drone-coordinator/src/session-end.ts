@@ -3,8 +3,8 @@ import type { SessionEndTrigger } from 'drone-swarm-common';
 import { logger } from './logger.js';
 import * as db from './db/index.js';
 import { isBeaconConnected, sendBeaconCommand } from './beacon-ws.js';
+import { DEFAULT_COMMAND_TIMEOUT_MS } from './command-timeout.js';
 
-const DEFAULT_COMMAND_TIMEOUT_MS = 30000;
 const ESCALATION_KILL_GRACE_MS = 200;
 const FALLBACK_SETTLE_GRACE_MS = 1000;
 // Session IDs are substituted verbatim into a shell command, so they must be

@@ -10,6 +10,7 @@ import {
   type ServerConfigFile,
   type SessionEndTrigger,
 } from 'drone-swarm-common';
+import { resolveSessionEndCommandTimeoutMs } from './command-timeout.js';
 import os from 'node:os';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -77,7 +78,6 @@ const DEFAULT_PORT = 3456;
 const DEFAULT_HOST = '0.0.0.0';
 const DEFAULT_WEB_PORT = 8080;
 const DEFAULT_WEB_HOST = '127.0.0.1';
-const DEFAULT_COMMAND_TIMEOUT_MS = 30000;
 const DEFAULT_CONFIG_DIR = path.join(os.homedir(), '.drone-coordinator');
 const DEFAULT_DB_FILENAME = 'drone-coordinator.db';
 
@@ -582,7 +582,7 @@ export async function main() {
     }
     configureSessionEndHook({
       trigger: config.sessionEnd,
-      commandTimeoutMs: DEFAULT_COMMAND_TIMEOUT_MS,
+      commandTimeoutMs: resolveSessionEndCommandTimeoutMs(config.sessionEnd),
     });
     logger.info('Session-end hook configured');
   }

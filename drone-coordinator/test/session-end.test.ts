@@ -3,6 +3,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
+vi.mock('node:child_process', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  spawnMock.mockImplementation(actual.spawn);
+  return { ...actual, spawn: spawnMock };
+});
+
 vi.mock('../src/db/index.js', () => ({
   getBeacon: (id: string) =>
     id === 'b-1'
@@ -14,6 +21,7 @@ import {
   configureSessionEndHook,
   runSessionEndHook,
 } from '../src/session-end.js';
+import { resolveSessionEndCommandTimeoutMs } from '../src/command-timeout.js';
 import {
   _handleIncomingMessage,
   _registerTestConnection,
@@ -94,6 +102,67 @@ describe('coordinator runSessionEndHook', () => {
     expect(result.kind).toBe('command');
     expect(result.error).toMatch(/terminated by|timed out/);
   }, 5000);
+
+  it('uses the config-supplied commandTimeoutMs as the spawn timeout', async () => {
+    spawnMock.mockClear();
+    configureSessionEndHook({
+      commandTimeoutMs: 4321,
+      trigger: { type: 'command', command: 'exit 0' },
+    });
+    await runSessionEndHook('session-a');
+    expect(spawnMock).toHaveBeenCalledExactlyOnceWith(
+      '/bin/sh',
+      ['-c', 'exit 0'],
+      expect.objectContaining({ timeout: 4321 })
+    );
+  });
+
+  it('falls back to the 300000 default when commandTimeoutMs is omitted', () => {
+    expect(
+      resolveSessionEndCommandTimeoutMs({ type: 'command', command: 'exit 0' })
+    ).toBe(300000);
+  });
+
+  it('uses the config-supplied commandTimeoutMs when the trigger specifies it', () => {
+    expect(
+      resolveSessionEndCommandTimeoutMs({
+        type: 'command',
+        command: 'exit 0',
+        commandTimeoutMs: 600000,
+      })
+    ).toBe(600000);
+  });
+
+  it('ignores commandTimeoutMs on non-command triggers', () => {
+    expect(
+      resolveSessionEndCommandTimeoutMs({
+        type: 'spawn',
+        persona: 'librarian',
+        beaconId: 'b-1',
+        commandTimeoutMs: 600000,
+      } as never)
+    ).toBe(300000);
+  });
+
+  it('ignores commandTimeoutMs for spawn triggers', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ status: 'spawning' }), {
+            status: 202,
+          })
+      )
+    );
+    spawnMock.mockClear();
+    configureSessionEndHook({
+      commandTimeoutMs: 123,
+      trigger: { type: 'spawn', persona: 'librarian', beaconId: 'b-1' },
+    });
+    const result = await runSessionEndHook('session-a');
+    expect(result).toEqual({ ran: true, kind: 'spawn' });
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
 
   it('forwards spawn triggers to the configured beacon', async () => {
     vi.stubGlobal(
