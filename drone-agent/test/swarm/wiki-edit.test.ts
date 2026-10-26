@@ -232,4 +232,22 @@ describe('swarm wiki_edit', () => {
     const body = JSON.parse(String(putInit.body));
     expect(body.content).toContain('appended');
   });
+
+  it('advises re-reading the page (not a file) when no hunk applies', async () => {
+    const page: MockPage = { content: 'a\nb' };
+    fetchMock.mockResolvedValueOnce(readResponse(page));
+
+    const parsed = await run({
+      pageId: 'p',
+      diff: ['-nonexistent_line', '+other'].join('\n'),
+    });
+
+    expect(parsed.success).toBe(false);
+    expect(parsed.error).toContain('no hunks applied to the page body');
+    expect(parsed.error).toContain('swarm__wiki_read');
+    // The shared formatter is tool-agnostic — no file__read advice may leak in.
+    expect(parsed.error).not.toContain('file__read');
+    // Zero hunks applied → nothing is written.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

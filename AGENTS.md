@@ -103,7 +103,7 @@ The TUI is built with Ink 5.x (React for CLIs). It renders a five-region layout:
 
 ### Memory System
 
-Project-level memory is stored as Markdown files with YAML frontmatter in `.drone-agent/memory/`. Tools: `memory__manage` (store/recall/delete actions) and `memory__browse` (list/search actions). The memory plugin is opt-in (not enabled by default).
+Project-level memory is stored as Markdown files with YAML frontmatter in `.drone-agent/memory/`. Tools: `memory__manage` (store/recall/edit/delete actions) and `memory__browse` (list/search actions). The memory plugin is opt-in (not enabled by default).
 
 ### Insight System
 

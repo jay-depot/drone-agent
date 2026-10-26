@@ -17,6 +17,14 @@ import { formatPatchError } from '../../shared/patch-applier/errors.js';
 /** Metadata fields wiki_edit can carry through to the PUT body. */
 type WikiEditMetadataKeys = 'title' | 'tags' | 'sources' | 'pitch';
 
+/**
+ * Recovery hint appended to wiki_edit patch failures. The shared
+ * `formatPatchError` output is deliberately tool-agnostic, so each caller
+ * supplies its own "re-read and retry" advice.
+ */
+const WIKI_EDIT_RECOVERY_TIP =
+  'Tip: Re-read the page with swarm__wiki_read to confirm its current contents, then correct the diff and try again.';
+
 function createWikiEditTool(ctx: SwarmContext): DroneToolDefinition {
   return {
     name: 'wiki_edit',
@@ -139,9 +147,10 @@ function createWikiEditTool(ctx: SwarmContext): DroneToolDefinition {
             if (result.appliedHunks.length === 0) {
               return JSON.stringify({
                 success: false,
-                error: `wiki_edit: no hunks applied to the page body. ${result.errors
-                  .map(formatPatchError)
-                  .join('\n\n')}`,
+                error:
+                  `wiki_edit: no hunks applied to the page body. ` +
+                  `${result.errors.map(formatPatchError).join('\n\n')}\n\n` +
+                  WIKI_EDIT_RECOVERY_TIP,
               });
             }
             patchedContent = result.patchedLines.join('\n');
@@ -170,9 +179,11 @@ function createWikiEditTool(ctx: SwarmContext): DroneToolDefinition {
             summary = rendered.summary as unknown as Record<string, unknown>;
 
             if (!result.success) {
-              partialFailureMessage = `wiki_edit: ${result.errors.length} of ${hunks.length} hunk(s) failed to apply. The page was written with ${result.appliedHunks.length} successful hunk(s) applied.\n\n${result.errors
-                .map(formatPatchError)
-                .join('\n\n')}`;
+              partialFailureMessage =
+                `wiki_edit: ${result.errors.length} of ${hunks.length} hunk(s) failed to apply. ` +
+                `The page was written with ${result.appliedHunks.length} successful hunk(s) applied.\n\n` +
+                `${result.errors.map(formatPatchError).join('\n\n')}\n\n` +
+                WIKI_EDIT_RECOVERY_TIP;
             }
           }
 

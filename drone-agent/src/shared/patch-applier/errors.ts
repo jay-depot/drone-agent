@@ -149,8 +149,8 @@ export function buildType2Failure(
   const suggestions = findFuzzySuggestions(fileLines, hunk.oldLines);
   const detail =
     suggestions.length > 0
-      ? `The old code was not found in the file in any form. The closest candidates (by edit distance) are listed below — you may have meant one of these.`
-      : `The old code was not found in the file in any form, and no close candidates could be identified (the old code may be too generic or the file has changed substantially). Re-read the file with file__read to see the current contents.`;
+      ? `The old code was not found in any form. The closest candidates (by edit distance) are listed below — you may have meant one of these.`
+      : `The old code was not found in any form, and no close candidates could be identified (the old code may be too generic or the target has changed substantially).`;
   return {
     hunkIndex,
     message: `Old code not found in file`,
@@ -199,7 +199,7 @@ export function formatPatchError(e: PatchError): string {
     const suggestions = e.suggestions ?? [];
     if (suggestions.length === 0) {
       return (
-        `${tag} The old code (the \`-\` lines) was not found in the file in any form.\n` +
+        `${tag} The old code (the \`-\` lines) was not found in any form.\n` +
         `  ${e.detail}`
       );
     }
@@ -212,7 +212,7 @@ export function formatPatchError(e: PatchError): string {
           .join('\n')
     );
     return (
-      `${tag} The old code (the \`-\` lines) was not found in the file.\n` +
+      `${tag} The old code (the \`-\` lines) was not found.\n` +
       `  ${e.detail}\n` +
       `  Closest candidates:\n${lines.join('\n')}`
     );
