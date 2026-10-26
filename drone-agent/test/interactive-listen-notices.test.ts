@@ -25,6 +25,7 @@ type EventListener = (event: { kind: string; content?: string }) => void;
 
 function makeEngine(): {
   engine: {
+    getCapability: <T>(_id: string) => T | undefined;
     onConversationEvent: (cb: EventListener) => () => void;
     runConversationEventHooks: (event: {
       kind: string;
@@ -36,6 +37,7 @@ function makeEngine(): {
   const listeners: EventListener[] = [];
   return {
     engine: {
+      getCapability: <T>(_id: string) => undefined as T | undefined,
       onConversationEvent: (cb: EventListener) => {
         listeners.push(cb);
         return () => {

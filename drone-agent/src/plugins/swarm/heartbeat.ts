@@ -37,29 +37,34 @@ export function registerShutdown(
   beaconConfigInjector: BeaconConfigInjector | null,
   configCap: DroneConfigCapability | undefined
 ): void {
-  ctx.registration.hooks.onShutdown(async () => {
-    ctx.shuttingDown = true;
-    clearInterval(heartbeatInterval);
-    clearInterval(swarmInfoInterval);
-    if (ctx.ws) ctx.ws.close();
-    await flushEventBuffer(ctx);
-    if (beaconConfigInjector && configCap) {
-      configCap.unregisterInjector(beaconConfigInjector.id);
-    }
-    // End swarm session on coordinator
-    try {
-      await fetch(`${ctx.baseUrl}/sync/sessions/${ctx.sessionId}`, {
-        method: 'DELETE',
-      });
-    } catch {
-      // Silently ignore cleanup failures
-    }
-    try {
-      await fetch(`${ctx.baseUrl}/agents/${ctx.sessionId}`, {
-        method: 'DELETE',
-      });
-    } catch {
-      // Silently ignore cleanup failures
-    }
-  });
+  // Priority 0: inform the beacon before any other onShutdown hook runs, so
+  // the beacon sees the agent go offline even if a later hook blocks.
+  ctx.registration.hooks.onShutdown(
+    async () => {
+      ctx.shuttingDown = true;
+      clearInterval(heartbeatInterval);
+      clearInterval(swarmInfoInterval);
+      if (ctx.ws) ctx.ws.close();
+      await flushEventBuffer(ctx);
+      if (beaconConfigInjector && configCap) {
+        configCap.unregisterInjector(beaconConfigInjector.id);
+      }
+      // End swarm session on coordinator
+      try {
+        await fetch(`${ctx.baseUrl}/sync/sessions/${ctx.sessionId}`, {
+          method: 'DELETE',
+        });
+      } catch {
+        // Silently ignore cleanup failures
+      }
+      try {
+        await fetch(`${ctx.baseUrl}/agents/${ctx.sessionId}`, {
+          method: 'DELETE',
+        });
+      } catch {
+        // Silently ignore cleanup failures
+      }
+    },
+    { priority: 0 }
+  );
 }

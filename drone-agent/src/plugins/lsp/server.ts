@@ -59,6 +59,7 @@ import {
   CRASH_GUARD_WINDOW_MS,
   KILL_GRACE_MS,
 } from './server/lifecycle.js';
+import { killRunningInstalls } from './installer.js';
 
 import type { DocumentState } from './server/types.js';
 export type { DocumentState } from './server/types.js';
@@ -635,6 +636,40 @@ export function createServerManager(
     return readFileSnippetImpl(filePath, line, contextLines);
   }
 
+  /**
+   * Tear down a single server runtime: send the LSP shutdown request +
+   * exit notification to connected spawned servers, disconnect the client
+   * transport, and kill the spawned child with escalation.
+   */
+  async function shutdownRuntime(runtime: ServerRuntime): Promise<void> {
+    if (
+      runtime.ownership === 'spawned' &&
+      serverStates.get(runtime.id)?.status === 'connected'
+    ) {
+      try {
+        await runtime.client.request('shutdown');
+      } catch {
+        // Ignore shutdown request failures during teardown.
+      }
+      try {
+        runtime.client.notify('exit');
+      } catch {
+        // Ignore exit notification failures during teardown.
+      }
+    }
+
+    // Disconnect before closing stdin: markClosed runs first so any
+    // in-flight write completion cannot surface as an EPIPE transport
+    // issue (EPIPE-safety ordering).
+    runtime.client.disconnect('plugin shutdown');
+    if (runtime.ownership === 'spawned' && runtime.childProcess) {
+      await killWithEscalation(runtime.childProcess, KILL_GRACE_MS);
+    }
+    updateServerState(runtime.id, {
+      status: 'disconnected',
+    });
+  }
+
   // ── Public API ────────────────────────────────────────────────────
 
   async function startCandidate(
@@ -944,34 +979,13 @@ export function createServerManager(
       const runtimes = Array.from(serverRuntimes.values());
       serverRuntimes.clear();
 
-      for (const runtime of runtimes) {
-        if (
-          runtime.ownership === 'spawned' &&
-          serverStates.get(runtime.id)?.status === 'connected'
-        ) {
-          try {
-            await runtime.client.request('shutdown');
-          } catch {
-            // Ignore shutdown request failures during teardown.
-          }
-          try {
-            runtime.client.notify('exit');
-          } catch {
-            // Ignore exit notification failures during teardown.
-          }
-        }
-
-        // Disconnect before closing stdin: markClosed runs first so any
-        // in-flight write completion cannot surface as an EPIPE transport
-        // issue (EPIPE-safety ordering).
-        runtime.client.disconnect('plugin shutdown');
-        if (runtime.ownership === 'spawned' && runtime.childProcess) {
-          await killWithEscalation(runtime.childProcess, KILL_GRACE_MS);
-        }
-        updateServerState(runtime.id, {
-          status: 'disconnected',
-        });
-      }
+      // Teardown runtimes in parallel so total shutdown time is the max of
+      // the per-runtime grace periods, not the sum, and so in-flight
+      // installs are killed concurrently rather than after every runtime.
+      await Promise.all([
+        ...runtimes.map(shutdownRuntime),
+        killRunningInstalls(),
+      ]);
     },
   };
 }

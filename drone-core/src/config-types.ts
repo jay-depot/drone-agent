@@ -191,6 +191,11 @@ export type DroneSessionConfig = {
   guardrail: DroneGuardrailConfig;
   /** Unified retry/classification policy for LLM chat() failures. */
   retry: DroneSessionRetryConfig;
+  /**
+   * Maximum time (ms) the shutdown watchdog allows onShutdown hooks to run
+   * before forcing exit. Default 30000.
+   */
+  shutdownTimeoutMs?: number;
 };
 
 /**
@@ -655,6 +660,7 @@ export function createDefaultAgentConfig(
       announceToolRemovals: true,
       promptOnToolIterationLimit: false,
       maxToolResultTokensPercent: 15,
+      shutdownTimeoutMs: 30000,
       guardrail: {
         brokenResponses: { hintAfter: 2, maxHints: 2 },
         reasoningOnlyResponses: { hintAfter: 4, maxHints: 2 },

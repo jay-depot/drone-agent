@@ -113,7 +113,10 @@ export type DronePluginHooks = {
       event: import('./session-types.js').DroneConversationEvent
     ) => Promise<void>
   ) => void;
-  onShutdown: (callback: () => Promise<void>) => void;
+  onShutdown: (
+    callback: () => Promise<void>,
+    options?: { priority?: number }
+  ) => void;
   onSessionClear: (
     callback: (payload?: DroneSessionClearPayload) => Promise<void>
   ) => void;

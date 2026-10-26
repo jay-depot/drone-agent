@@ -156,6 +156,8 @@ type RequestRecord = {
   params: unknown;
   url: string;
   headers: Record<string, string>;
+  /** The AbortSignal passed to fetch, if any (used to assert stream lifecycle). */
+  signal?: AbortSignal;
   /** JSON-RPC id (present on both requests and responses). */
   id?: number;
   /** Result field (present on responses). */
@@ -478,6 +480,7 @@ export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
       params: parsed.params,
       url,
       headers,
+      signal: init?.signal ?? undefined,
       id: parsed.id,
       result: parsed.result,
       error: parsed.error,
@@ -621,6 +624,16 @@ export type FakeMcpServerOptions = {
   crashOnInit?: boolean;
   /** If true, the child omits `shutdown` (-32601). */
   omitShutdown?: boolean;
+  /**
+   * Absolute path to a watch-file. When the file exists, the child never
+   * responds to `initialize` (simulates a hung respawn that the client must
+   * kill on disconnect even though it was never promoted to the active child).
+   */
+  hangFile?: string;
+  /** Delay (ms) before the child exits on any termination path (SIGTERM,
+   * SIGINT, stdin end, `exit` notification). Simulates a slow shutdown so
+   * parallel teardown tests can observe max-vs-sum timing. */
+  slowExitMs?: number;
   /** Custom tool list to serve (alternative to toolNames). */
   tools?: Array<{ name: string; description?: string; inputSchema?: unknown }>;
 };
@@ -662,6 +675,8 @@ export function startFakeMcpServer(
     FAKE_MCP_NOTIFY_MESSAGE_ON_TOOL_NAME: options.notifyMessageOnToolName ?? '',
     FAKE_MCP_NOTIFY_METHOD:
       options.notifyMethod ?? 'notifications/tools/list_changed',
+    FAKE_MCP_HANG_FILE: options.hangFile ?? '',
+    FAKE_MCP_SLOW_EXIT_MS: String(options.slowExitMs ?? 0),
   };
 
   return {

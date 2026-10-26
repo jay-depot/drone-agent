@@ -266,6 +266,7 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
       maxToolResultTokensPercent: Type.Optional(Percent),
       guardrail: Type.Optional(GuardrailSchema),
       retry: Type.Optional(RetrySchema),
+      shutdownTimeoutMs: Type.Optional(PositiveInteger),
     }),
     lsp: Type.Object({
       enabled: Type.Optional(Type.Boolean()),

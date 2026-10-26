@@ -41,6 +41,7 @@ export const KNOWN_CONFIG_KEYS: string[] = [
   'session.retry.promptOnError',
   'session.retry.backoffBaseMs',
   'session.retry.backoffFactor',
+  'session.shutdownTimeoutMs',
   // llm.*
   'llm.active',
   'llm.reasoningLevel',

@@ -981,6 +981,162 @@ describe('createDronePluginEngine', () => {
       }
     });
   });
+
+  describe('onShutdown hook priorities', () => {
+    it('runs a priority-0 hook before a no-priority hook', async () => {
+      const calls: string[] = [];
+      const plugins: DronePlugin[] = [
+        createTestPlugin({
+          id: 'implicit',
+          hooks: {
+            onShutdown: async () => {
+              calls.push('implicit');
+            },
+          },
+        }),
+        createTestPlugin({
+          id: 'zero',
+          register: ({ hooks }) => {
+            hooks.onShutdown(
+              async () => {
+                calls.push('zero');
+              },
+              { priority: 0 }
+            );
+          },
+        }),
+      ];
+
+      const engine = createTestEngine({
+        plugins,
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      await engine.initialize();
+      await engine.runHooks('onShutdown');
+
+      expect(calls).toEqual(['zero', 'implicit']);
+    });
+
+    it('runs a no-priority hook after all explicit-priority hooks', async () => {
+      const calls: string[] = [];
+      const plugins: DronePlugin[] = [
+        createTestPlugin({
+          id: 'implicit',
+          hooks: {
+            onShutdown: async () => {
+              calls.push('implicit');
+            },
+          },
+        }),
+        createTestPlugin({
+          id: 'p10',
+          register: ({ hooks }) => {
+            hooks.onShutdown(
+              async () => {
+                calls.push('p10');
+              },
+              { priority: 10 }
+            );
+          },
+        }),
+        createTestPlugin({
+          id: 'p0',
+          register: ({ hooks }) => {
+            hooks.onShutdown(
+              async () => {
+                calls.push('p0');
+              },
+              { priority: 0 }
+            );
+          },
+        }),
+      ];
+
+      const engine = createTestEngine({
+        plugins,
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      await engine.initialize();
+      await engine.runHooks('onShutdown');
+
+      expect(calls).toEqual(['p0', 'p10', 'implicit']);
+    });
+
+    it('preserves registration order for equal priorities (stable)', async () => {
+      const calls: string[] = [];
+      const plugins: DronePlugin[] = [
+        createTestPlugin({
+          id: 'first',
+          register: ({ hooks }) => {
+            hooks.onShutdown(
+              async () => {
+                calls.push('first');
+              },
+              { priority: 5 }
+            );
+          },
+        }),
+        createTestPlugin({
+          id: 'second',
+          register: ({ hooks }) => {
+            hooks.onShutdown(
+              async () => {
+                calls.push('second');
+              },
+              { priority: 5 }
+            );
+          },
+        }),
+      ];
+
+      const engine = createTestEngine({
+        plugins,
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      await engine.initialize();
+      await engine.runHooks('onShutdown');
+
+      expect(calls).toEqual(['first', 'second']);
+    });
+
+    it('accepts the swarm-style onShutdown(cb, { priority: 0 }) registration and runs it first', async () => {
+      const calls: string[] = [];
+      const plugins: DronePlugin[] = [
+        createTestPlugin({
+          id: 'swarm',
+          register: ({ hooks }) => {
+            hooks.onShutdown(
+              async () => {
+                calls.push('swarm');
+              },
+              { priority: 0 }
+            );
+          },
+        }),
+        createTestPlugin({
+          id: 'other',
+          hooks: {
+            onShutdown: async () => {
+              calls.push('other');
+            },
+          },
+        }),
+      ];
+
+      const engine = createTestEngine({
+        plugins,
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      await engine.initialize();
+      await engine.runHooks('onShutdown');
+
+      expect(calls).toEqual(['swarm', 'other']);
+    });
+  });
 });
 
 describe('runtime__list_tools — tool visibility filtering', () => {

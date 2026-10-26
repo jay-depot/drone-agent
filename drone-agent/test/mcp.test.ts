@@ -151,6 +151,19 @@ function cacheFilePath(): string {
   );
 }
 
+async function waitFor(
+  predicate: () => boolean,
+  timeoutMs = 5000
+): Promise<void> {
+  const start = Date.now();
+  while (!predicate()) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(`waitFor timed out after ${timeoutMs}ms`);
+    }
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+}
+
 async function seedCacheFile(
   entries: Record<string, { description: string; promptVersion: number }>
 ): Promise<void> {
@@ -423,6 +436,58 @@ describe('mcp plugin integration (stdio child)', () => {
 
     const demo = await statusOf(engine, 'demo');
     expect(demo.status).toBe('disconnected');
+  });
+
+  it('kills a respawn orphan whose initialize hangs (never promoted to childProcess) on shutdown', async () => {
+    const hangFile = path.join(osState.homeDir, 'hang-init');
+    const server = startFakeMcpServer({ toolNames: ['echo'], hangFile });
+    const engine = await bootWithServers({
+      demo: server.serverConfig,
+    });
+    const initialChild = spawnedChildren.at(-1);
+    expect(initialChild).toBeDefined();
+
+    // Make the active child die so the respawn monitor spawns a replacement.
+    // The replacement's initialize now hangs forever because hangFile exists,
+    // so it never becomes the active childProcess — the orphan that the old
+    // disconnect() could not see or kill.
+    await writeFile(hangFile, '');
+    initialChild!.kill();
+    await waitFor(() => spawnedChildren.length >= 2);
+
+    const orphan = spawnedChildren.at(-1);
+    expect(orphan).not.toBe(initialChild);
+
+    await engine.runHooks('onShutdown');
+
+    // Without the tracked-set fix the orphan survives, and its stdio pipes
+    // keep the Node event loop alive. It must now be dead.
+    const dead = orphan!.exitCode !== null || orphan!.killed;
+    expect(dead).toBe(true);
+  });
+
+  it('disconnects all servers in parallel: teardown elapsed ≈ max, not sum', async () => {
+    const serverA = startFakeMcpServer({
+      toolNames: ['echo'],
+      slowExitMs: 1500,
+    });
+    const serverB = startFakeMcpServer({
+      toolNames: ['add'],
+      slowExitMs: 1500,
+    });
+    const engine = await bootWithServers({
+      serverA: serverA.serverConfig,
+      serverB: serverB.serverConfig,
+    });
+
+    const start = Date.now();
+    await engine.runHooks('onShutdown');
+    const elapsed = Date.now() - start;
+
+    // Sequential teardown takes ~3000ms (sum of two 1500ms grace waits);
+    // parallel teardown takes ~1500ms (max). The bounds prove parallel.
+    expect(elapsed).toBeGreaterThanOrEqual(1000);
+    expect(elapsed).toBeLessThan(2800);
   });
 
   it('records an error state (no throw) when the server command is unavailable', async () => {

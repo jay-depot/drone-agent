@@ -25,6 +25,7 @@ function makeEngine() {
   const reminders: string[] = [];
   const sent: string[] = [];
   const engine = {
+    getCapability: <T>(_id: string) => undefined as T | undefined,
     queueSystemReminder: (content: string) => {
       reminders.push(content);
     },
