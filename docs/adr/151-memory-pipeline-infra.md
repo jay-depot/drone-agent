@@ -23,7 +23,7 @@ Four primitives, shaped deliberately to not block future proactive RAG:
 
 1. **JSON config files for both servers** (`--config-file <path>`). Resolution is defaults → file → CLI flags; flags win only when explicitly passed, so binaries track explicit flag overrides in a separate object merged _after_ the file. Shared loader in `drone-swarm-common/src/config-file.ts`: strict unknown-key rejection, every validation problem reported at once, path-prefixed errors. Hooks are only expressible in the file (no flag form) — a hook implies a config file.
 2. **Session-end triggers** (`sessionEnd`, discriminated union — strictly one variant):
-   - `{ type:'command', command }` — `{session_id}` substituted, `/bin/sh -c`, non-blocking, stdout/stderr → server log, 30s timeout, errors contained (never affect the HTTP response).
+   - `{ type:'command', command, commandTimeoutMs? }` — `{session_id}` substituted, `/bin/sh -c`, non-blocking, stdout/stderr → server log, errors contained (never affect the HTTP response).
    - `{ type:'spawn', persona, beaconId? }` — beacon layer defaults `beaconId` to itself (mismatching target → skip with warning); coordinator layer **requires** `beaconId` (startup exit 1 if missing) and forwards `POST /spawn` to that beacon.
      Fired from `DELETE /sync/sessions/:id` (beacon proxy, after the coordinator forward) and `DELETE /api/sync/sessions/:id` (coordinator, after status update + mutation publish).
 3. **`drone-swarm` CLI** — standalone REST client replacing curl+jq in pipelines. `--beacon`/`--coordinator` mutually exclusive (+ `DRONE_BEACON_URL`/`DRONE_COORDINATOR_URL`, default local coordinator :3456); the target picks address **and route dialect** (coordinator `/api/*`, beacon flat `/*`). Commands: `session list|log|process|processed`, `wiki read|write|search`. JSON on stdout, errors on stderr exit 1. `main(argv, fetchImpl?)` exported with an entry guard for testability. Notably, the TLS-tolerant `createCoordinatorFetch` was **not** extracted to drone-swarm-common (contrary to the original plan): the CLI targets plain HTTP REST and only beacon↔coordinator traffic is self-signed.
@@ -37,6 +37,8 @@ The opinionated default (`bootstrap__swarm-memory` workflow + the `coordinator-w
 - Coordinator-bound writes are now lossless across coordinator downtime and beacon restarts.
 - Server config becomes file-versionable; hooks unlock scheduled ingestion without external timers pointing at raw HTTP.
 - `mergeConfig` deep-merges `sessionEnd` only within a matching trigger type; differing shapes replace wholesale (prevents invalid unions like `{type:'spawn', command:'x'}`).
+
+**Postscript (2026-10-26, outbox + hook hardening):** the session-end command timeout now defaults to 300000 ms (was 30000) and is overridable per trigger with `sessionEnd.commandTimeoutMs` (command variant only, validated as a positive finite number). The beacon outbox deletes rows on delivery instead of marking them `deliveredAt` (no retention window), drops enqueued bodies over 900 KB with an error log (the coordinator's 1 MiB body limit made them undeliverable anyway), and its dequeue query is LIMIT-bounded on the `idx_outbox_undelivered` partial index so a large backlog is never materialized in full (the unbounded variant was implicated in hourly beacon RSS spikes). Coordinator session/event inserts are `ON CONFLICT(id) DO NOTHING`, making outbox replay true no-ops instead of UNIQUE-constraint 500s.
 
 ## Related
 

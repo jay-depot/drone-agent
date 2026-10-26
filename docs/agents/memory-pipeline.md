@@ -73,8 +73,9 @@ A discriminated union — strictly one variant or the other:
 
 ```jsonc
 // Shell out. {session_id} is substituted. Non-blocking; stderr/stdout go to
-// the server log; a 30s timeout applies.
-{ "type": "command", "command": "my-ingest.sh {session_id}" }
+// the server log; a 5-minute default timeout applies, overridable with
+// commandTimeoutMs (positive number, command variant only).
+{ "type": "command", "command": "my-ingest.sh {session_id}", "commandTimeoutMs": 300000 }
 
 // Spawn an agent via the swarm spawn system.
 { "type": "spawn", "persona": "coordinator-wiki-librarian", "beaconId": "beacon-123" }

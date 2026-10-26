@@ -82,6 +82,12 @@ export function buildCatchupScript(settings: SwarmMemorySettings): string {
 # (batch limited) and feeds each through the session-end ingest hook.
 set -euo pipefail
 
+# Single-instance guard: a hung librarian child must not stack concurrent
+# catch-up batches. Non-blocking flock on a dedicated fd; exit quietly so
+# cron noise stays clean.
+exec 9>"$HOME/.drone-swarm-memory/.catchup.lock"
+flock -n 9 || { echo "catch-up: another instance is running; exiting"; exit 0; }
+
 ${ENV_SOURCE_BLOCK}
 
 COORDINATOR_URL="${settings.coordinatorUrl}"

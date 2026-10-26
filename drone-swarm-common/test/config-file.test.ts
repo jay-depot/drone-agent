@@ -91,6 +91,38 @@ describe('validateConfigFile', () => {
     ]);
     expect(
       validateConfigFile({
+        sessionEnd: {
+          type: 'command',
+          command: 'x',
+          commandTimeoutMs: 0,
+        },
+      })
+    ).toEqual(['"sessionEnd.commandTimeoutMs" must be a positive number']);
+    expect(
+      validateConfigFile({
+        sessionEnd: {
+          type: 'command',
+          command: 'x',
+          commandTimeoutMs: -1,
+        },
+      })
+    ).toEqual(['"sessionEnd.commandTimeoutMs" must be a positive number']);
+    expect(
+      validateConfigFile({
+        sessionEnd: {
+          type: 'command',
+          command: 'x',
+          commandTimeoutMs: 'five minutes',
+        },
+      })
+    ).toEqual(['"sessionEnd.commandTimeoutMs" must be a positive number']);
+    expect(
+      validateConfigFile({
+        sessionEnd: { type: 'spawn', persona: 'p', commandTimeoutMs: 1000 },
+      })
+    ).toEqual(['unknown key "sessionEnd.commandTimeoutMs" for type "spawn"']);
+    expect(
+      validateConfigFile({
         sessionEnd: { type: 'spawn', persona: 'p', beaconId: 9 },
       })
     ).toEqual(['"sessionEnd.beaconId" must be a string']);
@@ -108,6 +140,15 @@ describe('validateConfigFile', () => {
     expect(
       validateConfigFile({
         sessionEnd: { type: 'command', command: 'run.sh {session_id}' },
+      })
+    ).toEqual([]);
+    expect(
+      validateConfigFile({
+        sessionEnd: {
+          type: 'command',
+          command: 'run.sh {session_id}',
+          commandTimeoutMs: 300000,
+        },
       })
     ).toEqual([]);
     expect(

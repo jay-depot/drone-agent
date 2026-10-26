@@ -57,6 +57,7 @@ vi.mock('ws', () => ({ default: FakeWebSocket }));
 const { handleSpawnAgent } = await import('../src/routes/spawn-handlers.js');
 const { startCoordinatorWsClient, resetCoordinatorWsClient } =
   await import('../src/coordinator-ws.js');
+const { logger } = await import('../src/logger.js');
 const { triggerCoordinatorSync } = await import('../src/routes/context.js');
 
 type SpawnResults = Awaited<ReturnType<typeof handleSpawnAgent>>;
@@ -197,6 +198,54 @@ describe('beacon reverse-channel client', () => {
     expect(response.ok).toBe(true);
     expect(response.status).toBe(200);
     expect(triggerCoordinatorSync).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs the coordinator URL and client-certificate presence on connect', () => {
+    startClient('https://coord.test:3456');
+    const connectLog = (logger.info as ReturnType<typeof vi.fn>).mock.calls
+      .map(call => String(call[0]))
+      .find(msg => msg.includes('Connecting to coordinator reverse channel'));
+    expect(connectLog).toContain('(client certificate: ABSENT)');
+  });
+
+  it('logs a present client certificate when an identity is supplied', () => {
+    startCoordinatorWsClient('https://coord.test:3456', {
+      certPath: '/tmp/cert.pem',
+      keyPath: '/tmp/key.pem',
+      fingerprint: 'fp',
+      certPem: 'cert',
+      keyPem: 'key',
+    });
+    const connectLog = (logger.info as ReturnType<typeof vi.fn>).mock.calls
+      .map(call => String(call[0]))
+      .find(msg => msg.includes('Connecting to coordinator reverse channel'));
+    expect(connectLog).toContain('(client certificate: present)');
+  });
+
+  it('resets reconnect backoff after a successful open', async () => {
+    vi.useFakeTimers();
+    try {
+      // Two consecutive failures back the reconnect delay up to 2s.
+      startClient('https://coord.test:3456');
+      expect(FakeWebSocket.instances).toHaveLength(1);
+      FakeWebSocket.instances[0].emit('close');
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(FakeWebSocket.instances).toHaveLength(2);
+      FakeWebSocket.instances[1].emit('close');
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(FakeWebSocket.instances).toHaveLength(3);
+
+      // A successful open resets the backoff: the next close reconnects
+      // after the 1s floor again, not an exponentially larger delay.
+      FakeWebSocket.instances[2].emit('open');
+      FakeWebSocket.instances[2].emit('close');
+      await vi.advanceTimersByTimeAsync(999);
+      expect(FakeWebSocket.instances).toHaveLength(3);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(FakeWebSocket.instances).toHaveLength(4);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('handles a fragmentsChanged nudge by re-pulling coordinator state', async () => {

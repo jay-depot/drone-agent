@@ -5,7 +5,12 @@ import fs from 'node:fs/promises';
  * beacon (proxy route) or coordinator. Strictly one of two variants.
  */
 export type SessionEndTrigger =
-  | { type: 'command'; command: string }
+  | {
+      type: 'command';
+      command: string;
+      /** Kill timeout for the spawned hook command. Defaults to 300000. */
+      commandTimeoutMs?: number;
+    }
   | { type: 'spawn'; persona: string; beaconId?: string };
 
 /**
@@ -145,12 +150,26 @@ function validateSessionEnd(
     if (typeof sessionEnd.command !== 'string' || !sessionEnd.command.trim()) {
       errors.push('"sessionEnd.command" must be a non-empty string');
     }
+    if (
+      sessionEnd.commandTimeoutMs !== undefined &&
+      (typeof sessionEnd.commandTimeoutMs !== 'number' ||
+        !Number.isFinite(sessionEnd.commandTimeoutMs) ||
+        sessionEnd.commandTimeoutMs <= 0)
+    ) {
+      errors.push('"sessionEnd.commandTimeoutMs" must be a positive number');
+    }
     for (const key of Object.keys(sessionEnd)) {
-      if (key !== 'type' && key !== 'command') {
+      if (key !== 'type' && key !== 'command' && key !== 'commandTimeoutMs') {
         errors.push(`unknown key "sessionEnd.${key}" for type "command"`);
       }
     }
-    return { type: 'command', command: sessionEnd.command as string };
+    return {
+      type: 'command',
+      command: sessionEnd.command as string,
+      ...(sessionEnd.commandTimeoutMs !== undefined
+        ? { commandTimeoutMs: sessionEnd.commandTimeoutMs as number }
+        : {}),
+    };
   }
   if (type === 'spawn') {
     if (typeof sessionEnd.persona !== 'string' || !sessionEnd.persona.trim()) {
