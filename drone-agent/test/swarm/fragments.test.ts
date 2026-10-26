@@ -246,7 +246,7 @@ describe('swarm plugin fragment registration', () => {
       unregisterPluginTools: () => {},
       unregisterTool: () => {},
       mountTool: () => undefined,
-      unmountTool: () => {},
+      unmountTool: () => ({ unmounted: true }),
       listMountedTools: () => [],
       emitEvent: () => {},
       hooks: {

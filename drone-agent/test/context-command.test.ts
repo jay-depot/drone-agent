@@ -40,7 +40,7 @@ async function captureContextCommand(options?: {
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
     mountTool: () => undefined,
-    unmountTool: () => {},
+    unmountTool: () => ({ unmounted: true }),
     listMountedTools: () => [],
     emitEvent: () => {},
     hooks: {
@@ -182,7 +182,7 @@ describe('/context command', () => {
       unregisterPluginTools: () => {},
       unregisterTool: () => {},
       mountTool: () => undefined,
-      unmountTool: () => {},
+      unmountTool: () => ({ unmounted: true }),
       listMountedTools: () => [],
       emitEvent: () => {},
       hooks: {

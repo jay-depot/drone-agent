@@ -94,7 +94,7 @@ export function captureRegistration(): {
     requestElicitation: () => undefined,
     listPlugins: () => [],
     mountTool: () => undefined,
-    unmountTool: () => {},
+    unmountTool: () => ({ unmounted: true }),
     listMountedTools: () => [],
     emitEvent: () => {},
   };

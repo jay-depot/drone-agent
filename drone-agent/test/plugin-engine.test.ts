@@ -9,6 +9,7 @@ import {
   type DroneSessionSafetyTrimPayload,
   type DroneToolDescriptor,
   type DroneToolDefinition,
+  type DroneToolUnmountResult,
 } from 'drone-core';
 import { getDefaultEnabledPluginIds } from '../src/runtime/plugin-engine.js';
 import { startupPlugin } from '../src/plugins/startup.js';
@@ -437,7 +438,7 @@ describe('createDronePluginEngine', () => {
       let listMountedFn: (() => DroneToolDescriptor[]) | undefined;
       let mountFn:
         ((name: string) => DroneToolDefinition | undefined) | undefined;
-      let unmountFn: ((name: string) => void) | undefined;
+      let unmountFn: ((name: string) => DroneToolUnmountResult) | undefined;
 
       const engine = createTestEngine({
         plugins: [
@@ -542,7 +543,7 @@ describe('createDronePluginEngine', () => {
       requestElicitation: () => undefined,
       listPlugins: () => [],
       mountTool: () => undefined,
-      unmountTool: () => {},
+      unmountTool: () => ({ unmounted: true }),
       unregisterPluginTools: () => {},
       unregisterTool: () => {},
       listMountedTools: () => [],
@@ -1169,6 +1170,38 @@ describe('runtime__list_tools — tool visibility filtering', () => {
     const lean = await listToolsResult(engine);
     const createLean = lean.tools.find(t => t.name === 'term__create');
     expect(createLean).not.toHaveProperty('defaultHidden');
+  });
+});
+
+describe('runtime__unmount_tool — engine-owned tool protection', () => {
+  it('refuses to unmount an engine-owned tool and keeps it mounted', async () => {
+    const engine = createTestEngine({
+      plugins: [
+        createTestPlugin({
+          id: 'test',
+          tools: [
+            { name: 'alpha', description: 'alpha', execute: async () => 'a' },
+          ],
+        }),
+      ],
+      config: createDefaultAgentConfig(),
+      logger: silentLogger(),
+    });
+    await engine.initialize();
+
+    const result = JSON.parse(
+      toToolResultContent(
+        await engine.executeTool('runtime__unmount_tool', {
+          tool: 'runtime__mount_tool',
+        })
+      )
+    ) as { success: boolean; tool: string; error?: string };
+    expect(result.success).toBe(false);
+    expect(result.tool).toBe('runtime__mount_tool');
+    expect(result.error).toContain('engine-owned tool');
+    expect(
+      engine.listMountedTools().some(t => t.name === 'runtime__mount_tool')
+    ).toBe(true);
   });
 });
 

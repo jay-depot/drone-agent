@@ -25,7 +25,7 @@ function makeRegistration(
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
     mountTool: () => undefined,
-    unmountTool: () => {},
+    unmountTool: () => ({ unmounted: true }),
     listMountedTools: () =>
       (opts.mountedTools ?? []).map(name => ({
         name,

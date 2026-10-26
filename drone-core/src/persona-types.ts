@@ -38,6 +38,11 @@ export type DronePersonaDefinition = {
    * `?` wildcards. Prefix a pattern with `!` to exclude matching tools.
    * When absent, all tools are visible.
    *
+   * Tools with `alwaysVisible` set (the engine's runtime meta-tools) are
+   * exempt from the inclusion patterns: they stay visible even when no
+   * inclusion pattern matches them. A `!` exclusion pattern still hides
+   * them.
+   *
    * Example: `['exec.*', 'file.*', '!exec.run']`
    */
   allowedTools?: string[];

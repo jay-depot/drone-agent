@@ -48,7 +48,7 @@ function createMockRegistration(): {
     requestElicitation: () => undefined,
     listPlugins: () => [],
     mountTool: () => undefined,
-    unmountTool: () => {},
+    unmountTool: () => ({ unmounted: true }),
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
     listMountedTools: () => [],

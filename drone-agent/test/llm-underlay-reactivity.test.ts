@@ -78,7 +78,7 @@ async function makeHarness(opts: {
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
     mountTool: () => undefined,
-    unmountTool: () => {},
+    unmountTool: () => ({ unmounted: true }),
     listMountedTools: () => [],
     emitEvent: () => {},
     hooks: {
