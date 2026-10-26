@@ -1006,5 +1006,13 @@
   {
     "timestamp": "2026-10-25T22:52:22.526Z",
     "insight": "The coordinator UI's shared `Dialog` primitive (drone-coordinator-ui/src/components/ui/dialog.tsx) hard-coded `max-w-md`, so any consumer with a wide body (the Stored Secrets table) clipped horizontally. When a modal's content overflows, check the shared primitive for a fixed max-width before patching the consumer. The primitive now exposes an optional `width` prop ('md' | 'lg' | 'xl', default 'md'), so consumers can widen without forking. Other consumers rendering wide content (the Add/Edit Config dialog, wiki dialogs) may still need `width` set."
+  },
+  {
+    "timestamp": "2026-10-26T01:57:23.586Z",
+    "insight": "Periodic indexers must have an in-flight guard. drone-beacon's WikiIndexer.startPeriodicSweep uses a bare setInterval with no re-entrancy guard, so a pass that runs longer than its interval lets multiple full sweeps overlap (the observed ~3x wiki-request amplification against the coordinator). SearchIndexer already guards with an `indexing` Set. Any new periodic sweep (or one that also fires on writes) should copy that guard, and any fire-and-forget write-triggered reindex should debounce so a burst of writes cannot stack full sweeps."
+  },
+  {
+    "timestamp": "2026-10-26T01:57:23.588Z",
+    "insight": "An incremental-sync skip test must run BEFORE the expensive fetch, or it is not a skip. drone-beacon's wiki indexer computes its page change hash from the downloaded body (wiki-indexer.ts:158-172), so the \"skip unchanged pages\" branch can never avoid the per-page GET /api/wiki/:id — every sweep re-downloads the whole coordinator corpus. Fix direction: derive the change hash from listing metadata only (pageId + origin + updatedAt + embedding fingerprint) and test it before fetching. Generalizable rule: a content-hash skip path is only a skip if the hash comes from cheap metadata, not from the payload it is meant to avoid fetching."
   }
 ]
