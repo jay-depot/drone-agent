@@ -1,4 +1,4 @@
-# 262. Coordinator per-client rate limit and beacon wiki sweep
+# 263. Coordinator per-client rate limit and beacon wiki sweep
 
 - Status: Accepted
 - Date: 2026-10-25
