@@ -1006,5 +1006,29 @@
   {
     "timestamp": "2026-10-25T22:52:22.526Z",
     "insight": "The coordinator UI's shared `Dialog` primitive (drone-coordinator-ui/src/components/ui/dialog.tsx) hard-coded `max-w-md`, so any consumer with a wide body (the Stored Secrets table) clipped horizontally. When a modal's content overflows, check the shared primitive for a fixed max-width before patching the consumer. The primitive now exposes an optional `width` prop ('md' | 'lg' | 'xl', default 'md'), so consumers can widen without forking. Other consumers rendering wide content (the Add/Edit Config dialog, wiki dialogs) may still need `width` set."
+  },
+  {
+    "timestamp": "2026-10-26T00:40:39.653Z",
+    "insight": "Follow-up (from plan-persona-always-visible-runtime-tools): `ToolRegistry.mount()` (drone-core/src/tool-registry.ts) returns `undefined` for BOTH \"tool not registered\" AND \"tool already mounted\". Consumers cannot distinguish the two. `applyToolPremount` in drone-agent/src/plugins/persona/index.ts:111 treats `undefined` as \"unknown tool\" and logs `premountedTools: unknown tool \"<canonical>\"`, so premounting a tool that is already mounted emits a false warning. Cosmetic (the mount is a no-op success), pre-existing, out of scope for the alwaysVisible/preventUnmount change. Fix would be a richer return (e.g. a status enum) or an explicit `isMounted` pre-check at the call site."
+  },
+  {
+    "timestamp": "2026-10-26T00:40:39.656Z",
+    "insight": "Follow-up (from plan-persona-always-visible-runtime-tools): `runtime__unmount_tool` (drone-agent/src/runtime/plugin-engine.ts, registerRuntimeMetaTools) returns `{ success: true, tool }` for an unknown/unregistered tool name — it never checks `toolRegistry.get` first, unlike its sibling `runtime__mount_tool` which pre-checks and returns an error. Harmless in practice but it reports success for a no-op, and it is the same class of \"lie to the model\" that the alwaysVisible/preventUnmount change fixes for the refusal path. Out of scope; consider aligning it with mount_tool's pre-check."
+  },
+  {
+    "timestamp": "2026-10-26T00:40:39.658Z",
+    "insight": "Follow-up (from plan-persona-always-visible-runtime-tools): two different \"explicit inclusion wins\" rules coexist in persona `getFilteredTools` (drone-agent/src/plugins/persona/index.ts). (1) An `allowedTools` `!` exclusion beats a normal inclusion pattern — exclusion wins. (2) The ADR-109 `premountedTools` union force-includes a premounted canonical name and IGNORES `!` exclusions entirely — inclusion wins. The new `alwaysVisible` exemption follows rule (1) (exclusions still win over it). Unifying the premount union onto rule (1) is a separate behavioural change, deliberately deferred here; no config-library persona exercises the conflict today."
+  },
+  {
+    "timestamp": "2026-10-26T01:28:46.033Z",
+    "insight": "HOST quirk (already noted in HOST.md spirit): drone-agent exports `DRONE_PERSONA` into the environment, and spawned subagents inherit it. The persona plugin resolves `DRONE_PERSONA` BEFORE `config.activePersona`, so any test that asserts config-driven persona activation fails when the suite is run from inside a drone session (the parent's persona id leaks in). Symptom: `persona-premount.test.ts` (\"session-start activation\") and `persona-cli-flag.test.ts` (\"falls back to config.activePersona\") fail only under a drone parent, not on a clean shell. Workaround: run `env -u DRONE_PERSONA pnpm run test`. Candidate real fix: have those tests scrub DRONE_PERSONA in setup, or make the CLI-flag precedence insensitive to ambient env in tests. Logged, not fixed."
+  },
+  {
+    "timestamp": "2026-10-26T01:28:46.036Z",
+    "insight": "Execution-process insight (plan-persona-always-visible-runtime-tools): the plan I authored was INTERNALLY INCONSISTENT and only an adversarial review caught it. Locked decision 6 said \"the premount union must not change,\" but Step 8's code snippet checked `isToolExcluded(t.name)` BEFORE the premount union, silently flipping premount-beats-exclusion to exclusion-beats-premount (violating ADR 109). The worker implemented the snippet faithfully, the ADR then asserted the opposite in prose, and every gate stayed green: build, typecheck, lint, 4424 tests, LSP all passed because no existing test covered premount ∩ exclusion. Only the reviewer's cross-check of decision-vs-code found it. Lesson: a plan's own code snippets must be audited against its decision table before dispatch; a green test suite proves nothing about a rule no test encodes. Add a premount∩exclusion case to the persona test suite if this area is touched again."
+  },
+  {
+    "timestamp": "2026-10-26T01:28:46.039Z",
+    "insight": "Orchestration insight (plan-persona-always-visible-runtime-tools): the LSP tool served STALE diagnostics after a subagent rewrote ~57 files. It reported 50 type errors (`unmountTool` mocks returning `() => void`) that no longer existed on disk. `tsc -p tsconfig.test.json --noEmit` exited 0, `grep` showed the correct content, and `drone-core/dist` had the new signature — three independent sources disagreed with the LSP. Touching the edited files forced the LSP to re-read, after which it reported clean. Lesson: for a multi-file change made by another process, do NOT trust an LSP snapshot as the authoritative gate; `tsc` + `grep` are the source of truth, and a `touch` resyncs the LSP. Corollary: the LSP's server-held buffer can lag the filesystem indefinitely; a stale \"failure\" is not evidence the change is broken, and a fresh \"clean\" is not evidence it is correct."
   }
 ]

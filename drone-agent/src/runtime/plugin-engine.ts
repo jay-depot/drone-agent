@@ -27,6 +27,7 @@ import {
   type DroneToolDefinition,
   type DroneToolExecutionContext,
   type DroneToolResult,
+  type DroneToolUnmountResult,
   type DroneWorkflow,
   type DroneWorkflowContext,
   type DroneWorkflowResult,
@@ -128,7 +129,7 @@ export type DronePluginEngine = {
   /** Mount a tool by canonical name (e.g. "file__read"). Returns the tool definition if newly mounted, else undefined. */
   mountTool: (canonicalName: string) => DroneToolDefinition | undefined;
   /** Unmount a mounted tool by canonical name. */
-  unmountTool: (canonicalName: string) => void;
+  unmountTool: (canonicalName: string) => DroneToolUnmountResult;
   /** List currently-mounted tools. */
   listMountedTools: () => DroneToolDescriptor[];
   getCapability: <T>(pluginId: string) => T | undefined;
@@ -587,7 +588,13 @@ export function createDronePluginEngine({
   function unmountTracked(
     canonicalName: string,
     opts?: { announce?: boolean }
-  ): void {
+  ): DroneToolUnmountResult {
+    const def = toolRegistry.get(canonicalName);
+    if (def?.preventUnmount) {
+      const reason = `${canonicalName} is an engine-owned tool and cannot be unmounted.`;
+      logger.warn(`refusing to unmount ${canonicalName}: engine-owned tool`);
+      return { unmounted: false, reason };
+    }
     toolRegistry.unmount(canonicalName);
     logToolChange('unmount', canonicalName);
     if (opts?.announce === false) {
@@ -595,6 +602,7 @@ export function createDronePluginEngine({
     } else {
       scheduleUnavailableNotice();
     }
+    return { unmounted: true };
   }
 
   /**
@@ -950,7 +958,7 @@ export function createDronePluginEngine({
         return mountTracked(canonicalName);
       },
       unmountTool: (canonicalName: string) => {
-        unmountTracked(canonicalName);
+        return unmountTracked(canonicalName);
       },
       listMountedTools: () => {
         return toolRegistry.listMounted();
@@ -1001,14 +1009,11 @@ export function createDronePluginEngine({
    * runtime__list_tools, runtime__mount_tool, runtime__unmount_tool.
    */
   function registerRuntimeMetaTools(): void {
-    const metaTools: Array<{
-      name: string;
-      description: string;
-      inputSchema: import('drone-core').DroneToolJsonSchema;
-      execute: (input: Record<string, unknown>) => Promise<string>;
-    }> = [
+    const metaTools: DroneToolDefinition[] = [
       {
         name: 'runtime__list_tools',
+        alwaysVisible: true,
+        preventUnmount: true,
         description:
           'List all registered tools and their mount status. Optionally filter by plugin (e.g. "file"). Pass includeSchemas=true to include input schemas.',
         inputSchema: {
@@ -1080,6 +1085,8 @@ export function createDronePluginEngine({
       },
       {
         name: 'runtime__mount_tool',
+        alwaysVisible: true,
+        preventUnmount: true,
         description:
           'Mount a tool by canonical name (e.g. "file__read"). Once mounted, the tool appears in your tool list with its full schema.',
         inputSchema: {
@@ -1138,6 +1145,8 @@ export function createDronePluginEngine({
       },
       {
         name: 'runtime__unmount_tool',
+        alwaysVisible: true,
+        preventUnmount: true,
         description:
           'Unmount a previously mounted tool by canonical name. Reduces clutter.',
         inputSchema: {
@@ -1160,7 +1169,14 @@ export function createDronePluginEngine({
             );
           }
 
-          unmountTracked(toolName, { announce: false });
+          const outcome = unmountTracked(toolName, { announce: false });
+          if (!outcome.unmounted) {
+            return JSON.stringify(
+              { success: false, tool: toolName, error: outcome.reason },
+              null,
+              2
+            );
+          }
           return JSON.stringify({ success: true, tool: toolName }, null, 2);
         },
       },

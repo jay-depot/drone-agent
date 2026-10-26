@@ -184,7 +184,7 @@ async function captureRegistration(
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
     mountTool: () => undefined,
-    unmountTool: () => {},
+    unmountTool: () => ({ unmounted: true }),
     listMountedTools: () =>
       mountedToolNames.map(name => ({
         name,
@@ -328,7 +328,7 @@ describe('createCompactionPlugin', () => {
         unregisterPluginTools: () => {},
         unregisterTool: () => {},
         mountTool: () => undefined,
-        unmountTool: () => {},
+        unmountTool: () => ({ unmounted: true }),
         listMountedTools: () => [],
         emitEvent: () => {},
         hooks: {

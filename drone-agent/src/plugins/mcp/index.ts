@@ -390,6 +390,7 @@ export const mcpPlugin: DronePlugin = {
           name: getCanonicalToolName('mcp', entry.definition.name),
           description: entry.definition.description,
           defaultHidden: false,
+          alwaysVisible: entry.definition.alwaysVisible,
         }));
         const visible = personaCap
           ? personaCap.getFilteredTools(descriptors)

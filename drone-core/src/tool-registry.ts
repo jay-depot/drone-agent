@@ -40,6 +40,7 @@ export class ToolRegistry {
         description: entry.definition.description,
         inputSchema: entry.definition.inputSchema,
         defaultHidden: entry.definition.defaultHidden,
+        alwaysVisible: entry.definition.alwaysVisible,
       });
     }
     return result;
@@ -102,6 +103,7 @@ export class ToolRegistry {
           description: entry.definition.description,
           inputSchema: entry.definition.inputSchema,
           defaultHidden: entry.definition.defaultHidden,
+          alwaysVisible: entry.definition.alwaysVisible,
         });
       }
     }
@@ -144,6 +146,7 @@ export class ToolRegistry {
         description: entry.definition.description,
         inputSchema: entry.definition.inputSchema,
         defaultHidden: entry.definition.defaultHidden,
+        alwaysVisible: entry.definition.alwaysVisible,
       });
     }
     return result;

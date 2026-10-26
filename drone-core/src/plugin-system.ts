@@ -31,6 +31,18 @@ export type DroneToolDefinition = {
    * be opt-in rather than always available.
    */
   defaultHidden?: boolean;
+  /**
+   * If true, this tool is exempt from the active persona's `allowedTools`
+   * inclusion patterns. An explicit `!` exclusion pattern still hides the
+   * tool. The engine sets this on its own meta-tools.
+   */
+  alwaysVisible?: boolean;
+  /**
+   * If true, the engine refuses to unmount this tool. The engine owns the
+   * tool and guarantees its presence. The unmount guard in `unmountTracked`
+   * reads this flag.
+   */
+  preventUnmount?: boolean;
   /** Optional custom React component for rendering in the TUI tail region. */
   renderComponent?: (
     state: import('./session-types.js').ToolRenderState
@@ -40,6 +52,15 @@ export type DroneToolDefinition = {
     onProgress?: (chunk: string) => void,
     context?: DroneToolExecutionContext
   ) => Promise<string | DroneToolResult>;
+};
+
+/**
+ * Result of an unmount request. `unmounted` is false when the engine refused
+ * the request. `reason` explains the refusal.
+ */
+export type DroneToolUnmountResult = {
+  unmounted: boolean;
+  reason?: string;
 };
 
 export type DronePromptFragment = {
@@ -196,7 +217,7 @@ export type DronePluginRegistration = {
    * if the tool is not found or not mounted. Used by plugins that manage
    * their own tool lifecycle (e.g. MCP plugin's unmount_tool).
    */
-  unmountTool: (canonicalName: string) => void;
+  unmountTool: (canonicalName: string) => DroneToolUnmountResult;
   /**
    * List all currently-mounted tools as `DroneToolDescriptor` objects.
    * Used by plugins that need to enumerate what is currently visible to
@@ -460,7 +481,7 @@ export type DroneSlashCommandContext = {
     /** Mount a tool by canonical name (for /tool mount). Returns the tool definition if newly mounted, else undefined. */
     mountTool?: (canonicalName: string) => DroneToolDefinition | undefined;
     /** Unmount a mounted tool by canonical name (for /tool unmount). */
-    unmountTool?: (canonicalName: string) => void;
+    unmountTool?: (canonicalName: string) => DroneToolUnmountResult;
     /** List currently-mounted tools (for /tool unmount --all). */
     listMountedTools?: () => import('./session-types.js').DroneToolDescriptor[];
     /** Get the total count of registered tools (for /tools). */

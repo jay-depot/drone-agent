@@ -49,7 +49,7 @@ function createCapture(): Capture {
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
     mountTool: () => undefined,
-    unmountTool: () => {},
+    unmountTool: () => ({ unmounted: true }),
     listMountedTools: () => [],
     emitEvent: (event: DroneConversationEvent) => events.push(event),
     hooks: {

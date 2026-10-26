@@ -185,4 +185,55 @@ describe('ToolRegistry', () => {
     expect(reg.getTotalCount()).toBe(3);
     expect(reg.getMountedCount()).toBe(1);
   });
+
+  it('listAll propagates alwaysVisible from the definition', () => {
+    const reg = new ToolRegistry();
+    reg.add('runtime__list_tools', {
+      ...makeTool('runtime__list_tools'),
+      alwaysVisible: true,
+    });
+    reg.add('file__read', makeTool('file__read'));
+
+    const all = reg.listAll();
+    const meta = all.find(t => t.name === 'runtime__list_tools');
+    const plain = all.find(t => t.name === 'file__read');
+    expect(meta?.alwaysVisible).toBe(true);
+    expect(plain?.alwaysVisible).toBeUndefined();
+  });
+
+  it('listMounted propagates alwaysVisible from the definition', () => {
+    const reg = new ToolRegistry();
+    reg.add('runtime__mount_tool', {
+      ...makeTool('runtime__mount_tool'),
+      alwaysVisible: true,
+    });
+    reg.add('file__read', makeTool('file__read'));
+    reg.mount('runtime__mount_tool');
+    reg.mount('file__read');
+
+    const mounted = reg.listMounted();
+    expect(
+      mounted.find(t => t.name === 'runtime__mount_tool')?.alwaysVisible
+    ).toBe(true);
+    expect(mounted.find(t => t.name === 'file__read')?.alwaysVisible).toBe(
+      undefined
+    );
+  });
+
+  it('listUnmountedWithSchemas propagates alwaysVisible from the definition', () => {
+    const reg = new ToolRegistry();
+    reg.add('runtime__list_tools', {
+      ...makeTool('runtime__list_tools'),
+      alwaysVisible: true,
+    });
+    reg.add('file__read', makeTool('file__read'));
+
+    const unmounted = reg.listUnmountedWithSchemas();
+    expect(
+      unmounted.find(t => t.name === 'runtime__list_tools')?.alwaysVisible
+    ).toBe(true);
+    expect(unmounted.find(t => t.name === 'file__read')?.alwaysVisible).toBe(
+      undefined
+    );
+  });
 });

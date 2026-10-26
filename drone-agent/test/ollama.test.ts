@@ -139,7 +139,7 @@ describe('ollama chat user-message injection', () => {
       unregisterPluginTools: () => {},
       unregisterTool: () => {},
       mountTool: () => undefined,
-      unmountTool: () => {},
+      unmountTool: () => ({ unmounted: true }),
       listMountedTools: () => [],
       emitEvent: () => {},
       hooks: {
@@ -511,7 +511,7 @@ describe('ollama DroneLlmError conversion', () => {
       unregisterPluginTools: () => {},
       unregisterTool: () => {},
       mountTool: () => undefined,
-      unmountTool: () => {},
+      unmountTool: () => ({ unmounted: true }),
       listMountedTools: () => [],
       emitEvent: () => {},
       hooks: {

@@ -244,14 +244,26 @@ const toolCommand: DroneSlashCommand = {
           ctx.logger.info('No mounted tools to unmount.');
           return true;
         }
+        const unmounted: string[] = [];
+        const skipped: string[] = [];
         for (const t of targets) {
-          ctx.engine.unmountTool(t.name);
+          const outcome = ctx.engine.unmountTool(t.name);
+          if (outcome.unmounted) {
+            unmounted.push(t.name);
+          } else {
+            skipped.push(t.name);
+          }
         }
-        ctx.logger.info(
-          `Unmounted ${targets.length} tool(s): ${targets
-            .map(t => t.name)
-            .join(', ')}`
-        );
+        if (unmounted.length > 0) {
+          ctx.logger.info(
+            `Unmounted ${unmounted.length} tool(s): ${unmounted.join(', ')}`
+          );
+        }
+        if (skipped.length > 0) {
+          ctx.logger.warn(
+            `Skipped ${skipped.length} protected tool(s): ${skipped.join(', ')}`
+          );
+        }
         return true;
       }
       const name = ctx.args[1];
@@ -261,8 +273,12 @@ const toolCommand: DroneSlashCommand = {
         );
         return true;
       }
-      ctx.engine.unmountTool(name);
-      ctx.logger.info(`Unmounted ${name}.`);
+      const outcome = ctx.engine.unmountTool(name);
+      if (!outcome.unmounted) {
+        ctx.logger.error(`Cannot unmount ${name}: ${outcome.reason}`);
+      } else {
+        ctx.logger.info(`Unmounted ${name}.`);
+      }
       return true;
     }
 

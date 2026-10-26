@@ -272,7 +272,16 @@ describe('/tool mount/unmount built-in command', () => {
         runHooks: async () => {},
         getCapability: <T>() => undefined as T,
         mountTool: name => registry.mount(name),
-        unmountTool: name => registry.unmount(name),
+        unmountTool: name => {
+          if (registry.get(name)?.preventUnmount) {
+            return {
+              unmounted: false,
+              reason: `${name} is an engine-owned tool and cannot be unmounted.`,
+            };
+          }
+          registry.unmount(name);
+          return { unmounted: true };
+        },
         listMountedTools: () => registry.listMounted(),
       },
     };
@@ -333,6 +342,24 @@ describe('/tool mount/unmount built-in command', () => {
     expect(registry.isMounted('file__write')).toBe(false);
     expect(registry.isMounted('runtime__mount_tool')).toBe(true);
     expect(logger.messages).toContain('Unmounted 1 tool(s): file__write');
+  });
+
+  it('refuses to unmount an engine-owned tool and keeps it mounted', async () => {
+    const { registry, ctx, logger } = makeRegistry();
+    registry.get('runtime__mount_tool')!.preventUnmount = true;
+    ctx.line = '/tool unmount runtime__mount_tool';
+    ctx.args = ['unmount', 'runtime__mount_tool'];
+
+    const result = await toolCmd.handler(ctx);
+    expect(result).toBe(true);
+    expect(registry.isMounted('runtime__mount_tool')).toBe(true);
+    expect(
+      logger.messages.some(
+        m =>
+          m.startsWith('Cannot unmount runtime__mount_tool:') &&
+          m.includes('engine-owned tool')
+      )
+    ).toBe(true);
   });
 
   it('still runs a tool directly when not a mount/unmount subcommand', async () => {
