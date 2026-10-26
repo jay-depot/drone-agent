@@ -1,6 +1,12 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SpawnDb } from '../src/spawner.js';
+import {
+  cleanupAllSpawns,
+  initSpawner,
+  spawnAgent,
+  terminateAgent,
+  type SpawnDb,
+} from '../src/spawner.js';
 
 const { spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -16,11 +22,15 @@ function createMockChildProcess() {
     stderr: EventEmitter;
     kill: ReturnType<typeof vi.fn>;
     killed: boolean;
+    exitCode: number | null;
+    signalCode: string | null;
   };
   child.stdout = new EventEmitter();
   child.stderr = new EventEmitter();
   child.kill = vi.fn();
   child.killed = false;
+  child.exitCode = null;
+  child.signalCode = null;
   return child;
 }
 
@@ -255,5 +265,124 @@ describe('spawner workingDir guard', () => {
 
     const [, args] = spawnMock.mock.calls[0] as [string, string[]];
     expect(args).not.toContain('--extension-hint');
+  });
+});
+
+describe('terminateAgent SIGKILL escalation', () => {
+  let db: SpawnDb;
+
+  beforeEach(() => {
+    spawnMock.mockReset();
+    db = {
+      createSpawn: vi.fn(() => ({ id: 'spawn-1', status: 'spawning' })),
+      updateSpawnStatus: vi.fn(),
+      getSpawn: vi.fn(() => undefined),
+      unregisterAgent: vi.fn(),
+    };
+    initSpawner(
+      {
+        agentPath: 'drone-agent',
+        timeoutMs: 60_000,
+        maxConcurrentSpawns: 2,
+        beaconHost: '127.0.0.1',
+        beaconPort: 4000,
+      },
+      db
+    );
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    cleanupAllSpawns();
+  });
+
+  async function spawnChild() {
+    const child = createMockChildProcess();
+    spawnMock.mockReturnValue(child);
+    await spawnAgent('spawn-1', 'agent-1', null, null, {});
+    return child;
+  }
+
+  it('SIGKILLs a SIGTERM-ignoring child after the grace period', async () => {
+    vi.useFakeTimers();
+    const child = await spawnChild();
+
+    expect(terminateAgent('spawn-1')).toBe(true);
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(child.kill).not.toHaveBeenCalledWith('SIGKILL');
+
+    await vi.advanceTimersByTimeAsync(5_000 - 1);
+    expect(child.kill).not.toHaveBeenCalledWith('SIGKILL');
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(child.kill).toHaveBeenCalledTimes(2);
+    expect(child.kill).toHaveBeenLastCalledWith('SIGKILL');
+  });
+
+  it('does not SIGKILL and clears the timer when the child exits during grace', async () => {
+    vi.useFakeTimers();
+    const child = await spawnChild();
+
+    terminateAgent('spawn-1');
+    await vi.advanceTimersByTimeAsync(3_000);
+    child.emit('exit', 0, null);
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(child.kill).toHaveBeenCalledTimes(1);
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(child.kill).not.toHaveBeenCalledWith('SIGKILL');
+  });
+
+  it('skips signalling and arming a timer for an already-exited child', async () => {
+    vi.useFakeTimers();
+    const child = await spawnChild();
+    child.exitCode = 0;
+
+    expect(terminateAgent('spawn-1')).toBe(true);
+    expect(child.kill).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(child.kill).not.toHaveBeenCalled();
+  });
+
+  it('force kills immediately without a grace timer', async () => {
+    vi.useFakeTimers();
+    const child = await spawnChild();
+
+    expect(terminateAgent('spawn-1', true)).toBe(true);
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(child.kill).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns false for an unknown spawn id', () => {
+    expect(terminateAgent('nope')).toBe(false);
+  });
+
+  it('unrefs the escalation timer so it cannot hold the process open', async () => {
+    const child = await spawnChild();
+    const unref = vi.fn();
+    const originalSetTimeout = globalThis.setTimeout;
+    let armedTimer: ReturnType<typeof setTimeout> | undefined;
+    const setTimeoutSpy = vi
+      .spyOn(globalThis, 'setTimeout')
+      .mockImplementation((callback, ms, ...args) => {
+        const timer = originalSetTimeout(callback, ms, ...args);
+        armedTimer = timer;
+        Object.defineProperty(timer, 'unref', {
+          value: unref,
+          configurable: true,
+        });
+        return timer;
+      });
+
+    terminateAgent('spawn-1');
+
+    expect(setTimeoutSpy).toHaveBeenCalled();
+    expect(unref).toHaveBeenCalledTimes(1);
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+    if (armedTimer) clearTimeout(armedTimer);
+    setTimeoutSpy.mockRestore();
   });
 });

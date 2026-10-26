@@ -11,6 +11,9 @@ export interface SpawnerConfig {
   beaconPort: number;
 }
 
+/** How long to wait after SIGTERM before escalating to SIGKILL. */
+const TERMINATE_GRACE_MS = 5000;
+
 export interface ManagedProcess {
   spawnId: string;
   process: ChildProcess;
@@ -254,21 +257,35 @@ export function terminateAgent(
   const { process } = managed;
   logger.info(`Terminating agent: ${spawnId}, force=${force}`);
 
+  // exitCode/signalCode are only set once the 'exit' event has fired; a second
+  // terminate call after that skips signalling entirely.
+  if (!force && (process.exitCode !== null || process.signalCode !== null)) {
+    logger.info(
+      `Agent ${spawnId} already exited (code=${process.exitCode}, signal=${process.signalCode}); skipping termination`
+    );
+    return true;
+  }
+
   if (force) {
     process.kill('SIGKILL');
-  } else {
-    process.kill('SIGTERM');
-    // Set a timeout to send SIGKILL if it doesn't exit
-    setTimeout(() => {
-      const stillActive = activeSpawns.get(spawnId);
-      if (stillActive && stillActive.process && !stillActive.process.killed) {
-        logger.warn(
-          `Agent ${spawnId} did not terminate gracefully, sending SIGKILL`
-        );
-        stillActive.process.kill('SIGKILL');
-      }
-    }, 5000);
+    return true;
   }
+
+  process.kill('SIGTERM');
+  // Escalate to SIGKILL only if the child has not actually exited by the end
+  // of the grace period. exitCode/signalCode stay null until the 'exit' event,
+  // so a SIGTERM-ignoring child is still killable here (unlike
+  // ChildProcess.killed, which flips true as soon as kill() is called).
+  const escalationTimer = setTimeout(() => {
+    if (process.exitCode === null && process.signalCode === null) {
+      logger.warn(
+        `Agent ${spawnId} did not terminate gracefully, sending SIGKILL`
+      );
+      process.kill('SIGKILL');
+    }
+  }, TERMINATE_GRACE_MS);
+  escalationTimer.unref();
+  process.once('exit', () => clearTimeout(escalationTimer));
 
   return true;
 }
