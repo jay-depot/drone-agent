@@ -78,7 +78,9 @@ function connect(): void {
     return;
   }
 
-  logger.info(`Connecting to coordinator reverse channel at ${coordinatorUrl}`);
+  logger.info(
+    `Connecting to coordinator reverse channel at ${coordinatorUrl} (client certificate: ${tlsIdentity ? 'present' : 'ABSENT'})`
+  );
   const protocol = coordinatorUrl.startsWith('https:') ? 'wss:' : 'ws:';
   const wsUrl = protocol + coordinatorUrl.slice(coordinatorUrl.indexOf('//'));
 
@@ -102,6 +104,8 @@ function connect(): void {
 
   ws.on('open', () => {
     logger.info('Connected to coordinator reverse channel');
+    // Successful open: reset reconnect backoff to its floor.
+    attempts = 0;
     // Post-reconnect (e.g. wake from sleep): re-announce the fingerprint
     // confirmation if the coordinator has not yet approved the beacon.
     announceFingerprint();

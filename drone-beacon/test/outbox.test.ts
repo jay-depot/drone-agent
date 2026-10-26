@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   initDatabase,
   closeDatabase,
+  getDatabase,
   enqueueOutbox,
   dequeueDueOutbox,
   countPendingOutbox,
@@ -12,9 +13,19 @@ import {
   markOutboxFailed,
   deleteOutboxEntry,
   OUTBOX_RETRY_BASE_MS,
+  type OutboxEntry,
 } from '../src/db/index.js';
+import { MAX_OUTBOX_BODY_BYTES } from '../src/db/outbox.js';
 import { createOutboxFlusher } from '../src/outbox-flusher.js';
 import { createServer, type Server } from 'node:http';
+
+/** Narrow an enqueueOutbox result so tests can use the entry directly. */
+function expectEnqueued(entry: OutboxEntry | undefined): OutboxEntry {
+  if (entry === undefined) {
+    throw new Error('expected the outbox entry to enqueue');
+  }
+  return entry;
+}
 
 describe('outbox db', () => {
   let dir: string;
@@ -30,17 +41,21 @@ describe('outbox db', () => {
   });
 
   it('enqueues and dequeues entries in createdAt order', () => {
-    const a = enqueueOutbox({
-      kind: 'pushEvents',
-      endpoint: '/api/sync/events/push',
-      method: 'POST',
-      body: { events: [{ id: 'e-1' }] },
-    });
-    const b = enqueueOutbox({
-      kind: 'endSwarmSession',
-      endpoint: '/api/sync/sessions/s-1',
-      method: 'DELETE',
-    });
+    const a = expectEnqueued(
+      enqueueOutbox({
+        kind: 'pushEvents',
+        endpoint: '/api/sync/events/push',
+        method: 'POST',
+        body: { events: [{ id: 'e-1' }] },
+      })
+    );
+    const b = expectEnqueued(
+      enqueueOutbox({
+        kind: 'endSwarmSession',
+        endpoint: '/api/sync/sessions/s-1',
+        method: 'DELETE',
+      })
+    );
     expect(a.id).toBeTruthy();
     expect(a.attempts).toBe(0);
     expect(a.deliveredAt).toBeNull();
@@ -52,25 +67,33 @@ describe('outbox db', () => {
   });
 
   it('marks entries delivered and clears pending count', () => {
-    const entry = enqueueOutbox({
-      kind: 'pushPersona',
-      endpoint: '/api/personas',
-      method: 'POST',
-      body: { id: 'p-1' },
-    });
+    const entry = expectEnqueued(
+      enqueueOutbox({
+        kind: 'pushPersona',
+        endpoint: '/api/personas',
+        method: 'POST',
+        body: { id: 'p-1' },
+      })
+    );
     markOutboxDelivered(entry.id);
     const pending = dequeueDueOutbox(10).find(e => e.id === entry.id);
     expect(pending).toBeUndefined();
     expect(countPendingOutbox(true)).toBe(0);
+    const row = getDatabase()
+      .prepare('SELECT * FROM outbox WHERE id = ?')
+      .get(entry.id);
+    expect(row).toBeUndefined();
   });
 
   it('applies exponential backoff between attempts', () => {
-    const entry = enqueueOutbox({
-      kind: 'pushSkill',
-      endpoint: '/api/skills',
-      method: 'POST',
-      body: { id: 'sk-1' },
-    });
+    const entry = expectEnqueued(
+      enqueueOutbox({
+        kind: 'pushSkill',
+        endpoint: '/api/skills',
+        method: 'POST',
+        body: { id: 'sk-1' },
+      })
+    );
     expect(dequeueDueOutbox(10)).toHaveLength(1);
 
     markOutboxFailed(entry.id, 'status 500');
@@ -90,13 +113,61 @@ describe('outbox db', () => {
     expect(countPendingOutbox()).toBe(0);
   });
 
-  it('delete removes entries outright', () => {
-    const entry = enqueueOutbox({
-      kind: 'pushKnowledge',
-      endpoint: '/api/sync/knowledge/push',
+  it('drops enqueue bodies over the size cap without inserting', () => {
+    const before = countPendingOutbox(true);
+    const dropped = enqueueOutbox({
+      kind: 'pushEvents',
+      endpoint: '/api/sync/events/push',
       method: 'POST',
-      body: { id: 'k-1' },
+      body: { x: 'a'.repeat(MAX_OUTBOX_BODY_BYTES + 10) },
     });
+    expect(dropped).toBeUndefined();
+    expect(countPendingOutbox(true)).toBe(before);
+  });
+
+  it('accepts enqueue bodies just under the size cap', () => {
+    const accepted = expectEnqueued(
+      enqueueOutbox({
+        kind: 'pushEvents',
+        endpoint: '/api/sync/events/push',
+        method: 'POST',
+        body: { x: 'a'.repeat(MAX_OUTBOX_BODY_BYTES - 100) },
+      })
+    );
+    expect(accepted).toBeDefined();
+    expect(countPendingOutbox(true)).toBe(1);
+  });
+
+  it('returns at most limit entries, oldest first', () => {
+    const entries: OutboxEntry[] = [];
+    for (let i = 0; i < 5; i++) {
+      entries.push(
+        expectEnqueued(
+          enqueueOutbox({
+            kind: 'pushEvents',
+            endpoint: `/api/sync/events/push-${i}`,
+            method: 'POST',
+            body: { seq: i },
+          })
+        )
+      );
+    }
+    const sorted = [...entries].sort((a, b) => a.createdAt - b.createdAt);
+    const batch = dequeueDueOutbox(3);
+    expect(batch).toHaveLength(3);
+    expect(batch.map(e => e.id)).toEqual(sorted.slice(0, 3).map(e => e.id));
+    expect(countPendingOutbox(true)).toBe(5);
+  });
+
+  it('delete removes entries outright', () => {
+    const entry = expectEnqueued(
+      enqueueOutbox({
+        kind: 'pushKnowledge',
+        endpoint: '/api/sync/knowledge/push',
+        method: 'POST',
+        body: { id: 'k-1' },
+      })
+    );
     deleteOutboxEntry(entry.id);
     expect(countPendingOutbox(true)).toBe(0);
   });

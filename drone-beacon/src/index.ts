@@ -96,7 +96,7 @@ const DEFAULT_MAX_CONCURRENT_SPAWNS = 10;
 const DEFAULT_SYNC_INTERVAL_MINUTES = 5;
 const DEFAULT_RATE_LIMIT_MAX = 1000;
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 60000;
-const DEFAULT_COMMAND_TIMEOUT_MS = 30000;
+const DEFAULT_COMMAND_TIMEOUT_MS = 300000;
 
 interface Config {
   port: number;
@@ -285,7 +285,11 @@ async function main() {
     configureSessionEndHook({
       trigger: config.sessionEnd,
       beaconId: config.beaconId,
-      commandTimeoutMs: DEFAULT_COMMAND_TIMEOUT_MS,
+      commandTimeoutMs:
+        config.sessionEnd.type === 'command' &&
+        config.sessionEnd.commandTimeoutMs !== undefined
+          ? config.sessionEnd.commandTimeoutMs
+          : DEFAULT_COMMAND_TIMEOUT_MS,
     });
     logger.info('Session-end hook configured');
   }
