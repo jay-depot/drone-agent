@@ -5,6 +5,7 @@ import * as db from '../db/index.js';
 import * as spawner from '../spawner.js';
 import { isAgentConnected, sendToAgent } from '../ws-server.js';
 import { getSpawnLiveness } from '../spawn-reconcile.js';
+import { sleep } from '../util.js';
 import {
   getDefaultSpawnRoot,
   getSpawnRoots,
@@ -138,10 +139,6 @@ export interface TerminateTiming {
 const DEFAULT_STAGE1_GRACE_MS = 5000;
 const DEFAULT_STAGE2_GRACE_MS = 5000;
 const DEFAULT_POLL_INTERVAL_MS = 100;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 function isPidAlive(pid: number): boolean {
   try {

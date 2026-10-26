@@ -53,6 +53,34 @@ pnpm start
 | `--rate-limit-window-ms`            | 60000                        | Rate limit window in milliseconds                                  |
 | `--help`                            | -                            | Show help message                                                  |
 
+## Configuration
+
+`--config-file` loads a JSON config file (flags override file values). Alongside
+the server keys, the beacon accepts a `wikiIndex` block that tunes the wiki
+re-index schedule:
+
+```json
+{
+  "wikiIndex": {
+    "sweepIntervalMs": 300000,
+    "pacingMs": 50,
+    "writeReindexDebounceMs": 5000
+  }
+}
+```
+
+| Key                      | Default | Meaning                                                                                                                                         |
+| ------------------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sweepIntervalMs`        | 300000  | Interval between periodic wiki sweeps (ms). Each sweep lists the merged beacon + coordinator corpus and re-indexes only the pages that changed. |
+| `pacingMs`               | 50      | Delay between coordinator page fetches inside one sweep (ms). Paces the sweep's request rate against the coordinator.                           |
+| `writeReindexDebounceMs` | 5000    | Write bursts coalesce: repeated local wiki writes inside this window cause one re-index, not one per write.                                     |
+
+The sweep skips unchanged pages **before** fetching them: a page whose id,
+origin, and `updatedAt` still match the stored hash (salted with the embedding
+fingerprint) is not downloaded. A sweep cannot overlap the previous sweep. After
+the first full re-index, a steady-state sweep makes exactly one request (the
+listing) when no page changed.
+
 ## API Endpoints
 
 ### Health

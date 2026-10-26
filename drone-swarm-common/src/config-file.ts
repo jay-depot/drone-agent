@@ -61,6 +61,25 @@ export interface RankingConfig {
 }
 
 /**
+ * Beacon-global wiki index schedule. Controls how often the merged wiki is
+ * re-indexed, how much the sweep paces its fetches, and how write bursts
+ * coalesce into one re-index.
+ */
+export interface WikiIndexConfig {
+  sweepIntervalMs: number;
+  pacingMs: number;
+  writeReindexDebounceMs: number;
+}
+
+export function defaultWikiIndexConfig(): WikiIndexConfig {
+  return {
+    sweepIntervalMs: 5 * 60 * 1000,
+    pacingMs: 50,
+    writeReindexDebounceMs: 5000,
+  };
+}
+
+/**
  * Default ranking, matching the values the agent used to hold so that moving
  * ranking to the beacon does not silently change result ordering.
  */
@@ -90,6 +109,7 @@ export interface ServerConfigFile {
   spawnRoots?: SpawnRootsConfig;
   embedding?: EmbeddingConfig;
   ranking?: RankingConfig;
+  wikiIndex?: WikiIndexConfig;
   [key: string]: unknown;
 }
 
@@ -105,6 +125,7 @@ const ALLOWED_KEYS: ReadonlySet<string> = new Set([
   'spawnRoots',
   'embedding',
   'ranking',
+  'wikiIndex',
 ]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -287,6 +308,33 @@ function validateRanking(ranking: unknown, errors: string[]): void {
   validateRankingAnchors(ranking.anchors, errors);
 }
 
+const WIKI_INDEX_NUMERIC_KEYS = [
+  'sweepIntervalMs',
+  'pacingMs',
+  'writeReindexDebounceMs',
+] as const;
+
+function validateWikiIndex(wikiIndex: unknown, errors: string[]): void {
+  if (!isPlainObject(wikiIndex)) {
+    errors.push('"wikiIndex" must be an object');
+    return;
+  }
+  for (const key of Object.keys(wikiIndex)) {
+    if (!(WIKI_INDEX_NUMERIC_KEYS as readonly string[]).includes(key)) {
+      errors.push(`unknown key "wikiIndex.${key}"`);
+    }
+  }
+  for (const key of WIKI_INDEX_NUMERIC_KEYS) {
+    if (
+      wikiIndex[key] !== undefined &&
+      (typeof wikiIndex[key] !== 'number' ||
+        !Number.isFinite(wikiIndex[key] as number))
+    ) {
+      errors.push(`"wikiIndex.${key}" must be a finite number`);
+    }
+  }
+}
+
 /**
  * Validate a parsed config file object, returning a list of error strings
  * (empty when valid).
@@ -334,6 +382,9 @@ export function validateConfigFile(value: unknown): string[] {
   }
   if (value.ranking !== undefined) {
     validateRanking(value.ranking, errors);
+  }
+  if (value.wikiIndex !== undefined) {
+    validateWikiIndex(value.wikiIndex, errors);
   }
   return errors;
 }

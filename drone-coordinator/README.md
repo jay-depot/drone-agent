@@ -44,9 +44,11 @@ pnpm start
 | `--db`                   | <config-dir>/drone-coordinator.db | Path to SQLite database                                            |
 | `--https`                | true                              | Enable HTTPS server (ON unless `--no-https`)                       |
 | `--no-https`             | -                                 | Disable HTTPS server                                               |
-| `--rate-limit-max`       | 100                               | Max requests per IP per window                                     |
+| `--rate-limit-max`       | 1000                              | Max requests per client per window                                 |
 | `--rate-limit-window-ms` | 1000                              | Rate limit window in ms                                            |
 | `--help`                 | -                                 | Show help message                                                  |
+
+The limit is per client. The client is the resolved node id, or the IP address when the node is unknown.
 
 ### Commands
 
@@ -229,7 +231,7 @@ Agent A (Beacon 1) → POST /messages/relay → Coordinator → Beacon 2 → Age
 - **fastify** - HTTP server
 - **@fastify/static** - Static file serving for web UI
 - **@fastify/cors** - CORS support
-- **@fastify/rate-limit** - Per-IP rate limiting
+- **@fastify/rate-limit** - Per-client rate limiting
 - **@fastify/websocket** - WebSocket support
 - **better-sqlite3** - SQLite database
 - **drone-coordinator-ui** - The React web UI served by the coordinator

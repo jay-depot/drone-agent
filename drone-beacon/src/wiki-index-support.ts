@@ -1,4 +1,4 @@
-import { listPages } from 'drone-swarm-common';
+import { defaultWikiIndexConfig, listPages } from 'drone-swarm-common';
 import type { DroneWikiPageMeta } from 'drone-core';
 
 import { logger } from './logger.js';
@@ -62,11 +62,13 @@ export async function collectWikiPages(): Promise<CollectedWikiPages> {
 export async function runWikiIndexCycle(
   indexer: WikiIndexer
 ): Promise<WikiIndexResult | null> {
-  const { pages, coordinatorReachable } = await collectWikiPages();
-  const reconcileOrigins: WikiPageInput['origin'][] = coordinatorReachable
-    ? ['beacon', 'coordinator']
-    : ['beacon'];
-  return indexer.indexWiki(pages, reconcileOrigins);
+  return indexer.runCycle(async () => {
+    const { pages, coordinatorReachable } = await collectWikiPages();
+    const reconcileOrigins: WikiPageInput['origin'][] = coordinatorReachable
+      ? ['beacon', 'coordinator']
+      : ['beacon'];
+    return indexer.indexWiki(pages, reconcileOrigins);
+  });
 }
 
 // ── Module-level indexer accessor ──────────────────────────────────────
@@ -81,14 +83,36 @@ export function getWikiIndexer(): WikiIndexer | undefined {
   return wikiIndexer;
 }
 
+let reindexDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let writeReindexDebounceMs = defaultWikiIndexConfig().writeReindexDebounceMs;
+
+export function setWikiReindexDebounceMs(ms: number): void {
+  writeReindexDebounceMs = ms;
+}
+
 /**
- * Fire-and-forget hook body: re-index after a local wiki write/delete.
- * Errors are contained — indexing must never break the HTTP route.
+ * Coalesce a burst of local wiki writes into one index cycle. Repeated calls
+ * inside the window reset the timer, so N writes cause one sweep. The timer is
+ * unref'd so a pending reindex can never hold the process open past shutdown.
  */
 export function triggerWikiReindex(): void {
-  const indexer = getWikiIndexer();
-  if (!indexer) return;
-  runWikiIndexCycle(indexer).catch(err => {
-    logger.warn(`Wiki index: post-write reindex failed: ${err}`);
-  });
+  if (reindexDebounceTimer) clearTimeout(reindexDebounceTimer);
+  reindexDebounceTimer = setTimeout(() => {
+    reindexDebounceTimer = null;
+    const indexer = getWikiIndexer();
+    if (!indexer) return;
+    runWikiIndexCycle(indexer)
+      .then(result => {
+        if (result === null) {
+          // A periodic sweep holds the in-flight guard, so this write was not
+          // indexed. Re-arm through the same debounce delay so the write is
+          // picked up once the running sweep finishes — never a tight loop.
+          triggerWikiReindex();
+        }
+      })
+      .catch(err => {
+        logger.warn(`Wiki index: post-write reindex failed: ${err}`);
+      });
+  }, writeReindexDebounceMs);
+  reindexDebounceTimer.unref();
 }

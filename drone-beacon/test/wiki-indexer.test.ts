@@ -11,6 +11,7 @@ import {
 } from '../src/db/index.js';
 import { WikiIndexer } from '../src/wiki-indexer.js';
 import type { WikiPageInput, WikiIndexResult } from '../src/wiki-indexer.js';
+import { runWikiIndexCycle } from '../src/wiki-index-support.js';
 import {
   countWikiFtsRows,
   hasWikiFtsRows,
@@ -19,6 +20,33 @@ import {
   writePage,
 } from '../../drone-swarm-common/src/index.js';
 import { NOMIC_EMBED_TEXT_V1_5, type DroneEmbeddingProvider } from 'drone-core';
+
+const proxyWikiToCoordinator = vi.fn();
+
+const { sleepSpy } = vi.hoisted(() => ({ sleepSpy: vi.fn() }));
+
+vi.mock('../src/util.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../src/util.js')>();
+  return {
+    ...actual,
+    // Record the requested delay but resolve immediately so the pacing test
+    // runs at full speed.
+    sleep: (ms: number) => {
+      sleepSpy(ms);
+      return actual.sleep(0);
+    },
+  };
+});
+
+vi.mock('../src/routes/context.js', async importOriginal => {
+  const actual =
+    await importOriginal<typeof import('../src/routes/context.js')>();
+  return {
+    ...actual,
+    proxyWikiToCoordinator: (...args: unknown[]) =>
+      proxyWikiToCoordinator(...args),
+  };
+});
 
 function fakeEmbedding(activeIndex: number): Float32Array {
   const v = new Float32Array(768);
@@ -88,6 +116,8 @@ describe('WikiIndexer', () => {
     await setupDb();
     const kbDir = await mkdtemp(path.join(os.tmpdir(), 'wiki-kb-'));
     setKnowledgeBaseDir(kbDir);
+    proxyWikiToCoordinator.mockReset();
+    sleepSpy.mockReset();
   });
 
   afterEach(async () => {
@@ -280,6 +310,121 @@ describe('WikiIndexer', () => {
         s => s.page_id === 'fragments-guide' && s.origin === 'coordinator'
       )
     ).toBeUndefined();
+  });
+
+  it('skips a coordinator page before fetching it when updatedAt is unchanged', async () => {
+    const pageFetches: string[] = [];
+    proxyWikiToCoordinator.mockImplementation(
+      async (method: string, p: string) => {
+        if (method === 'GET' && p === '/wiki/fragments-guide') {
+          pageFetches.push(p);
+          return {
+            ...COORDINATOR_PAGE_META,
+            content: '# Coordinator body\n\nCoordinator details.',
+          };
+        }
+        return null;
+      }
+    );
+
+    const indexer = new WikiIndexer(makeProvider());
+    const pages: WikiPageInput[] = [
+      { page: COORDINATOR_PAGE_META, origin: 'coordinator' },
+    ];
+
+    const first = await indexer.indexWiki(pages);
+    expect(first.pagesIndexed).toBe(1);
+    expect(pageFetches).toHaveLength(1);
+
+    // Same updatedAt → the skip test runs BEFORE any fetch, so no extra GET.
+    const second = await indexer.indexWiki(pages);
+    expect(second.pagesSkipped).toBe(1);
+    expect(second.pagesIndexed).toBe(0);
+    expect(pageFetches).toHaveLength(1);
+
+    // A new updatedAt must trigger the fetch again.
+    const changed = {
+      ...COORDINATOR_PAGE_META,
+      updatedAt: '2026-04-01T00:00:00Z',
+    };
+    const third = await indexer.indexWiki([
+      { page: changed, origin: 'coordinator' },
+    ]);
+    expect(third.pagesIndexed).toBe(1);
+    expect(pageFetches).toHaveLength(2);
+  });
+
+  it('paces only the coordinator fetches that actually happen', async () => {
+    proxyWikiToCoordinator.mockImplementation(
+      async (method: string, p: string) => {
+        if (method === 'GET' && p === '/wiki/fragments-guide') {
+          return {
+            ...COORDINATOR_PAGE_META,
+            content: '# Coordinator body\n\nCoordinator details.',
+          };
+        }
+        return null;
+      }
+    );
+
+    const indexer = new WikiIndexer(makeProvider(), 5 * 60 * 1000, '', 50);
+    const pages: WikiPageInput[] = [
+      { page: COORDINATOR_PAGE_META, origin: 'coordinator' },
+    ];
+
+    // A coordinator page with no inline content is fetched lazily, so its
+    // fetch is paced by pacingMs to avoid hammering the coordinator.
+    const first = await indexer.indexWiki(pages);
+    expect(first.pagesIndexed).toBe(1);
+    expect(sleepSpy).toHaveBeenCalledTimes(1);
+    expect(sleepSpy).toHaveBeenCalledWith(50);
+
+    // The unchanged page is skipped by the hash test BEFORE the fetch, so it
+    // is not paced at all.
+    const second = await indexer.indexWiki(pages);
+    expect(second.pagesSkipped).toBe(1);
+    expect(sleepSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a second cycle while the first is still in flight', async () => {
+    let pageFetches = 0;
+    proxyWikiToCoordinator.mockImplementation(
+      async (method: string, p: string) => {
+        if (method === 'GET' && p === '/wiki') return [COORDINATOR_PAGE_META];
+        if (method === 'GET' && p === '/wiki/fragments-guide') {
+          pageFetches++;
+          return {
+            ...COORDINATOR_PAGE_META,
+            content: '# Coordinator body\n\nCoordinator details.',
+          };
+        }
+        return null;
+      }
+    );
+
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const base = makeProvider();
+    const provider: DroneEmbeddingProvider = {
+      ...base,
+      embedDocument: async (text: string) => {
+        await gate;
+        return base.embedDocument(text);
+      },
+    };
+    const indexer = new WikiIndexer(provider, 5 * 60 * 1000, '', 0);
+
+    const first = runWikiIndexCycle(indexer);
+    const second = await runWikiIndexCycle(indexer);
+    expect(second).toBeNull();
+
+    release();
+    const firstResult = await first;
+    expect(firstResult?.pagesIndexed).toBe(1);
+    // The second cycle was a no-op: the page was fetched exactly once.
+    expect(pageFetches).toBe(1);
   });
 
   describe('keyword (FTS) index', () => {
