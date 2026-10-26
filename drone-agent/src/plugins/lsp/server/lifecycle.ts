@@ -71,10 +71,12 @@ export function createInFlightDedup<K>(): {
 
 /**
  * Kill a spawned LSP server child: send SIGTERM, then race the child's
- * 'close' event against a grace timer. A child that ignores SIGTERM is
- * escalated to SIGKILL so shutdown can never leave a lingering process.
- * Resolves once the child has closed (bounded by the grace window); a
- * child that already exited resolves immediately.
+ * 'exit' event against a grace timer, escalating to SIGKILL at `graceMs`
+ * and resolving unconditionally at `graceMs + 1000` as a hard fallback.
+ * Resolving on 'exit' (not 'close') matters because a D-state
+ * (uninterruptible-sleep) child never emits 'close'; the fallback timer
+ * guarantees the promise cannot hang even when the child ignores both
+ * SIGTERM and SIGKILL. A child that already exited resolves immediately.
  */
 export function killWithEscalation(
   child: ChildProcess,
@@ -90,18 +92,27 @@ export function killWithEscalation(
         return;
       }
       settled = true;
+      clearTimeout(graceTimer);
+      clearTimeout(fallbackTimer);
+      child.removeListener('exit', onExit);
       resolve();
     };
 
-    child.once('close', () => {
-      clearTimeout(timer);
+    const onExit = (): void => {
       finish();
-    });
-    child.kill();
-    const timer = setTimeout(() => {
+    };
+    child.on('exit', onExit);
+
+    const graceTimer = setTimeout(() => {
       if (!settled) {
         child.kill('SIGKILL');
       }
     }, graceMs);
+
+    const fallbackTimer = setTimeout(() => {
+      finish();
+    }, graceMs + 1000);
+
+    child.kill();
   });
 }

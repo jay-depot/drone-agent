@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { timingSafeEqualStrings } from 'drone-swarm-common';
 import { createGunzip } from 'node:zlib';
-import { execFile } from 'node:child_process';
+import { execFile, type ChildProcess } from 'node:child_process';
 import { commandExistsOnPath } from 'drone-core';
 import type {
   DroneLspInstallSpec,
@@ -23,16 +23,122 @@ import path from 'node:path';
 import process from 'node:process';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { promisify } from 'node:util';
 import { extract as extractTar } from 'tar';
-
-const execFileAsync = promisify(execFile);
 
 const CACHE_DIR_ENV = 'DRONE_AGENT_LSP_CACHE';
 const CACHE_SUBDIR = 'lsp';
 
 const DOWNLOAD_MAX_ATTEMPTS = 3;
 const DOWNLOAD_RETRY_DELAY_MS = 500;
+
+const installKillGraceMs = 2000;
+
+/**
+ * In-flight installer child processes (npm install, go build). Tracked so
+ * a shutdown can terminate them instead of leaving the event loop alive.
+ */
+const runningInstalls = new Set<ChildProcess>();
+
+/**
+ * Track a spawned installer child in `runningInstalls`. The child is
+ * removed on 'exit' so completed installs do not accumulate. Returns the
+ * same child so call sites can chain it directly.
+ */
+export function trackInstallChild(child: ChildProcess): ChildProcess {
+  runningInstalls.add(child);
+  child.once('exit', () => {
+    runningInstalls.delete(child);
+  });
+  return child;
+}
+
+/**
+ * Kill a child with SIGTERM, escalating to SIGKILL after `graceMs` and
+ * resolving unconditionally another second later so the promise can never
+ * hang (a D-state child ignores both signals and never emits 'exit').
+ * Mirrors `killWithEscalation` in lifecycle.ts; duplicated here because
+ * importing across would create a cycle.
+ */
+function killChildWithEscalation(
+  child: ChildProcess,
+  graceMs: number
+): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return Promise.resolve();
+  }
+  return new Promise<void>(resolve => {
+    let settled = false;
+    const finish = (): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(graceTimer);
+      clearTimeout(fallbackTimer);
+      child.removeListener('exit', onExit);
+      resolve();
+    };
+
+    const onExit = (): void => {
+      finish();
+    };
+    child.on('exit', onExit);
+
+    const graceTimer = setTimeout(() => {
+      if (!settled) {
+        child.kill('SIGKILL');
+      }
+    }, graceMs);
+
+    const fallbackTimer = setTimeout(() => {
+      finish();
+    }, graceMs + 1000);
+
+    child.kill();
+  });
+}
+
+/**
+ * Terminate every in-flight installer child, escalating to SIGKILL and
+ * bounding the wait so shutdown cannot hang on an unkillable install.
+ * Always resolves.
+ */
+export async function killRunningInstalls(): Promise<void> {
+  if (runningInstalls.size === 0) {
+    return;
+  }
+  await Promise.all(
+    Array.from(runningInstalls, child =>
+      killChildWithEscalation(child, installKillGraceMs).finally(() => {
+        runningInstalls.delete(child);
+      })
+    )
+  );
+}
+
+/**
+ * Run a child process with its spawn handle recorded in
+ * `runningInstalls`, resolving once it exits. Rejects with an `Error`
+ * carrying `code`/`signal`/`stdout`/`stderr` — the same shape
+ * `util.promisify` gives for `execFile`. The child is untracked on exit.
+ */
+function runTrackedInstall(
+  file: string,
+  args: string[],
+  options: { cwd: string }
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    trackInstallChild(
+      execFile(file, args, options, (error, stdout, stderr) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve({ stdout, stderr });
+      })
+    );
+  });
+}
 
 /**
  * A description of how a server should be invoked after the installer runs.
@@ -581,7 +687,7 @@ export async function ensureServerInstalled(
     // install time so that `require('vscode-languageserver/node')` works.
     if (spec.install.type === 'npm') {
       try {
-        await execFileAsync(
+        await runTrackedInstall(
           'npm',
           [
             'install',
@@ -590,9 +696,7 @@ export async function ensureServerInstalled(
             '--no-fund',
             '--no-package-lock',
           ],
-          {
-            cwd: cacheDir,
-          }
+          { cwd: cacheDir }
         );
       } catch (installError) {
         throw new Error(
@@ -608,7 +712,7 @@ export async function ensureServerInstalled(
     if (spec.install.type === 'go') {
       const entryPoint = spec.install.entryPoint ?? spec.command;
       try {
-        await execFileAsync('go', ['build', '-o', entryPoint], {
+        await runTrackedInstall('go', ['build', '-o', entryPoint], {
           cwd: cacheDir,
         });
       } catch (buildError) {

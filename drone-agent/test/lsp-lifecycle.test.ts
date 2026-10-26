@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import {
   CrashGuard,
   createInFlightDedup,
@@ -214,7 +215,31 @@ describe('createInFlightDedup', () => {
   });
 });
 
+class FakeChild extends EventEmitter {
+  exitCode: number | null = null;
+  signalCode: NodeJS.Signals | null = null;
+  killCalls: (string | undefined)[] = [];
+  kill(signal?: string | number): boolean {
+    this.killCalls.push(signal === undefined ? undefined : String(signal));
+    return true;
+  }
+}
+
 describe('killWithEscalation', () => {
+  it('resolves via the hard fallback when the child ignores SIGTERM and SIGKILL', async () => {
+    // A child that never emits 'exit' (worst case: a D-state process) must
+    // not hang the promise: the fallback timer resolves it at graceMs + 1000.
+    const child = new FakeChild();
+    const start = Date.now();
+    await killWithEscalation(child as unknown as ChildProcess, 150);
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeGreaterThanOrEqual(1100);
+    // Zero-arg kill() sends SIGTERM; the grace timer escalates to SIGKILL.
+    expect(child.killCalls).toEqual([undefined, 'SIGKILL']);
+    // Timers and listeners must be cleaned up on resolve.
+    expect(child.listenerCount('exit')).toBe(0);
+  }, 10_000);
+
   it('resolves when the child exits on the initial kill', async () => {
     const fake = await startFakeLspServer({ respondToInitialize: true });
     try {
