@@ -17,9 +17,12 @@
  *   FAKE_MCP_NOTIFY_ON_TOOL_NAME  tool name that triggers a notification
  *   FAKE_MCP_NOTIFY_MESSAGE_ON_TOOL_NAME  tool name that triggers a notifications/message
  *   FAKE_MCP_NOTIFY_METHOD        notification method to send (default: notifications/tools/list_changed)
+ *   FAKE_MCP_HANG_FILE            absolute path; when it exists, initialize never responds
+ *   FAKE_MCP_SLOW_EXIT_MS         delay (ms) before the child exits on any termination signal
  */
 
 import process from 'node:process';
+import { existsSync } from 'node:fs';
 
 function parseEnvTools() {
   if (process.env.FAKE_MCP_TOOLS_FULL) {
@@ -43,6 +46,16 @@ const NOTIFY_MESSAGE_ON_TOOL =
   process.env.FAKE_MCP_NOTIFY_MESSAGE_ON_TOOL_NAME || '';
 const NOTIFY_METHOD =
   process.env.FAKE_MCP_NOTIFY_METHOD || 'notifications/tools/list_changed';
+const HANG_FILE = process.env.FAKE_MCP_HANG_FILE || '';
+const SLOW_EXIT_MS = Number(process.env.FAKE_MCP_SLOW_EXIT_MS || '0');
+
+function exitAfterDelay() {
+  if (SLOW_EXIT_MS > 0) {
+    setTimeout(() => process.exit(0), SLOW_EXIT_MS);
+    return;
+  }
+  process.exit(0);
+}
 
 const RESOURCES = [
   { uri: 'file:///a.txt', name: 'a', description: 'Resource A' },
@@ -84,6 +97,12 @@ function handleRequest(method, id, params) {
       if (CRASH_ON_INIT) {
         // Simulate a server that can't initialize: exit the process.
         process.exit(1);
+      }
+      if (HANG_FILE && existsSync(HANG_FILE)) {
+        // Simulate an initialize that never completes (a hung respawn). The
+        // client must still kill this child on disconnect even though it was
+        // never promoted to the active childProcess.
+        return;
       }
       respond(id, {
         protocolVersion: '2024-11-05',
@@ -200,7 +219,7 @@ function parseBuffer() {
     // Notifications (no id). The MCP `exit` notification means the server
     // should terminate itself so the client's graceful shutdown is fast.
     if (message.method === 'exit' && message.id === undefined) {
-      process.exit(0);
+      exitAfterDelay();
     }
     // notifications (no id) are ignored
   }
@@ -212,8 +231,8 @@ process.stdin.on('data', chunk => {
 });
 
 process.stdin.on('end', () => {
-  process.exit(0);
+  exitAfterDelay();
 });
 
-process.on('SIGTERM', () => process.exit(0));
-process.on('SIGINT', () => process.exit(0));
+process.on('SIGTERM', () => exitAfterDelay());
+process.on('SIGINT', () => exitAfterDelay());

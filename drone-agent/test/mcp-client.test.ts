@@ -976,6 +976,35 @@ describe('streamable-HTTP GET SSE stream + DELETE termination (point 8)', () => 
     expect(conn.state.status).toBe('disconnected');
     expect(errors.some(e => e.includes('DELETE failed'))).toBe(true);
   });
+
+  it('disconnect() aborts the GET SSE stream via the owned controller (no request-timeout on GET)', async () => {
+    const errors: string[] = [];
+    const mock = createMockFetch({ sessionId: 'sess-xyz' });
+    installFetch(mock);
+    const conn = await makeConnection(
+      mock,
+      {},
+      { requestTimeoutMs: 60 },
+      {
+        onStreamError: (message: string) => {
+          errors.push(message);
+        },
+      }
+    );
+    const firstGet = mock.requests.find(r => r.method === 'GET');
+    expect(firstGet).toBeDefined();
+    expect(firstGet!.signal).toBeDefined();
+    expect(firstGet!.signal!.aborted).toBe(false);
+
+    // Wait well past the per-request timeout. The owned controller is not
+    // tied to requestTimeoutMs, so the stream must not self-abort.
+    await new Promise(resolve => setTimeout(resolve, 200));
+    expect(firstGet!.signal!.aborted).toBe(false);
+    expect(errors).toHaveLength(0);
+
+    await conn.disconnect();
+    expect(firstGet!.signal!.aborted).toBe(true);
+  });
 });
 
 describe('splitToolResultBlocks', () => {

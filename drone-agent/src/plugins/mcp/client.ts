@@ -724,6 +724,7 @@ function createStreamableHttpJsonRpcClient(options: {
 }): JsonRpcClient {
   let nextId = 1;
   let closed = false;
+  const streamAbort = new AbortController();
   let sessionId: string | undefined;
   let negotiatedProtocolVersion = '2025-06-18';
   let requestTimeoutMs = options.requestTimeoutMs;
@@ -740,7 +741,7 @@ function createStreamableHttpJsonRpcClient(options: {
             'MCP-Protocol-Version': negotiatedProtocolVersion,
             ...options.headers,
           },
-          signal: AbortSignal.timeout(requestTimeoutMs),
+          signal: streamAbort.signal,
         });
 
         if (!response.ok || !response.body) {
@@ -826,6 +827,9 @@ function createStreamableHttpJsonRpcClient(options: {
         }
       }
     }
+    // The stream loop has exited (disconnect or fatal drop); release the
+    // owned signal so no fetch handles linger.
+    streamAbort.abort();
   }
 
   async function handleHttpRequest(
@@ -968,6 +972,9 @@ function createStreamableHttpJsonRpcClient(options: {
     },
     disconnect: () => {
       closed = true;
+      // Abort the long-lived GET SSE stream so its fetch/reader handles are
+      // released instead of keeping the event loop alive.
+      streamAbort.abort();
       // Best-effort DELETE to terminate the session server-side. Non-blocking
       // so disconnect() keeps its synchronous signature; failures are logged
       // via onStreamError but never throw.
@@ -1217,6 +1224,18 @@ export async function createMcpClientConnection(options: {
 
   let childProcess: ChildProcessWithoutNullStreams | undefined;
   let closed = false;
+  const spawnedChildren = new Set<ChildProcessWithoutNullStreams>();
+
+  function trackChild(child: ChildProcessWithoutNullStreams): void {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return;
+    }
+    spawnedChildren.add(child);
+    child.once('exit', () => {
+      spawnedChildren.delete(child);
+    });
+  }
+
   let rpc: JsonRpcClient;
   if (options.config.transport === 'streamable_http') {
     rpc = createStreamableHttpJsonRpcClient({
@@ -1243,6 +1262,7 @@ export async function createMcpClientConnection(options: {
       },
       stdio: 'pipe',
     });
+    trackChild(childProcess);
 
     rpc = createStdioJsonRpcClient({
       transport: createChildTransport(
@@ -1386,6 +1406,7 @@ export async function createMcpClientConnection(options: {
             },
             stdio: 'pipe',
           });
+          trackChild(newChild);
           const newRpc = createStdioJsonRpcClient({
             transport: createChildTransport(
               newChild,
@@ -1414,6 +1435,14 @@ export async function createMcpClientConnection(options: {
             clientInfo: { name: 'drone-agent', version: '0.1.0' },
           });
           newRpc.notify('notifications/initialized', {});
+          // The child may have died while initialize was in flight (e.g. a
+          // shutdown raced the respawn). Never promote a dead child.
+          if (newChild.exitCode !== null || newChild.signalCode !== null) {
+            newChild.kill();
+            throw new Error(
+              `MCP respawn child exited during initialize (code ${newChild.exitCode ?? 'null'}, signal ${newChild.signalCode ?? 'null'})`
+            );
+          }
           childProcess = newChild;
           rpc = newRpc;
           state.status = 'connected';
@@ -1432,8 +1461,10 @@ export async function createMcpClientConnection(options: {
           state.lastError =
             error instanceof Error ? error.message : String(error);
           state.lastErrorCategory = classifyErrorCategory(error);
-          await sleep(backoffMs);
-          backoffMs = Math.min(backoffMs * 2, 60000);
+          if (!closed) {
+            await sleep(backoffMs);
+            backoffMs = Math.min(backoffMs * 2, 60000);
+          }
         }
       }
     };
@@ -1613,30 +1644,33 @@ export async function createMcpClientConnection(options: {
       // Disconnect RPC transport
       rpc.disconnect();
 
-      // Forcefully terminate spawned process after timeout if it hasn't exited
-      if (state.ownership === 'spawned' && childProcess) {
-        const cp = childProcess;
+      // Terminate every tracked child, including respawn orphans that never
+      // became childProcess — their stdio pipes would otherwise keep the event
+      // loop alive. SIGTERM first; SIGKILL after the grace period as backstop.
+      if (state.ownership === 'spawned') {
         const FORCE_KILL_DELAY_MS = 2500;
-        const exitPromise = new Promise<void>(resolve => {
-          const onExit = () => resolve();
-          cp.once('exit', onExit);
-          // Also resolve if process is already dead
-          if (!cp.pid || cp.killed) {
-            resolve();
-          }
-        });
-
-        const timeoutPromise = new Promise<void>(resolve => {
-          setTimeout(() => {
-            options.logger.warn(
-              `mcp server ${options.serverId} did not exit gracefully, forcing termination`
-            );
-            cp.kill();
-            resolve();
-          }, FORCE_KILL_DELAY_MS);
-        });
-
-        await Promise.race([exitPromise, timeoutPromise]);
+        const children = [...spawnedChildren];
+        await Promise.all(
+          children.map(
+            cp =>
+              new Promise<void>(resolve => {
+                if (cp.exitCode !== null || cp.signalCode !== null || !cp.pid) {
+                  resolve();
+                  return;
+                }
+                cp.once('exit', () => resolve());
+                const forceKillTimer = setTimeout(() => {
+                  options.logger.warn(
+                    `mcp server ${options.serverId} did not exit after SIGTERM, forcing SIGKILL`
+                  );
+                  cp.kill('SIGKILL');
+                  resolve();
+                }, FORCE_KILL_DELAY_MS);
+                cp.once('exit', () => clearTimeout(forceKillTimer));
+                cp.kill();
+              })
+          )
+        );
       }
 
       state.status = 'disconnected';

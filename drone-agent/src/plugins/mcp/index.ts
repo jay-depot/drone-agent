@@ -619,8 +619,10 @@ export const mcpPlugin: DronePlugin = {
     });
 
     registration.hooks.onShutdown(async () => {
+      await Promise.all(
+        [...connections.values()].map(connection => connection.disconnect())
+      );
       for (const connection of connections.values()) {
-        await connection.disconnect();
         setServerState(connection.state);
       }
     });
