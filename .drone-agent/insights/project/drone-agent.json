@@ -1066,5 +1066,17 @@
   {
     "timestamp": "2026-10-26T16:44:09.483Z",
     "insight": "Importing a package's `src/index.ts` from a test fails at runtime in this monorepo when the module transitively imports subpath exports of workspace deps (e.g. `drone-swarm-common/tls`): the root vitest config aliases only specific subpaths and resolution rejects the rest in that context — typecheck and build still pass, so the failure only surfaces in vitest. `drone-coordinator/test/app-helper.ts` exists precisely to avoid importing `src/index.ts`. Rule: never import a server package's entry `index.js` from a test; extract the needed helper into its own module (e.g. `command-timeout.ts`) and import that."
+  },
+  {
+    "timestamp": "2026-10-26T18:37:18.488Z",
+    "insight": "MCP and LSP child-process management in drone-agent is NOT shared code despite looking near-identical. MCP's createChildTransport + respawn monitor live in src/plugins/mcp/client.ts; LSP's live in src/plugins/lsp/transport.ts + server/runtime-factory.ts. They have different RPC clients, different framing, and different lifecycle models (MCP has an autonomous stdio respawn monitor; LSP is demand-driven with no respawn loop and a startCandidate shuttingDown guard that already prevents orphan races). When a fix targets \"child processes\" generically, verify per-plugin — a single change never covers both, and LSP's specific gaps (killWithEscalation resolve condition, untracked installer children) are disjoint from MCP's (orphaned mid-initialize respawns)."
+  },
+  {
+    "timestamp": "2026-10-26T18:37:18.490Z",
+    "insight": "In drone-agent shutdown orchestration, a doc comment claiming a child kill is \"bounded by the grace window\" was false: lsp/server/lifecycle.ts killWithEscalation resolved only on the child 'close' event, so SIGKILL at graceMs settled nothing for a D-state/uninterruptible child — the promise (and server.shutdown / runHooks('onShutdown')) hung forever. Rule of thumb for this codebase: any teardown await MUST have a hard resolve path independent of the child's cooperation (e.g. resolve on 'exit' + a final setTimeout fallback), and watchdog deadlines must be armed BEFORE runHooks('onShutdown') — arming after cannot bound a hung hook. The project already favors additive config keys (PR #146 sessionEnd.commandTimeoutMs, default preserves behavior) for tunable deadlines."
+  },
+  {
+    "timestamp": "2026-10-26T18:37:18.492Z",
+    "insight": "Node's ChildProcess.killed is set to true the moment kill() is called — it means \"signal sent\", NOT \"process exited\". The `!process.killed` guard used for SIGKILL escalation in both drone-gateway local-spawn-backend.terminateSession and drone-swarm-common spawner.terminateAgent is therefore dead code: after the SIGTERM, !killed is always false, so SIGKILL never fires and a stuck agent hangs the parent forever. Correct check: child.exitCode === null && child.signalCode === null (both stay null until the process truly exits). Grep for `\\.killed` when auditing any kill-escalation path."
   }
 ]
