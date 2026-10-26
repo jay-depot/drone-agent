@@ -208,7 +208,8 @@ export async function runJsonMode(
     const message = err instanceof Error ? err.message : String(err);
     ndjsonHandler({ kind: 'error', message });
     ndjsonHandler({ kind: 'return', result: '', error: message, subagentId });
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   // Output the final assistant message
@@ -257,6 +258,17 @@ export async function runJsonListenMode(
         ndjsonHandler({ kind: 'notice', content: event.content });
       }
     }) ?? null;
+
+  // Hoisted above the try so the finally block can remove the listeners.
+  const runtime = engine.getCapability<{
+    cancelCurrentRequest?: () => void;
+  }>('runtime');
+  const onSignal = () => {
+    runtime?.cancelCurrentRequest?.();
+    rl.close();
+  };
+  process.once('SIGTERM', onSignal);
+  process.once('SIGINT', onSignal);
 
   try {
     for await (const line of rl) {
@@ -418,6 +430,10 @@ export async function runJsonListenMode(
       await engine.runHooks('onAfterToolCall');
     }
   } finally {
+    if (onSignal) {
+      process.removeListener('SIGTERM', onSignal);
+      process.removeListener('SIGINT', onSignal);
+    }
     unregisterNotices?.();
     rl.close();
   }
@@ -562,6 +578,17 @@ export async function runInteractiveLoop(
       makePlainOutputEventHandler({ renderAssistantMessage: true })
     ) ?? null;
 
+  // Hoisted above the try so the finally block can remove the listeners.
+  const runtime = engine.getCapability<{
+    cancelCurrentRequest?: () => void;
+  }>('runtime');
+  const onSignal = () => {
+    runtime?.cancelCurrentRequest?.();
+    rl.close();
+  };
+  process.once('SIGTERM', onSignal);
+  process.once('SIGINT', onSignal);
+
   try {
     while (true) {
       const raw = await rl.question(promptLabel);
@@ -643,6 +670,10 @@ export async function runInteractiveLoop(
       await engine.runHooks('onAfterToolCall');
     }
   } finally {
+    if (onSignal) {
+      process.removeListener('SIGTERM', onSignal);
+      process.removeListener('SIGINT', onSignal);
+    }
     unregisterConversationEvents?.();
     rl.close();
   }
