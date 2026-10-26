@@ -1062,5 +1062,9 @@
   {
     "timestamp": "2026-10-26T03:03:48.252Z",
     "insight": "ADR numbers collide when two workstreams are planned in parallel off the same base. Here, `plan-persona-always-visible-runtime-tools` and `plan-coordinator-per-client-rate-limit-and-beacon-wiki-sweep` both independently picked \"262\" (each saw 261 as the latest), and both landed. Detection: `ls docs/adr | sed 's/-.*//' | sort | uniq -d` must be empty. Resolution rule used: the ADR that landed on `main` FIRST keeps the number; the later, un-ingested one renumbers (here 262 -> 263). Check this BEFORE ingesting: the project wiki's pointer-stub filenames (`decisions/NNN-slug.md`) and its `[[decisions/…]]` links are keyed on the number, so renumbering after ingest is far more expensive than before. Also verify the incoming `docs/adr/index.md` row actually exists — `d084f224` wrote a stray description fragment instead of the engine-owned 262 row, leaving that ADR with no catalog entry."
+  },
+  {
+    "timestamp": "2026-10-26T16:44:09.483Z",
+    "insight": "Importing a package's `src/index.ts` from a test fails at runtime in this monorepo when the module transitively imports subpath exports of workspace deps (e.g. `drone-swarm-common/tls`): the root vitest config aliases only specific subpaths and resolution rejects the rest in that context — typecheck and build still pass, so the failure only surfaces in vitest. `drone-coordinator/test/app-helper.ts` exists precisely to avoid importing `src/index.ts`. Rule: never import a server package's entry `index.js` from a test; extract the needed helper into its own module (e.g. `command-timeout.ts`) and import that."
   }
 ]
