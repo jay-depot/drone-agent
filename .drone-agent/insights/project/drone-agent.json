@@ -1078,5 +1078,9 @@
   {
     "timestamp": "2026-10-26T18:37:18.492Z",
     "insight": "Node's ChildProcess.killed is set to true the moment kill() is called — it means \"signal sent\", NOT \"process exited\". The `!process.killed` guard used for SIGKILL escalation in both drone-gateway local-spawn-backend.terminateSession and drone-swarm-common spawner.terminateAgent is therefore dead code: after the SIGTERM, !killed is always false, so SIGKILL never fires and a stuck agent hangs the parent forever. Correct check: child.exitCode === null && child.signalCode === null (both stay null until the process truly exits). Grep for `\\.killed` when auditing any kill-escalation path."
+  },
+  {
+    "timestamp": "2026-10-26T20:21:41.787Z",
+    "insight": "Cherry-picking fix/embedding-memory-explosion (bb707702) onto fix/shutdown-handling-and-hook-ordering applied cleanly even though both branches touch drone-agent/src/index.tsx — the two edits live in different regions (bottom main().catch exit handling vs. the onShutdown watchdog arm higher up), so git merged them without conflict. Overlap-checking against the merge-base before cherry-picking (only 1 of 4 files shared) is what made this a one-shot, no-surprise operation."
   }
 ]
