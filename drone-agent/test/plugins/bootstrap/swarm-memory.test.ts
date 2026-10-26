@@ -566,6 +566,35 @@ describe('bootstrap swarm-memory workflow', () => {
     expect(dismissedBranch).toContain('session processed "$id"');
   });
 
+  it('catch-up script guards against concurrent instances with flock', async () => {
+    const { buildHookScript, buildCatchupScript, ENV_SOURCE_BLOCK } =
+      await import('../../../src/plugins/bootstrap/swarm-memory-scripts.js');
+    const settings = {
+      coordinatorUrl: 'http://127.0.0.1:8080',
+      webToken: '',
+      configureBeacon: false,
+      batchLimit: '5',
+      cronSchedule: '0 * * * *',
+      droneAgentPath: '/usr/local/bin/drone-agent',
+      droneSwarmPath: '/usr/local/bin/drone-swarm',
+    };
+    const catchup = buildCatchupScript(settings);
+    const hook = buildHookScript(settings);
+
+    expect(catchup).toContain('flock -n 9');
+    expect(catchup).toContain('.catchup.lock');
+
+    // The guard must run before the env block is sourced, so a second
+    // instance exits before touching anything else.
+    const flockIndex = catchup.indexOf('flock -n 9');
+    const envIndex = catchup.indexOf(ENV_SOURCE_BLOCK);
+    expect(flockIndex).toBeGreaterThan(-1);
+    expect(envIndex).toBeGreaterThan(flockIndex);
+
+    // The hook script has no such guard (single trigger per session).
+    expect(hook).not.toContain('flock');
+  });
+
   it('generated scripts use the discovered absolute binary paths', async () => {
     const { buildHookScript, buildCatchupScript } =
       await import('../../../src/plugins/bootstrap/swarm-memory-scripts.js');
