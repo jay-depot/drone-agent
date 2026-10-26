@@ -802,6 +802,19 @@ describe('Swarm Session & Events', () => {
     expect(s!.id).toBe('ss1');
   });
 
+  it('should return the existing swarm session on duplicate registration', () => {
+    const first = createSwarmSession('ss1', 'persona-1', 'b1', true);
+    const second = createSwarmSession('ss1', 'persona-2', 'b2', false);
+    expect(second.id).toBe('ss1');
+    expect(second.personaId).toBe('persona-1');
+    expect(second.beaconId).toBe('b1');
+    expect(second.interactive).toBe(true);
+    expect(second.createdAt).toBe(first.createdAt);
+    expect(second.updatedAt).toBe(first.updatedAt);
+    expect(listSwarmSessions()).toHaveLength(1);
+    expect(countSwarmSessions()).toBe(1);
+  });
+
   it('should return undefined for non-existent swarm session', () => {
     expect(getSwarmSession('nonexistent')).toBeUndefined();
   });
@@ -876,6 +889,24 @@ describe('Swarm Session & Events', () => {
     });
     expect(event.id).toBe('evt1');
     expect(event.sessionId).toBe('ss1');
+  });
+
+  it('should not duplicate a swarm event when replaying the same id', () => {
+    createSwarmSession('ss1', null, 'b1');
+    const event = {
+      id: 'evt1',
+      sessionId: 'ss1',
+      correlationId: null,
+      type: 'msg',
+      payload: null,
+      metadata: null,
+      createdAt: 1,
+    };
+    expect(() => createSwarmEvent(event)).not.toThrow();
+    expect(() => createSwarmEvent(event)).not.toThrow();
+    const events = getSwarmEvents('ss1');
+    expect(events).toHaveLength(1);
+    expect(events[0].id).toBe('evt1');
   });
 
   it('should get swarm events for a session', () => {

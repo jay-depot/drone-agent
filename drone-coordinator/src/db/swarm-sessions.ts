@@ -56,6 +56,27 @@ export function createSwarmSession(
   sessionSnapshot: DroneSessionSnapshot | null = null
 ): SwarmSession {
   const now = Date.now();
+  const stmt = getDatabase().prepare(`
+    INSERT INTO swarm_sessions (id, persona_id, beacon_id, createdAt, updatedAt, status, interactive, session_snapshot)
+    VALUES (@id, @personaId, @beaconId, @createdAt, @updatedAt, @status, @interactive, @sessionSnapshot)
+    ON CONFLICT(id) DO NOTHING
+  `);
+  const result = stmt.run({
+    id,
+    personaId,
+    beaconId,
+    createdAt: now,
+    updatedAt: now,
+    status: 'active',
+    interactive: interactive ? 1 : 0,
+    sessionSnapshot: sessionSnapshot ? JSON.stringify(sessionSnapshot) : null,
+  });
+
+  if (result.changes === 0) {
+    logger.info(`Swarm session already exists: ${id}; returning existing`);
+    return getSwarmSession(id)!;
+  }
+
   const session: SwarmSession = {
     id,
     personaId,
@@ -66,24 +87,6 @@ export function createSwarmSession(
     interactive,
     sessionSnapshot,
   };
-
-  const stmt = getDatabase().prepare(`
-    INSERT INTO swarm_sessions (id, persona_id, beacon_id, createdAt, updatedAt, status, interactive, session_snapshot)
-    VALUES (@id, @personaId, @beaconId, @createdAt, @updatedAt, @status, @interactive, @sessionSnapshot)
-  `);
-
-  stmt.run({
-    id: session.id,
-    personaId: session.personaId,
-    beaconId: session.beaconId,
-    createdAt: session.createdAt,
-    updatedAt: session.updatedAt,
-    status: session.status,
-    interactive: session.interactive ? 1 : 0,
-    sessionSnapshot: session.sessionSnapshot
-      ? JSON.stringify(session.sessionSnapshot)
-      : null,
-  });
 
   logger.info(`Created swarm session: ${session.id}`);
   return session;
@@ -269,6 +272,7 @@ export function createSwarmEvent(event: SwarmEvent): SwarmEvent {
   const stmt = getDatabase().prepare(`
     INSERT INTO swarm_events (id, sessionId, correlationId, type, payload, metadata, createdAt)
     VALUES (@id, @sessionId, @correlationId, @type, @payload, @metadata, @createdAt)
+    ON CONFLICT(id) DO NOTHING
   `);
 
   stmt.run({
