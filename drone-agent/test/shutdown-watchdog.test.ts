@@ -61,7 +61,7 @@ describe('armShutdownWatchdog', () => {
       const unref = vi.fn();
       unrefSpies.push(unref);
       return { unref, ref: vi.fn() };
-    }) as typeof setTimeout);
+    }) as unknown as typeof setTimeout);
 
     const disarm = armShutdownWatchdog(30_000);
     disarm();
