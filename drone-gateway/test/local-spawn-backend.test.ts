@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { PassThrough, Readable, Writable } from 'node:stream';
 import type { ChildProcess } from 'node:child_process';
@@ -62,6 +62,8 @@ function makeMockProcess(pid: number): MockProcess {
     stderr,
     kill: vi.fn(),
     killed: false,
+    exitCode: null,
+    signalCode: null,
   });
   return {
     proc,
@@ -449,6 +451,15 @@ describe('LocalSpawnBackend', () => {
   });
 
   describe('terminateSession', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      vi.useRealTimers();
+    });
+
     it('sends SIGTERM to the child process and removes the session', async () => {
       const mock = makeMockProcess(12345);
       mockSpawn.mockReturnValue(mock.proc);
@@ -479,6 +490,66 @@ describe('LocalSpawnBackend', () => {
       };
 
       await expect(backend.terminateSession(session)).resolves.toBeUndefined();
+    });
+
+    it('escalates to SIGKILL when the child ignores SIGTERM past the grace period', async () => {
+      const mock = makeMockProcess(12345);
+      mockSpawn.mockReturnValue(mock.proc);
+
+      const session = await backend.spawnSession('conv-1', 'coder');
+      await backend.terminateSession(session);
+
+      expect(mock.proc.kill).toHaveBeenCalledWith('SIGTERM');
+
+      vi.advanceTimersByTime(5_000);
+
+      expect(mock.proc.kill).toHaveBeenCalledTimes(2);
+      expect(mock.proc.kill).toHaveBeenLastCalledWith('SIGKILL');
+    });
+
+    it('does not SIGKILL a child that exits during the grace period', async () => {
+      const mock = makeMockProcess(12345);
+      mockSpawn.mockReturnValue(mock.proc);
+
+      const session = await backend.spawnSession('conv-1', 'coder');
+      await backend.terminateSession(session);
+
+      vi.advanceTimersByTime(4_000);
+      mock.proc.emit('exit', 0, null);
+      vi.advanceTimersByTime(1_000);
+
+      expect(mock.proc.kill).toHaveBeenCalledTimes(1);
+      expect(mock.proc.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(mock.proc.kill).not.toHaveBeenCalledWith('SIGKILL');
+    });
+
+    it('sends no signals and arms no timer for an already-exited child', async () => {
+      const mock = makeMockProcess(12345);
+      Object.assign(mock.proc, { exitCode: 0 });
+      mockSpawn.mockReturnValue(mock.proc);
+
+      const session = await backend.spawnSession('conv-1', 'coder');
+      const setSpy = vi.spyOn(globalThis, 'setTimeout');
+      await backend.terminateSession(session);
+
+      expect(mock.proc.kill).not.toHaveBeenCalled();
+      expect(setSpy).not.toHaveBeenCalled();
+    });
+
+    it('unrefs the grace timer so it cannot keep the process alive', async () => {
+      const mock = makeMockProcess(12345);
+      mockSpawn.mockReturnValue(mock.proc);
+
+      const session = await backend.spawnSession('conv-1', 'coder');
+
+      const unrefSpy = vi.fn();
+      vi.spyOn(globalThis, 'setTimeout').mockImplementation((() => ({
+        unref: unrefSpy,
+      })) as unknown as typeof globalThis.setTimeout);
+
+      await backend.terminateSession(session);
+
+      expect(unrefSpy).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -15,6 +15,9 @@ const MAX_STDERR_LINES = 20;
 /** Max stderr lines included in an early-exit error string. */
 const STDERR_TAIL_LINES = 10;
 
+/** Grace period before a SIGTERM'd agent is escalated to SIGKILL. */
+const TERMINATE_GRACE_MS = 5000;
+
 /**
  * LocalSpawnBackend spawns `drone-agent` processes on the host.
  *
@@ -318,17 +321,23 @@ export class LocalSpawnBackend implements SpawnBackend {
     logger.info(`Terminating agent for conversation ${session.conversationId}`);
     this.failPending(managed);
     managed.reader.close();
-    managed.process.kill('SIGTERM');
 
-    // Give it 5 seconds to exit gracefully, then SIGKILL
-    setTimeout(() => {
-      if (!managed.process.killed) {
-        logger.warn(
-          `Agent for conversation ${session.conversationId} did not exit gracefully, sending SIGKILL`
-        );
-        managed.process.kill('SIGKILL');
-      }
-    }, 5000);
+    const child = managed.process;
+    const alreadyExited = child.exitCode !== null || child.signalCode !== null;
+    if (!alreadyExited) {
+      const graceTimer = setTimeout(() => {
+        // A child that exited during the grace window must not be SIGKILLed.
+        if (child.exitCode === null && child.signalCode === null) {
+          logger.warn(
+            `Agent for conversation ${session.conversationId} did not exit gracefully, sending SIGKILL`
+          );
+          child.kill('SIGKILL');
+        }
+      }, TERMINATE_GRACE_MS);
+      graceTimer.unref();
+      child.once('exit', () => clearTimeout(graceTimer));
+      child.kill('SIGTERM');
+    }
 
     this.sessions.delete(session.conversationId);
   }
