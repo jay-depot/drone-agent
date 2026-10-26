@@ -228,4 +228,48 @@ describe('parseUnifiedDiff', () => {
       { kind: '+', content: 'new2' },
     ]);
   });
+
+  // ── Headerless diffs (no @@ hunk header) ──────────────────────────
+
+  it('parses a headerless single hunk (context + old + new)', () => {
+    const diff = [' context1', '-old line', '+new line', ' context2'].join(
+      '\n'
+    );
+
+    const hunks = parseUnifiedDiff(diff);
+    expect(hunks).toHaveLength(1);
+    expect(hunks[0].sectionHeading).toBeUndefined();
+    expect(hunks[0].lineHint).toBeUndefined();
+    expect(hunks[0].contextBefore).toEqual(['context1']);
+    expect(hunks[0].oldLines).toEqual(['old line']);
+    expect(hunks[0].newLines).toEqual(['new line']);
+    expect(hunks[0].contextAfter).toEqual(['context2']);
+  });
+
+  it('parses a headerless pure-insertion patch', () => {
+    const diff = ['+line1', '+line2', '+line3'].join('\n');
+
+    const hunks = parseUnifiedDiff(diff);
+    expect(hunks).toHaveLength(1);
+    expect(hunks[0].oldLines).toEqual([]);
+    expect(hunks[0].newLines).toEqual(['line1', 'line2', 'line3']);
+    expect(hunks[0].lineHint).toBeUndefined();
+    expect(hunks[0].sectionHeading).toBeUndefined();
+  });
+
+  it('returns [] for headerless context-only input (no change lines)', () => {
+    const diff = [' a', ' b', ' c'].join('\n');
+
+    expect(parseUnifiedDiff(diff)).toEqual([]);
+  });
+
+  it('treats a bare @@ ## label body line as context, not a header', () => {
+    const diff = [' @@ ## label', '-old', '+new'].join('\n');
+
+    const hunks = parseUnifiedDiff(diff);
+    expect(hunks).toHaveLength(1);
+    expect(hunks[0].contextBefore).toEqual(['@@ ## label']);
+    expect(hunks[0].oldLines).toEqual(['old']);
+    expect(hunks[0].newLines).toEqual(['new']);
+  });
 });

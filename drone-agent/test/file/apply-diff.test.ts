@@ -46,6 +46,78 @@ describe('file__apply_diff — round-trip integration', () => {
     }
   });
 
+  it('applies a headerless patch (no @@ hunk header) as one hunk', async () => {
+    const { registration, tools } = captureRegistration();
+    await filePlugin.register(registration);
+
+    const applyDiff = tools.get('apply_diff');
+    expect(applyDiff).toBeDefined();
+
+    const target = path.join(
+      tmpdir(),
+      `drone-agent-headerless-${Date.now()}.txt`
+    );
+    await writeFile(target, 'line1\nline2\nline3\n', 'utf-8');
+    try {
+      const patch = [' line1', '-line2', '+line2_modified', ' line3'].join(
+        '\n'
+      );
+
+      const result = JSON.parse(await applyDiff!({ path: target, patch }));
+      expect(result.patched).toBe(true);
+
+      const content = await readFile(target, 'utf-8');
+      expect(content).toContain('line2_modified');
+      expect(content).toContain('line1');
+      expect(content).toContain('line3');
+    } finally {
+      const { unlink } = await import('node:fs/promises');
+      await unlink(target).catch(() => {});
+    }
+  });
+
+  it('applies a headerless multi-change body as one hunk', async () => {
+    const { registration, tools } = captureRegistration();
+    await filePlugin.register(registration);
+
+    const applyDiff = tools.get('apply_diff');
+    expect(applyDiff).toBeDefined();
+
+    const target = path.join(
+      tmpdir(),
+      `drone-agent-headerless-multi-${Date.now()}.txt`
+    );
+    await writeFile(
+      target,
+      ['keep1', 'old1', 'keep2', 'old2', 'keep3'].join('\n'),
+      'utf-8'
+    );
+    try {
+      const patch = [
+        ' keep1',
+        '-old1',
+        '+new1',
+        ' keep2',
+        '-old2',
+        '+new2',
+        ' keep3',
+      ].join('\n');
+
+      const result = JSON.parse(await applyDiff!({ path: target, patch }));
+      expect(result.patched).toBe(true);
+
+      const content = await readFile(target, 'utf-8');
+      expect(content).toContain('new1');
+      expect(content).toContain('new2');
+      expect(content).toContain('keep2');
+      expect(content).not.toContain('old1');
+      expect(content).not.toContain('old2');
+    } finally {
+      const { unlink } = await import('node:fs/promises');
+      await unlink(target).catch(() => {});
+    }
+  });
+
   it('applies a multi-hunk patch top-to-bottom', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);

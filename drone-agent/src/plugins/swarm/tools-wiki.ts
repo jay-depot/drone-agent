@@ -8,6 +8,224 @@
 import type { DroneToolDefinition } from 'drone-core';
 import type { SwarmContext } from './context.js';
 import { firstMissingString } from './string-params.js';
+import { withKeyLock } from 'drone-swarm-common';
+import { parseUnifiedDiff } from '../../shared/unified-diff-parser.js';
+import { applyPatch } from '../../shared/patch-applier.js';
+import { renderDiffV2 } from '../../shared/diff-renderer.js';
+import { formatPatchError } from '../../shared/patch-applier/errors.js';
+
+/** Metadata fields wiki_edit can carry through to the PUT body. */
+type WikiEditMetadataKeys = 'title' | 'tags' | 'sources' | 'pitch';
+
+function createWikiEditTool(ctx: SwarmContext): DroneToolDefinition {
+  return {
+    name: 'wiki_edit',
+    description:
+      'Surgically edit an existing wiki page body and/or metadata. ' +
+      'Applies the same unified diff format as file__apply_diff to the page ' +
+      'body (the @@ hunk header is optional — a headerless patch parses as one ' +
+      'hunk). Metadata fields (title, tags, sources, pitch) default to the ' +
+      'current read values when omitted. Requires pageId plus at least one of ' +
+      'diff/title/tags/sources/pitch. Reads the page, applies the diff, and PUTs ' +
+      'the result under a wiki: key lock so concurrent edits cannot corrupt ' +
+      'the page.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        pageId: {
+          type: 'string',
+          description: 'The page ID to edit',
+        },
+        scope: {
+          type: 'string',
+          enum: ['beacon', 'coordinator'],
+          description: 'Scope (beacon or coordinator). Default: beacon',
+        },
+        diff: {
+          type: 'string',
+          description:
+            'Optional unified diff patch string applied to the page body. ' +
+            'The @@ hunk header is optional; a headerless patch parses as one ' +
+            'hunk and must contain -/+ change lines.',
+        },
+        title: {
+          type: 'string',
+          description: 'Optional replacement title',
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional replacement tags',
+        },
+        sources: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional replacement source session log IDs',
+        },
+        pitch: {
+          type: 'string',
+          description:
+            'Optional replacement one-sentence summary (an empty pitch is not ' +
+            'transmitted — use wiki_write to clear it)',
+        },
+      },
+      required: ['pageId'],
+      additionalProperties: false,
+    },
+    execute: async params => {
+      const pageId = params.pageId as string | undefined;
+      const scope = params.scope as string | undefined;
+      const diff = params.diff as string | undefined;
+      const metadataKeys: WikiEditMetadataKeys[] = [
+        'title',
+        'tags',
+        'sources',
+        'pitch',
+      ];
+      const hasMetadataChange = metadataKeys.some(
+        key => params[key] !== undefined
+      );
+      if (
+        typeof pageId !== 'string' ||
+        pageId.trim().length === 0 ||
+        (!diff && !hasMetadataChange)
+      ) {
+        return JSON.stringify({
+          success: false,
+          error:
+            'wiki_edit requires at least one change: pass a diff or a metadata field (title, tags, sources, pitch).',
+        });
+      }
+
+      const effectiveScope = scope ?? 'beacon';
+      return withKeyLock(`wiki:${pageId}`, async () => {
+        try {
+          const readUrl = `${ctx.baseUrl}/wiki/${encodeURIComponent(
+            pageId
+          )}?scope=${effectiveScope}`;
+          const readRes = await fetch(readUrl);
+          if (!readRes.ok) {
+            return JSON.stringify({
+              success: false,
+              error: `Wiki page not found: ${pageId} (scope: ${effectiveScope})`,
+            });
+          }
+          const page = (await readRes.json()) as {
+            content?: string;
+            title?: string;
+            tags?: string[];
+            sources?: string[];
+            pitch?: string;
+          } & Record<string, unknown>;
+
+          let patchedContent: string | undefined;
+          let diffOutput: string | undefined;
+          let summary: Record<string, unknown> | undefined;
+          let partialFailureMessage: string | undefined;
+          if (diff) {
+            const hunks = parseUnifiedDiff(diff);
+            if (hunks.length === 0) {
+              return JSON.stringify({
+                success: false,
+                error:
+                  'wiki_edit: no hunks found in the diff. The patch must contain ' +
+                  '`-`/`+` change lines (a headerless patch parses as one hunk).',
+              });
+            }
+            const result = applyPatch(
+              String(page.content ?? '').split('\n'),
+              hunks
+            );
+            if (result.appliedHunks.length === 0) {
+              return JSON.stringify({
+                success: false,
+                error: `wiki_edit: no hunks applied to the page body. ${result.errors
+                  .map(formatPatchError)
+                  .join('\n\n')}`,
+              });
+            }
+            patchedContent = result.patchedLines.join('\n');
+
+            const fuzzByIndex = new Map(
+              result.appliedHunks.map(a => [a.hunkIndex, a.fuzz])
+            );
+            const diffHunks = hunks
+              .map((hunk, i) => ({ hunk, i }))
+              .filter(({ i }) => fuzzByIndex.has(i))
+              .map(({ hunk, i }) => ({
+                anchors: hunk.anchors,
+                contextBefore: hunk.contextBefore,
+                changeZone: hunk.changeZone,
+                oldLines: hunk.oldLines,
+                newLines: hunk.newLines,
+                contextAfter: hunk.contextAfter,
+                fuzz: fuzzByIndex.get(i),
+              }));
+            const rendered = renderDiffV2(
+              `${effectiveScope}:${pageId}`,
+              diffHunks,
+              false
+            );
+            diffOutput = rendered.plain;
+            summary = rendered.summary as unknown as Record<string, unknown>;
+
+            if (!result.success) {
+              partialFailureMessage = `wiki_edit: ${result.errors.length} of ${hunks.length} hunk(s) failed to apply. The page was written with ${result.appliedHunks.length} successful hunk(s) applied.\n\n${result.errors
+                .map(formatPatchError)
+                .join('\n\n')}`;
+            }
+          }
+
+          const putRes = await fetch(
+            `${ctx.baseUrl}/wiki/${encodeURIComponent(pageId)}`,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: params.title ?? page.title,
+                content: patchedContent ?? page.content,
+                scope: effectiveScope,
+                tags: params.tags ?? page.tags,
+                sources: params.sources ?? page.sources,
+                ...(params.pitch !== undefined
+                  ? { pitch: params.pitch }
+                  : page.pitch
+                    ? { pitch: page.pitch }
+                    : {}),
+              }),
+            }
+          );
+          if (!putRes.ok) {
+            const err = await putRes.json().catch(() => ({}));
+            return JSON.stringify({
+              success: false,
+              error:
+                (err as { error?: string }).error ||
+                'Failed to write wiki page',
+            });
+          }
+          if (partialFailureMessage) {
+            return JSON.stringify({
+              success: false,
+              error: partialFailureMessage,
+            });
+          }
+          return JSON.stringify({
+            success: true,
+            page: await putRes.json(),
+            summary,
+            ...(diffOutput !== undefined ? { diff: diffOutput } : {}),
+          });
+        } catch (err) {
+          return JSON.stringify({
+            success: false,
+            error: `Failed to edit wiki page: ${err}`,
+          });
+        }
+      });
+    },
+  };
+}
 
 function createWikiReadTool(ctx: SwarmContext): DroneToolDefinition {
   return {
@@ -349,6 +567,7 @@ function createWikiLintTool(ctx: SwarmContext): DroneToolDefinition {
  */
 export function createWikiTools(ctx: SwarmContext): DroneToolDefinition[] {
   return [
+    createWikiEditTool(ctx),
     createWikiReadTool(ctx),
     createWikiWriteTool(ctx),
     createWikiSearchTool(ctx),

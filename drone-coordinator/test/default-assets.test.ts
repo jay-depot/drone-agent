@@ -67,6 +67,7 @@ describe('seedDefaultAssets against the live database', () => {
       expect(librarian?.systemPrompt).not.toContain(phantom);
     }
     expect(librarian?.systemPrompt).toContain('swarm__wiki_write');
+    expect(librarian?.systemPrompt).toContain('swarm__wiki_edit');
   });
 
   it('seeds a memory-wiki skill without phantom tool references', () => {

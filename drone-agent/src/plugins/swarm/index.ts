@@ -107,7 +107,7 @@ export function createSwarmPlugin(
     metadata: {
       id: 'swarm',
       name: 'Swarm',
-      version: '0.2.0',
+      version: '0.3.0',
       description:
         'Connects to a drone-beacon for swarm-wide personas and skills.',
       defaultEnabled: false,

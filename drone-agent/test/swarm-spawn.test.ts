@@ -100,6 +100,7 @@ describe('swarm spawn tools', () => {
       'swarm_message',
       'wiki_read',
       'wiki_write',
+      'wiki_edit',
       'wiki_search',
       'wiki_list',
       'wiki_delete',
@@ -114,7 +115,7 @@ describe('swarm spawn tools', () => {
     for (const name of expected) {
       expect(registeredTools.has(name), `missing tool: ${name}`).toBe(true);
     }
-    expect(registeredTools.size).toBe(13);
+    expect(registeredTools.size).toBe(14);
   });
 
   describe('swarm_list_beacons', () => {
