@@ -45,6 +45,21 @@ export function NotepadBlock({ state }: { state: ToolRenderState }): ReactNode {
     );
   }
 
+  if (action === 'edit') {
+    if (parsed.success === false) {
+      return (
+        <Text color={scheme.error} wrap="wrap">
+          {`✗ notepad.edit: ${String(parsed.error ?? '')}`}
+        </Text>
+      );
+    }
+    return (
+      <Text color={scheme.success} wrap="wrap">
+        {'✓ notepad.edit'}
+      </Text>
+    );
+  }
+
   // set or append — show the content from arguments as markdown
   const content = state.arguments.content as string | undefined;
   const actionLabel = action === 'set' ? 'set' : 'append';

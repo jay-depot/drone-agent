@@ -4,6 +4,11 @@ import {
 } from 'drone-core';
 import { registerPortableContextContributor } from '../shared/portable-context-contributor.js';
 import { NotepadBlock } from '../tui/components/NotepadBlock.js';
+import { applyEditToBody } from '../shared/patch-applier/edit-body.js';
+
+/** Recovery hint appended to notepad edit patch failures. */
+const NOTEPAD_EDIT_RECOVERY_TIP =
+  'Tip: the current notepad is included in the system prompt above; correct the diff against its exact contents and try again.';
 
 type NotepadState = {
   currentNotepad: string | null;
@@ -58,20 +63,28 @@ export const notepadPlugin: DronePlugin = {
       name: 'manage',
       description:
         'Manage the session notepad. Use action="set" to replace contents, ' +
-        'action="append" to add text, action="clear" to empty it. ' +
+        'action="append" to add text, action="edit" to apply a unified diff ' +
+        'to the current contents, action="clear" to empty it. ' +
         'The notepad is included in the system prompt and persists for the session.',
       inputSchema: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
-            enum: ['set', 'clear', 'append'],
+            enum: ['set', 'clear', 'append', 'edit'],
             description:
-              'What to do: set (replace), clear (empty), append (add to end).',
+              'What to do: set (replace), clear (empty), append (add to end), edit (apply a unified diff).',
           },
           content: {
             type: 'string',
             description: 'Text content (required for set and append).',
+          },
+          diff: {
+            type: 'string',
+            description:
+              'Unified diff patch applied to the current notepad contents ' +
+              '(required for edit). The @@ hunk header is optional; a ' +
+              'headerless patch parses as one hunk and must contain -/+ change lines.',
           },
         },
         required: ['action'],
@@ -80,16 +93,60 @@ export const notepadPlugin: DronePlugin = {
       execute: async input => {
         const action = input.action as string;
 
-        if (action !== 'set' && action !== 'clear' && action !== 'append') {
+        if (
+          action !== 'set' &&
+          action !== 'clear' &&
+          action !== 'append' &&
+          action !== 'edit'
+        ) {
           return JSON.stringify({
             success: false,
-            error: 'notepad action must be set, clear, or append.',
+            error: 'notepad action must be set, clear, append, or edit.',
           });
         }
 
         if (action === 'clear') {
           state.currentNotepad = null;
           return JSON.stringify({ success: true });
+        }
+
+        if (action === 'edit') {
+          if (
+            typeof input.diff !== 'string' ||
+            input.diff.trim().length === 0
+          ) {
+            return JSON.stringify({
+              success: false,
+              error: 'notepad edit requires a non-empty diff.',
+            });
+          }
+          if (state.currentNotepad === null) {
+            return JSON.stringify({
+              success: false,
+              error: 'Cannot edit: the notepad is empty.',
+            });
+          }
+          const outcome = applyEditToBody(state.currentNotepad, input.diff, {
+            label: 'notepad',
+            toolName: 'notepad.manage edit',
+            targetNoun: 'notepad',
+            recoveryTip: NOTEPAD_EDIT_RECOVERY_TIP,
+          });
+          if (outcome.status === 'none-applied') {
+            return JSON.stringify({ success: false, error: outcome.error });
+          }
+          state.currentNotepad = outcome.value;
+          if (outcome.partialFailureMessage) {
+            return JSON.stringify({
+              success: false,
+              error: outcome.partialFailureMessage,
+            });
+          }
+          return JSON.stringify({
+            success: true,
+            summary: outcome.summary,
+            diff: outcome.diff,
+          });
         }
 
         if (typeof input.content !== 'string') {

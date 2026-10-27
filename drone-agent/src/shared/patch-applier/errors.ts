@@ -149,8 +149,8 @@ export function buildType2Failure(
   const suggestions = findFuzzySuggestions(fileLines, hunk.oldLines);
   const detail =
     suggestions.length > 0
-      ? `The old code was not found in the file in any form. The closest candidates (by edit distance) are listed below — you may have meant one of these.`
-      : `The old code was not found in the file in any form, and no close candidates could be identified (the old code may be too generic or the file has changed substantially). Re-read the file with file__read to see the current contents.`;
+      ? `The old code was not found in any form. The closest candidates (by edit distance) are listed below — you may have meant one of these.`
+      : `The old code was not found in any form, and no close candidates could be identified (the old code may be too generic or the target has changed substantially).`;
   return {
     hunkIndex,
     message: `Old code not found in file`,
@@ -177,4 +177,62 @@ export function buildType3Failure(
   err.message = `Narrowing over-eliminated all matches; unrolled to last multiple-match step`;
   err.detail = `A later narrowing step eliminated all candidates, so the matcher unrolled to the last step that had multiple matches (${lastMultiple.length}). See each match below with a reworked hunk.`;
   return err;
+}
+
+/**
+ * Format a PatchError into an LLM-friendly error message. Each failure type
+ * is reported differently:
+ *
+ *   Type 1 (multiple matches): a cheat sheet listing each match with line
+ *     numbers + surrounding context, plus a reworked hunk that would uniquely
+ *     target each one (the LLM can crib and resubmit).
+ *   Type 2 (old code not found): up to 5 Levenshtein-closest file spans with
+ *     location + actual content; or a plain "not found" message if the old
+ *     code is too generic.
+ *   Type 3 (narrowing over-eliminated): unrolled to the last multiple-match
+ *     step, then reported like Type 1.
+ */
+export function formatPatchError(e: PatchError): string {
+  const tag = `Hunk ${e.hunkIndex}:`;
+
+  if (e.failureType === 'type2') {
+    const suggestions = e.suggestions ?? [];
+    if (suggestions.length === 0) {
+      return (
+        `${tag} The old code (the \`-\` lines) was not found in any form.\n` +
+        `  ${e.detail}`
+      );
+    }
+    const lines = suggestions.map(
+      s =>
+        `  - line ${s.line} (distance ${s.distance}):\n` +
+        s.content
+          .split('\n')
+          .map(l => `      ${l}`)
+          .join('\n')
+    );
+    return (
+      `${tag} The old code (the \`-\` lines) was not found.\n` +
+      `  ${e.detail}\n` +
+      `  Closest candidates:\n${lines.join('\n')}`
+    );
+  }
+
+  // Type 1 and Type 3 share the cheat-sheet format.
+  const sites = e.matchSites ?? [];
+  const siteBlocks = sites.map((site, idx) => {
+    const ctx = site.context.map(l => `    ${l}`).join('\n');
+    return (
+      `  Match ${idx + 1} (line ${site.line}):\n` +
+      `${ctx}\n` +
+      `  Reworked hunk to target this match:\n` +
+      '  ```diff\n' +
+      site.reworkedHunk
+        .split('\n')
+        .map(l => `  ${l}`)
+        .join('\n') +
+      '\n  ```'
+    );
+  });
+  return `${tag} ${e.message}\n  ${e.detail}\n\n${siteBlocks.join('\n\n')}`;
 }

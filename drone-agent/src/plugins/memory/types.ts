@@ -52,4 +52,17 @@ export type DroneMemoryCapability = {
    * `false` if no entry existed.
    */
   delete: (key: string) => Promise<boolean>;
+
+  /**
+   * Edit an existing entry in place. Reads the entry, applies `patch` to
+   * produce a new value and optional tags, then writes it back — the whole
+   * read-modify-write runs atomically under a per-key lock so concurrent
+   * mutations cannot interleave. `createdAt` is preserved; `updatedAt` is
+   * bumped. Returns the updated entry, or `null` if no entry exists for
+   * the given key.
+   */
+  edit: (
+    key: string,
+    patch: (entry: MemoryEntry) => { value: string; tags?: string[] }
+  ) => Promise<MemoryEntry | null>;
 };

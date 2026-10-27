@@ -70,6 +70,23 @@ describe('swarm tool input validation (pre-network guards)', () => {
   });
 
   it.each([
+    ['wiki_edit', {}],
+    ['wiki_edit', { pageId: '   ' }],
+    ['wiki_edit', { diff: '-a\n+b' }],
+    ['wiki_edit', { pageId: 'p' }],
+  ])(
+    '%s rejects no-change input %j before any network call',
+    async (name, input) => {
+      const tools = wikiToolMap();
+      await expectRejection(
+        tools.get(name)!.execute(input),
+        /at least one change/
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
     ['swarm_spawn', {}, 'targetBeaconId'],
     ['swarm_get_spawn', { beaconId: 'b' }, 'spawnId'],
     ['swarm_get_spawn', {}, 'beaconId'],

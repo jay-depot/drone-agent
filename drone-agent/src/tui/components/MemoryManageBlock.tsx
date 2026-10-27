@@ -85,6 +85,30 @@ export function MemoryManageBlock({
     );
   }
 
+  if (action === 'edit') {
+    if (parsed.success === false) {
+      return (
+        <Text color={scheme.error} wrap="wrap">
+          {`✗ memory.edit: "${key}"  ${String(parsed.error ?? '')}`}
+        </Text>
+      );
+    }
+    if (parsed.entry === null) {
+      return (
+        <Text color={scheme.toolResult} wrap="wrap">
+          {`✓ memory.edit: "${key}"  (no entry found)`}
+        </Text>
+      );
+    }
+    const tags = Array.isArray(parsed.tags) ? (parsed.tags as string[]) : [];
+    const tagStr = tags.length > 0 ? `  (tags: [${tags.join(', ')}])` : '';
+    return (
+      <Text color={scheme.success} wrap="wrap">
+        {`✓ memory.edit: "${key}"${tagStr}`}
+      </Text>
+    );
+  }
+
   return (
     <Text color={scheme.toolResult} wrap="wrap">
       {`✓ ${result}`}

@@ -1082,5 +1082,25 @@
   {
     "timestamp": "2026-10-26T20:21:41.787Z",
     "insight": "Cherry-picking fix/embedding-memory-explosion (bb707702) onto fix/shutdown-handling-and-hook-ordering applied cleanly even though both branches touch drone-agent/src/index.tsx — the two edits live in different regions (bottom main().catch exit handling vs. the onShutdown watchdog arm higher up), so git merged them without conflict. Overlap-checking against the merge-base before cherry-picking (only 1 of 4 files shared) is what made this a one-shot, no-surprise operation."
+  },
+  {
+    "timestamp": "2026-10-26T23:12:57.006Z",
+    "insight": "When adding a tool to the swarm plugin's createWikiTools array, the tool-count assertion in drone-agent/test/swarm-spawn.test.ts ('registers all N swarm tools at init') breaks — it pins both the exact tool-name list and the size. Search for hardcoded swarm tool counts (grep 'registeredTools.size') whenever createWikiTools/createSwarmTools gains an entry. Same for the coordinator's BUILTIN_HIDDEN_TOOLS count if any test pins it."
+  },
+  {
+    "timestamp": "2026-10-26T23:12:57.008Z",
+    "insight": "Meta: file__apply_diff rejects a patch whose only header line is a bare `@@` (no `-N,M +N,M` ranges) with \"no hunks found\" in the pre-fix build — hit this twice while editing the very test files for this change. Include a real `@@ -a,b +c,d @@` header in any apply_diff patch to existing tooling until the headerless parser change lands in the running agent's own build (dogfooding lag: the code change is in the repo but the running agent still uses the old built dist until restart)."
+  },
+  {
+    "timestamp": "2026-10-26T23:12:57.011Z",
+    "insight": "The input-validation test matrix in swarm-tool-input-validation.test.ts builds its expected-error matcher as `new RegExp(\\`${name} requires a non-empty ${field}\\`)`, so a tool whose error text does NOT follow the \"requires a non-empty <field>\" template (e.g. wiki_edit's \"requires at least one change: ...\") CANNOT be shoehorned into that it.each — it needs its own it.each block with its own matcher. Match the existing template or add a sibling block; don't fight the parameterized matcher."
+  },
+  {
+    "timestamp": "2026-10-26T23:57:40.313Z",
+    "insight": "file__apply_diff mis-anchors PURE-INSERTION hunks (a hunk with only `+` lines and no `-` lines). Observed 2026-10-26 adding a field to a type: the hunk `+  edit: (...) => ...;` with a 3-line context header (`delete: ...` / `false if no entry existed.` / `*/`) and 0 deletions landed in the WRONG type — it was inserted into `MemoryEntry` (a different `};`-terminated object) instead of `DroneMemoryCapability`. A second attempt anchored on the trailing `};` did the same. Root cause looks like: with no `-` change zone, the content matcher has nothing to anchor on but the context, and multiple `};`-terminated blocks with similar `delete:`/`*/` neighborhoods make the target ambiguous — yet the tool reported success (hunks:1, additions:13). Workaround: for pure insertions into files with repeated boilerplate, use full-file `file__write` (as was done to fix it). Worth investigating: either make pure-insertion hunks require a unique anchor and FAIL loudly on ambiguity, or document that insertions need a `-` line of context. Reported while adding `memory__manage` action=\"edit\" on feat/more-diff-improvements."
+  },
+  {
+    "timestamp": "2026-10-26T23:57:40.316Z",
+    "insight": "Memory plugin concurrency pattern (ADR-237 style, landed 2026-10-26 on feat/more-diff-improvements): the memory plugin's `DroneMemoryCapability` (drone-agent/src/plugins/memory/types.ts) is the SHARED API — other plugins can `request()` it — so the per-key lock belongs in the CAPABILITY, not the tool. `store`, `delete`, and the new `edit` all wrap their read-modify-write in `withKeyLock(\\`memory:${sanitizeKey(key)}\\`)` (from ../../shared/keyed-lock.js, re-exporting drone-swarm-common). Because all three lock the SAME key, the tool layer must NOT lock again (re-entrant withKeyLock self-deadlocks — it is a serializing chain, not a reentrant mutex). New `edit(key, patch: (entry)=>{value,tags?})` runs read→patch→write atomically under one lock; the diff-apply logic stays in the tool via the patch callback (a `MemoryEditAbort` sentinel thrown from inside the callback aborts the write for \"no hunks applied\"). Contrast with swarm__wiki_edit, where the whole read→patch→PUT span is locked at the TOOL level because there is no shared capability. Note: no in-repo consumer currently request()s the memory capability (only index.ts uses it) — locking the capability is defense-in-depth for the intended contract."
   }
 ]

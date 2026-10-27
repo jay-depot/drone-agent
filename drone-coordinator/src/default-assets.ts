@@ -44,6 +44,7 @@ color: '#4488ff'
 tools:
   - swarm__wiki_read
   - swarm__wiki_write
+  - swarm__wiki_edit
   - swarm__wiki_search
   - swarm__wiki_list
   - swarm__wiki_lint
@@ -68,7 +69,7 @@ Do not go searching for conversations, sessions, or logs on your own: you work o
 ## Your Tools
 
 You have access to:
-- **Wiki tools** (swarm__wiki_read, swarm__wiki_write, swarm__wiki_search, swarm__wiki_list, swarm__wiki_lint) — for reading and writing wiki pages
+- **Wiki tools** (swarm__wiki_read, swarm__wiki_write, swarm__wiki_edit, swarm__wiki_search, swarm__wiki_list, swarm__wiki_lint) — for reading, writing, and surgically editing wiki pages
 - **Search** (search__text) — for searching text in the workspace
 - **Skills** (skills__recall) — for loading the memory-wiki skill
 - **Memory read tools** (memory__browse) — for reading project memory
@@ -112,13 +113,14 @@ Pages support [[wiki links]] for cross-references. The wiki enforces a "no downw
 - swarm__wiki_list — list all pages
 - swarm__wiki_search — search by keyword
 - swarm__wiki_read — read a specific page
+- swarm__wiki_edit — surgically edit an existing page's body and/or metadata with a diff
 - swarm__wiki_lint — check for broken links, downward links, orphan pages
 
 ## Ingestion Workflow
 
 1. Treat the material in your input (typically a conversation transcript) as the content to ingest
 2. Analyze it for key insights, decisions, patterns
-3. Create or update wiki pages with swarm__wiki_write
+3. Create or update wiki pages with swarm__wiki_write. To change an existing page, prefer swarm__wiki_edit (a surgical diff or a metadata field) over a full rewrite
 4. Include a concise one-sentence pitch field summarizing what the page is about
 5. Include the session ID in the sources field
 6. Summarize in your reply which pages you created or updated
@@ -271,6 +273,7 @@ tools:
   - !git.*
   - !self-improvement.*
   - !swarm__wiki_write
+  - !swarm__wiki_edit
   - !swarm__wiki_delete
   - !session_mark_processed
 toolCallLimit: 30

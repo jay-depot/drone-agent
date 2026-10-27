@@ -424,6 +424,10 @@ const BUILTIN_HIDDEN_TOOLS: Array<{
     description: 'Create or update a wiki page in the swarm knowledge base',
   },
   {
+    name: 'swarm__wiki_edit',
+    description: 'Surgically edit an existing wiki page body and/or metadata',
+  },
+  {
     name: 'swarm__wiki_delete',
     description: 'Delete a wiki page from the swarm knowledge base',
   },

@@ -93,6 +93,17 @@ export function parseUnifiedDiff(diff: string): HunkWithHints[] {
     hunks.push(hunk);
   }
 
+  // Headerless fallback: a patch with no @@ hunk headers parses as ONE
+  // content-anchored hunk covering the whole input (lineHint/sectionHeading
+  // stay undefined). Push only if it contains actual change lines — otherwise
+  // the caller's "no hunks found" error stays accurate for garbage input.
+  if (hunks.length === 0) {
+    const hunk = classifyBody(lines, 0, '');
+    if (hunk.oldLines.length > 0 || hunk.newLines.length > 0) {
+      hunks.push(hunk);
+    }
+  }
+
   return hunks;
 }
 

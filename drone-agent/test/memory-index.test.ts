@@ -174,6 +174,7 @@ describe('memoryPlugin', () => {
     expect(typeof cap.list).toBe('function');
     expect(typeof cap.search).toBe('function');
     expect(typeof cap.delete).toBe('function');
+    expect(typeof cap.edit).toBe('function');
 
     // Help
     expect(captured.help.length).toBeGreaterThan(0);
@@ -260,7 +261,7 @@ describe('memoryPlugin', () => {
     const manageTool = captured.tools.find(t => t.name === 'manage')!;
     await expect(
       manageTool.execute({ action: 'bogus', key: 'k' })
-    ).rejects.toThrow(/action must be store, recall, or delete/);
+    ).rejects.toThrow(/action must be store, recall, edit, or delete/);
   });
 
   it('browse tool rejects unknown action', async () => {
@@ -301,5 +302,145 @@ describe('memoryPlugin', () => {
     expect(typeof rendered).toBe('string');
     expect(rendered).toContain('Project Memories');
     expect(rendered).toContain('fact-1');
+  });
+
+  it('edit tool patches the entry body with a diff', async () => {
+    const { registration, captured } = createMockRegistration();
+    await memoryPlugin.register(registration);
+
+    const cap = captured.capabilities.get('memory') as DroneMemoryCapability;
+    await cap.store('greeting', 'hello world');
+
+    const manageTool = captured.tools.find(t => t.name === 'manage')!;
+    const result = await manageTool.execute({
+      action: 'edit',
+      key: 'greeting',
+      diff: '-hello world\n+hello there',
+    });
+    const parsed = JSON.parse(toToolResultContent(result));
+    expect(parsed.success).toBe(true);
+    expect(parsed.key).toBe('greeting');
+    expect(parsed.summary).toMatchObject({ additions: 1, deletions: 1 });
+
+    const recalled = await cap.recall('greeting');
+    expect(recalled!.value).toBe('hello there');
+  });
+
+  it('edit tool replaces tags without touching the body', async () => {
+    const { registration, captured } = createMockRegistration();
+    await memoryPlugin.register(registration);
+
+    const cap = captured.capabilities.get('memory') as DroneMemoryCapability;
+    await cap.store('tagged', 'body text', ['old']);
+
+    const manageTool = captured.tools.find(t => t.name === 'manage')!;
+    const result = await manageTool.execute({
+      action: 'edit',
+      key: 'tagged',
+      tags: ['new', 'extra'],
+    });
+    const parsed = JSON.parse(toToolResultContent(result));
+    expect(parsed.success).toBe(true);
+    expect(parsed.tags).toEqual(['new', 'extra']);
+
+    const recalled = await cap.recall('tagged');
+    expect(recalled!.value).toBe('body text');
+    expect(recalled!.tags).toEqual(['new', 'extra']);
+  });
+
+  it('edit preserves createdAt and bumps updatedAt', async () => {
+    const { registration, captured } = createMockRegistration();
+    await memoryPlugin.register(registration);
+
+    const cap = captured.capabilities.get('memory') as DroneMemoryCapability;
+    const created = await cap.store('stamped', 'v1');
+
+    const edited = await cap.edit('stamped', () => ({ value: 'v2' }));
+    expect(edited).not.toBeNull();
+    expect(edited!.createdAt).toBe(created.createdAt);
+    expect(new Date(edited!.updatedAt).getTime()).toBeGreaterThanOrEqual(
+      new Date(created.updatedAt).getTime()
+    );
+  });
+
+  it('edit returns null for a missing entry', async () => {
+    const { registration, captured } = createMockRegistration();
+    await memoryPlugin.register(registration);
+
+    const cap = captured.capabilities.get('memory') as DroneMemoryCapability;
+    const edited = await cap.edit('does-not-exist', () => ({ value: 'x' }));
+    expect(edited).toBeNull();
+  });
+
+  it('edit tool reports a missing entry', async () => {
+    const { registration, captured } = createMockRegistration();
+    await memoryPlugin.register(registration);
+
+    const manageTool = captured.tools.find(t => t.name === 'manage')!;
+    const result = await manageTool.execute({
+      action: 'edit',
+      key: 'nope',
+      diff: '-a\n+b',
+    });
+    const parsed = JSON.parse(toToolResultContent(result));
+    expect(parsed.entry).toBeNull();
+  });
+
+  it('edit tool rejects a call with neither diff nor tags', async () => {
+    const { registration, captured } = createMockRegistration();
+    await memoryPlugin.register(registration);
+
+    const manageTool = captured.tools.find(t => t.name === 'manage')!;
+    await expect(
+      manageTool.execute({ action: 'edit', key: 'k' })
+    ).rejects.toThrow(/requires a diff and\/or tags/);
+  });
+
+  it('edit tool reports a non-matching diff and writes nothing', async () => {
+    const { registration, captured } = createMockRegistration();
+    await memoryPlugin.register(registration);
+
+    const cap = captured.capabilities.get('memory') as DroneMemoryCapability;
+    await cap.store('stable', 'unchanged body');
+
+    const manageTool = captured.tools.find(t => t.name === 'manage')!;
+    const result = await manageTool.execute({
+      action: 'edit',
+      key: 'stable',
+      diff: '-this line is not present\n+nor is this',
+    });
+    const parsed = JSON.parse(toToolResultContent(result));
+    expect(parsed.success).toBe(false);
+    expect(parsed.error).toContain('no hunks applied');
+    expect(parsed.error).toContain('memory__manage');
+
+    const recalled = await cap.recall('stable');
+    expect(recalled!.value).toBe('unchanged body');
+  });
+
+  it('serializes concurrent edits to the same key', async () => {
+    const { registration, captured } = createMockRegistration();
+    await memoryPlugin.register(registration);
+
+    const cap = captured.capabilities.get('memory') as DroneMemoryCapability;
+    await cap.store('counter', '0');
+
+    // Each edit reads-modifies-writes. Without the per-key lock the later
+    // write would clobber the earlier one; serialized, both apply.
+    const order: string[] = [];
+    await Promise.all([
+      cap.edit('counter', entry => {
+        order.push('a');
+        return { value: `${entry.value}a` };
+      }),
+      cap.edit('counter', entry => {
+        order.push('b');
+        return { value: `${entry.value}b` };
+      }),
+    ]);
+
+    expect(order).toEqual(['a', 'b']);
+    const recalled = await cap.recall('counter');
+    expect(recalled!.value).toBe('0ab');
   });
 });

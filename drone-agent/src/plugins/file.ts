@@ -12,7 +12,8 @@ import { FileApplyDiffBlock } from '../tui/components/FileApplyDiffBlock.js';
 import { FileListBlock } from '../tui/components/FileListBlock.js';
 import { FileGlobBlock } from '../tui/components/FileGlobBlock.js';
 import { renderDiffV2 } from '../shared/diff-renderer.js';
-import { applyPatch, type PatchError } from '../shared/patch-applier.js';
+import { formatPatchError } from '../shared/patch-applier/errors.js';
+import { applyPatch } from '../shared/patch-applier.js';
 import { parseUnifiedDiff } from '../shared/unified-diff-parser.js';
 import { withPathLock } from '../shared/keyed-lock.js';
 
@@ -56,69 +57,11 @@ function enhanceFsError(
  */
 export const __testing = { enhanceFsError };
 
-/**
- * Format a PatchError into an LLM-friendly error message. Each failure type
- * is reported differently:
- *
- *   Type 1 (multiple matches): a cheat sheet listing each match with line
- *     numbers + surrounding context, plus a reworked hunk that would uniquely
- *     target each one (the LLM can crib and resubmit).
- *   Type 2 (old code not found): up to 5 Levenshtein-closest file spans with
- *     location + actual content; or a plain "not found" message if the old
- *     code is too generic.
- *   Type 3 (narrowing over-eliminated): unrolled to the last multiple-match
- *     step, then reported like Type 1.
- */
-function formatPatchError(e: PatchError): string {
-  const tag = `Hunk ${e.hunkIndex}:`;
-
-  if (e.failureType === 'type2') {
-    const suggestions = e.suggestions ?? [];
-    if (suggestions.length === 0) {
-      return (
-        `${tag} The old code (the \`-\` lines) was not found in the file in any form.\n` +
-        `  ${e.detail}`
-      );
-    }
-    const lines = suggestions.map(
-      s =>
-        `  - line ${s.line} (distance ${s.distance}):\n` +
-        s.content
-          .split('\n')
-          .map(l => `      ${l}`)
-          .join('\n')
-    );
-    return (
-      `${tag} The old code (the \`-\` lines) was not found in the file.\n` +
-      `  ${e.detail}\n` +
-      `  Closest candidates:\n${lines.join('\n')}`
-    );
-  }
-
-  // Type 1 and Type 3 share the cheat-sheet format.
-  const sites = e.matchSites ?? [];
-  const siteBlocks = sites.map((site, idx) => {
-    const ctx = site.context.map(l => `    ${l}`).join('\n');
-    return (
-      `  Match ${idx + 1} (line ${site.line}):\n` +
-      `${ctx}\n` +
-      `  Reworked hunk to target this match:\n` +
-      '  ```diff\n' +
-      site.reworkedHunk
-        .split('\n')
-        .map(l => `  ${l}`)
-        .join('\n') +
-      '\n  ```'
-    );
-  });
-  return `${tag} ${e.message}\n  ${e.detail}\n\n${siteBlocks.join('\n\n')}`;
-}
-
 export const filePlugin: DronePlugin = {
   metadata: {
     id: 'file',
     name: 'File',
-    version: '0.4.0',
+    version: '0.5.0',
     description: 'Read, write, list, and patch files in the workspace.',
     defaultEnabled: false,
   },
@@ -319,7 +262,9 @@ export const filePlugin: DronePlugin = {
         '+    added line\n' +
         '     context\n\n' +
         '```\n' +
-        'Hunks start with @@ -start,count +start,count @@ [section heading].\n' +
+        'Hunks start with @@ -start,count +start,count @@ [section heading] — ' +
+        'the hunk header is OPTIONAL. A patch without any @@ header is parsed ' +
+        'as one content-anchored hunk covering the whole input.\n' +
         'Lines with ` ` are context, `-` are removed, `+` are added.\n' +
         'Multiple hunks (multiple @@ sections) are applied top-to-bottom.\n\n' +
         'Matching is content-anchored and robust to formatting changes:\n' +
@@ -347,12 +292,22 @@ export const filePlugin: DronePlugin = {
             type: 'string',
             description:
               'Unified diff patch string in `git diff` format. ' +
-              'Each hunk starts with @@ -start,count +start,count @@ [section heading].\n' +
+              'Each hunk starts with @@ -start,count +start,count @@ [section heading] — ' +
+              'the hunk header is OPTIONAL. A patch without any @@ header is parsed ' +
+              'as one content-anchored hunk covering the whole input; such a patch ' +
+              'must contain `-`/`+` change lines.\n' +
               'Lines prefixed with ` ` are context, `-` are removed, `+` are added.\n' +
               'Context lines between `-`/`+` lines are preserved (standard unified-diff semantics).\n' +
               'Example:\n' +
               '```diff\n' +
               '@@ -10,4 +10,4 @@ function_name:\n' +
+              '   context\n' +
+              '  -old line\n' +
+              '  +new line\n' +
+              '   context\n' +
+              '```\n' +
+              'A headerless example (same change, no @@ header):\n' +
+              '```diff\n' +
               '   context\n' +
               '  -old line\n' +
               '  +new line\n' +
@@ -394,9 +349,15 @@ export const filePlugin: DronePlugin = {
           if (hunks.length === 0) {
             throw new Error(
               'file__apply_diff: no hunks found in the patch string.\n\n' +
-                'The patch did not contain any @@ ... @@ hunk headers. ' +
+                'The patch did not contain any @@ ... @@ hunk header, and no ' +
+                '`-`/`+` change lines were found to parse as a headerless hunk. ' +
                 'Make sure the patch uses unified diff format, e.g.:\n' +
                 '@@ -5,7 +5,7 @@ function_name():\n' +
+                '     context\n' +
+                '-    old line\n' +
+                '+    new line\n\n' +
+                'A headerless patch is also accepted (no @@ header, just `-`/`+` ' +
+                'change lines), e.g.:\n' +
                 '     context\n' +
                 '-    old line\n' +
                 '+    new line\n\n' +

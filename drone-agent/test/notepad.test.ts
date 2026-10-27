@@ -75,7 +75,7 @@ describe('notepad manage tool', () => {
       )
     );
     expect(parsed.success).toBe(false);
-    expect(parsed.error).toMatch(/must be set, clear, or append/);
+    expect(parsed.error).toMatch(/must be set, clear, append, or edit/);
   });
 
   it('rejects omitted action instead of silently succeeding', async () => {
@@ -84,7 +84,7 @@ describe('notepad manage tool', () => {
       toToolResultContent(await manageTool.execute({}))
     );
     expect(parsed.success).toBe(false);
-    expect(parsed.error).toMatch(/must be set, clear, or append/);
+    expect(parsed.error).toMatch(/must be set, clear, append, or edit/);
   });
 
   it('leaves notepad state untouched after failed actions', async () => {
@@ -142,5 +142,66 @@ describe('notepad manage tool', () => {
       expect(parsed.success).toBe(false);
       expect(parsed.error).toMatch(/Missing content/);
     }
+  });
+
+  it('edit applies a diff to the current contents', async () => {
+    const { manageTool, currentFragment } = await setup();
+
+    await manageTool.execute({ action: 'set', content: 'alpha\nbeta\ngamma' });
+    const parsed = JSON.parse(
+      toToolResultContent(
+        await manageTool.execute({
+          action: 'edit',
+          diff: '-beta\n+BETA',
+        })
+      )
+    );
+    expect(parsed.success).toBe(true);
+    expect(parsed.summary).toMatchObject({ additions: 1, deletions: 1 });
+
+    const rendered = await currentFragment!.render();
+    expect(rendered).toContain('alpha');
+    expect(rendered).toContain('BETA');
+    expect(rendered).not.toContain('beta');
+  });
+
+  it('edit rejects a missing diff', async () => {
+    const { manageTool } = await setup();
+    await manageTool.execute({ action: 'set', content: 'x' });
+    const parsed = JSON.parse(
+      toToolResultContent(await manageTool.execute({ action: 'edit' }))
+    );
+    expect(parsed.success).toBe(false);
+    expect(parsed.error).toMatch(/requires a non-empty diff/);
+  });
+
+  it('edit rejects an empty notepad', async () => {
+    const { manageTool } = await setup();
+    const parsed = JSON.parse(
+      toToolResultContent(
+        await manageTool.execute({ action: 'edit', diff: '-a\n+b' })
+      )
+    );
+    expect(parsed.success).toBe(false);
+    expect(parsed.error).toMatch(/notepad is empty/);
+  });
+
+  it('edit reports a non-matching diff and leaves the notepad untouched', async () => {
+    const { manageTool, currentFragment } = await setup();
+    await manageTool.execute({ action: 'set', content: 'keep me' });
+
+    const parsed = JSON.parse(
+      toToolResultContent(
+        await manageTool.execute({
+          action: 'edit',
+          diff: '-not present\n+nope',
+        })
+      )
+    );
+    expect(parsed.success).toBe(false);
+    expect(parsed.error).toContain('no hunks applied to the notepad');
+
+    const rendered = await currentFragment!.render();
+    expect(rendered).toContain('keep me');
   });
 });

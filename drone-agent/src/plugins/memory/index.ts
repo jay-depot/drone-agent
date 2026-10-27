@@ -8,12 +8,33 @@ import {
   listMemoryEntries,
   readMemoryEntry,
   resolveMemoryDir,
+  sanitizeKey,
   searchMemoryEntries,
   updateMemoryEntry,
   writeMemoryEntry,
   countMemoryEntries as countStoreEntries,
 } from './store.js';
+import { withKeyLock } from '../../shared/keyed-lock.js';
 import type { DroneMemoryCapability, MemoryEntry } from './types.js';
+import { applyEditToBody } from '../../shared/patch-applier/edit-body.js';
+import type { DiffSummary } from '../../shared/diff-renderer.js';
+
+/**
+ * Signals that a `capability.edit` patch callback decided not to commit
+ * (e.g. the diff matched no hunks). Thrown from inside the callback so the
+ * read-modify-write is abandoned without writing; the tool converts it into
+ * a structured error result.
+ */
+class MemoryEditAbort extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'MemoryEditAbort';
+  }
+}
+
+/** Recovery hint appended to memory edit patch failures. */
+const MEMORY_EDIT_RECOVERY_TIP =
+  'Tip: recall the entry with memory__manage (action="recall") to confirm its current contents, then correct the diff and try again.';
 
 export const memoryPlugin: DronePlugin = {
   metadata: {
@@ -21,7 +42,7 @@ export const memoryPlugin: DronePlugin = {
     name: 'Memory',
     version: '0.1.0',
     description:
-      'Persistent project-level memory: store, recall, search, and delete facts across sessions.',
+      'Persistent project-level memory: store, recall, edit, search, and delete facts across sessions.',
     defaultEnabled: false,
   },
   register: async registration => {
@@ -40,16 +61,18 @@ export const memoryPlugin: DronePlugin = {
         if (!config.enabled) {
           throw new Error('Memory is disabled by configuration.');
         }
-        const existing =
-          cache.get(key) ?? (await readMemoryEntry(memoryDir, key));
-        const entry = existing
-          ? updateMemoryEntry(existing, value, tags)
-          : createMemoryEntry(key, value, tags);
+        return withKeyLock(`memory:${sanitizeKey(key)}`, async () => {
+          const existing =
+            cache.get(key) ?? (await readMemoryEntry(memoryDir, key));
+          const entry = existing
+            ? updateMemoryEntry(existing, value, tags)
+            : createMemoryEntry(key, value, tags);
 
-        cache.set(entry.key, entry);
-        await writeMemoryEntry(memoryDir, entry);
-        registration.logger.info(`memory stored: ${entry.key}`);
-        return entry;
+          cache.set(entry.key, entry);
+          await writeMemoryEntry(memoryDir, entry);
+          registration.logger.info(`memory stored: ${entry.key}`);
+          return entry;
+        });
       },
 
       recall: async key => {
@@ -85,8 +108,30 @@ export const memoryPlugin: DronePlugin = {
         if (!config.enabled) {
           return false;
         }
-        cache.delete(key);
-        return deleteMemoryEntry(memoryDir, key);
+        return withKeyLock(`memory:${sanitizeKey(key)}`, async () => {
+          cache.delete(key);
+          return deleteMemoryEntry(memoryDir, key);
+        });
+      },
+
+      edit: async (key, patch) => {
+        if (!config.enabled) {
+          return null;
+        }
+        return withKeyLock(`memory:${sanitizeKey(key)}`, async () => {
+          const existing =
+            cache.get(key) ?? (await readMemoryEntry(memoryDir, key));
+          if (!existing) {
+            return null;
+          }
+          const { value, tags } = patch(existing);
+          const entry = updateMemoryEntry(existing, value, tags);
+
+          cache.set(entry.key, entry);
+          await writeMemoryEntry(memoryDir, entry);
+          registration.logger.info(`memory edited: ${entry.key}`);
+          return entry;
+        });
       },
     };
 
@@ -131,17 +176,18 @@ export const memoryPlugin: DronePlugin = {
     registration.registerTool({
       name: 'manage',
       description:
-        'Manage memory entries: store, recall, or delete. ' +
+        'Manage memory entries: store, recall, edit, or delete. ' +
         'Use action="store" with key+value to save, action="recall" with key to retrieve, ' +
+        'action="edit" with key+diff (and/or tags) to surgically patch an existing entry, ' +
         'action="delete" with key to remove.',
       inputSchema: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
-            enum: ['store', 'recall', 'delete'],
+            enum: ['store', 'recall', 'edit', 'delete'],
             description:
-              'What to do: store (save), recall (retrieve), delete (remove).',
+              'What to do: store (save), recall (retrieve), edit (patch in place), delete (remove).',
           },
           key: {
             type: 'string',
@@ -155,7 +201,14 @@ export const memoryPlugin: DronePlugin = {
             type: 'array',
             items: { type: 'string' },
             description:
-              'Optional tags for categorization (store action only).',
+              'Optional tags for categorization (store, or edit to replace tags).',
+          },
+          diff: {
+            type: 'string',
+            description:
+              'Unified diff patch applied to the entry body (required for edit ' +
+              'unless tags is given). The @@ hunk header is optional; a ' +
+              'headerless patch parses as one hunk and must contain -/+ change lines.',
           },
         },
         required: ['action', 'key'],
@@ -166,9 +219,14 @@ export const memoryPlugin: DronePlugin = {
 
         const key = typeof input.key === 'string' ? input.key.trim() : '';
         if (!key) throw new Error('memory.manage requires a non-empty key.');
-        if (action !== 'store' && action !== 'recall' && action !== 'delete') {
+        if (
+          action !== 'store' &&
+          action !== 'recall' &&
+          action !== 'edit' &&
+          action !== 'delete'
+        ) {
           throw new Error(
-            'memory.manage action must be store, recall, or delete.'
+            'memory.manage action must be store, recall, edit, or delete.'
           );
         }
 
@@ -198,6 +256,84 @@ export const memoryPlugin: DronePlugin = {
             );
           }
           return JSON.stringify(entry, null, 2);
+        }
+
+        if (action === 'edit') {
+          const diff =
+            typeof input.diff === 'string' && input.diff.trim().length > 0
+              ? input.diff
+              : undefined;
+          const tags = Array.isArray(input.tags)
+            ? (input.tags as string[]).filter(t => typeof t === 'string')
+            : undefined;
+          if (!diff && !tags) {
+            throw new Error(
+              'memory.manage edit requires a diff and/or tags to change.'
+            );
+          }
+
+          let diffOutput: string | undefined;
+          let summary: DiffSummary | undefined;
+          let partialFailureMessage: string | undefined;
+
+          let entry: MemoryEntry | null;
+          try {
+            entry = await capability.edit(key, existing => {
+              if (!diff) {
+                return { value: existing.value, tags };
+              }
+              const outcome = applyEditToBody(existing.value, diff, {
+                label: `memory:${key}`,
+                toolName: 'memory.manage edit',
+                targetNoun: 'entry body',
+                recoveryTip: MEMORY_EDIT_RECOVERY_TIP,
+              });
+              if (outcome.status === 'none-applied') {
+                throw new MemoryEditAbort(outcome.error);
+              }
+              diffOutput = outcome.diff;
+              summary = outcome.summary;
+              partialFailureMessage = outcome.partialFailureMessage;
+              return { value: outcome.value, tags };
+            });
+          } catch (err) {
+            if (err instanceof MemoryEditAbort) {
+              return JSON.stringify(
+                { success: false, key, error: err.message },
+                null,
+                2
+              );
+            }
+            throw err;
+          }
+
+          if (!entry) {
+            return JSON.stringify(
+              { key, entry: null, message: 'No entry found for this key.' },
+              null,
+              2
+            );
+          }
+          if (partialFailureMessage) {
+            return JSON.stringify(
+              { success: false, key, error: partialFailureMessage },
+              null,
+              2
+            );
+          }
+          return JSON.stringify(
+            {
+              success: true,
+              key: entry.key,
+              tags: entry.tags,
+              createdAt: entry.createdAt,
+              updatedAt: entry.updatedAt,
+              ...(summary ? { summary } : {}),
+              ...(diffOutput !== undefined ? { diff: diffOutput } : {}),
+            },
+            null,
+            2
+          );
         }
 
         if (action === 'delete') {
@@ -284,7 +420,7 @@ export const memoryPlugin: DronePlugin = {
 
     // ── help snippet ───────────────────────────────────────────────────
     registration.registerHelp(
-      'Project Memory: store/recall/list/search/delete facts in .drone-agent/memory/. Enabled with --plugin memory.'
+      'Project Memory: store/recall/edit/list/search/delete facts in .drone-agent/memory/. Enabled with --plugin memory.'
     );
 
     // ── lifecycle hooks ────────────────────────────────────────────────
