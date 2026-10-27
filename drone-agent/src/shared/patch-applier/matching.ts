@@ -373,76 +373,61 @@ export function sortByLineHint(
 // ── Pure-insertion locator ────────────────────────────────────────────
 
 /**
- * Locate the insertion point for a pure-insertion hunk (empty oldLines).
- * Searches for the contextBefore block; the insertion happens immediately
- * after it. Falls back to contextAfter (insertion immediately before it).
- * Returns the 0-based insertion index, or null if no context matched.
+ * Find every insertion point for a pure-insertion hunk (empty oldLines).
+ *
+ * A pure insertion has no old lines to anchor on, so its position is fixed
+ * entirely by surrounding context. This returns ALL distinct candidate
+ * insertion indices using the first anchor strategy that yields any:
+ *
+ *   1. contextBefore — insertion immediately AFTER each matching block.
+ *   2. contextAfter  — insertion immediately BEFORE each matching block.
+ *   3. no context    — [0] for an empty file, else the line hint, else [].
+ *
+ * Matching loosens through fuzz levels (exact → trim → strip-all) exactly as
+ * the rest of the cascade does, but stops at the first level that yields any
+ * candidates. Callers MUST treat >1 candidate as ambiguous and fail rather
+ * than guess: a non-unique anchor would otherwise insert in the wrong place
+ * while reporting success.
  */
-export function locatePureInsertion(
+export function locatePureInsertionCandidates(
   fileLines: string[],
   contextBefore: string[],
   contextAfter: string[],
   lineHint?: number
-): number | null {
-  if (contextBefore.length > 0) {
-    for (let i = 0; i <= fileLines.length - contextBefore.length; i++) {
-      if (
-        linesMatch(
-          contextBefore,
-          fileLines.slice(i, i + contextBefore.length),
-          0
-        )
-      ) {
-        return i + contextBefore.length;
-      }
-    }
-    for (const level of [1, 100] as FuzzLevel[]) {
-      for (let i = 0; i <= fileLines.length - contextBefore.length; i++) {
-        if (
-          linesMatch(
-            contextBefore,
-            fileLines.slice(i, i + contextBefore.length),
-            level
-          )
-        ) {
-          return i + contextBefore.length;
+): number[] {
+  const collect = (ctx: string[], offset: (i: number) => number): number[] => {
+    for (const level of [0, 1, 100] as FuzzLevel[]) {
+      const points: number[] = [];
+      for (let i = 0; i <= fileLines.length - ctx.length; i++) {
+        if (linesMatch(ctx, fileLines.slice(i, i + ctx.length), level)) {
+          const point = offset(i);
+          if (!points.includes(point)) points.push(point);
         }
       }
+      if (points.length > 0) return points;
     }
+    return [];
+  };
+
+  if (contextBefore.length > 0) {
+    const points = collect(contextBefore, i => i + contextBefore.length);
+    if (points.length > 0) return points;
   }
   if (contextAfter.length > 0) {
-    for (let i = 0; i <= fileLines.length - contextAfter.length; i++) {
-      if (
-        linesMatch(contextAfter, fileLines.slice(i, i + contextAfter.length), 0)
-      ) {
-        return i;
-      }
-    }
-    for (const level of [1, 100] as FuzzLevel[]) {
-      for (let i = 0; i <= fileLines.length - contextAfter.length; i++) {
-        if (
-          linesMatch(
-            contextAfter,
-            fileLines.slice(i, i + contextAfter.length),
-            level
-          )
-        ) {
-          return i;
-        }
-      }
-    }
+    const points = collect(contextAfter, i => i);
+    if (points.length > 0) return points;
   }
   // No context at all — if file is empty, insert at start.
-  if (fileLines.length === 0) return 0;
+  if (fileLines.length === 0) return [0];
   // lineHint as last resort
   if (
     lineHint !== undefined &&
     lineHint >= 1 &&
     lineHint <= fileLines.length + 1
   ) {
-    return lineHint - 1;
+    return [lineHint - 1];
   }
-  return null;
+  return [];
 }
 
 // Re-export for callers that need it (e.g. tests).

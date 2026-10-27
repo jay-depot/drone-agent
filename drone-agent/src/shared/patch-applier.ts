@@ -40,6 +40,7 @@ import type {
   PatchResult,
 } from './patch-applier/types.js';
 import {
+  buildInsertionAmbiguityFailure,
   buildType1Failure,
   buildType2Failure,
   buildType3Failure,
@@ -47,7 +48,7 @@ import {
 import {
   findAggressiveOldLinesMatches,
   findExactOldLinesMatches,
-  locatePureInsertion,
+  locatePureInsertionCandidates,
   narrowByContextCascade,
   narrowByHeadingCascade,
   sortByLineHint,
@@ -132,16 +133,23 @@ export function applyPatch(lines: string[], hunks: PatchHunk[]): PatchResult {
 
     // Special case: empty oldLines (pure insertion) — use context to locate.
     if (oldLines.length === 0) {
-      const inserted = locatePureInsertion(
+      const candidates = locatePureInsertionCandidates(
         workingLines,
         contextBefore,
         contextAfter,
         lineHint
       );
-      if (inserted === null) {
+      if (candidates.length === 0) {
         errors.push(buildType2Failure(hi, hunk, workingLines));
         continue;
       }
+      if (candidates.length > 1) {
+        errors.push(
+          buildInsertionAmbiguityFailure(hi, candidates, workingLines, hunk)
+        );
+        continue;
+      }
+      const inserted = candidates[0];
       workingLines.splice(inserted, 0, ...newLines);
       appliedHunks.push({
         anchors,

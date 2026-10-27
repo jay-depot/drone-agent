@@ -516,3 +516,110 @@ describe('applyPatch — interleaved context (regression)', () => {
     ]);
   });
 });
+
+describe('applyPatch — pure insertion ambiguity', () => {
+  it('inserts when the anchor is unique', () => {
+    const lines = [
+      'export type A = {',
+      '  x: string;',
+      '};',
+      '',
+      'export type B = {',
+      '  delete: (k: string) => boolean;',
+      '};',
+    ];
+    const hunks: PatchHunk[] = [
+      makeHunk({
+        anchors: [],
+        contextBefore: ['  delete: (k: string) => boolean;'],
+        oldLines: [],
+        newLines: ['  edit: (k: string) => boolean;'],
+        contextAfter: [],
+      }),
+    ];
+
+    const result = applyPatch(lines, hunks);
+    expect(result.success).toBe(true);
+    // Inserted immediately after the unique `delete` line, before the `};`
+    // that closes type B — NOT into type A.
+    expect(result.patchedLines.indexOf('  edit: (k: string) => boolean;')).toBe(
+      result.patchedLines.indexOf('export type B = {') + 2
+    );
+  });
+
+  it('fails loudly when only a generic after-anchor matches more than once', () => {
+    const lines = [
+      'export type A = {',
+      '  x: string;',
+      '};',
+      '',
+      'export type B = {',
+      '  y: string;',
+      '};',
+    ];
+    const hunks: PatchHunk[] = [
+      makeHunk({
+        anchors: [],
+        contextBefore: [],
+        oldLines: [],
+        newLines: ['  z: string;'],
+        contextAfter: ['};'],
+      }),
+    ];
+
+    const result = applyPatch(lines, hunks);
+    expect(result.success).toBe(false);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].failureType).toBe('type1');
+    expect(result.errors[0].message).toContain('Ambiguous insertion point');
+    expect(result.errors[0].matchSites).toHaveLength(2);
+    expect(result.patchedLines).toEqual(lines);
+  });
+
+  it('fails loudly when a duplicated before-anchor matches more than once', () => {
+    const lines = ['    pass', '', '    pass', ''];
+    const hunks: PatchHunk[] = [
+      makeHunk({
+        anchors: [],
+        contextBefore: ['    pass'],
+        oldLines: [],
+        newLines: ['    extra'],
+        contextAfter: [],
+      }),
+    ];
+
+    const result = applyPatch(lines, hunks);
+    expect(result.success).toBe(false);
+    expect(result.errors[0].failureType).toBe('type1');
+    expect(result.errors[0].matchSites).toHaveLength(2);
+  });
+
+  it('cheat-sheet reworked hunks are textually distinct per candidate', () => {
+    const lines = [
+      'export type A = {',
+      '  x: string;',
+      '};',
+      '',
+      'export type B = {',
+      '  y: string;',
+      '};',
+    ];
+    const hunks: PatchHunk[] = [
+      makeHunk({
+        anchors: [],
+        contextBefore: [],
+        oldLines: [],
+        newLines: ['  z: string;'],
+        contextAfter: ['};'],
+      }),
+    ];
+
+    const result = applyPatch(lines, hunks);
+    const sites = result.errors[0].matchSites!;
+    // The growth loop must add the distinguishing context line for each site,
+    // so resubmitting either reworked hunk would actually disambiguate.
+    expect(sites[0].reworkedHunk).toContain('x: string;');
+    expect(sites[1].reworkedHunk).toContain('y: string;');
+    expect(sites[0].reworkedHunk).not.toBe(sites[1].reworkedHunk);
+  });
+});

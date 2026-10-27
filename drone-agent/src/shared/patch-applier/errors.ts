@@ -39,16 +39,24 @@ function buildReworkedHunk(
   let extraBefore = 0;
   let extraAfter = 0;
 
+  // Render the context window that a hunk anchored at `m` would carry, given
+  // the current growth. Two candidates are still ambiguous when their windows
+  // are textually identical (the change zone is the same at every candidate,
+  // so only surrounding context can tell them apart).
+  const windowText = (m: MatchSpan): string => {
+    const bs = Math.max(0, m.start - contextBefore.length - extraBefore);
+    const ae = Math.min(
+      fileLines.length,
+      m.end + contextAfter.length + extraAfter
+    );
+    return fileLines.slice(bs, ae).join('\n');
+  };
+
   const isUnique = (): boolean => {
-    const beforeStart = match.start - contextBefore.length - extraBefore;
-    const afterEnd = match.end + contextAfter.length + extraAfter;
+    const mine = windowText(match);
     for (const other of otherMatches) {
       if (other.start === match.start && other.end === match.end) continue;
-      const otherBeforeStart = other.start - contextBefore.length - extraBefore;
-      const otherAfterEnd = other.end + contextAfter.length + extraAfter;
-      if (beforeStart === otherBeforeStart && afterEnd === otherAfterEnd) {
-        return false;
-      }
+      if (windowText(other) === mine) return false;
     }
     return true;
   };
@@ -132,6 +140,41 @@ export function buildType1Failure(
     hunkIndex,
     message: `Multiple matches (${survivors.length}) survived all narrowing`,
     detail: `The old code matched ${survivors.length} locations and the context/heading couldn't disambiguate. See each match below with a reworked hunk that would uniquely target it.`,
+    anchors: hunk.anchors,
+    failureType: 'type1',
+    matchSites: buildMatchSites(survivors, fileLines, hunk),
+  };
+}
+
+/**
+ * Build a failure for an ambiguous pure-insertion hunk: the hunk has no old
+ * lines, so its position rests entirely on context, and that context matched
+ * more than one place. Guessing would insert in the wrong location while
+ * reporting success, so we surface each candidate instead. Each site is a
+ * zero-width span at the candidate insertion index; `buildMatchSites` renders
+ * the surrounding context and a reworked hunk that inserts at that point.
+ */
+export function buildInsertionAmbiguityFailure(
+  hunkIndex: number,
+  insertionPoints: number[],
+  fileLines: string[],
+  hunk: PatchHunk
+): PatchError {
+  const survivors: MatchSpan[] = insertionPoints.map(point => ({
+    start: point,
+    end: point,
+    fuzz: 0,
+  }));
+  return {
+    hunkIndex,
+    message: `Ambiguous insertion point (${insertionPoints.length} candidates)`,
+    detail:
+      `This hunk only inserts lines (it has no \`-\` lines), so its position is ` +
+      `fixed entirely by the surrounding context — and that context matches ` +
+      `${insertionPoints.length} places. Add more context lines, or include a ` +
+      `line of the code you are inserting next to as a \`-\` line, so the ` +
+      `anchor is unique. Each candidate is shown below with a reworked hunk ` +
+      `that inserts at that point.`,
     anchors: hunk.anchors,
     failureType: 'type1',
     matchSites: buildMatchSites(survivors, fileLines, hunk),
