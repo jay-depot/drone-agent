@@ -61,7 +61,7 @@ export const filePlugin: DronePlugin = {
   metadata: {
     id: 'file',
     name: 'File',
-    version: '0.5.0',
+    version: '0.6.0',
     description: 'Read, write, list, and patch files in the workspace.',
     defaultEnabled: false,
   },

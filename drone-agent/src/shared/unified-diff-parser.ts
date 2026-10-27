@@ -142,6 +142,7 @@ function classifyBody(
     for (const line of bodyLines) {
       if (line.length === 0) continue;
       if (line[0] === '\\') continue;
+      if (line[0] === '@') continue;
       contextBefore.push(line.slice(1));
     }
     return {
@@ -170,6 +171,11 @@ function classifyBody(
 
     // Skip no-newline markers
     if (ch === '\\') continue;
+
+    // Skip a malformed hunk header: a line beginning with `@` that is not a
+    // valid `@@ -N,M +N,M @@` header (valid ones are consumed by the parser
+    // loop above). Ingesting it as content would silently corrupt the anchor.
+    if (ch === '@') continue;
 
     const content = line.slice(1);
 
