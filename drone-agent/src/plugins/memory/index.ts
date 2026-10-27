@@ -16,21 +16,8 @@ import {
 } from './store.js';
 import { withKeyLock } from '../../shared/keyed-lock.js';
 import type { DroneMemoryCapability, MemoryEntry } from './types.js';
-import {
-  parseUnifiedDiff,
-  type HunkWithHints,
-} from '../../shared/unified-diff-parser.js';
-import { applyPatch } from '../../shared/patch-applier.js';
-import { renderDiffV2 } from '../../shared/diff-renderer.js';
-import { formatPatchError } from '../../shared/patch-applier/errors.js';
-
-/**
- * Recovery hint appended to memory edit patch failures. The shared
- * `formatPatchError` output is deliberately tool-agnostic, so each caller
- * supplies its own "re-read and retry" advice.
- */
-const MEMORY_EDIT_RECOVERY_TIP =
-  'Tip: recall the entry with memory__manage (action="recall") to confirm its current contents, then correct the diff and try again.';
+import { applyEditToBody } from '../../shared/patch-applier/edit-body.js';
+import type { DiffSummary } from '../../shared/diff-renderer.js';
 
 /**
  * Signals that a `capability.edit` patch callback decided not to commit
@@ -45,59 +32,9 @@ class MemoryEditAbort extends Error {
   }
 }
 
-/**
- * Apply a parsed diff to an entry body, returning the patched text plus the
- * rendered diff and summary for the tool result. Throws `MemoryEditAbort`
- * when no hunk applied, so the caller writes nothing.
- */
-function applyPatchToBody(
-  key: string,
-  body: string,
-  hunks: HunkWithHints[]
-): {
-  value: string;
-  diffOutput: string;
-  summary: Record<string, unknown>;
-  partialFailureMessage?: string;
-} {
-  const result = applyPatch(body.split('\n'), hunks);
-  if (result.appliedHunks.length === 0) {
-    throw new MemoryEditAbort(
-      `memory.manage edit: no hunks applied to the entry body. ` +
-        `${result.errors.map(formatPatchError).join('\n\n')}\n\n` +
-        MEMORY_EDIT_RECOVERY_TIP
-    );
-  }
-
-  const fuzzByIndex = new Map(
-    result.appliedHunks.map(a => [a.hunkIndex, a.fuzz])
-  );
-  const diffHunks = hunks
-    .map((hunk, i) => ({ hunk, i }))
-    .filter(({ i }) => fuzzByIndex.has(i))
-    .map(({ hunk, i }) => ({
-      anchors: hunk.anchors,
-      contextBefore: hunk.contextBefore,
-      changeZone: hunk.changeZone,
-      oldLines: hunk.oldLines,
-      newLines: hunk.newLines,
-      contextAfter: hunk.contextAfter,
-      fuzz: fuzzByIndex.get(i),
-    }));
-  const rendered = renderDiffV2(`memory:${key}`, diffHunks, false);
-
-  return {
-    value: result.patchedLines.join('\n'),
-    diffOutput: rendered.plain,
-    summary: rendered.summary as unknown as Record<string, unknown>,
-    partialFailureMessage: result.success
-      ? undefined
-      : `memory.manage edit: ${result.errors.length} of ${hunks.length} hunk(s) failed to apply. ` +
-        `The entry was written with ${result.appliedHunks.length} successful hunk(s) applied.\n\n` +
-        `${result.errors.map(formatPatchError).join('\n\n')}\n\n` +
-        MEMORY_EDIT_RECOVERY_TIP,
-  };
-}
+/** Recovery hint appended to memory edit patch failures. */
+const MEMORY_EDIT_RECOVERY_TIP =
+  'Tip: recall the entry with memory__manage (action="recall") to confirm its current contents, then correct the diff and try again.';
 
 export const memoryPlugin: DronePlugin = {
   metadata: {
@@ -335,20 +272,8 @@ export const memoryPlugin: DronePlugin = {
             );
           }
 
-          let hunks: HunkWithHints[] = [];
-          if (diff) {
-            hunks = parseUnifiedDiff(diff);
-            if (hunks.length === 0) {
-              throw new Error(
-                'memory.manage edit: no hunks found in the diff. The patch ' +
-                  'must contain `-`/`+` change lines (a headerless patch ' +
-                  'parses as one hunk).'
-              );
-            }
-          }
-
           let diffOutput: string | undefined;
-          let summary: Record<string, unknown> | undefined;
+          let summary: DiffSummary | undefined;
           let partialFailureMessage: string | undefined;
 
           let entry: MemoryEntry | null;
@@ -357,11 +282,19 @@ export const memoryPlugin: DronePlugin = {
               if (!diff) {
                 return { value: existing.value, tags };
               }
-              const patched = applyPatchToBody(key, existing.value, hunks);
-              diffOutput = patched.diffOutput;
-              summary = patched.summary;
-              partialFailureMessage = patched.partialFailureMessage;
-              return { value: patched.value, tags };
+              const outcome = applyEditToBody(existing.value, diff, {
+                label: `memory:${key}`,
+                toolName: 'memory.manage edit',
+                targetNoun: 'entry body',
+                recoveryTip: MEMORY_EDIT_RECOVERY_TIP,
+              });
+              if (outcome.status === 'none-applied') {
+                throw new MemoryEditAbort(outcome.error);
+              }
+              diffOutput = outcome.diff;
+              summary = outcome.summary;
+              partialFailureMessage = outcome.partialFailureMessage;
+              return { value: outcome.value, tags };
             });
           } catch (err) {
             if (err instanceof MemoryEditAbort) {

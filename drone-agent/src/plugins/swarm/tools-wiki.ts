@@ -9,10 +9,8 @@ import type { DroneToolDefinition } from 'drone-core';
 import type { SwarmContext } from './context.js';
 import { firstMissingString } from './string-params.js';
 import { withKeyLock } from 'drone-swarm-common';
-import { parseUnifiedDiff } from '../../shared/unified-diff-parser.js';
-import { applyPatch } from '../../shared/patch-applier.js';
-import { renderDiffV2 } from '../../shared/diff-renderer.js';
-import { formatPatchError } from '../../shared/patch-applier/errors.js';
+import { applyEditToBody } from '../../shared/patch-applier/edit-body.js';
+import type { DiffSummary } from '../../shared/diff-renderer.js';
 
 /** Metadata fields wiki_edit can carry through to the PUT body. */
 type WikiEditMetadataKeys = 'title' | 'tags' | 'sources' | 'pitch';
@@ -128,63 +126,22 @@ function createWikiEditTool(ctx: SwarmContext): DroneToolDefinition {
 
           let patchedContent: string | undefined;
           let diffOutput: string | undefined;
-          let summary: Record<string, unknown> | undefined;
+          let summary: DiffSummary | undefined;
           let partialFailureMessage: string | undefined;
           if (diff) {
-            const hunks = parseUnifiedDiff(diff);
-            if (hunks.length === 0) {
-              return JSON.stringify({
-                success: false,
-                error:
-                  'wiki_edit: no hunks found in the diff. The patch must contain ' +
-                  '`-`/`+` change lines (a headerless patch parses as one hunk).',
-              });
+            const outcome = applyEditToBody(String(page.content ?? ''), diff, {
+              label: `${effectiveScope}:${pageId}`,
+              toolName: 'wiki_edit',
+              targetNoun: 'page body',
+              recoveryTip: WIKI_EDIT_RECOVERY_TIP,
+            });
+            if (outcome.status === 'none-applied') {
+              return JSON.stringify({ success: false, error: outcome.error });
             }
-            const result = applyPatch(
-              String(page.content ?? '').split('\n'),
-              hunks
-            );
-            if (result.appliedHunks.length === 0) {
-              return JSON.stringify({
-                success: false,
-                error:
-                  `wiki_edit: no hunks applied to the page body. ` +
-                  `${result.errors.map(formatPatchError).join('\n\n')}\n\n` +
-                  WIKI_EDIT_RECOVERY_TIP,
-              });
-            }
-            patchedContent = result.patchedLines.join('\n');
-
-            const fuzzByIndex = new Map(
-              result.appliedHunks.map(a => [a.hunkIndex, a.fuzz])
-            );
-            const diffHunks = hunks
-              .map((hunk, i) => ({ hunk, i }))
-              .filter(({ i }) => fuzzByIndex.has(i))
-              .map(({ hunk, i }) => ({
-                anchors: hunk.anchors,
-                contextBefore: hunk.contextBefore,
-                changeZone: hunk.changeZone,
-                oldLines: hunk.oldLines,
-                newLines: hunk.newLines,
-                contextAfter: hunk.contextAfter,
-                fuzz: fuzzByIndex.get(i),
-              }));
-            const rendered = renderDiffV2(
-              `${effectiveScope}:${pageId}`,
-              diffHunks,
-              false
-            );
-            diffOutput = rendered.plain;
-            summary = rendered.summary as unknown as Record<string, unknown>;
-
-            if (!result.success) {
-              partialFailureMessage =
-                `wiki_edit: ${result.errors.length} of ${hunks.length} hunk(s) failed to apply. ` +
-                `The page was written with ${result.appliedHunks.length} successful hunk(s) applied.\n\n` +
-                `${result.errors.map(formatPatchError).join('\n\n')}\n\n` +
-                WIKI_EDIT_RECOVERY_TIP;
-            }
+            patchedContent = outcome.value;
+            diffOutput = outcome.diff;
+            summary = outcome.summary;
+            partialFailureMessage = outcome.partialFailureMessage;
           }
 
           const putRes = await fetch(
