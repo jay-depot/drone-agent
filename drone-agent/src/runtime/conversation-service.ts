@@ -164,13 +164,13 @@ type CreateConversationServiceOptions = {
   ) => Promise<boolean>;
   /**
    * Optional callback invoked when the broken-response retry limit is
-   * reached (empty or reasoning-only responses). The host can prompt the
-   * user to continue. Return `true` to reset and continue, or `false`
-   * to return an empty string. When omitted, the limit returns an empty
-   * string.
+   * reached (empty, reasoning-only, or malformed-tool-call-argument
+   * responses). The host can prompt the user to continue. Return `true`
+   * to reset and continue, or `false` to return an empty string. When
+   * omitted, the limit returns an empty string.
    */
   onBrokenResponseLimitReached?: (
-    type: 'empty' | 'reasoning-only'
+    type: 'empty' | 'reasoning-only' | 'malformed tool-call arguments'
   ) => Promise<boolean>;
   /**
    * Optional callback invoked when the identical tool-call streak limit
@@ -293,6 +293,7 @@ export function createConversationService({
   // alternating between the two could conflate their hintAfter/maxHints limits).
   let emptyResponseCount = 0;
   let reasoningOnlyResponseCount = 0;
+  let malformedToolCallResponseCount = 0;
   let stuckCount = 0;
   let identicalCallNudgeActive = false;
   let brokenResponseHintActive = false;
@@ -1236,10 +1237,57 @@ export function createConversationService({
             return '';
           }
 
+          // ── Malformed tool-call arguments: degenerate-response tier ──
+          // Unparseable or non-object arguments cannot be acted on. Unlike
+          // a missing optional parameter (which the tool's own error
+          // feedback lets the model correct in one round), there is nothing
+          // to feed back, so the whole response retries under the
+          // brokenResponses thresholds. Assistant text is discarded with the
+          // retry so the session never holds a turn paired with unusable
+          // calls.
+          if ((response.malformedToolCalls?.length ?? 0) > 0) {
+            const tier = resolvedGuardrail.brokenResponses;
+            const label = 'malformed tool-call arguments';
+            const tierCount = ++malformedToolCallResponseCount;
+
+            if (tierCount <= tier.hintAfter) {
+              emit({
+                kind: 'notice',
+                content: `Degenerate response (${label}), retrying (${tierCount}/${tier.hintAfter})`,
+              });
+              continue;
+            }
+
+            if (tierCount < tier.hintAfter + tier.maxHints) {
+              emit({
+                kind: 'notice',
+                content: `Degenerate response (${label}), retrying with hint (${tierCount - tier.hintAfter}/${tier.maxHints})`,
+              });
+              brokenResponseHintActive = true;
+              continue;
+            }
+
+            emit({
+              kind: 'notice',
+              content: `Degenerate response (${label}) retry limit reached after ${tierCount} attempts.`,
+            });
+            if (onBrokenResponseLimitReached) {
+              const shouldContinue = await onBrokenResponseLimitReached(label);
+              if (shouldContinue) {
+                malformedToolCallResponseCount = 0;
+                brokenResponseHintActive = false;
+                continue;
+              }
+            }
+            completedNormally = true;
+            return '';
+          }
+
           // ── Non-broken response: reset broken-response counter ───────
           emptyResponseCount = 0;
           reasoningOnlyResponseCount = 0;
           brokenResponseHintActive = false;
+          malformedToolCallResponseCount = 0;
 
           // Reasoning is only emitted for KEPT responses.
           if (response.reasoning && response.reasoning.length > 0) {
@@ -1468,6 +1516,7 @@ export function createConversationService({
       lastIdenticalToolCall = null;
       emptyResponseCount = 0;
       reasoningOnlyResponseCount = 0;
+      malformedToolCallResponseCount = 0;
       identicalCallNudgeActive = false;
       brokenResponseHintActive = false;
       engine.clearSystemReminders();
@@ -1644,6 +1693,7 @@ export function createConversationService({
       lastIdenticalToolCall = null;
       emptyResponseCount = 0;
       reasoningOnlyResponseCount = 0;
+      malformedToolCallResponseCount = 0;
       identicalCallNudgeActive = false;
       brokenResponseHintActive = false;
     },

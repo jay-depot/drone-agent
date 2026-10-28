@@ -195,7 +195,10 @@ export const memoryPlugin: DronePlugin = {
           },
           value: {
             type: 'string',
-            description: 'Text value to store (required for store action).',
+            description:
+              'Text value to store. REQUIRED when action="store"; omit for ' +
+              'recall/edit/delete. For very large values, prefer splitting ' +
+              'into several stores.',
           },
           tags: {
             type: 'array',
@@ -206,9 +209,10 @@ export const memoryPlugin: DronePlugin = {
           diff: {
             type: 'string',
             description:
-              'Unified diff patch applied to the entry body (required for edit ' +
-              'unless tags is given). The @@ hunk header is optional; a ' +
-              'headerless patch parses as one hunk and must contain -/+ change lines.',
+              'Unified diff patch for edit. Provide diff and/or tags when ' +
+              'action="edit" (at least one is required). The @@ hunk header ' +
+              'is optional; a headerless patch parses as one hunk and must ' +
+              'contain -/+ change lines.',
           },
         },
         required: ['action', 'key'],
