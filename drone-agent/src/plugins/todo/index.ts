@@ -193,12 +193,22 @@ export const todoPlugin: DronePlugin = {
           },
           id: {
             type: 'string',
-            description: 'Item id (for mark_*/remove_item).',
+            description:
+              'Item id. REQUIRED when action="mark_in_progress", ' +
+              '"mark_completed", or "remove_item"; omit for add_item, ' +
+              'list_items, and clear_completed.',
           },
-          title: { type: 'string', description: 'Item title (for add_item).' },
+          title: {
+            type: 'string',
+            description:
+              'Item title. REQUIRED when action="add_item"; omit for all ' +
+              'other actions.',
+          },
           items: {
             type: 'array',
-            description: 'Replacement list (for replace_list).',
+            description:
+              'Replacement list. REQUIRED when action="replace_list"; omit ' +
+              'for all other actions.',
             items: {
               type: 'object',
               properties: {

@@ -8,7 +8,7 @@ tags:
   - openrouter
   - schema-honesty
 created: 2026-10-28T01:51:13.474Z
-updated: 2026-10-28T01:51:13.474Z
+updated: 2026-10-28T02:11:25.421Z
 ---
 
 # Plan: Malformed tool-call arguments = degenerate response + schema-honesty sweep
@@ -78,3 +78,46 @@ docs/adr/NNN-malformed-tool-call-arguments-degenerate.md — number = next free 
 - After any memory store, recall the key to verify. A store you did not verify is a store you do not have.
 - If a store fails twice, write the artifact into the reply body and tell the operator; do not loop.
 - A tool error naming a field is a schema error in the call, not a harness fault.
+
+## EXECUTION SUMMARY (2026-10-28, status: completed)
+Executed by the code persona on fix/tool-call-args-parse-swallow. All steps done:
+- Step 0 (operator capture): NOT run — it is an operator-only live repro (--debug llm);
+  still gates any upstream OpenRouter report. Verdict slot left open in this memory.
+- A1: DroneChatResponse.malformedToolCalls?: string[] added in drone-core/src/session-types.ts
+  (JSDoc: set only when >=1 call malformed; native-object drivers never set it). pnpm -r run build run immediately; green.
+- A2: fromOpenAiResponse (drone-agent/src/shared/openai-compatible.ts) now collects tool names
+  on parse throw OR parsed non-object (null/array/string/number), keeps parsedArgs = {}, sets
+  result.malformedToolCalls only when non-empty. PLAN REFINEMENT (approved by intent): empty or
+  whitespace-only arguments string is treated as a legitimate ZERO-ARGUMENT call, NOT malformed —
+  without the exemption every zero-arg tool call would trip the new tier (JSON.parse('') throws).
+- A3: new per-tier counter malformedToolCallResponseCount in conversation-service.ts; malformed
+  response = whole response discarded (assistant text included); notices with distinct label
+  'malformed tool-call arguments' under resolvedGuardrail.brokenResponses (2/2); abort path via
+  onBrokenResponseLimitReached(label) reusing existing continue-or-abort flow. Counter reset in
+  THREE sites — the plan listed healthy-response reset + resetStuckDetectors; the sweep also found
+  clearSession resets the sibling counters (plan gap, fixed there too). onBrokenResponseLimitReached's
+  type widened: 'empty' | 'reasoning-only' | 'malformed tool-call arguments' (build caught the narrow
+  union — a cross-cutting change the plan's file list missed, caught by the LSP/build gate).
+- A4: new test/openai-compatible.test.ts (5 tests: invalid JSON -> name listed; valid JSON ->
+  field absent; null/array/string parse -> malformed; mixed -> only bad names; empty/whitespace
+  args -> NOT malformed). Malformed-tier block added to test/conversation-service-guardrails.test.ts
+  (3 tests: exact notice text + no tool execution + no session append; onBrokenResponseLimitReached
+  receives the label; counter resets after healthy TOOL-CARRYING response — test refinement: a
+  text-only healthy response ENDS the round, so the reset test drives the loop with healthy tool
+  calls with differing arguments to keep the identical-streak guardrail idle).
+- Step C: descriptions-only sweep. memory.manage value ("REQUIRED when action=store; omit otherwise;
+  split very large values") + diff ("provide diff and/or tags when action=edit"); notepad.manage
+  content ("REQUIRED when action=set or append") + diff ("REQUIRED when action=edit", kept separate);
+  todo.manage_list id/title/items per-action requiredness. Survey verdicts: search (no action enum)
+  and utils (unconditional required) need NO change — matches the plan's conditional.
+- ADR: docs/adr/267-malformed-tool-call-arguments-degenerate.md WRITTEN HERE (267 was free; the
+  coordinator-UI duration plan is UNEXECUTED on feat/ui-polish and now takes 268). Index row added.
+- Validation: LSP clean (no errors/warnings) on all touched files; pnpm -r run build zero errors;
+  pnpm typecheck zero errors; pnpm lint zero errors; pnpm test 4536 passed / 16 skipped (345 files),
+  including the 8 new tests.
+- Deviations from plan text (all within intent): empty-args exemption in A2; THIRD reset site
+  (clearSession) in A3; label-union widening on the callback type; ADR number fixed at 267 now
+  instead of left to merge time; duration plan's ADR number becomes 268.
+- Out of scope, unchanged: upstream valid-JSON-missing-props (Step 0 capture pending, operator);
+  engine-level required enforcement (B follow-up, own branch later); notepad content/diff stay
+  separate properties (descriptions sharpened only).
