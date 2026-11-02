@@ -40,6 +40,7 @@ vi.mock('../src/adapters/matrix.js', () => ({
       start: vi.fn(),
       stop: vi.fn(),
       sendMessage: vi.fn(),
+      splitOutbound: vi.fn(),
       onMessage: vi.fn(),
       snapshotStore: adapterStores.snapshotStore,
       outboundLedger: adapterStores.outboundLedger,
@@ -1017,6 +1018,99 @@ describe('GatewayEngine', () => {
         platformRef: undefined,
         text: 'hello',
       });
+    });
+
+    it('sends one message per splitOutbound chunk and records one ledger row per chunk', async () => {
+      const append = vi.fn();
+      adapterStores.outboundLedger = {
+        append,
+        list: vi.fn(() => []),
+        remove: vi.fn(),
+      };
+      const { engine } = await startEngine();
+      const matrix = (await import('../src/adapters/matrix.js'))
+        .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
+      const adapter = matrix.mock.results.at(-1)?.value as {
+        sendMessage: ReturnType<typeof vi.fn>;
+        splitOutbound: ReturnType<typeof vi.fn>;
+      };
+      adapter.splitOutbound.mockImplementation((text: string) =>
+        text.length > 20 ? [text.slice(0, 20), text.slice(20)] : [text]
+      );
+      adapter.sendMessage
+        .mockResolvedValueOnce('$ref1')
+        .mockResolvedValueOnce('$ref2');
+
+      await engine.injectMessage('matrix-1', '!room:server', 'x'.repeat(25));
+
+      expect(adapter.sendMessage).toHaveBeenNthCalledWith(
+        1,
+        '!room:server',
+        'x'.repeat(20)
+      );
+      expect(adapter.sendMessage).toHaveBeenNthCalledWith(
+        2,
+        '!room:server',
+        'x'.repeat(5)
+      );
+      expect(append).toHaveBeenNthCalledWith(1, '!room:server', {
+        platformRef: '$ref1',
+        text: 'x'.repeat(20),
+      });
+      expect(append).toHaveBeenNthCalledWith(2, '!room:server', {
+        platformRef: '$ref2',
+        text: 'x'.repeat(5),
+      });
+    });
+
+    it('falls back to a single send and one ledger row without splitOutbound', async () => {
+      const append = vi.fn();
+      adapterStores.outboundLedger = {
+        append,
+        list: vi.fn(() => []),
+        remove: vi.fn(),
+      };
+      const { engine } = await startEngine();
+      const matrix = (await import('../src/adapters/matrix.js'))
+        .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
+      const adapter = matrix.mock.results.at(-1)?.value as {
+        sendMessage: ReturnType<typeof vi.fn>;
+        splitOutbound?: ReturnType<typeof vi.fn>;
+      };
+      adapter.splitOutbound = undefined;
+
+      await engine.injectMessage('matrix-1', '!room:server', 'hello');
+
+      expect(adapter.sendMessage).toHaveBeenCalledTimes(1);
+      expect(adapter.sendMessage).toHaveBeenCalledWith('!room:server', 'hello');
+      expect(append).toHaveBeenCalledTimes(1);
+      expect(append).toHaveBeenCalledWith('!room:server', {
+        platformRef: undefined,
+        text: 'hello',
+      });
+    });
+
+    it('records no ledger rows when a chunk send fails mid-split', async () => {
+      const append = vi.fn();
+      adapterStores.outboundLedger = {
+        append,
+        list: vi.fn(() => []),
+        remove: vi.fn(),
+      };
+      const { engine } = await startEngine();
+      const matrix = (await import('../src/adapters/matrix.js'))
+        .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
+      const adapter = matrix.mock.results.at(-1)?.value as {
+        sendMessage: ReturnType<typeof vi.fn>;
+        splitOutbound: ReturnType<typeof vi.fn>;
+      };
+      adapter.splitOutbound.mockImplementation(() => ['a', 'b']);
+      adapter.sendMessage.mockRejectedValueOnce(new Error('send failed'));
+
+      await expect(
+        engine.injectMessage('matrix-1', '!room:server', 'long text')
+      ).rejects.toThrow('send failed');
+      expect(append).not.toHaveBeenCalled();
     });
 
     it('handles a missing ledger handle without throwing', async () => {

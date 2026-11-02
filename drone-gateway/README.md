@@ -122,6 +122,7 @@ See [ADR 256](../docs/adr/256-gateway-swarm-extension.md).
   "rooms": ["!room:matrix.org"], // optional allowlist; DMs always included
   "dataPath": "~/.drone-gateway/adapters/my-matrix-bot/state.db",
   "encryption": false, // opt-in E2EE; on Node the Rust-crypto keys are memory-only
+  "maxMessageChars": 20000, // optional; 0 disables splitting
 }
 ```
 
@@ -129,6 +130,11 @@ See [ADR 256](../docs/adr/256-gateway-swarm-extension.md).
   (portable-context continuity), and the **Outbound Ledger**. When it is unset,
   `persona-assignment` continuity is **disabled** (one startup warning per
   adapter).
+
+- **`maxMessageChars`** (default 20000) splits outbound text longer than the
+  budget into multiple messages at paragraph or line breaks, continuations
+  marked ` (n/m)`; the total is capped at 100,000 characters with the tail
+  truncated and marked. See [ADR 267](../docs/adr/267-gateway-outbound-message-splitting.md).
 
 ### `adapters/<id>/conversations/<conv-id>.json`
 

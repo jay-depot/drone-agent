@@ -8,7 +8,7 @@ tags:
   - truncation
   - outbound
 created: 2026-11-02T18:44:33.368Z
-updated: 2026-11-02T18:44:33.368Z
+updated: 2026-11-02T19:15:12.233Z
 ---
 
 # Plan: Gateway outbound message splitting (per-adapter, with truncation cap)
@@ -139,3 +139,14 @@ Run and confirm the validation criteria below. Sweep: LSP diagnostics clean; bui
 - No byte-exact platform limit computation (char budget with headroom instead).
 - No retry/resume of partially-sent split messages (D8: mid-split failure behaves like today's single-send failure).
 - No changes to telegram/slack (not implemented).
+
+## Execution summary (2026-11-02, code persona) — EXECUTED TO COMPLETION
+
+Executed all steps on branch `fix/gateway-message-splitting`. All validation criteria 1–5 pass; criterion 6 (manual >20k live inject into the operator DM) remains deployment-side.
+
+- NEW `drone-gateway/src/split-message.ts`: pure splitter (`DEFAULT_MAX_CHUNK_CHARS=20000`, `DEFAULT_MAX_TOTAL_CHARS=100000`). Greedy `\n\n` → `\n` → hard-cut packing with budget+1 scan and exactly one break char consumed per preferred split. Continuation ` (n/m)` marker width is reserved from the continuation budget and re-packed to the smallest self-consistent chunk count. Truncation marker `[message truncated — N characters were dropped]`; truncated tail is bounded by BOTH the ceiling remainder and `maxChunkChars`; the marker is emitted even when it alone exceeds the remaining ceiling; all-breaks-only chunks are skipped as noise.
+- NEW `test/split-message.test.ts` (28 tests). EXTENDED `test/matrix-adapter.test.ts` (+7: chunk sequence/under-budget, paragraph split, one typing pair + one receipt, `maxMessageChars: 0` legacy path, mid-split failure propagates, `splitOutbound` parity) and `test/engine.test.ts` (+3: per-chunk sends + one ledger row per chunk, no-`splitOutbound` fallback, no ledger rows on mid-split failure).
+- Matrix adapter: `maxMessageChars` config (0 disables), split BEFORE markdown render, one typing/receipt pair per `sendMessage` call, returns last eventId, new `splitOutbound()`. `types.ts`: optional `DroneServiceAdapter.splitOutbound?`. Engine `injectMessage`: per-chunk sends + per-chunk ledger rows; reply paths untouched.
+- NEW `docs/adr/267-gateway-outbound-message-splitting.md`; README documents `maxMessageChars`.
+- Deviations from plan text (both plan gaps, user decisions honored): (a) all-breaks-only chunks are skipped rather than sent; (b) the truncated tail is additionally bounded by `maxChunkChars` — with the 20k/100k defaults an unbounded tail could otherwise emit a ~40k-char final message, defeating the feature.
+- Gates at completion: LSP clean, `pnpm -r run build` green, `pnpm run lint` green, fast suite 4566 passed / 345 files, `sendMessage` call-site sweep clean.

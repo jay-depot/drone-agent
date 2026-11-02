@@ -1,5 +1,10 @@
 import { logger } from '../logger.js';
 import { BasicMarkdownRenderer } from '../markdown.js';
+import {
+  DEFAULT_MAX_CHUNK_CHARS,
+  DEFAULT_MAX_TOTAL_CHARS,
+  splitMessage,
+} from '../split-message.js';
 import type { ICreateClientOpts } from 'matrix-js-sdk/lib/client.js';
 import { RoomEvent } from 'matrix-js-sdk';
 import { openGatewayDb } from '../store/db.js';
@@ -64,6 +69,15 @@ export interface MatrixAdapterConfig {
    * is future work.
    */
   encryption?: boolean;
+  /**
+   * Maximum characters (UTF-16 code units) per outbound message. Longer text
+   * is split into multiple messages at paragraph or line breaks, each marked
+   * ` (n/m)`. A gateway-wide ceiling (100,000 characters) truncates and marks
+   * the tail when even the full split would exceed it. Defaults to 20000
+   * (headroom under the typical Synapse 64 KB event size cap). Set to 0 to
+   * disable splitting.
+   */
+  maxMessageChars?: number;
 }
 
 /**
@@ -334,25 +348,35 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
       }
     }
 
-    // Render markdown to HTML
-    const rendered = this.markdownRenderer.render(text);
+    // Split BEFORE rendering so an HTML tag never breaks mid-chunk.
+    const maxChars = this.config.maxMessageChars ?? DEFAULT_MAX_CHUNK_CHARS;
+    const chunks =
+      maxChars > 0
+        ? splitMessage(text, {
+            maxChunkChars: maxChars,
+            maxTotalChars: DEFAULT_MAX_TOTAL_CHARS,
+          })
+        : [text];
 
-    // Send the message with HTML formatting
+    // Send each chunk rendered; the last event id is the message's ref.
     let eventId: string | undefined;
     try {
-      if (rendered.formattedBody) {
-        const res = await this.client.sendHtmlMessage(
-          roomId,
-          rendered.body,
-          rendered.formattedBody
-        );
-        eventId = res?.event_id;
-      } else {
-        const res = await this.client.sendMessage(roomId, {
-          body: rendered.body,
-          msgtype: 'm.text' as never,
-        });
-        eventId = res?.event_id;
+      for (const chunk of chunks) {
+        const rendered = this.markdownRenderer.render(chunk);
+        if (rendered.formattedBody) {
+          const res = await this.client.sendHtmlMessage(
+            roomId,
+            rendered.body,
+            rendered.formattedBody
+          );
+          eventId = res?.event_id;
+        } else {
+          const res = await this.client.sendMessage(roomId, {
+            body: rendered.body,
+            msgtype: 'm.text' as never,
+          });
+          eventId = res?.event_id;
+        }
       }
     } finally {
       // Stop typing notification
@@ -364,6 +388,21 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
     }
 
     return eventId;
+  }
+
+  /**
+   * Split outbound text the way {@link MatrixServiceAdapter.sendMessage}
+   * sends it, so the engine can pair per-chunk platform refs with the chunk
+   * texts in the outbound ledger. Returns `[text]` when splitting is
+   * disabled.
+   */
+  splitOutbound(text: string): string[] {
+    const maxChars = this.config.maxMessageChars ?? DEFAULT_MAX_CHUNK_CHARS;
+    if (maxChars <= 0) return [text];
+    return splitMessage(text, {
+      maxChunkChars: maxChars,
+      maxTotalChars: DEFAULT_MAX_TOTAL_CHARS,
+    });
   }
 
   async stop(): Promise<void> {
