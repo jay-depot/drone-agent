@@ -56,6 +56,35 @@ describe('Swarm Routes', () => {
     });
     expect(res.statusCode).toBe(404);
   });
+
+  it('GET /sessions shows a non-null endedAt after DELETE /sync/sessions/:id', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/sync/sessions/register',
+      payload: { id: 'ss1', beaconId: 'b1' },
+    });
+    await app.inject({ method: 'DELETE', url: '/api/sync/sessions/ss1' });
+    const res = await app.inject({ method: 'GET', url: '/api/sessions' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    const row = body.sessions.find((s: { id: string }) => s.id === 'ss1');
+    expect(row).toBeDefined();
+    expect(typeof row.endedAt).toBe('number');
+  });
+
+  it('GET /sessions shows endedAt null for a live session', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/sync/sessions/register',
+      payload: { id: 'ss2', beaconId: 'b1' },
+    });
+    const res = await app.inject({ method: 'GET', url: '/api/sessions' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    const row = body.sessions.find((s: { id: string }) => s.id === 'ss2');
+    expect(row).toBeDefined();
+    expect(row.endedAt).toBeNull();
+  });
   it('POST /sessions/:id/process transitions ended session to processing', async () => {
     // Create a session, end it, then process it — should succeed
     await app.inject({

@@ -630,3 +630,62 @@ describe('SessionsPage live session events', () => {
     expect(String(lastSessionsCall(mockFetch))).toContain('status=archived');
   });
 });
+
+describe('SessionsPage duration column', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('a frozen row shows the endedAt - createdAt duration', async () => {
+    const row = {
+      ...sessionPayload('processed'),
+      endedAt: 1_700_000_300_000,
+    };
+    const mockFetch = scriptedFetch([listBody([row])]);
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(
+      <MemoryRouter initialEntries={['/sessions']}>
+        <SessionsPage />
+      </MemoryRouter>,
+      { wrapper }
+    );
+    await screen.findByText('s-1');
+    expect(screen.getByText('5m')).toBeInTheDocument();
+  });
+
+  it('a live row shows a ~-prefixed age', async () => {
+    const row = { ...sessionPayload('active'), endedAt: null };
+    const mockFetch = scriptedFetch([listBody([row])]);
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(
+      <MemoryRouter initialEntries={['/sessions']}>
+        <SessionsPage />
+      </MemoryRouter>,
+      { wrapper }
+    );
+    await screen.findByText('s-1');
+    expect(screen.getByText(/^~/)).toBeInTheDocument();
+  });
+
+  it('a non-live row without an end time shows unknown', async () => {
+    const row = { ...sessionPayload('processing'), endedAt: null };
+    const mockFetch = scriptedFetch([listBody([row])]);
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(
+      <MemoryRouter initialEntries={['/sessions']}>
+        <SessionsPage />
+      </MemoryRouter>,
+      { wrapper }
+    );
+    await screen.findByText('s-1');
+    expect(screen.getByText('unknown')).toBeInTheDocument();
+  });
+});

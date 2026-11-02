@@ -7,7 +7,7 @@ tags:
   - duration
   - ended-at
 created: 2026-10-28T01:15:56.646Z
-updated: 2026-11-02T22:54:58.795Z
+updated: 2026-11-02T23:20:01.323Z
 ---
 
 # Plan: Fix the Sessions-page "Duration" column (show a true duration, not an age)
@@ -220,4 +220,23 @@ Step 5 -+-> Step 6 -> Step 7 -> Step 8, Step 11   (UI side)
 ## Test-environment notes
 - Coordinator tests use setupDb()/teardownDb() from test/setup.ts (fresh temp-dir SQLite per test) and buildTestApp() from test/app-helper.ts for route injection.
 - UI tests run via the package's pnpm test script (NODE_ENV=test) because react 19 exports .act only on its development build.
-- Prettier runs as part of pnpm lint and will reformat files; re-read before further edits.
+ Prettier runs as part of pnpm lint and will reformat files; re-read before further edits.
+
+ ## Execution summary — ALL 13 STEPS COMPLETE (2026-11-02, session agent-1793206514614)
+ Executed on feat/ui-polish. Steps 1-2: idempotent ended_at migration in db/init.ts;
+ LIVE_STATUSES/freezesClock helper + set-once stamping in updateSwarmSessionStatus and
+ transitionSessionStatus (markStaleSessions untouched). Step 3: sweep found one EXTRA
+ site the plan's grep missed (drone-coordinator/test/transcript.test.ts typed literal;
+ `grep | head -N` truncation) — caught by typecheck because endedAt is REQUIRED.
+ Steps 4-7: lib/duration.ts (formatDuration + formatSessionDuration), UI types.ts,
+ sessions.tsx (row type, map, local formatter deleted, cell swapped), beacon-detail.tsx
+ (formatDuration direct, strict !== null guard). Steps 8-11: duration.test.ts (10
+ tests), db.test.ts +6 (121 pass), routes/swarm.test.ts +2 (52 pass),
+ sessions.test.tsx +3 (19 pass). Step 12: ADR 269 + index row (frontier re-verified:
+ 268 highest). Step 13 ALL PASS: LSP clean, build (10 pkgs), typecheck, lint, fast
+ tests (4586 pass/16 skip), UI tests 358/358 on full run. Pre-existing UI-suite flake
+ documented: rotating ~1s waitFor timeouts in debounce tests; isolated runs green.
+ One deviation: init.ts migration comment kept but reduced to 2 lines (project
+ standards limit comments to jsdoc/complex-algorithm/TODO). Insights logged to
+ .drone-agent/insights/project/{file-apply-diff,type-sweep-verification,testing}.json
+ (self-improvement tool bridge was broken; files written directly, format verified).

@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { paginationRange } from '@/lib/pagination';
+import { formatSessionDuration } from '@/lib/duration';
 // ── New Session launch panel ──────────────────────────────────────────
 
 function NewSessionPanel({
@@ -189,7 +190,7 @@ const PAGE_SIZE = 20;
 // undo button before a refetch removes it from the list.
 const ARCHIVE_UNDO_MS = 5000;
 
-type SessionRow = BeaconSession & { status?: string };
+type SessionRow = BeaconSession & { status?: string; endedAt: number | null };
 
 interface PendingArchive {
   row: SessionRow;
@@ -286,6 +287,7 @@ export default function SessionsPage() {
           createdAt: s.createdAt,
           updatedAt: s.updatedAt,
           status: s.status,
+          endedAt: s.endedAt,
           beaconName: beaconMap.get(s.beaconId) ?? s.beaconId,
         }));
 
@@ -355,16 +357,6 @@ export default function SessionsPage() {
   useEffect(() => {
     fetchSessions(offset);
   }, [offset, fetchSessions]);
-
-  const formatDuration = (connectedAt: number): string => {
-    const ms = Date.now() - connectedAt;
-    const minutes = Math.floor(ms / 60000);
-    const hours = Math.floor(minutes / 60);
-    if (hours > 0) {
-      return `${hours}h ${minutes % 60}m`;
-    }
-    return `${minutes}m`;
-  };
 
   const refresh = useCallback(
     () => fetchSessions(offset),
@@ -666,7 +658,11 @@ export default function SessionsPage() {
                         {getStatusBadge(pending ? 'archived' : session.status)}
                       </TableCell>
                       <TableCell>
-                        {formatDuration(session.connectedAt)}
+                        {formatSessionDuration({
+                          createdAt: session.connectedAt,
+                          endedAt: session.endedAt,
+                          status: session.status ?? 'active',
+                        })}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {new Date(session.connectedAt).toLocaleString()}

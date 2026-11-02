@@ -293,6 +293,12 @@ export function initDatabase(dataPath: string): Database.Database {
     db.exec('ALTER TABLE swarm_sessions ADD COLUMN session_snapshot TEXT');
   }
 
+  // Idempotent migration: add ended_at to swarm_sessions. It records the real
+  // stop time. NULL means the session is live, or the row predates this column.
+  if (!swarmSessionCols.some(c => c.name === 'ended_at')) {
+    db.exec('ALTER TABLE swarm_sessions ADD COLUMN ended_at INTEGER');
+  }
+
   // Extension capability cache + bundle registry.
   db.exec(`
     CREATE TABLE IF NOT EXISTS extension_capabilities (
