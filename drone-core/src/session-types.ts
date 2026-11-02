@@ -183,6 +183,13 @@ export type DroneChatResponse = {
   reasoning?: string;
   toolCalls?: DroneToolCall[];
   /**
+   * Names of tool calls whose arguments failed to parse, or parsed to a
+   * non-object value (null, array, string, number). Set only when at least
+   * one tool call was malformed; drivers that receive arguments as native
+   * objects never set it.
+   */
+  malformedToolCalls?: string[];
+  /**
    * Provider-reported usage for this individual API call. Additive: every
    * existing DroneLlmProvider remains valid without setting it.
    */

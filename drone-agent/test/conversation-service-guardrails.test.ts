@@ -751,3 +751,152 @@ describe('createConversationService — notice event emission', () => {
     expect(noticeEvents[0].content.length).toBeGreaterThan(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Malformed tool-call arguments (degenerate-response tier)
+// ---------------------------------------------------------------------------
+
+describe('createConversationService — malformed tool-call arguments guardrail', () => {
+  function makeMalformedResponse(): DroneChatResponse {
+    return {
+      message: 'Storing the entry now.',
+      toolCalls: [{ id: 'call_1', name: 'memory__manage', arguments: {} }],
+      malformedToolCalls: ['memory__manage'],
+    };
+  }
+
+  function makeService(
+    provider: ReturnType<typeof makeProvider>,
+    engine: ReturnType<typeof createMockEngine>,
+    options?: {
+      onBrokenResponseLimitReached?: (label: string) => Promise<boolean>;
+    }
+  ) {
+    const llm = makeLlmCapability(provider);
+    const config = createDefaultAgentConfig();
+    config.session.guardrail = {
+      ...defaultGuardrail,
+      brokenResponses: { hintAfter: 2, maxHints: 2 },
+    };
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+      onBrokenResponseLimitReached: options?.onBrokenResponseLimitReached,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? llm : undefined);
+    return { conversation, sessionManager };
+  }
+
+  it('retries a malformed response without executing the tool or appending its turn', async () => {
+    const engine = createMockEngine({
+      tools: [
+        {
+          name: 'memory__manage',
+          description: 'manage memory',
+          inputSchema: { type: 'object', properties: {} },
+        },
+      ],
+      executeToolImpl: async () => 'executed',
+    });
+    const provider = makeProvider([
+      makeMalformedResponse(),
+      { message: 'recovered' },
+    ]);
+    const { conversation, sessionManager } = makeService(provider, engine);
+
+    const events: DroneConversationEvent[] = [];
+    const result = await conversation.sendUserMessage('test', event => {
+      events.push(event);
+    });
+
+    expect(result).toBe('recovered');
+    // The malformed call must never reach tool execution.
+    expect(engine.__executeMock).not.toHaveBeenCalled();
+    // The distinct tier label appears in the retry notice.
+    const noticeEvents = events.filter(e => e.kind === 'notice');
+    expect(noticeEvents[0].content).toBe(
+      'Degenerate response (malformed tool-call arguments), retrying (1/2)'
+    );
+    // No tool messages, and the malformed response's assistant text is discarded.
+    const messages = sessionManager.getMessages();
+    expect(messages.every(m => m.role !== 'tool')).toBe(true);
+    expect(
+      messages.some(
+        m => m.role === 'assistant' && m.content === 'Storing the entry now.'
+      )
+    ).toBe(false);
+  });
+
+  it('calls onBrokenResponseLimitReached with the malformed label after limits', async () => {
+    const engine = createMockEngine({
+      tools: [],
+      executeToolImpl: async () => '',
+    });
+    const provider = makeProvider([
+      makeMalformedResponse(),
+      makeMalformedResponse(),
+      makeMalformedResponse(),
+      makeMalformedResponse(),
+    ]);
+    const limitReached = vi.fn(async () => false);
+    const { conversation } = makeService(provider, engine, {
+      onBrokenResponseLimitReached: limitReached,
+    });
+
+    const result = await conversation.sendUserMessage('test');
+    expect(result).toBe('');
+    expect(limitReached).toHaveBeenCalledWith('malformed tool-call arguments');
+  });
+
+  it('resets the malformed counter after a healthy response', async () => {
+    const engine = createMockEngine({
+      tools: [
+        {
+          name: 'tool_a',
+          description: 'test tool',
+          inputSchema: { type: 'object', properties: {} },
+        },
+      ],
+      executeToolImpl: async () => 'tool result',
+    });
+    // Healthy responses carry tool calls (with differing arguments so the
+    // identical-call streak guardrail stays idle): a text-only healthy
+    // response would end the round instead of continuing the loop.
+    const healthyCall = (n: number): DroneChatResponse => ({
+      message: '',
+      toolCalls: [{ id: `call_h${n}`, name: 'tool_a', arguments: { n } }],
+    });
+    const provider = makeProvider([
+      makeMalformedResponse(),
+      healthyCall(1),
+      makeMalformedResponse(),
+      healthyCall(2),
+      { message: 'done' },
+    ]);
+    const { conversation } = makeService(provider, engine);
+
+    const events: DroneConversationEvent[] = [];
+    const result = await conversation.sendUserMessage('test', event => {
+      events.push(event);
+    });
+    expect(result).toBe('done');
+
+    const noticeEvents = events.filter(e => e.kind === 'notice');
+    const retryNotices = noticeEvents
+      .map(e => e.content)
+      .filter(c =>
+        c.startsWith('Degenerate response (malformed tool-call arguments)')
+      );
+    expect(retryNotices).toEqual([
+      'Degenerate response (malformed tool-call arguments), retrying (1/2)',
+      'Degenerate response (malformed tool-call arguments), retrying (1/2)',
+    ]);
+  });
+});
