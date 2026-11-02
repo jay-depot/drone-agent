@@ -155,12 +155,30 @@ export function fromOpenAiResponse(
   }
 
   if (choice.message.tool_calls && choice.message.tool_calls.length > 0) {
+    // Unparseable or non-object arguments cannot be acted on. They still
+    // degrade to {} (DroneToolCall requires an object), but the tool names
+    // are collected so the conversation service can treat the response as
+    // degenerate instead of executing hollow calls. An empty arguments
+    // string is a legitimate zero-argument call, not corruption.
+    const malformedToolCalls: string[] = [];
     result.toolCalls = choice.message.tool_calls.map(tc => {
-      let parsedArgs: Record<string, unknown>;
-      try {
-        parsedArgs = JSON.parse(tc.function.arguments);
-      } catch {
-        parsedArgs = {};
+      let parsedArgs: Record<string, unknown> = {};
+      const rawArguments = tc.function.arguments;
+      if (rawArguments.trim() !== '') {
+        try {
+          const parsed: unknown = JSON.parse(rawArguments);
+          if (
+            parsed === null ||
+            typeof parsed !== 'object' ||
+            Array.isArray(parsed)
+          ) {
+            malformedToolCalls.push(tc.function.name);
+          } else {
+            parsedArgs = parsed as Record<string, unknown>;
+          }
+        } catch {
+          malformedToolCalls.push(tc.function.name);
+        }
       }
       return {
         id: tc.id,
@@ -168,6 +186,9 @@ export function fromOpenAiResponse(
         arguments: parsedArgs,
       } satisfies DroneToolCall;
     });
+    if (malformedToolCalls.length > 0) {
+      result.malformedToolCalls = malformedToolCalls;
+    }
   }
 
   const usage = toDroneLlmUsage({
