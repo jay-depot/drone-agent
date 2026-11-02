@@ -8,7 +8,7 @@ tags:
   - truncation
   - outbound
 created: 2026-11-02T18:44:33.368Z
-updated: 2026-11-02T19:15:12.233Z
+updated: 2026-11-02T19:40:19.700Z
 ---
 
 # Plan: Gateway outbound message splitting (per-adapter, with truncation cap)
@@ -150,3 +150,7 @@ Executed all steps on branch `fix/gateway-message-splitting`. All validation cri
 - NEW `docs/adr/267-gateway-outbound-message-splitting.md`; README documents `maxMessageChars`.
 - Deviations from plan text (both plan gaps, user decisions honored): (a) all-breaks-only chunks are skipped rather than sent; (b) the truncated tail is additionally bounded by `maxChunkChars` — with the 20k/100k defaults an unbounded tail could otherwise emit a ~40k-char final message, defeating the feature.
 - Gates at completion: LSP clean, `pnpm -r run build` green, `pnpm run lint` green, fast suite 4566 passed / 345 files, `sendMessage` call-site sweep clean.
+
+### Post-PR refinement (2026-11-02, user nit)
+
+Splitter now never ends a message on a markdown ATX heading line (`#`–`######`, up to 3 leading spaces): break candidates that would end on a heading are rejected while a later break fits; the hard cut only runs when no valid break exists (mid-heading cut documented best-effort). Implemented as validity checks inside the packer scans (`endsWithHeadingLine` helper; line start searched backwards past chunk boundaries so hard-cut-split lines are judged whole). 4 new tests in `test/split-message.test.ts` (32 total); ADR 267 §3 + README amended. Opened PR #151 (base main) before this nit; push updates it.

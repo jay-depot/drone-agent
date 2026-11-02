@@ -43,6 +43,13 @@ Split-point precedence per chunk:
 2. Else the largest prefix ending at a line break (`\n`) — consumed.
 3. Else a hard cut at exactly the budget.
 
+A break candidate that would end the message on a markdown ATX heading line
+(`#`–`######`) is rejected while any later break fits — a heading belongs to
+the paragraph it introduces, so the heading is glued to the following text.
+Only when no valid break exists does the hard cut split, possibly
+mid-heading (documented best-effort; the alternative is a message ending on
+a bare heading).
+
 A chunk that would hold only line breaks is skipped as noise. Text at or
 under both budgets returns as a single unmarked chunk; an empty string
 returns `['']` (one send, never zero).

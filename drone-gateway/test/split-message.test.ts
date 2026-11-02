@@ -147,6 +147,66 @@ describe('splitMessage', () => {
     });
   });
 
+  describe('heading glue', () => {
+    it('carries a heading into the body text instead of ending a message on it', () => {
+      const chunks = splitMessage('# Heading\n\nbody line one\nbody line two', {
+        maxChunkChars: 20,
+        maxTotalChars: 1_000_000,
+        continuationMarker: plus,
+      });
+      // The paragraph and line breaks inside the window would all end the
+      // message on the heading, so the hard cut keeps the heading glued to
+      // the first body line.
+      expect(chunks).toEqual([
+        '# Heading\n\nbody line',
+        ' one\nbody line two+',
+      ]);
+    });
+
+    it('moves the split back into the body when a later break fits', () => {
+      const chunks = splitMessage(
+        'intro\n\n# Heading\n\nbody line one\nbody line two',
+        {
+          maxChunkChars: 18,
+          maxTotalChars: 1_000_000,
+          continuationMarker: plus,
+        }
+      );
+      expect(chunks).toEqual([
+        'intro\n',
+        '# Heading\n\nbody l+',
+        'ine one+',
+        'body line two+',
+      ]);
+    });
+
+    it('keeps consecutive headings glued to the following text', () => {
+      const chunks = splitMessage('# A\n\n# B\n\nbody one two three', {
+        maxChunkChars: 20,
+        maxTotalChars: 1_000_000,
+        continuationMarker: plus,
+      });
+      expect(chunks).toEqual(['# A\n\n# B\n\nbody one t', 'wo three+']);
+    });
+
+    it('splits mid-heading only when no valid break exists at all', () => {
+      const chunks = splitMessage('# Heading and a very long run of words', {
+        maxChunkChars: 10,
+        maxTotalChars: 1_000_000,
+        continuationMarker: plus,
+      });
+      // No break of any kind fits before the budget, so the hard cut lands
+      // mid-heading — documented best-effort, not a heading-ending message.
+      expect(chunks).toEqual([
+        '# Heading ',
+        'and a ver+',
+        'y long ru+',
+        'n of word+',
+        's+',
+      ]);
+    });
+  });
+
   describe('total ceiling', () => {
     it('sends the full plan when it fits the ceiling exactly', () => {
       const chunks = run('x'.repeat(600), 200, 618);

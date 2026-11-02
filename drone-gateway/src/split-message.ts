@@ -38,6 +38,21 @@ function isAllBreaks(s: string): boolean {
 }
 
 /**
+ * True when the chunk ending at source offset `end` would end on a markdown
+ * ATX heading line (`#` to `######`). A message must not end on a heading:
+ * the heading belongs to the paragraph it introduces. The line start is
+ * searched backwards past earlier chunks too, so a logical line that a hard
+ * cut split across chunks is judged as a whole.
+ */
+function endsWithHeadingLine(text: string, end: number): boolean {
+  if (end <= 0) return false;
+  let lineEnd = end;
+  if (text.charCodeAt(lineEnd - 1) === 10) lineEnd -= 1;
+  const lineStart = text.lastIndexOf('\n', lineEnd - 1) + 1;
+  return /^ {0,3}#{1,6}(?:\t| |$)/.test(text.slice(lineStart, lineEnd));
+}
+
+/**
  * Split `text` into chunks ready to send.
  *
  * - Text at or under both budgets comes back as a single unmarked chunk.
@@ -45,6 +60,9 @@ function isAllBreaks(s: string): boolean {
  *   paragraph break (`\n\n`), else a line break (`\n`), else a hard cut.
  *   A preferred split drops exactly one break character (so the scan window
  *   is budget + 1); a hard cut drops nothing.
+ *   A break candidate that would end the message on a heading line is
+ *   rejected while any later break fits; only when no valid break exists
+ *   does the hard cut split (possibly mid-heading).
  * - The first message carries no marker; continuations carry
  *   `continuationMarker(n, total)`, whose length is reserved from the
  *   continuation budget. The reservation is re-packed to the smallest
@@ -103,7 +121,8 @@ export function splitMessage(text: string, options: SplitOptions): string[] {
       for (let i = paraLimit; i >= 0; i--) {
         if (
           text.charCodeAt(pos + i) === 10 &&
-          text.charCodeAt(pos + i + 1) === 10
+          text.charCodeAt(pos + i + 1) === 10 &&
+          !endsWithHeadingLine(text, pos + i + 1)
         ) {
           split = i;
           break;
@@ -115,7 +134,10 @@ export function splitMessage(text: string, options: SplitOptions): string[] {
       } else {
         const lineLimit = Math.min(budget, remaining - 1);
         for (let i = lineLimit; i >= 0; i--) {
-          if (text.charCodeAt(pos + i) === 10) {
+          if (
+            text.charCodeAt(pos + i) === 10 &&
+            !endsWithHeadingLine(text, pos + i)
+          ) {
             split = i;
             break;
           }
