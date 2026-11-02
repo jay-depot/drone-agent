@@ -7,7 +7,7 @@ tags:
   - duration
   - ended-at
 created: 2026-10-28T01:15:56.646Z
-updated: 2026-10-28T01:15:56.646Z
+updated: 2026-11-02T22:54:58.795Z
 ---
 
 # Plan: Fix the Sessions-page "Duration" column (show a true duration, not an age)
@@ -24,7 +24,7 @@ The Sessions page shows a "Duration" column that actually shows the session's ag
 
 ## Decisions (locked with user Q1-Q7)
 - Q1: Add nullable `ended_at INTEGER` to swarm_sessions. Duration = endedAt - createdAt when set, else live age.
-- Q2: Stamp ended_at on ANY transition into ended/processing/processed/archived (the four non-live states), set-once (only when currently NULL). Leave active and stale NULL (they show live age). stale stays live because it is a 24h liveness heuristic, not a confirmed stop.
+ Q2 (refined): stamp ended_at ONLY on a transition FROM a live status (active|stale) INTO a non-live status (ended|processing|processed|archived), set-once. Live statuses keep endedAt NULL; stale stays live (24h heuristic, not a stop). New sessions behave identically to the old rule; legacy NULL rows are never stamped by later bookkeeping transitions (processing->processed, processed->archived, archived->processed restore) — they stay NULL and the UI shows "unknown".
 - Q3: Format ladder: Xs / Xm / Xh YYm / Xd YYh, zero-padded second unit, `~` prefix on live (unfrozen) values.
 - Q4: No live ticker; compute at render time only.
 - Q5: Surface endedAt in API responses (coordinator SwarmSession type + UI lib/types.ts). No new display sites beyond the list column.
@@ -54,7 +54,7 @@ File: drone-coordinator/src/db/swarm-sessions.ts
 - 2d: Add a shared helper near the top:
 ```ts
 const LIVE_STATUSES = new Set(['active', 'stale']);
-/** A transition into a non-live state freezes the session clock. */
+/** A non-live TARGET status stops the clock; the caller checks the from-status. */
 function freezesClock(status: string): boolean {
   return !LIVE_STATUSES.has(status);
 }
@@ -68,9 +68,10 @@ export function updateSwarmSessionStatus(
   const existing = getSwarmSession(id);
   if (!existing) return undefined;
   const now = Date.now();
-  const endedAt = freezesClock(status)
-    ? (existing.endedAt ?? now)
-    : existing.endedAt;
+  const endedAt =
+    LIVE_STATUSES.has(existing.status) && freezesClock(status)
+      ? now
+      : existing.endedAt;
   const stmt = getDatabase().prepare(`
     UPDATE swarm_sessions
     SET status = @status, updatedAt = @updatedAt, ended_at = @endedAt
@@ -80,7 +81,7 @@ export function updateSwarmSessionStatus(
   return { ...existing, status, updatedAt: now, endedAt };
 }
 ```
-- 2f: Make the same change in transitionSessionStatus (use session.endedAt in place of existing.endedAt); return endedAt in the result object.
+- 2f: Make the same change in transitionSessionStatus (use session.status and session.endedAt in place of existing.status and existing.endedAt); return endedAt in the result object.
 - 2g: Do NOT change markStaleSessions. It writes 'stale', a live status; freezesClock('stale') is false; the clock stays open.
 
 ### Step 3 - Confirm no other construction site breaks (coder)
@@ -171,7 +172,8 @@ File: drone-coordinator/test/db.test.ts (Swarm Session & Events block):
 - A new session has endedAt === null.
 - updateSwarmSessionStatus(id, 'ended') sets endedAt to a number.
 - transitionSessionStatus(id, 'active', 'processing') sets endedAt.
-- Set-once: after 'ended', a transition to 'processing' keeps the same endedAt.
+ - Set-once: after 'ended', a transition to 'processing' keeps the same endedAt.
+ - Legacy row: create a session, force ended_at back to NULL while in a non-live status, then transition processing->processed; endedAt must STAY null (no fabricated stamp).
 - markStaleSessions leaves endedAt === null.
 
 ### Step 10 - Route tests (tester)
@@ -186,7 +188,9 @@ File: drone-coordinator-ui/src/pages/sessions.test.tsx - add a block:
 - A non-live row without an end time (status processing, endedAt null) shows 'unknown'.
 
 ### Step 12 - ADR (coder)
-New file: docs/adr/267-session-ended-at-duration.md
+New file: docs/adr/269-session-ended-at-duration.md
+ (ADR number verified 2026-11-02 against docs/adr/: 267 and 268 are both
+ taken. Re-verify max(existing)+1 at write time.)
 Record: the problem (the Duration column showed an age), the new ended_at column, the set-once rule for the four non-live states, the live active/stale rule, the no-backfill decision, and the shared formatter. Add a row to docs/adr/index.md.
 
 ### Step 13 - Check the work against the validation criteria (reviewer)
