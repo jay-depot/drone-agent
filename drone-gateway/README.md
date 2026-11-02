@@ -136,7 +136,7 @@ See [ADR 256](../docs/adr/256-gateway-swarm-extension.md).
   marked ` (n/m)` — a split never ends a message on a markdown heading (the
   heading travels with the paragraph it introduces); the total is capped at
   100,000 characters with the tail truncated and marked. See
-  [ADR 267](../docs/adr/267-gateway-outbound-message-splitting.md).
+  [ADR 268](../docs/adr/268-gateway-outbound-message-splitting.md).
 
 ### `adapters/<id>/conversations/<conv-id>.json`
 

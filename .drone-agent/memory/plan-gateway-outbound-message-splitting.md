@@ -8,7 +8,7 @@ tags:
   - truncation
   - outbound
 created: 2026-11-02T18:44:33.368Z
-updated: 2026-11-02T19:40:19.700Z
+updated: 2026-11-02T19:47:46.899Z
 ---
 
 # Plan: Gateway outbound message splitting (per-adapter, with truncation cap)
@@ -154,3 +154,7 @@ Executed all steps on branch `fix/gateway-message-splitting`. All validation cri
 ### Post-PR refinement (2026-11-02, user nit)
 
 Splitter now never ends a message on a markdown ATX heading line (`#`–`######`, up to 3 leading spaces): break candidates that would end on a heading are rejected while a later break fits; the hard cut only runs when no valid break exists (mid-heading cut documented best-effort). Implemented as validity checks inside the packer scans (`endsWithHeadingLine` helper; line start searched backwards past chunk boundaries so hard-cut-split lines are judged whole). 4 new tests in `test/split-message.test.ts` (32 total); ADR 267 §3 + README amended. Opened PR #151 (base main) before this nit; push updates it.
+
+### ADR renumber 267 → 268 (2026-11-02)
+
+The user merged `origin/main` (commit `ca681faa`) which took ADR **267** for `267-malformed-tool-call-arguments-degenerate` — the plan brief's "ADR 267" was stale at execution time (same trap as swarm wiki `adr-numbering-verify-before-creating`). Renumbered per user instruction (ours is newer): file `docs/adr/268-gateway-outbound-message-splitting.md`, title now "ADR 268", README link → 268, and the missing `docs/adr/index.md` row added as 268. Plan/commit-history references to "ADR 267" in older text are historical record, left as-is.

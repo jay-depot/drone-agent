@@ -1,4 +1,4 @@
-# ADR 267: Gateway Outbound Message Splitting — per-adapter char budget, break-preferring splitter, truncation ceiling
+# ADR 268: Gateway Outbound Message Splitting — per-adapter char budget, break-preferring splitter, truncation ceiling
 
 **Status**: Accepted (2026-11-02, branch `fix/gateway-message-splitting`)
 
