@@ -364,8 +364,14 @@ export class GatewayEngine {
     }
     const adapter = this.adapters.get(adapterId);
     if (!adapter) throw new UnknownAdapterError(adapterId);
-    const platformRef = await adapter.sendMessage(conversationId, text);
-    adapter.outboundLedger?.append(conversationId, { platformRef, text });
+    const chunks = adapter.splitOutbound?.(text) ?? [text];
+    for (const chunk of chunks) {
+      const platformRef = await adapter.sendMessage(conversationId, chunk);
+      adapter.outboundLedger?.append(conversationId, {
+        platformRef,
+        text: chunk,
+      });
+    }
   }
 
   private async createAdapter(

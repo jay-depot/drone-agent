@@ -15,6 +15,12 @@ export interface DroneServiceAdapter {
     conversationId: string,
     text: string
   ): Promise<string | undefined>;
+  /**
+   * Split outbound text the way this adapter sends it, so the engine can
+   * pre-split injection text and record one outbound-ledger row per chunk.
+   * Absent = no splitting (single send).
+   */
+  splitOutbound?(text: string): string[];
   onMessage(handler: (message: AdapterMessage) => void): void;
   /** Built when the adapter has a persistent DB; absent otherwise. */
   readonly snapshotStore?: ContextSnapshotStore;

@@ -771,6 +771,140 @@ describe('MatrixServiceAdapter', () => {
     });
   });
 
+  describe('outbound splitting', () => {
+    async function makeStartedAdapter(
+      config: Record<string, unknown>
+    ): Promise<void> {
+      adapter = new MatrixServiceAdapter('matrix-1', {
+        homeserverUrl: 'https://matrix.org',
+        accessToken: 'syt_token',
+        userId: '@bot:matrix.org',
+        ...config,
+      });
+      await adapter.start();
+    }
+
+    function recordSends(): string[] {
+      const bodies: string[] = [];
+      // Plain text renders to HTML, so sends can arrive via either client
+      // method; record the plain-text body from both.
+      mockSendHtmlMessage.mockImplementation(
+        async (_roomId: string, body: string) => {
+          bodies.push(body);
+          return { event_id: `$sent${bodies.length}` };
+        }
+      );
+      mockSendMessage.mockImplementation(
+        async (_roomId: string, content: { body: string }) => {
+          bodies.push(content.body);
+          return { event_id: `$sent${bodies.length}` };
+        }
+      );
+      return bodies;
+    }
+
+    it('splits an oversized message into under-budget sends', async () => {
+      await makeStartedAdapter({ maxMessageChars: 20 });
+      const bodies = recordSends();
+
+      const eventId = await adapter.sendMessage(
+        '!test:matrix.org',
+        'x'.repeat(45)
+      );
+
+      expect(bodies).toEqual([
+        'x'.repeat(20),
+        'x'.repeat(14) + ' (2/3)',
+        'x'.repeat(11) + ' (3/3)',
+      ]);
+      for (const body of bodies) expect(body.length).toBeLessThanOrEqual(20);
+      expect(eventId).toBe('$sent3');
+      expect(mockSendTyping).toHaveBeenCalledTimes(2);
+      expect(mockSendTyping).toHaveBeenCalledWith(
+        '!test:matrix.org',
+        true,
+        5000
+      );
+      expect(mockSendTyping).toHaveBeenCalledWith('!test:matrix.org', false, 0);
+      expect(mockSendReadReceipt).not.toHaveBeenCalled();
+    });
+
+    it('splits at paragraph breaks and marks continuations', async () => {
+      await makeStartedAdapter({ maxMessageChars: 20 });
+      const bodies = recordSends();
+
+      await adapter.sendMessage(
+        '!test:matrix.org',
+        'para one\n\npara two\n\npara three'
+      );
+
+      expect(bodies).toEqual(['para one\n\npara two\n', 'para three (2/2)']);
+    });
+
+    it('sends one read receipt for a split message with a prior event', async () => {
+      await makeStartedAdapter({ maxMessageChars: 20 });
+      const timelineHandler = mockOn.mock.calls.find(
+        call => call[0] === 'Room.timeline'
+      )?.[1];
+      timelineHandler(
+        makeEventStub(),
+        makeRoomStub({
+          roomId: '!test:matrix.org',
+          getJoinedMemberCount: vi.fn().mockReturnValue(10),
+        }),
+        false,
+        false,
+        { liveEvent: true }
+      );
+      recordSends();
+
+      await adapter.sendMessage('!test:matrix.org', 'x'.repeat(45));
+
+      expect(mockSendReadReceipt).toHaveBeenCalledTimes(1);
+      expect(mockSendTyping).toHaveBeenCalledTimes(2);
+    });
+
+    it('sends a single message when maxMessageChars is 0', async () => {
+      await makeStartedAdapter({ maxMessageChars: 0 });
+      const text = 'x'.repeat(100);
+      const bodies = recordSends();
+
+      await adapter.sendMessage('!test:matrix.org', text);
+
+      expect(bodies).toEqual([text]);
+    });
+
+    it('propagates a mid-split send failure and still stops typing', async () => {
+      await makeStartedAdapter({ maxMessageChars: 20 });
+      recordSends();
+      let htmlCalls = 0;
+      mockSendHtmlMessage.mockImplementation(async () => {
+        htmlCalls += 1;
+        if (htmlCalls === 2) throw new Error('homeserver said no');
+        return { event_id: `$e${htmlCalls}` };
+      });
+
+      await expect(
+        adapter.sendMessage('!test:matrix.org', 'x'.repeat(45))
+      ).rejects.toThrow('homeserver said no');
+      expect(mockSendTyping).toHaveBeenCalledWith('!test:matrix.org', false, 0);
+    });
+
+    it('splitOutbound mirrors the sendMessage chunking', async () => {
+      await makeStartedAdapter({ maxMessageChars: 20 });
+      expect(adapter.splitOutbound('x'.repeat(45))).toEqual([
+        'x'.repeat(20),
+        'x'.repeat(14) + ' (2/3)',
+        'x'.repeat(11) + ' (3/3)',
+      ]);
+    });
+
+    it('splitOutbound returns one chunk when splitting is disabled', async () => {
+      await makeStartedAdapter({ maxMessageChars: 0 });
+      expect(adapter.splitOutbound('x'.repeat(45))).toEqual(['x'.repeat(45)]);
+    });
+  });
+
   describe('stop', () => {
     it('stops the client and clears state', async () => {
       adapter = new MatrixServiceAdapter('matrix-1', {
