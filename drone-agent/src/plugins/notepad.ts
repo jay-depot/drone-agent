@@ -77,13 +77,15 @@ export const notepadPlugin: DronePlugin = {
           },
           content: {
             type: 'string',
-            description: 'Text content (required for set and append).',
+            description:
+              'Text content. REQUIRED when action="set" or "append"; omit ' +
+              'for clear and edit.',
           },
           diff: {
             type: 'string',
             description:
-              'Unified diff patch applied to the current notepad contents ' +
-              '(required for edit). The @@ hunk header is optional; a ' +
+              'Unified diff patch. REQUIRED when action="edit"; omit for ' +
+              'set, clear, and append. The @@ hunk header is optional; a ' +
               'headerless patch parses as one hunk and must contain -/+ change lines.',
           },
         },
