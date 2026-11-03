@@ -190,7 +190,7 @@ const PAGE_SIZE = 20;
 // undo button before a refetch removes it from the list.
 const ARCHIVE_UNDO_MS = 5000;
 
-type SessionRow = BeaconSession & { status?: string; endedAt: number | null };
+type SessionRow = BeaconSession & { status: string; endedAt: number | null };
 
 interface PendingArchive {
   row: SessionRow;
@@ -661,7 +661,7 @@ export default function SessionsPage() {
                         {formatSessionDuration({
                           createdAt: session.connectedAt,
                           endedAt: session.endedAt,
-                          status: session.status ?? 'active',
+                          status: session.status,
                         })}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">

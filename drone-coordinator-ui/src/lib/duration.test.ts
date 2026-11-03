@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { formatDuration, formatSessionDuration } from './duration';
+import type { SessionDurationInput } from './duration';
 
 describe('formatDuration', () => {
   it('formats zero as 0s', () => {
@@ -24,6 +25,14 @@ describe('formatDuration', () => {
 
   it('clamps negative input to 0s', () => {
     expect(formatDuration(-5_000)).toBe('0s');
+  });
+
+  it('shows unknown for NaN input', () => {
+    expect(formatDuration(Number.NaN)).toBe('unknown');
+  });
+
+  it('shows unknown for infinite input', () => {
+    expect(formatDuration(Number.POSITIVE_INFINITY)).toBe('unknown');
   });
 });
 
@@ -60,5 +69,23 @@ describe('formatSessionDuration', () => {
         status: 'processing',
       })
     ).toBe('unknown');
+  });
+
+  it('treats an absent endedAt from a stale API as null for a live session', () => {
+    const fromStaleApi = {
+      createdAt: 0,
+      endedAt: undefined,
+      status: 'active',
+    } as unknown as SessionDurationInput;
+    expect(formatSessionDuration(fromStaleApi, 300_000)).toBe('~5m');
+  });
+
+  it('shows unknown for an absent endedAt on a non-live session', () => {
+    const fromStaleApi = {
+      createdAt: 0,
+      endedAt: undefined,
+      status: 'processing',
+    } as unknown as SessionDurationInput;
+    expect(formatSessionDuration(fromStaleApi, 300_000)).toBe('unknown');
   });
 });
