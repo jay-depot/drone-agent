@@ -47,7 +47,7 @@ Context: ADR 269 design record = wiki coordinator-swarm-sessions-ended-at-and-du
 
 All 8 steps done on feat/ui-polish; every validation criterion passed.
 
-- Commits: f5fa25fe (preliminary: plan + review memory files), a0c55c9f (UI, steps 1–4), and the coordinator commit that includes this memory file (steps 5–6; hash is circular with this file — see `git log -- drone-coordinator`).
+- Commits: f5fa25fe (preliminary: plan + review memory files), a0c55c9f (UI, steps 1–4), 91719c1a (coordinator, steps 5–6 + this memory file).
 - Steps 1–2 (duration.ts): formatDuration returns 'unknown' for non-finite input; formatSessionDuration normalizes `session.endedAt ?? null` once, keeps strict `!== null`, requires `Number.isFinite(age)` before the `~` live branch; jsdoc documents absent-endedAt-behaves-as-null.
 - Step 3 (duration.test.ts): +4 tests — NaN→'unknown', Infinity→'unknown', absent endedAt + active → '~5m', absent endedAt + processing → 'unknown' (cast `as unknown as SessionDurationInput`). File now has 14 tests, all pass.
 - Step 4 (sessions.tsx): SessionRow.status required, `?? 'active'` dropped. Typecheck found no other sites — the plan's mapper/test-helper assumption held.
