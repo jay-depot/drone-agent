@@ -8,6 +8,7 @@ const session: SwarmSession = {
   beaconId: 'b1',
   createdAt: 1000,
   updatedAt: 2000,
+  endedAt: null,
   status: 'ended',
   interactive: false,
   sessionSnapshot: null,

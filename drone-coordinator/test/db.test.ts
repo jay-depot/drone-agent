@@ -37,8 +37,11 @@ import {
   listSwarmSessions,
   countSwarmSessions,
   updateSwarmSessionStatus,
+  updateSwarmSessionPersona,
   archiveSwarmSession,
   restoreSwarmSession,
+  transitionSessionStatus,
+  markStaleSessions,
   createSwarmEvent,
   getSwarmEvents,
   getLatestSwarmEvents,
@@ -824,6 +827,84 @@ describe('Swarm Session & Events', () => {
     const updated = updateSwarmSessionStatus('ss1', 'ended');
     expect(updated).toBeDefined();
     expect(updated!.status).toBe('ended');
+  });
+
+  it('a new swarm session has a null endedAt', () => {
+    const session = createSwarmSession('ss1', null, 'b1');
+    expect(session.endedAt).toBeNull();
+    expect(getSwarmSession('ss1')!.endedAt).toBeNull();
+  });
+
+  it('updateSwarmSessionStatus stamps endedAt when leaving a live status', () => {
+    createSwarmSession('ss1', null, 'b1');
+    const ended = updateSwarmSessionStatus('ss1', 'ended');
+    expect(typeof ended!.endedAt).toBe('number');
+    expect(getSwarmSession('ss1')!.endedAt).toBe(ended!.endedAt);
+  });
+
+  it('transitionSessionStatus stamps endedAt when leaving a live status', () => {
+    createSwarmSession('ss1', null, 'b1');
+    const result = transitionSessionStatus('ss1', 'active', 'processing') as {
+      endedAt: number | null;
+    };
+    expect(typeof result.endedAt).toBe('number');
+  });
+
+  it('endedAt is set-once across later transitions', () => {
+    createSwarmSession('ss1', null, 'b1');
+    const ended = updateSwarmSessionStatus('ss1', 'ended')!;
+    const processed = transitionSessionStatus('ss1', 'ended', 'processing') as {
+      endedAt: number | null;
+    };
+    expect(processed.endedAt).toBe(ended.endedAt);
+  });
+
+  it('updateSwarmSessionPersona preserves a stamped endedAt', () => {
+    createSwarmSession('ss1', null, 'b1');
+    const ended = updateSwarmSessionStatus('ss1', 'ended')!;
+    const updated = updateSwarmSessionPersona('ss1', 'persona-2')!;
+    expect(updated.endedAt).toBe(ended.endedAt);
+    expect(getSwarmSession('ss1')!.endedAt).toBe(ended.endedAt);
+  });
+
+  it('a legacy non-live row keeps endedAt null across bookkeeping transitions', () => {
+    createSwarmSession('ss1', null, 'b1');
+    updateSwarmSessionStatus('ss1', 'processing');
+    getDatabase()
+      .prepare('UPDATE swarm_sessions SET ended_at = NULL WHERE id = ?')
+      .run('ss1');
+    const result = transitionSessionStatus(
+      'ss1',
+      'processing',
+      'processed'
+    ) as {
+      endedAt: number | null;
+    };
+    expect(result.endedAt).toBeNull();
+    expect(getSwarmSession('ss1')!.endedAt).toBeNull();
+  });
+
+  it('markStaleSessions leaves endedAt null', () => {
+    createSwarmSession('ss1', null, 'b1');
+    getDatabase()
+      .prepare('UPDATE swarm_sessions SET updatedAt = ? WHERE id = ?')
+      .run(Date.now() - 10_000, 'ss1');
+    const stale = markStaleSessions(1_000);
+    expect(stale).toHaveLength(1);
+    expect(stale[0].endedAt).toBeNull();
+  });
+
+  it('markStaleSessions preserves an existing endedAt', () => {
+    createSwarmSession('ss1', null, 'b1');
+    getDatabase()
+      .prepare(
+        'UPDATE swarm_sessions SET ended_at = ?, updatedAt = ? WHERE id = ?'
+      )
+      .run(1_234_567, Date.now() - 10_000, 'ss1');
+    const stale = markStaleSessions(1_000);
+    expect(stale).toHaveLength(1);
+    expect(stale[0].endedAt).toBe(1_234_567);
+    expect(getSwarmSession('ss1')!.endedAt).toBe(1_234_567);
   });
   it('should return undefined when updating non-existent session', () => {
     expect(updateSwarmSessionStatus('nonexistent', 'ended')).toBeUndefined();

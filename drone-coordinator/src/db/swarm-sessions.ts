@@ -2,12 +2,19 @@ import { getDatabase } from './init.js';
 import { logger } from '../logger.js';
 import type { DroneSessionSnapshot } from 'drone-core';
 
+const LIVE_STATUSES = new Set(['active', 'stale']);
+/** A non-live TARGET status stops the clock; the caller checks the from-status. */
+function freezesClock(status: string): boolean {
+  return !LIVE_STATUSES.has(status);
+}
+
 export interface SwarmSession {
   id: string;
   personaId: string | null;
   beaconId: string;
   createdAt: number;
   updatedAt: number;
+  endedAt: number | null;
   status: string;
   interactive: boolean;
   sessionSnapshot: DroneSessionSnapshot | null;
@@ -29,6 +36,7 @@ interface SwarmSessionRow {
   beacon_id: string;
   createdAt: number;
   updatedAt: number;
+  ended_at: number | null;
   status: string;
   interactive: number;
   session_snapshot: string | null;
@@ -41,6 +49,7 @@ function rowToSwarmSession(row: SwarmSessionRow): SwarmSession {
     beaconId: row.beacon_id,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    endedAt: row.ended_at,
     status: row.status,
     interactive: row.interactive === 1,
     sessionSnapshot: row.session_snapshot
@@ -57,8 +66,8 @@ export function createSwarmSession(
 ): SwarmSession {
   const now = Date.now();
   const stmt = getDatabase().prepare(`
-    INSERT INTO swarm_sessions (id, persona_id, beacon_id, createdAt, updatedAt, status, interactive, session_snapshot)
-    VALUES (@id, @personaId, @beaconId, @createdAt, @updatedAt, @status, @interactive, @sessionSnapshot)
+    INSERT INTO swarm_sessions (id, persona_id, beacon_id, createdAt, updatedAt, status, interactive, session_snapshot, ended_at)
+    VALUES (@id, @personaId, @beaconId, @createdAt, @updatedAt, @status, @interactive, @sessionSnapshot, @endedAt)
     ON CONFLICT(id) DO NOTHING
   `);
   const result = stmt.run({
@@ -70,6 +79,7 @@ export function createSwarmSession(
     status: 'active',
     interactive: interactive ? 1 : 0,
     sessionSnapshot: sessionSnapshot ? JSON.stringify(sessionSnapshot) : null,
+    endedAt: null,
   });
 
   if (result.changes === 0) {
@@ -84,6 +94,7 @@ export function createSwarmSession(
     createdAt: now,
     updatedAt: now,
     status: 'active',
+    endedAt: null,
     interactive,
     sessionSnapshot,
   };
@@ -144,9 +155,14 @@ export function markStaleSessions(thresholdMs: number): SwarmSession[] {
   for (const session of staleSessions) {
     const now = Date.now();
     const stmt = getDatabase().prepare(
-      'UPDATE swarm_sessions SET status = @status, updatedAt = @updatedAt WHERE id = @id'
+      'UPDATE swarm_sessions SET status = @status, updatedAt = @updatedAt, ended_at = @endedAt WHERE id = @id'
     );
-    stmt.run({ id: session.id, status: 'stale', updatedAt: now });
+    stmt.run({
+      id: session.id,
+      status: 'stale',
+      updatedAt: now,
+      endedAt: session.endedAt,
+    });
     updated.push({ ...session, status: 'stale', updatedAt: now });
   }
   if (updated.length > 0) {
@@ -185,12 +201,18 @@ export function updateSwarmSessionStatus(
   if (!existing) return undefined;
 
   const now = Date.now();
+  const endedAt =
+    LIVE_STATUSES.has(existing.status) && freezesClock(status)
+      ? now
+      : existing.endedAt;
   const stmt = getDatabase().prepare(`
-    UPDATE swarm_sessions SET status = @status, updatedAt = @updatedAt WHERE id = @id
+    UPDATE swarm_sessions
+    SET status = @status, updatedAt = @updatedAt, ended_at = @endedAt
+    WHERE id = @id
   `);
-  stmt.run({ id, status, updatedAt: now });
+  stmt.run({ id, status, updatedAt: now, endedAt });
 
-  return { ...existing, status, updatedAt: now };
+  return { ...existing, status, updatedAt: now, endedAt };
 }
 
 export function transitionSessionStatus(
@@ -209,12 +231,16 @@ export function transitionSessionStatus(
   }
 
   const now = Date.now();
+  const endedAt =
+    LIVE_STATUSES.has(session.status) && freezesClock(toStatus)
+      ? now
+      : session.endedAt;
   const stmt = getDatabase().prepare(
-    'UPDATE swarm_sessions SET status = @status, updatedAt = @updatedAt WHERE id = @id'
+    'UPDATE swarm_sessions SET status = @status, updatedAt = @updatedAt, ended_at = @endedAt WHERE id = @id'
   );
-  stmt.run({ id, status: toStatus, updatedAt: now });
+  stmt.run({ id, status: toStatus, updatedAt: now, endedAt });
 
-  return { ...session, status: toStatus, updatedAt: now };
+  return { ...session, status: toStatus, updatedAt: now, endedAt };
 }
 
 export function archiveSwarmSession(
@@ -238,9 +264,9 @@ export function updateSwarmSessionPersona(
 
   const now = Date.now();
   const stmt = getDatabase().prepare(`
-    UPDATE swarm_sessions SET persona_id = @personaId, updatedAt = @updatedAt WHERE id = @id
+    UPDATE swarm_sessions SET persona_id = @personaId, updatedAt = @updatedAt, ended_at = @endedAt WHERE id = @id
   `);
-  stmt.run({ id, personaId, updatedAt: now });
+  stmt.run({ id, personaId, updatedAt: now, endedAt: existing.endedAt });
 
   return { ...existing, personaId, updatedAt: now };
 }

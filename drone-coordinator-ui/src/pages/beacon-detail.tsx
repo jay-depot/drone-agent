@@ -8,6 +8,7 @@ import type {
   AgentLocation,
   WsEventMessage,
 } from '@/lib/types';
+import { formatDuration } from '@/lib/duration';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -425,8 +426,8 @@ export default function BeaconDetailPage() {
                         {new Date(session.connectedAt).toLocaleString()}
                       </TableCell>
                       <TableCell className="text-xs">
-                        {session.durationMs
-                          ? `${Math.floor(session.durationMs / 60000)}m`
+                        {session.durationMs !== null
+                          ? formatDuration(session.durationMs)
                           : 'Active'}
                       </TableCell>
                     </TableRow>

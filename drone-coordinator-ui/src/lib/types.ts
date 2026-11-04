@@ -70,6 +70,7 @@ export interface SwarmSession {
   status: string;
   createdAt: number;
   updatedAt: number;
+  endedAt: number | null;
   interactive?: boolean;
 }
 
