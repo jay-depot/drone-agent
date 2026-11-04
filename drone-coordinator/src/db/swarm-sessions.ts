@@ -155,9 +155,14 @@ export function markStaleSessions(thresholdMs: number): SwarmSession[] {
   for (const session of staleSessions) {
     const now = Date.now();
     const stmt = getDatabase().prepare(
-      'UPDATE swarm_sessions SET status = @status, updatedAt = @updatedAt WHERE id = @id'
+      'UPDATE swarm_sessions SET status = @status, updatedAt = @updatedAt, ended_at = @endedAt WHERE id = @id'
     );
-    stmt.run({ id: session.id, status: 'stale', updatedAt: now });
+    stmt.run({
+      id: session.id,
+      status: 'stale',
+      updatedAt: now,
+      endedAt: session.endedAt,
+    });
     updated.push({ ...session, status: 'stale', updatedAt: now });
   }
   if (updated.length > 0) {
@@ -259,9 +264,9 @@ export function updateSwarmSessionPersona(
 
   const now = Date.now();
   const stmt = getDatabase().prepare(`
-    UPDATE swarm_sessions SET persona_id = @personaId, updatedAt = @updatedAt WHERE id = @id
+    UPDATE swarm_sessions SET persona_id = @personaId, updatedAt = @updatedAt, ended_at = @endedAt WHERE id = @id
   `);
-  stmt.run({ id, personaId, updatedAt: now });
+  stmt.run({ id, personaId, updatedAt: now, endedAt: existing.endedAt });
 
   return { ...existing, personaId, updatedAt: now };
 }

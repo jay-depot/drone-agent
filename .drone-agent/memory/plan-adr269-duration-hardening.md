@@ -9,8 +9,9 @@ tags:
   - ended-at
   - hardening
   - feat/ui-polish
+status: completed
 created: 2026-11-03T22:18:28.990Z
-updated: 2026-11-03T22:18:28.990Z
+updated: 2026-11-03T22:29:24.590Z
 ---
 
 # Plan: ADR 269 duration follow-ups — input guards, honest defaults, write-path invariant
@@ -41,3 +42,16 @@ ADR 269 (commit 6a58409b) added swarm_sessions.ended_at + a three-branch duratio
 Dependencies: 1→2→3 (same file family); 4 same package, after 2; 5→6; 7 after all; 8 last. UI (1-4) and coordinator (5-6) are file-disjoint — two parallel workstreams.
 
 Context: ADR 269 design record = wiki coordinator-swarm-sessions-ended-at-and-duration-column; as-built = wiki drone-coordinator-session-ended-at-duration-as-built; review findings = project memory review-adr269-unknown-duration-finding. LIVE_STATUSES = {'active','stale'} exists in both duration.ts and swarm-sessions.ts.
+
+## Completed (2026-11-03) — executed by persona `code`
+
+All 8 steps done on feat/ui-polish; every validation criterion passed.
+
+- Commits: f5fa25fe (preliminary: plan + review memory files), a0c55c9f (UI, steps 1–4), and the coordinator commit that includes this memory file (steps 5–6; hash is circular with this file — see `git log -- drone-coordinator`).
+- Steps 1–2 (duration.ts): formatDuration returns 'unknown' for non-finite input; formatSessionDuration normalizes `session.endedAt ?? null` once, keeps strict `!== null`, requires `Number.isFinite(age)` before the `~` live branch; jsdoc documents absent-endedAt-behaves-as-null.
+- Step 3 (duration.test.ts): +4 tests — NaN→'unknown', Infinity→'unknown', absent endedAt + active → '~5m', absent endedAt + processing → 'unknown' (cast `as unknown as SessionDurationInput`). File now has 14 tests, all pass.
+- Step 4 (sessions.tsx): SessionRow.status required, `?? 'active'` dropped. Typecheck found no other sites — the plan's mapper/test-helper assumption held.
+- Step 5 (swarm-sessions.ts): updateSwarmSessionPersona and markStaleSessions now set `ended_at = @endedAt`, carrying the existing value. Invariant verified by grep: all 4 `UPDATE swarm_sessions` sites set ended_at.
+- Step 6 (db.test.ts): +2 preservation tests — persona update preserves a stamped endedAt; markStaleSessions preserves a pre-set ended_at value (1_234_567).
+- Step 7: LSP clean; `pnpm -r run build`, `pnpm typecheck`, `pnpm lint` pass (prettier reflowed long lines only); fast suite 4588 passed / 16 skipped / 0 failed; no loose equality added.
+- D6 (wiki addendum to drone-coordinator-session-ended-at-duration-as-built) stays intentionally open until PR #153 merges, per the plan.

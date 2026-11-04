@@ -37,6 +37,7 @@ import {
   listSwarmSessions,
   countSwarmSessions,
   updateSwarmSessionStatus,
+  updateSwarmSessionPersona,
   archiveSwarmSession,
   restoreSwarmSession,
   transitionSessionStatus,
@@ -858,6 +859,14 @@ describe('Swarm Session & Events', () => {
     expect(processed.endedAt).toBe(ended.endedAt);
   });
 
+  it('updateSwarmSessionPersona preserves a stamped endedAt', () => {
+    createSwarmSession('ss1', null, 'b1');
+    const ended = updateSwarmSessionStatus('ss1', 'ended')!;
+    const updated = updateSwarmSessionPersona('ss1', 'persona-2')!;
+    expect(updated.endedAt).toBe(ended.endedAt);
+    expect(getSwarmSession('ss1')!.endedAt).toBe(ended.endedAt);
+  });
+
   it('a legacy non-live row keeps endedAt null across bookkeeping transitions', () => {
     createSwarmSession('ss1', null, 'b1');
     updateSwarmSessionStatus('ss1', 'processing');
@@ -883,6 +892,19 @@ describe('Swarm Session & Events', () => {
     const stale = markStaleSessions(1_000);
     expect(stale).toHaveLength(1);
     expect(stale[0].endedAt).toBeNull();
+  });
+
+  it('markStaleSessions preserves an existing endedAt', () => {
+    createSwarmSession('ss1', null, 'b1');
+    getDatabase()
+      .prepare(
+        'UPDATE swarm_sessions SET ended_at = ?, updatedAt = ? WHERE id = ?'
+      )
+      .run(1_234_567, Date.now() - 10_000, 'ss1');
+    const stale = markStaleSessions(1_000);
+    expect(stale).toHaveLength(1);
+    expect(stale[0].endedAt).toBe(1_234_567);
+    expect(getSwarmSession('ss1')!.endedAt).toBe(1_234_567);
   });
   it('should return undefined when updating non-existent session', () => {
     expect(updateSwarmSessionStatus('nonexistent', 'ended')).toBeUndefined();
