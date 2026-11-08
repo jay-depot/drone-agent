@@ -29,6 +29,7 @@ vi.mock('../src/coordinator-client.js', () => ({
 const adapterStores = vi.hoisted(() => ({
   snapshotStore: undefined as unknown,
   outboundLedger: undefined as unknown,
+  wakeupStore: undefined as unknown,
 }));
 
 // Mock the matrix adapter module so engine can import it without matrix-js-sdk
@@ -44,6 +45,7 @@ vi.mock('../src/adapters/matrix.js', () => ({
       onMessage: vi.fn(),
       snapshotStore: adapterStores.snapshotStore,
       outboundLedger: adapterStores.outboundLedger,
+      wakeupStore: adapterStores.wakeupStore,
     };
   }),
 }));
@@ -179,6 +181,7 @@ describe('GatewayEngine', () => {
     mockSpawnBackend = makeMockSpawnBackend();
     adapterStores.snapshotStore = undefined;
     adapterStores.outboundLedger = undefined;
+    adapterStores.wakeupStore = undefined;
   });
 
   describe('constructor', () => {
@@ -1156,6 +1159,152 @@ describe('GatewayEngine', () => {
       expect(engine.listInjectableConversations()).toEqual([
         { adapterId: 'matrix-1', conversationId: '!room:server' },
       ]);
+    });
+  });
+
+  describe('schedule seams', () => {
+    function makeWakeupStore(
+      rows: Array<{
+        id: string;
+        conversationId: string;
+        note: string;
+        dueAt: number;
+      }>
+    ) {
+      return {
+        insert: vi.fn(),
+        list: vi.fn(() => []),
+        get: vi.fn(() => null),
+        due: vi.fn((conversationId: string) =>
+          rows
+            .filter(r => r.conversationId === conversationId)
+            .map(r => ({ ...r, createdAt: 0, attempts: 0 }))
+        ),
+        remove: vi.fn(),
+        bumpAttempts: vi.fn(() => 1),
+      };
+    }
+
+    function scheduleConfig(enabled: boolean): GatewayConfig {
+      return makeMinimalConfig({
+        serviceAdapters: [
+          {
+            id: 'matrix-1',
+            type: 'matrix',
+            config: { dataPath: '/tmp/gw.sqlite' },
+            conversations: new Map([
+              [
+                'conv-1',
+                conv([
+                  makeConvSpec('persona-assignment', {
+                    personaId: 'me',
+                    config: { schedule: { enabled } },
+                  }),
+                ]),
+              ],
+            ]),
+          },
+        ],
+      });
+    }
+
+    async function startedAdapter(engine: InstanceType<typeof GatewayEngine>) {
+      await engine.start();
+      const matrix = (await import('../src/adapters/matrix.js'))
+        .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
+      return matrix.mock.results.at(-1)?.value as {
+        sendMessage: ReturnType<typeof vi.fn>;
+      };
+    }
+
+    it('posts a due wake reply through the adapter and appends a ledger row', async () => {
+      vi.useFakeTimers();
+      try {
+        const append = vi.fn();
+        adapterStores.outboundLedger = {
+          append,
+          list: vi.fn(() => []),
+          remove: vi.fn(),
+        };
+        adapterStores.wakeupStore = makeWakeupStore([
+          { id: 'w1', conversationId: 'conv-1', note: 'soup', dueAt: 0 },
+        ]);
+        const backend = makeRespondingSpawnBackend('local');
+        const engine = makeEngine(scheduleConfig(true), backend);
+        const adapter = await startedAdapter(engine);
+        adapter.sendMessage.mockResolvedValue('$ref');
+
+        await vi.advanceTimersByTimeAsync(21_000);
+
+        expect(backend.sendMessage).toHaveBeenCalledTimes(1);
+        expect(adapter.sendMessage).toHaveBeenCalledWith(
+          'conv-1',
+          'PERSONA-RESPONSE'
+        );
+        expect(append).toHaveBeenCalledWith('conv-1', {
+          platformRef: '$ref',
+          text: 'PERSONA-RESPONSE',
+        });
+        await engine.stop();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not arm the wake tick when scheduling is disabled', async () => {
+      vi.useFakeTimers();
+      try {
+        adapterStores.wakeupStore = makeWakeupStore([
+          { id: 'w1', conversationId: 'conv-1', note: 'soup', dueAt: 0 },
+        ]);
+        const backend = makeRespondingSpawnBackend('local');
+        const engine = makeEngine(scheduleConfig(false), backend);
+        await startedAdapter(engine);
+
+        await vi.advanceTimersByTimeAsync(60_000);
+
+        expect(backend.sendMessage).not.toHaveBeenCalled();
+        await engine.stop();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('leaves scheduling disabled when the adapter has no persistent DB', async () => {
+      vi.useFakeTimers();
+      try {
+        adapterStores.wakeupStore = undefined;
+        const backend = makeRespondingSpawnBackend('local');
+        const config = makeMinimalConfig({
+          serviceAdapters: [
+            {
+              id: 'matrix-1',
+              type: 'matrix',
+              config: {},
+              conversations: new Map([
+                [
+                  'conv-1',
+                  conv([
+                    makeConvSpec('persona-assignment', {
+                      personaId: 'me',
+                      config: { schedule: { enabled: true } },
+                    }),
+                  ]),
+                ],
+              ]),
+            },
+          ],
+        });
+        const engine = makeEngine(config, backend);
+        await startedAdapter(engine);
+
+        await vi.advanceTimersByTimeAsync(60_000);
+
+        expect(backend.sendMessage).not.toHaveBeenCalled();
+        await engine.stop();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

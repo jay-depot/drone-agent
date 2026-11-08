@@ -1,6 +1,7 @@
 import type {
   ContextSnapshotStore,
   OutboundLedgerHandle,
+  ScheduledWakeupStore,
 } from './store/gateway-state-store.js';
 
 // === Service Adapter Interface ===
@@ -26,6 +27,8 @@ export interface DroneServiceAdapter {
   readonly snapshotStore?: ContextSnapshotStore;
   /** Built when the adapter has a persistent DB; absent otherwise. */
   readonly outboundLedger?: OutboundLedgerHandle;
+  /** Built when the adapter has a persistent DB; absent otherwise. */
+  readonly wakeupStore?: ScheduledWakeupStore;
 }
 
 export interface AdapterMessage {

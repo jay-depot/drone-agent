@@ -43,6 +43,7 @@ function makeSurface(
   const ctx: SurfaceContext = {
     spawnBackend: backend,
     swarm: undefined,
+    postMessage: vi.fn(async () => undefined),
     ...ctxOverrides,
     mode: ctxOverrides.mode ?? 'active',
     catchUpIntervalMs: ctxOverrides.catchUpIntervalMs ?? 900_000,
@@ -101,6 +102,7 @@ describe('createPersonaAssignmentSurface', () => {
       createPersonaAssignmentSurface({ type: 'persona-assignment' }, 'conv-1', {
         spawnBackend: {} as never,
         swarm: undefined,
+        postMessage: vi.fn(async () => undefined),
         mode: 'active',
         catchUpIntervalMs: 900_000,
         extensionHintPrefix: 'drone-gateway',
@@ -644,6 +646,148 @@ describe('createPersonaAssignmentSurface', () => {
       );
 
       expect(sentOpts(backend)).toEqual({ systemReminder: ROOM_INSTRUCTION });
+    });
+  });
+
+  describe('scheduled wake-ups', () => {
+    const TICK = 15_000;
+
+    function makeWakeupStore(
+      rows: Array<{ id: string; note: string; dueAt: number }>
+    ) {
+      return {
+        insert: vi.fn(),
+        list: vi.fn(() => []),
+        get: vi.fn(() => null),
+        due: vi.fn(() =>
+          rows.map(r => ({
+            ...r,
+            conversationId: 'conv-1',
+            createdAt: 0,
+            attempts: 0,
+          }))
+        ),
+        remove: vi.fn(),
+        bumpAttempts: vi.fn(() => 1),
+      };
+    }
+
+    function readiness() {
+      return { isReady: () => true, timeoutMs: 5000, pollMs: 250 };
+    }
+
+    it('posts a wake reply in observer mode (D2)', async () => {
+      const backend = makeBackend();
+      const postMessage = vi.fn(async () => undefined);
+      const store = makeWakeupStore([{ id: 'w1', note: 'soup', dueAt: 0 }]);
+      const surface = makeSurface(backend, {
+        mode: 'observer',
+        catchUpIntervalMs: 900_000,
+        wakeupStore: store,
+        scheduleReadiness: readiness(),
+        postMessage,
+      });
+
+      await vi.advanceTimersByTimeAsync(TICK);
+
+      expect(backend.sendMessage).toHaveBeenCalledTimes(1);
+      expect(sentText(backend)).toContain('soup');
+      expect(postMessage).toHaveBeenCalledWith('conv-1', 'hello back');
+      expect(store.remove).toHaveBeenCalledWith('w1');
+      await surface.dispose?.();
+    });
+
+    it('posts nothing and still removes the row for a no-response wake reply (D6)', async () => {
+      const backend = makeBackend({
+        sendMessage: vi.fn(async () => NO_RESPONSE_SENTINEL),
+      });
+      const postMessage = vi.fn(async () => undefined);
+      const store = makeWakeupStore([{ id: 'w1', note: 'soup', dueAt: 0 }]);
+      const surface = makeSurface(backend, {
+        mode: 'observer',
+        catchUpIntervalMs: 900_000,
+        wakeupStore: store,
+        scheduleReadiness: readiness(),
+        postMessage,
+      });
+
+      await vi.advanceTimersByTimeAsync(TICK);
+
+      expect(postMessage).not.toHaveBeenCalled();
+      expect(store.remove).toHaveBeenCalledWith('w1');
+      expect(store.bumpAttempts).not.toHaveBeenCalled();
+      await surface.dispose?.();
+    });
+
+    it('keeps the row and increments attempts when the wake turn throws (D6)', async () => {
+      const backend = makeBackend({
+        sendMessage: vi.fn(async () => {
+          throw new Error('agent gone');
+        }),
+      });
+      const store = makeWakeupStore([{ id: 'w1', note: 'soup', dueAt: 0 }]);
+      const surface = makeSurface(backend, {
+        mode: 'observer',
+        catchUpIntervalMs: 900_000,
+        wakeupStore: store,
+        scheduleReadiness: readiness(),
+      });
+
+      await vi.advanceTimersByTimeAsync(TICK);
+
+      expect(store.bumpAttempts).toHaveBeenCalledWith('w1');
+      expect(store.remove).not.toHaveBeenCalled();
+      await surface.dispose?.();
+    });
+
+    it('drops the row after the max attempts (D6)', async () => {
+      const backend = makeBackend({
+        sendMessage: vi.fn(async () => {
+          throw new Error('agent gone');
+        }),
+      });
+      const store = makeWakeupStore([{ id: 'w1', note: 'soup', dueAt: 0 }]);
+      store.bumpAttempts.mockReturnValue(3);
+      const surface = makeSurface(backend, {
+        mode: 'observer',
+        catchUpIntervalMs: 900_000,
+        wakeupStore: store,
+        scheduleReadiness: readiness(),
+      });
+
+      await vi.advanceTimersByTimeAsync(TICK);
+
+      expect(store.remove).toHaveBeenCalledWith('w1');
+      await surface.dispose?.();
+    });
+
+    it('does not arm the wake tick when scheduling is disabled', async () => {
+      const backend = makeBackend();
+      const surface = makeSurface(backend, {
+        mode: 'observer',
+        catchUpIntervalMs: 900_000,
+      });
+
+      await vi.advanceTimersByTimeAsync(TICK * 3);
+
+      expect(backend.sendMessage).not.toHaveBeenCalled();
+      await surface.dispose?.();
+    });
+
+    it('clears the wake timer on dispose', async () => {
+      const backend = makeBackend();
+      const store = makeWakeupStore([{ id: 'w1', note: 'soup', dueAt: 0 }]);
+      const surface = makeSurface(backend, {
+        mode: 'observer',
+        catchUpIntervalMs: 900_000,
+        wakeupStore: store,
+        scheduleReadiness: readiness(),
+      });
+
+      await surface.dispose?.();
+      await vi.advanceTimersByTimeAsync(TICK * 3);
+
+      expect(backend.sendMessage).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,6 +1,24 @@
-import { createExtensionNode, type ExtensionNode } from 'drone-swarm-common';
+import {
+  createExtensionNode,
+  type ExtensionNode,
+  type InvokeCtx,
+  type InvokeResult,
+} from 'drone-swarm-common';
+import type { DroneSessionSnapshot, DroneSessionEndedEvent } from 'drone-core';
 import { logger } from './logger.js';
 import type { SwarmExtensionConfig } from './types.js';
+import { SCHEDULE_CAPABILITIES } from './schedule/catalog.js';
+
+/** Handlers the gateway installs on the node (session state + tool invokes). */
+export interface ExtensionNodeHandlers {
+  onSessionStarted: (s: DroneSessionSnapshot) => void;
+  onSessionEnded: (e: DroneSessionEndedEvent) => void;
+  onInvokeTool: (
+    cap: string,
+    params: unknown,
+    ctx: InvokeCtx
+  ) => Promise<InvokeResult>;
+}
 
 /**
  * Owns the gateway's swarm extension node: one node per gateway process.
@@ -13,11 +31,17 @@ import type { SwarmExtensionConfig } from './types.js';
 export class ExtensionNodeHandle {
   private node: ExtensionNode | null = null;
   private stopped = false;
+  private handlers: ExtensionNodeHandlers | null = null;
 
   constructor(
     private readonly coordinatorUrl: string,
     private readonly config: SwarmExtensionConfig
   ) {}
+
+  /** Install the session and invoke handlers before {@link start}. */
+  setHandlers(handlers: ExtensionNodeHandlers): void {
+    this.handlers = handlers;
+  }
 
   /** Start the node without waiting for registration. Safe to call once. */
   start(): void {
@@ -26,14 +50,28 @@ export class ExtensionNodeHandle {
       dataDir: this.config.dataDir,
       id: this.config.id,
       name: this.config.name,
-      capabilities: [],
+      capabilities: SCHEDULE_CAPABILITIES,
       awaitRegistration: false,
       requestTimeoutMs: this.config.requestTimeoutMs,
       handlers: {
-        onSessionStarted: session =>
-          logger.debug({ sessionId: session.sessionId }, 'session started'),
-        onSessionEnded: session =>
-          logger.debug({ sessionId: session.sessionId }, 'session ended'),
+        onSessionStarted: session => {
+          logger.debug({ sessionId: session.sessionId }, 'session started');
+          this.handlers?.onSessionStarted(session);
+        },
+        onSessionEnded: session => {
+          logger.debug({ sessionId: session.sessionId }, 'session ended');
+          this.handlers?.onSessionEnded(session);
+        },
+        onInvokeTool: (cap, params, ctx) => {
+          if (!this.handlers) {
+            return Promise.resolve({
+              ok: false,
+              status: 503,
+              body: { error: 'gateway not ready' },
+            });
+          }
+          return this.handlers.onInvokeTool(cap, params, ctx);
+        },
       },
     })
       .then(node => {
@@ -61,6 +99,32 @@ export class ExtensionNodeHandle {
       );
     }
     return node.getFetch()(url, init);
+  }
+
+  /** Push a persistent prompt fragment into a target session. No-op when absent. */
+  injectFragment(input: {
+    target: string;
+    id: string;
+    content: string;
+    phase?: 'header' | 'footer';
+    ttlMs?: number;
+  }): void {
+    this.node?.injectFragment(input);
+  }
+
+  /** Select capabilities as tools for a target session. No-op when absent. */
+  injectTools(input: { target: string; capabilities: string[] }): void {
+    this.node?.injectTools(input);
+  }
+
+  /** Remove a prior injection. No-op when absent. */
+  removeInjection(input: {
+    target: string;
+    kind: 'fragment' | 'reminder' | 'tools';
+    injectionId?: string;
+    tools?: string[];
+  }): void {
+    this.node?.removeInjection(input);
   }
 
   /** Idempotent. Stops the node so terminate requests can no longer go out. */

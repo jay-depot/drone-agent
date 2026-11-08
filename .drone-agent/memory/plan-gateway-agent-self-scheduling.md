@@ -18,7 +18,7 @@ Branch: feat/gateway-swarm-extensions. ADR to write: 270.
 
 ## 1. Summary
 
-This plan makes `drone-gateway` a *callee* swarm extension.
+This plan makes `drone-gateway` a _callee_ swarm extension.
 
 Today the gateway declares an empty capability manifest. It is a sender only.
 This plan makes the gateway declare three callable capabilities.
@@ -35,6 +35,7 @@ store.
 ## 2. Scope
 
 In scope:
+
 - A per-surface opt-in flag.
 - Three capabilities: `schedule_wakeup`, `schedule_list`, `schedule_cancel`.
 - A durable store for pending wake-ups.
@@ -43,6 +44,7 @@ In scope:
 - Documentation and an ADR.
 
 Not in scope (v1):
+
 - Coordinator spawn mode. The gateway cannot see the reply in that mode.
 - Recurring schedules (one-time only).
 - Per-wake-up timezone (absolute instants only).
@@ -66,6 +68,7 @@ Read these files before you start.
 - `docs/adr/256-gateway-swarm-extension.md` - the gateway-as-extension design.
 
 Key facts:
+
 - A `tools` injection materializes agent tools named `extensions__<extId>__<tool>`.
   The tools start UNMOUNTED. The model mounts them with `runtime__mount_tool`.
 - A tool call is a full agent turn.
@@ -135,16 +138,16 @@ export const SCHEDULE_GUIDANCE_INJECTION_ID = 'schedule-guidance';
 
 Execute the phases in order. Phases depend on the phases above them.
 
-| Phase | Steps | Depends on |
-|-------|-------|-----------|
-| P0 Store and types | S1-S4 | none |
-| P1 Schedule domain | S5-S7 | P0 |
-| P2 Node wiring | S8-S9 | P1 |
-| P3 Engine seams | S10-S11 | P0 |
-| P4 Surface | S12-S14 | P1, P3 |
-| P5 Config | S15 | none |
-| P6 Docs | S16-S18 | P0-P5 |
-| P7 Validation | S19 | all |
+| Phase              | Steps   | Depends on |
+| ------------------ | ------- | ---------- |
+| P0 Store and types | S1-S4   | none       |
+| P1 Schedule domain | S5-S7   | P0         |
+| P2 Node wiring     | S8-S9   | P1         |
+| P3 Engine seams    | S10-S11 | P0         |
+| P4 Surface         | S12-S14 | P1, P3     |
+| P5 Config          | S15     | none       |
+| P6 Docs            | S16-S18 | P0-P5      |
+| P7 Validation      | S19     | all        |
 
 ## 7. Steps
 
@@ -207,7 +210,9 @@ export interface ScheduledWakeupStore {
 
 export function createScheduledWakeupStore(
   db: GatewayDatabase
-): ScheduledWakeupStore { /* implement with prepared statements */ }
+): ScheduledWakeupStore {
+  /* implement with prepared statements */
+}
 ```
 
 `list` and `due` order rows by `due_at` ascending, then by `created_at`.
@@ -339,8 +344,12 @@ export const WAKE_INSTRUCTION =
 export function buildWakePrompt(note: string, dueAt: number): string {
   return (
     '[scheduled wake-up] You set this reminder for the user earlier:\n\n' +
-    '  ' + note + '\n\n' +
-    'It became due at ' + new Date(dueAt).toISOString() + '. Act on it now.'
+    '  ' +
+    note +
+    '\n\n' +
+    'It became due at ' +
+    new Date(dueAt).toISOString() +
+    '. Act on it now.'
   );
 }
 
@@ -382,7 +391,8 @@ export function resolveDueAt(params: {
     return { ok: true, dueAt: parsed };
   }
   if (typeof delayRaw === 'number' && Number.isFinite(delayRaw)) {
-    if (delayRaw < 0) return { ok: false, error: 'delayMs must not be negative' };
+    if (delayRaw < 0)
+      return { ok: false, error: 'delayMs must not be negative' };
     return { ok: true, dueAt: now + delayRaw };
   }
   return { ok: false, error: 'provide dueAt or delayMs' };
@@ -416,6 +426,7 @@ Test `buildWakePrompt` contains the note and the ISO time.
 File: `drone-gateway/src/extension-node.ts`
 
 Changes:
+
 1. Import `SCHEDULE_CAPABILITIES`.
 2. Pass `capabilities: SCHEDULE_CAPABILITIES` to `createExtensionNode`.
    This replaces `capabilities: []`.
@@ -503,6 +514,7 @@ Test: an enabled surface gets `scheduleReadiness`; a disabled one does not.
 File: `drone-gateway/src/schedule/service.ts` (new)
 
 The service owns four things:
+
 1. The session map: `sessionId` to `{ adapterId, conversationId }`.
 2. Tool and fragment injection on `sessionStarted`.
 3. The three invoke handlers.
@@ -510,14 +522,16 @@ The service owns four things:
 
 ```ts
 export interface ScheduleServiceDeps {
-  getNode: () => {
-    injectFragment(input: {
-      target: string;
-      id: string;
-      content: string;
-    }): void;
-    injectTools(input: { target: string; capabilities: string[] }): void;
-  } | undefined;
+  getNode: () =>
+    | {
+        injectFragment(input: {
+          target: string;
+          id: string;
+          content: string;
+        }): void;
+        injectTools(input: { target: string; capabilities: string[] }): void;
+      }
+    | undefined;
   getWakeupStore: (adapterId: string) => ScheduledWakeupStore | undefined;
   resolveAdapter: (
     conversationId: string
@@ -526,10 +540,15 @@ export interface ScheduleServiceDeps {
 }
 
 export class ScheduleService {
-  private sessions = new Map<string, { adapterId: string; conversationId: string }>();
+  private sessions = new Map<
+    string,
+    { adapterId: string; conversationId: string }
+  >();
   private enabled = new Set<string>(); // conversation ids
 
-  setEnabledConversations(ids: Set<string>): void { this.enabled = ids; }
+  setEnabledConversations(ids: Set<string>): void {
+    this.enabled = ids;
+  }
 
   registerSession(snapshot: DroneSessionSnapshot): void {
     const hint = snapshot.extensionHint;
@@ -540,7 +559,9 @@ export class ScheduleService {
     if (!this.enabled.has(conversationId)) return;
     const resolved = this.deps.resolveAdapter(conversationId);
     if (!resolved || resolved.ambiguous) {
-      this.deps.logger.warn(`scheduling: cannot resolve adapter for conversation ${conversationId}`);
+      this.deps.logger.warn(
+        `scheduling: cannot resolve adapter for conversation ${conversationId}`
+      );
       return;
     }
     this.sessions.set(snapshot.sessionId, {
@@ -575,11 +596,14 @@ export class ScheduleService {
     cap: string,
     params: unknown,
     ctx: InvokeCtxLike
-  ): Promise<InvokeResult> { /* switch on cap; see below */ }
+  ): Promise<InvokeResult> {
+    /* switch on cap; see below */
+  }
 }
 ```
 
 `handleInvokeTool` logic:
+
 - Resolve the session: `this.sessions.get(ctx.sessionId ?? '')`. If absent, return
   `{ ok: false, status: 400, body: { error: 'unknown session' } }`.
 - `schedule_wakeup`: read `note` (string, required). Call `resolveDueAt(params)`.
@@ -600,6 +624,7 @@ Keep each file below 750 lines. If `service.ts` grows, move the handlers to
 File: `drone-gateway/test/schedule-service.test.ts`
 
 Test with a fake node and an in-memory store:
+
 - `registerSession` injects tools and the fragment for an enabled conversation.
 - `registerSession` ignores a non-matching hint and a disabled conversation.
 - `schedule_wakeup` inserts a row and returns the resolved instant.
@@ -612,6 +637,7 @@ Test with a fake node and an in-memory store:
 File: `drone-gateway/src/surfaces/persona-assignment.ts`
 
 Add:
+
 1. A module constant import: `DEFAULT_WAKEUP_TICK_MS`, `MAX_WAKEUP_ATTEMPTS`.
 2. A `runWake(w)` function:
 
@@ -629,7 +655,10 @@ async function runWake(w: ScheduledWakeup): Promise<void> {
     const attempts = store.bumpAttempts(w.id);
     if (attempts >= MAX_WAKEUP_ATTEMPTS) {
       store.remove(w.id);
-      logger.error({ conversationId, wakeupId: w.id }, 'wake-up dropped after max attempts');
+      logger.error(
+        { conversationId, wakeupId: w.id },
+        'wake-up dropped after max attempts'
+      );
     }
     return;
   }
@@ -637,7 +666,8 @@ async function runWake(w: ScheduledWakeup): Promise<void> {
   if (ledger && ids.length > 0) ledger.remove(ids);
   const outcome = classifyWakeReply(reply);
   logger.info({ conversationId, wakeupId: w.id, outcome }, 'wake-up fired');
-  if (outcome === 'posted') await ctx.postMessage(conversationId, reply!.trim());
+  if (outcome === 'posted')
+    await ctx.postMessage(conversationId, reply!.trim());
 }
 ```
 
@@ -647,7 +677,9 @@ async function runWake(w: ScheduledWakeup): Promise<void> {
 
 ```ts
 if (ctx.scheduleReadiness && ctx.wakeupStore) {
-  wakeTimer = setInterval(() => { void fireDue(); }, DEFAULT_WAKEUP_TICK_MS);
+  wakeTimer = setInterval(() => {
+    void fireDue();
+  }, DEFAULT_WAKEUP_TICK_MS);
   wakeTimer.unref();
 }
 ```
@@ -715,7 +747,11 @@ pattern used by the other keys.
 ```ts
 const schedule = rest.schedule;
 if (schedule !== undefined) {
-  if (typeof schedule !== 'object' || schedule === null || Array.isArray(schedule)) {
+  if (
+    typeof schedule !== 'object' ||
+    schedule === null ||
+    Array.isArray(schedule)
+  ) {
     warn('schedule is not an object; ignoring');
     delete rest.schedule;
   } else {
@@ -751,6 +787,7 @@ Check the frontier table row. The current frontier is 269.
 #### S23 (coder) - Update the agent and gateway docs
 
 Files:
+
 - `docs/agents/swarm-extensions.md` - replace "gateway is a sender only" text.
   State that the gateway now declares three `schedule_*` capabilities.
 - `drone-gateway/CONTEXT.md` - add the schedule surface flag, the store table,
@@ -774,6 +811,7 @@ name as a cross-check.
 #### S26 (tester) - Run the full validation
 
 Run, in this order:
+
 1. `pnpm -r run build`
 2. `pnpm typecheck`
 3. `pnpm run lint`

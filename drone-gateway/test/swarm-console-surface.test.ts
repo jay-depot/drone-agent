@@ -40,6 +40,7 @@ function makeSurface(ctx: Partial<SurfaceContext>) {
   const context: SurfaceContext = {
     spawnBackend: {} as never,
     swarm: undefined,
+    postMessage: vi.fn(async () => undefined),
     ...ctx,
     mode: ctx.mode ?? 'active',
     catchUpIntervalMs: ctx.catchUpIntervalMs ?? 900_000,

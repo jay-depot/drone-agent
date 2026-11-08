@@ -1,6 +1,7 @@
 import { logger } from '../logger.js';
 import type { AdapterMessage } from '../types.js';
 import type { SurfaceFactory } from './types.js';
+import type { ScheduledWakeup } from '../store/gateway-state-store.js';
 import { SessionLifecycle } from './lifecycle.js';
 import {
   OUTBOUND_LEDGER_PREAMBLE,
@@ -10,6 +11,15 @@ import {
   isCancelled,
   isNoResponse,
 } from '../chat-format.js';
+import {
+  DEFAULT_WAKEUP_TICK_MS,
+  MAX_WAKEUP_ATTEMPTS,
+} from '../schedule/constants.js';
+import {
+  WAKE_INSTRUCTION,
+  buildWakePrompt,
+  classifyWakeReply,
+} from '../schedule/wake-prompt.js';
 
 /**
  * A control surface that routes messages in a conversation to a specific
@@ -26,6 +36,11 @@ import {
  * code (not just instructions): a discarding mode returns `response: null`
  * regardless of what the model said. A cancelled turn's sentinel and the
  * no-response sentinel both post nothing, in every mode.
+ *
+ * When the surface opted into scheduling (`config.schedule.enabled`) and the
+ * adapter is persistent, a polled tick fires due wake-ups as their own agent
+ * turns. A wake round is a deliverable round: its reply is posted in every
+ * mode (D2), while the sentinels still suppress it.
  */
 export const createPersonaAssignmentSurface: SurfaceFactory = (
   spec,
@@ -48,6 +63,8 @@ export const createPersonaAssignmentSurface: SurfaceFactory = (
   /** Inbound messages accumulated since the last flush (observer/passive). */
   let buffer: AdapterMessage[] = [];
   let timer: NodeJS.Timeout | null = null;
+  let wakeTimer: NodeJS.Timeout | null = null;
+  let disposed = false;
 
   /**
    * Drain the pending outbound ledger into a preamble. Rows are deleted only
@@ -101,7 +118,6 @@ export const createPersonaAssignmentSurface: SurfaceFactory = (
         handled: true,
       };
     }
-    // Only after a successful round: a thrown send leaves the rows for retry.
     if (ledger && ids.length > 0) ledger.remove(ids);
 
     if (reply === null) {
@@ -147,6 +163,54 @@ export const createPersonaAssignmentSurface: SurfaceFactory = (
   }
 
   /**
+   * Fire one due wake-up: run the turn, then post its reply. A delivered turn
+   * always removes the row (D6); only a thrown send keeps it for retry. The
+   * reply is posted in every mode — a wake round is deliverable (D2).
+   */
+  async function runWake(w: ScheduledWakeup): Promise<void> {
+    const store = ctx.wakeupStore;
+    if (!store || disposed) return;
+    const { text: preamble, ids } = buildPreamble();
+    const prompt = preamble + buildWakePrompt(w.note, w.dueAt);
+    let reply: string | null;
+    try {
+      reply = await lifecycle.send(prompt, {
+        systemReminder: WAKE_INSTRUCTION,
+      });
+    } catch (err) {
+      logger.warn(
+        { err, conversationId, wakeupId: w.id },
+        'wake-up turn failed; will retry'
+      );
+      const attempts = store.bumpAttempts(w.id);
+      if (attempts >= MAX_WAKEUP_ATTEMPTS) {
+        store.remove(w.id);
+        logger.error(
+          { conversationId, wakeupId: w.id },
+          'wake-up dropped after max attempts'
+        );
+      }
+      return;
+    }
+    store.remove(w.id);
+    if (ledger && ids.length > 0) ledger.remove(ids);
+    const outcome = classifyWakeReply(reply);
+    logger.info({ conversationId, wakeupId: w.id, outcome }, 'wake-up fired');
+    if (outcome === 'posted')
+      await ctx.postMessage(conversationId, reply!.trim());
+  }
+
+  /** Fire every due wake-up, oldest first. Serialized by the lifecycle tail. */
+  async function fireDue(): Promise<void> {
+    const store = ctx.wakeupStore;
+    if (!store || disposed) return;
+    const due = store.due(conversationId, Date.now());
+    for (const w of due) {
+      await runWake(w);
+    }
+  }
+
+  /**
    * Buffer inbound messages. In `active` a turn runs immediately; in a
    * discarding mode a mention-bearing ingest (passive) flushes at once, and
    * anything else waits for the timer. The flush is awaited inside the
@@ -173,15 +237,27 @@ export const createPersonaAssignmentSurface: SurfaceFactory = (
     timer.unref();
   }
 
+  if (ctx.scheduleReadiness && ctx.wakeupStore) {
+    wakeTimer = setInterval(() => {
+      void fireDue();
+    }, DEFAULT_WAKEUP_TICK_MS);
+    wakeTimer.unref();
+  }
+
   return {
     id: `persona-assignment-${conversationId}`,
     type: 'persona-assignment',
     handleMessage: (msg: AdapterMessage) => ingest([msg]),
     handleBatch: (messages: AdapterMessage[]) => ingest(messages),
     dispose: async () => {
+      disposed = true;
       if (timer) {
         clearInterval(timer);
         timer = null;
+      }
+      if (wakeTimer) {
+        clearInterval(wakeTimer);
+        wakeTimer = null;
       }
       await lifecycle.dispose();
     },

@@ -41,6 +41,7 @@ export function initGatewaySchema(db: GatewayDatabase): void {
   createCryptoSchema(db);
   createSyncSchema(db);
   createGatewayStateSchema(db);
+  createScheduleSchema(db);
 }
 
 /**
@@ -182,5 +183,25 @@ function createGatewayStateSchema(db: GatewayDatabase): void {
 
     CREATE INDEX IF NOT EXISTS idx_pending_outbound_conversation
       ON pending_outbound (conversation_id, id);
+  `);
+}
+
+/**
+ * Schedule tables: pending one-time wake-ups an agent set for itself in a
+ * conversation. Durable so an overdue wake-up survives a gateway restart.
+ */
+function createScheduleSchema(db: GatewayDatabase): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS scheduled_wakeups (
+      id              TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL,
+      note            TEXT NOT NULL,
+      due_at          INTEGER NOT NULL,
+      created_at      INTEGER NOT NULL,
+      attempts        INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_scheduled_wakeups_due
+      ON scheduled_wakeups (conversation_id, due_at);
   `);
 }

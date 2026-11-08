@@ -116,3 +116,121 @@ export function createOutboundLedger(
     },
   };
 }
+
+/**
+ * A pending one-time wake-up an agent scheduled for itself in a conversation.
+ * `attempts` counts failed wake turns (a thrown `send`), never successful ones.
+ */
+export interface ScheduledWakeup {
+  id: string;
+  conversationId: string;
+  note: string;
+  dueAt: number;
+  createdAt: number;
+  attempts: number;
+}
+
+/**
+ * Durable store for pending wake-ups. Synchronous, matching the other stores.
+ * `list` and `due` order rows by `due_at` ascending, then by `created_at`.
+ */
+export interface ScheduledWakeupStore {
+  insert(input: {
+    id: string;
+    conversationId: string;
+    note: string;
+    dueAt: number;
+  }): void;
+  list(conversationId: string): ScheduledWakeup[];
+  get(id: string): ScheduledWakeup | null;
+  due(conversationId: string, now: number): ScheduledWakeup[];
+  remove(id: string): void;
+  bumpAttempts(id: string): number;
+}
+
+type ScheduledWakeupRow = {
+  id: string;
+  conversation_id: string;
+  note: string;
+  due_at: number;
+  created_at: number;
+  attempts: number;
+};
+
+function mapWakeupRow(row: ScheduledWakeupRow): ScheduledWakeup {
+  return {
+    id: row.id,
+    conversationId: row.conversation_id,
+    note: row.note,
+    dueAt: row.due_at,
+    createdAt: row.created_at,
+    attempts: row.attempts,
+  };
+}
+
+export function createScheduledWakeupStore(
+  db: GatewayDatabase
+): ScheduledWakeupStore {
+  const insert = db.prepare(
+    `INSERT INTO scheduled_wakeups
+       (id, conversation_id, note, due_at, created_at, attempts)
+     VALUES (?, ?, ?, ?, ?, 0)`
+  );
+  const selectOne = db.prepare(
+    `SELECT id, conversation_id, note, due_at, created_at, attempts
+     FROM scheduled_wakeups WHERE id = ?`
+  );
+  const selectByConversation = db.prepare(
+    `SELECT id, conversation_id, note, due_at, created_at, attempts
+     FROM scheduled_wakeups
+     WHERE conversation_id = ?
+     ORDER BY due_at ASC, created_at ASC`
+  );
+  const selectDue = db.prepare(
+    `SELECT id, conversation_id, note, due_at, created_at, attempts
+     FROM scheduled_wakeups
+     WHERE conversation_id = ? AND due_at <= ?
+     ORDER BY due_at ASC, created_at ASC`
+  );
+  const del = db.prepare(`DELETE FROM scheduled_wakeups WHERE id = ?`);
+  const bump = db.prepare(
+    `UPDATE scheduled_wakeups SET attempts = attempts + 1 WHERE id = ?`
+  );
+  const readAttempts = db.prepare(
+    `SELECT attempts FROM scheduled_wakeups WHERE id = ?`
+  );
+
+  return {
+    insert(input) {
+      insert.run(
+        input.id,
+        input.conversationId,
+        input.note,
+        input.dueAt,
+        Date.now()
+      );
+    },
+    list(conversationId) {
+      const rows = selectByConversation.all(
+        conversationId
+      ) as ScheduledWakeupRow[];
+      return rows.map(mapWakeupRow);
+    },
+    get(id) {
+      const row = selectOne.get(id) as ScheduledWakeupRow | undefined;
+      return row ? mapWakeupRow(row) : null;
+    },
+    due(conversationId, now) {
+      const rows = selectDue.all(conversationId, now) as ScheduledWakeupRow[];
+      return rows.map(mapWakeupRow);
+    },
+    remove(id) {
+      del.run(id);
+    },
+    bumpAttempts(id) {
+      bump.run(id);
+      const row = readAttempts.get(id) as { attempts: number } | undefined;
+      return row?.attempts ?? 0;
+    },
+  };
+}

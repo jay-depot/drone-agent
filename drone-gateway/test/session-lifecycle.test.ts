@@ -8,6 +8,7 @@ import type { SurfaceContext } from '../src/surfaces/types.js';
 import type { SpawnSession } from '../src/types.js';
 import type { ContextSnapshotStore } from '../src/store/gateway-state-store.js';
 import type { DronePortableContextExport } from 'drone-core';
+import { logger } from '../src/logger.js';
 
 function makeSession(id: string): SpawnSession {
   return {
@@ -39,6 +40,7 @@ function makeCtx(
   return {
     spawnBackend: backend,
     swarm: undefined,
+    postMessage: vi.fn(async () => undefined),
     ...overrides,
     mode: overrides.mode ?? 'active',
     catchUpIntervalMs: overrides.catchUpIntervalMs ?? 900_000,
@@ -439,6 +441,92 @@ describe('SessionLifecycle', () => {
 
       await lifecycle.send('hi');
       expect(backend.exportContext).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('schedule readiness wait', () => {
+    it('returns at once when no readiness is configured', async () => {
+      const backend = makeBackend();
+      const lifecycle = new SessionLifecycle({
+        surfaceType: 'persona-assignment',
+        conversationId: 'conv-1',
+        personaId: 'coder',
+        ctx: makeCtx(backend),
+      });
+
+      await lifecycle.send('hi');
+      expect(backend.sendMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('waits until the conversation is ready, then sends', async () => {
+      let ready = false;
+      const isReady = vi.fn(() => ready);
+      const backend = makeBackend();
+      const lifecycle = new SessionLifecycle({
+        surfaceType: 'persona-assignment',
+        conversationId: 'conv-1',
+        personaId: 'coder',
+        ctx: makeCtx(backend, {
+          scheduleReadiness: { isReady, timeoutMs: 5000, pollMs: 250 },
+        }),
+      });
+
+      const pending = lifecycle.send('hi');
+      await vi.advanceTimersByTimeAsync(250);
+      ready = true;
+      await vi.advanceTimersByTimeAsync(250);
+      await pending;
+
+      expect(isReady).toHaveBeenCalled();
+      expect(backend.sendMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('continues on timeout and logs a degradation', async () => {
+      const warn = vi.spyOn(logger, 'warn').mockImplementation(() => logger);
+      const backend = makeBackend();
+      const lifecycle = new SessionLifecycle({
+        surfaceType: 'persona-assignment',
+        conversationId: 'conv-1',
+        personaId: 'coder',
+        ctx: makeCtx(backend, {
+          scheduleReadiness: {
+            isReady: () => false,
+            timeoutMs: 500,
+            pollMs: 250,
+          },
+        }),
+      });
+
+      const pending = lifecycle.send('hi');
+      await vi.advanceTimersByTimeAsync(600);
+      await pending;
+
+      expect(backend.sendMessage).toHaveBeenCalledTimes(1);
+      const degraded = warn.mock.calls.filter(call =>
+        String(call[1]).includes('schedule tools not ready')
+      );
+      expect(degraded).toHaveLength(1);
+      warn.mockRestore();
+    });
+
+    it('runs the readiness wait only once per session', async () => {
+      const isReady = vi.fn(() => true);
+      const backend = makeBackend();
+      const lifecycle = new SessionLifecycle({
+        surfaceType: 'persona-assignment',
+        conversationId: 'conv-1',
+        personaId: 'coder',
+        ctx: makeCtx(backend, {
+          scheduleReadiness: { isReady, timeoutMs: 5000, pollMs: 250 },
+        }),
+      });
+
+      await lifecycle.send('one');
+      const afterFirst = isReady.mock.calls.length;
+      await lifecycle.send('two');
+
+      // The second send adds no further readiness polls.
+      expect(isReady.mock.calls.length).toBe(afterFirst);
     });
   });
 });

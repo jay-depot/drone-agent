@@ -10,6 +10,9 @@ vi.mock('../src/logger.js', () => ({ logger: mockLogger }));
 
 type FakeNode = {
   getFetch: () => (url: string, init?: RequestInit) => Promise<Response>;
+  injectFragment: (input: unknown) => void;
+  injectTools: (input: unknown) => void;
+  removeInjection: (input: unknown) => void;
   stop: () => Promise<void>;
 };
 
@@ -25,6 +28,9 @@ vi.mock('drone-swarm-common', () => ({
     return new Promise((resolve, reject) => {
       const node: FakeNode = {
         getFetch: () => vi.fn(async () => new Response('ok')),
+        injectFragment: vi.fn(),
+        injectTools: vi.fn(),
+        removeInjection: vi.fn(),
         stop: vi.fn(async () => {}),
       };
       created.push({
@@ -70,7 +76,7 @@ describe('ExtensionNodeHandle', () => {
     await handle.stop();
   });
 
-  it('passes the config and non-blocking registration to the SDK', async () => {
+  it('declares the three schedule capabilities and non-blocking registration', async () => {
     const handle = new ExtensionNodeHandle('http://127.0.0.1:3456', config);
     handle.start();
     expect(created[0].opts).toMatchObject({
@@ -78,9 +84,109 @@ describe('ExtensionNodeHandle', () => {
       dataDir: '/tmp/ext',
       id: 'drone-gateway',
       name: 'Drone Gateway',
-      capabilities: [],
       awaitRegistration: false,
       requestTimeoutMs: 15000,
+    });
+    const caps = created[0].opts.capabilities as Array<{ name: string }>;
+    expect(caps.map(c => c.name)).toEqual([
+      'schedule_wakeup',
+      'schedule_list',
+      'schedule_cancel',
+    ]);
+    await handle.stop();
+  });
+
+  it('routes an invokeTool command to the installed handler', async () => {
+    const handle = new ExtensionNodeHandle('http://127.0.0.1:3456', config);
+    const onInvokeTool = vi.fn(async () => ({ ok: true, status: 200 }));
+    handle.setHandlers({
+      onSessionStarted: vi.fn(),
+      onSessionEnded: vi.fn(),
+      onInvokeTool,
+    });
+    handle.start();
+    const handlers = created[0].opts.handlers as {
+      onInvokeTool: (
+        cap: string,
+        params: unknown,
+        ctx: { caller: 'agent'; sessionId: string }
+      ) => Promise<unknown>;
+    };
+    const result = await handlers.onInvokeTool(
+      'schedule_wakeup',
+      { note: 'x' },
+      { caller: 'agent', sessionId: 's1' }
+    );
+    expect(onInvokeTool).toHaveBeenCalledWith(
+      'schedule_wakeup',
+      { note: 'x' },
+      { caller: 'agent', sessionId: 's1' }
+    );
+    expect(result).toEqual({ ok: true, status: 200 });
+    await handle.stop();
+  });
+
+  it('rejects an invokeTool command when no handlers are installed', async () => {
+    const handle = new ExtensionNodeHandle('http://127.0.0.1:3456', config);
+    handle.start();
+    const handlers = created[0].opts.handlers as {
+      onInvokeTool: (
+        cap: string,
+        params: unknown,
+        ctx: unknown
+      ) => Promise<{ ok: boolean; status?: number }>;
+    };
+    const result = await handlers.onInvokeTool('schedule_wakeup', {}, {});
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(503);
+    await handle.stop();
+  });
+
+  it('forwards session events to the installed handlers', async () => {
+    const handle = new ExtensionNodeHandle('http://127.0.0.1:3456', config);
+    const onSessionStarted = vi.fn();
+    const onSessionEnded = vi.fn();
+    handle.setHandlers({
+      onSessionStarted,
+      onSessionEnded,
+      onInvokeTool: vi.fn(async () => ({ ok: true })),
+    });
+    handle.start();
+    const handlers = created[0].opts.handlers as {
+      onSessionStarted: (s: { sessionId: string }) => void;
+      onSessionEnded: (e: { sessionId: string }) => void;
+    };
+    handlers.onSessionStarted({ sessionId: 'a' });
+    handlers.onSessionEnded({ sessionId: 'b' });
+    expect(onSessionStarted).toHaveBeenCalledWith({ sessionId: 'a' });
+    expect(onSessionEnded).toHaveBeenCalledWith({ sessionId: 'b' });
+    await handle.stop();
+  });
+
+  it('does not throw injecting tools before the node exists', async () => {
+    const handle = new ExtensionNodeHandle('http://127.0.0.1:3456', config);
+    handle.start();
+    expect(() =>
+      handle.injectTools({ target: 's1', capabilities: ['schedule_wakeup'] })
+    ).not.toThrow();
+    expect(() =>
+      handle.injectFragment({ target: 's1', id: 'g', content: 'x' })
+    ).not.toThrow();
+    expect(() =>
+      handle.removeInjection({ target: 's1', kind: 'tools' })
+    ).not.toThrow();
+    await handle.stop();
+  });
+
+  it('forwards injections to the node once ready', async () => {
+    const handle = new ExtensionNodeHandle('http://127.0.0.1:3456', config);
+    handle.start();
+    created[0].resolve();
+    await flush();
+    handle.injectTools({ target: 's1', capabilities: ['schedule_list'] });
+    expect(created[0].node.injectTools).toHaveBeenCalledWith({
+      target: 's1',
+      capabilities: ['schedule_list'],
     });
     await handle.stop();
   });

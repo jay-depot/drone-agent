@@ -120,6 +120,14 @@ _Avoid_: outbox, sent log, message journal
 The engine's per-conversation coalescer (`batcher.ts`). When a message resolves to an **exact** conversation whose **sole** surface defines `handleBatch`, the message is buffered and the flush timer is (re)armed for the **Batch Debounce**. On flush the buffer is dispatched as **one** turn through the conversation's serial tail, and one merged reply is posted. Every other case (the wildcard, non-batch surfaces, multi-surface conversations) keeps the immediate per-message path.
 _Avoid_: Coalescer, debouncer, aggregator
 
+**Scheduled Wake-up**:
+A one-time reminder a `persona-assignment` agent sets for itself (ADR [270](../docs/adr/270-gateway-agent-self-scheduling.md)). An enabled agent gets three `extensions__drone-gateway__schedule_*` tools (left unmounted) and a `# Scheduled Wake-ups` guidance fragment, injected on `sessionStarted`. A valid `schedule_wakeup` call (a required `note`, plus `dueAt` ISO-8601 or a relative `delayMs`) inserts a durable row (`scheduled_wakeups`, keyed by `conversation_id`) into the adapter's `dataPath` database. **Absent when the adapter has no `dataPath`** (one warning), and the feature is off unless `controlSurfaces[].config.schedule.enabled` is `true`.
+_Avoid_: timer, alarm, cron job
+
+**Wake Tick**:
+The per-surface polled interval (`DEFAULT_WAKEUP_TICK_MS`, 15 s, a module constant — not configurable) that fires **due** wake-ups oldest-first. Each wake runs an ordinary agent turn via `SessionLifecycle.send` with the **Wake Instruction**; the row is deleted once that send **resolves** (a reply is not required). A _thrown_ send keeps the row, increments `attempts`, and drops the row after `MAX_WAKEUP_ATTEMPTS` (3). A **deliverable round**, so its reply is posted in every **Surface Mode** through the engine's internal `postMessage` seam; the **No-Response Sentinel** and **Cancel Sentinel** still suppress the post. v1 is **local spawn mode only**.
+_Avoid_: scheduler, ticker, heartbeat
+
 **Batch Debounce**:
 How long a batch waits for stragglers before flushing. Resolved as `controlSurfaces[].config.batch.debounceMs ?? config.batch.debounceMs` (gateway-wide) ?? a built-in default (500 ms). `0` disables the debounce (flush on the next tick). Inert in a multi-surface conversation, where surface `batch.debounceMs` is silently ignored (batching is single-surface only).
 _Avoid_: batch window, coalesce interval
