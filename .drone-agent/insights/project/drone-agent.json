@@ -1114,5 +1114,13 @@
   {
     "timestamp": "2026-11-08T18:33:59.954Z",
     "insight": "The gateway's extension node (ADR 256) already receives `sessionStarted`/`sessionEnded` snapshots with `extensionHint = drone-gateway:<conversationId>`, but the handlers are wired as debug-log no-ops (D11 \"hint filtering deferred\"). Any feature where the gateway must react to sessions IT spawned (self-scheduling wake-ups, injection targeting, session->conversation correlation) needs only the CONSUMER — the snapshot emission path (agent -> beacon -> coordinator -> node) is fully built. Do not plan to build the event plumbing."
+  },
+  {
+    "timestamp": "2026-11-08T18:49:51.456Z",
+    "insight": "When you add a REQUIRED field to a widely-constructed shared interface (e.g. `postMessage` on `SurfaceContext`), `pnpm typecheck` is the sweep instrument — it names every test file whose ctx-literal builders are now incomplete. But it does NOT catch vi.mock factories that omit a newly-added EXPORT from a mocked module: adding `createScheduledWakeupStore` to `gateway-state-store.ts` left `test/matrix-adapter.test.ts`'s `vi.mock('../src/store/gateway-state-store.js', ...)` short an export, so the mock threw \"No X export is defined on the mock\" only at RUNTIME under `pnpm test`, not at typecheck. Rule: when adding an export to a module that any test `vi.mock`s, grep for `vi.mock('<that module>'` and add the new export to every factory. Typecheck + fast-test together, not either alone."
+  },
+  {
+    "timestamp": "2026-11-08T18:49:51.458Z",
+    "insight": "The extension-node / callee direction (ADR 270) is now live in drone-gateway: the node declares `schedule_wakeup`/`schedule_list`/`schedule_cancel` (exposed:'mcp', no dots), which materialize as agent tools `extensions__drone-gateway__schedule_*` left unmounted. An extension node's `onInvokeTool` ctx carries the calling agent's `sessionId` — that is the ONLY handle tying an invoke back to a conversation, so the gateway builds a `sessionId -> {adapterId, conversationId}` map from `sessionStarted`/`sessionEnded` events (hint prefix-stripped). A `tools` injection is discoverable/mountable but the model must mount before calling; the wake itself is a synthetic turn via `SessionLifecycle.send` and only works in LOCAL spawn mode (coordinator mode returns no reply). This is the pattern for any future callee capability."
   }
 ]
