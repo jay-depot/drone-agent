@@ -386,6 +386,31 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0(@types/node@24.13.2)(jsdom@29.1.1)(vite@7.3.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0))
 
+  drone-swarm-project:
+    dependencies:
+      drone-core:
+        specifier: workspace:*
+        version: link:../drone-core
+      drone-extension-ui-types:
+        specifier: workspace:*
+        version: link:../drone-extension-ui-types
+      drone-swarm-common:
+        specifier: workspace:*
+        version: link:../drone-swarm-common
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.10
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.17
+      esbuild:
+        specifier: ^0.25.12
+        version: 0.25.12
+      react:
+        specifier: ^19.0.0
+        version: 19.2.7
+
   mcp-swarm:
     dependencies:
       drone-core:

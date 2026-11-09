@@ -1,0 +1,34 @@
+{
+  "name": "drone-swarm-project",
+  "version": "0.1.0",
+  "description": "Swarm extension: a kanban board that starts agent sessions as cards move.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "drone-swarm-project": "./bin/drone-swarm-project"
+  },
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "private": true,
+  "scripts": {
+    "build": "tsc -b && node scripts/build-bundle.mjs",
+    "typecheck": "tsc -b --pretty false && tsc -p bundle/tsconfig.json",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "echo 'drone-swarm-project tests run via root vitest'",
+    "start": "node ./bin/drone-swarm-project"
+  },
+  "dependencies": {
+    "drone-core": "workspace:*",
+    "drone-swarm-common": "workspace:*",
+    "drone-extension-ui-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.10",
+    "@types/react": "^19.0.0",
+    "react": "^19.0.0",
+    "esbuild": "^0.25.12"
+  }
+}
