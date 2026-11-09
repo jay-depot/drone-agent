@@ -226,31 +226,31 @@ effect with the block below. The register callbacks now wrap the registry
 callbacks, push the disposer into the ref, and return it.
 
 ```tsx
-  const disposersRef = useRef<Array<() => void>>([]);
-  const extensions = useExtensions();
-  useEffect(() => {
-    extensions.load(
-      (region, component, label) => {
-        const dispose = registerComponent(
-          region as UIRegion,
-          component as ComponentType,
-          label
-        );
-        disposersRef.current.push(dispose);
-        return dispose;
-      },
-      route => {
-        const dispose = registerRoute(route);
-        disposersRef.current.push(dispose);
-        return dispose;
-      }
-    );
-    if (extensions.loaded.length > 0) setLoaded(extensions.loaded);
-    return () => {
-      for (const dispose of disposersRef.current) dispose();
-      disposersRef.current = [];
-    };
-  }, [extensions.load, registerComponent, registerRoute]);
+const disposersRef = useRef<Array<() => void>>([]);
+const extensions = useExtensions();
+useEffect(() => {
+  extensions.load(
+    (region, component, label) => {
+      const dispose = registerComponent(
+        region as UIRegion,
+        component as ComponentType,
+        label
+      );
+      disposersRef.current.push(dispose);
+      return dispose;
+    },
+    route => {
+      const dispose = registerRoute(route);
+      disposersRef.current.push(dispose);
+      return dispose;
+    }
+  );
+  if (extensions.loaded.length > 0) setLoaded(extensions.loaded);
+  return () => {
+    for (const dispose of disposersRef.current) dispose();
+    disposersRef.current = [];
+  };
+}, [extensions.load, registerComponent, registerRoute]);
 ```
 
 Do **not** add a `cancelled` flag. See D3.
@@ -342,13 +342,11 @@ function KeyedErrorBoundary({ children }: { children: ReactNode }) {
 5. Wrap `<Routes>` inside `<main>`:
 
 ```tsx
-      <main className="flex-1 overflow-auto p-6">
-        <KeyedErrorBoundary>
-          <Routes>
-            {/* ...existing routes unchanged... */}
-          </Routes>
-        </KeyedErrorBoundary>
-      </main>
+<main className="flex-1 overflow-auto p-6">
+  <KeyedErrorBoundary>
+    <Routes>{/* ...existing routes unchanged... */}</Routes>
+  </KeyedErrorBoundary>
+</main>
 ```
 
 `KeyedErrorBoundary` must stay inside `<BrowserRouter>`, so it can call
@@ -366,20 +364,20 @@ uses the real `useExtensions` and the real provider. Only the loader is mocked.
 It fails before Step 1 and passes after.
 
 ```tsx
-  it('keeps the extension route and its nav link after navigating to it', async () => {
-    const user = userEvent.setup();
-    window.history.pushState({}, '', '/');
-    render(<App />);
+it('keeps the extension route and its nav link after navigating to it', async () => {
+  const user = userEvent.setup();
+  window.history.pushState({}, '', '/');
+  render(<App />);
 
-    const link = await screen.findByRole('link', { name: /Board/ });
-    await user.click(link);
+  const link = await screen.findByRole('link', { name: /Board/ });
+  await user.click(link);
 
-    await waitFor(() => {
-      expect(window.location.pathname).toBe('/board');
-      expect(screen.getByText('BOARD')).toBeInTheDocument();
-    });
-    expect(screen.getByRole('link', { name: /Board/ })).toBeInTheDocument();
+  await waitFor(() => {
+    expect(window.location.pathname).toBe('/board');
+    expect(screen.getByText('BOARD')).toBeInTheDocument();
   });
+  expect(screen.getByRole('link', { name: /Board/ })).toBeInTheDocument();
+});
 ```
 
 Add `import userEvent from '@testing-library/user-event';` to the test file.
@@ -571,3 +569,58 @@ All of these must pass.
 - A user-managed extension nav list (deferred in ADR 272).
 - The `loaded` field of the registry (it is read from a ref and is always `[]`;
   not consumed by any page).
+
+---
+
+## 6. Execution summary (2026-11-09, branch `feat/kanban-extension-base`)
+
+**Status: COMPLETE.** All 7 steps executed.
+
+### Changes
+- `drone-coordinator-ui/src/extensions/useExtensions.tsx` — `load` is now
+  reference-stable: `navigate` and `authFetch` are held in refs (kept fresh in a
+  `useEffect`), the `useCallback` dep list is `[]`, and the async body reads the
+  refs. The provider effect is therefore mount-only.
+- `drone-coordinator-ui/src/extensions/ExtensionContext.tsx` — added a
+  `disposersRef`; the register callbacks wrap the registry callbacks, push each
+  disposer into the ref, and return it; the cleanup disposes the ref and then
+  clears it. Deliberately **no** `cancelled` flag (StrictMode-unsafe).
+- `drone-coordinator-ui/src/components/error-boundary.tsx` — **new**. A class
+  `ErrorBoundary` that catches a subtree render error, shows a house-style panel
+  ("Something went wrong" + message + "Try again"), and logs error + component
+  stack to `console.error`.
+- `drone-coordinator-ui/src/App.tsx` — added `useLocation` + `type ReactNode` +
+  the boundary import, a `KeyedErrorBoundary` (keyed by `location.pathname`), and
+  wrapped `<Routes>` inside `<main>`.
+- Tests: extended `App.test.tsx` (nav regression, test A); new
+  `src/components/error-boundary.test.tsx` (test B); new
+  `src/extensions/useExtensions.test.tsx` (test C).
+- Docs: new `docs/adr/273-extension-registry-navigation-teardown.md` + index row;
+  extended `docs/agents/swarm-extensions.md`; Obsidian stub
+  `decisions/273-extension-registry-navigation-teardown.md`, module note in
+  `modules/drone-coordinator-ui.md`, `decisions/index.md` row, and `index.md`
+  count/pointer.
+
+### Commits
+- `7b76f668` — plan memory + insights (pre-work housekeeping).
+- `7f1d142e` — code fix + tests.
+- `85fffbe8` — ADR 273 + agent docs (+ prettier reflow of App.tsx).
+
+### Validation
+- LSP clean; `pnpm -r run build`, `pnpm typecheck`, `pnpm run lint` all exit 0.
+- `pnpm test` 4706 passed / 19 skipped; `pnpm --filter drone-coordinator-ui test`
+  371 passed.
+- Regression proof: tests A and C FAIL on the pre-fix source (reverted via `/tmp`
+  backups, not `git stash`), PASS after the fix.
+- Bundle untouched: `drone-swarm-project` source is clean; `dist/bundle/index.js`
+  is gitignored and rebuilds byte-identically (deterministic).
+
+### Deviation — criterion 9 (ADR index integrity)
+The row-count check (`grep -c '^| \[' docs/adr/index.md` must equal the file
+count) **cannot pass** and is **pre-existing rot**, not introduced here: before
+this work the index had 294 rows vs 272 files (at `8fb54725^`: 293 vs 271), 27
+duplicated ADR numbers (171, 172, 176–196, 217–219), a misplaced frontmatter
+block mid-file, a stray second table header, and 5 ADRs with no row (239, 249,
+250, 255, 266). This change adds exactly +1 row / +1 file (295 / 273). The other
+two criterion-9 commands pass (no duplicate ADR numbers, no prose above the
+table). Tracked as `followup-adr-index-duplicate-rows-and-missing-entries`.

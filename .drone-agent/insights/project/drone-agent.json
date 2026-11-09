@@ -1146,5 +1146,21 @@
   {
     "timestamp": "2026-11-09T22:27:33.743Z",
     "insight": "Coordinator-UI has NO React error boundary anywhere (grep ErrorBoundary|componentDidCatch|getDerivedStateFromError across drone-coordinator-ui/src = 0). A render crash in any page or extension region component therefore unmounts the whole app silently, with no console output unless the crash itself throws during render (which React does log, but a caught-and-swallowed failure does not). The loader contains BUNDLE-LOAD failures (try/catch -> onError -> console.warn default), but nothing contains RENDER failures. ADR 273 adds a reusable `ErrorBoundary` (class component, src/components/error-boundary.tsx) wrapping `<Routes>`, keyed by `useLocation().pathname` for auto-reset on navigation."
+  },
+  {
+    "timestamp": "2026-11-09T22:44:06.391Z",
+    "insight": "Coordinator-UI extension registry teardown (ADR 273): `useNavigate()` in react-router 7.18.3 returns a `useCallback` whose identity changes on every navigation (it closes over `locationPathname`). Any `useCallback` that lists `navigate` (or a hook that wraps it) in its deps becomes unstable per-navigation; a provider effect depending on that callback re-runs and disposes the whole registry. Fix: hold `navigate`/`authFetch` in refs and use `useCallback(..., [])` so the effect is mount-only. General rule: NEVER put react-router's `navigate` in a `useCallback` dep list if the callback's identity is load-bearing for a mount-only effect."
+  },
+  {
+    "timestamp": "2026-11-09T22:44:06.398Z",
+    "insight": "Coordinator-UI StrictMode-safe disposal pattern: when an effect registers things and returns disposers, do NOT guard with a `cancelled` boolean captured in the effect closure. Under React StrictMode's simulated unmount, the flag is set, the `didLoadRef`-style idempotence guard blocks re-registration, and a late async registration would be disposed at once. Instead push every disposer into a persistent `useRef` array and have the cleanup dispose the ref then clear it: the simulated unmount disposes an as-yet-empty ref, the late registration lands in the fresh ref, and the real unmount disposes it."
+  },
+  {
+    "timestamp": "2026-11-09T22:44:06.409Z",
+    "insight": "`docs/adr/index.md` has pre-existing rot (as of 2026-11-09): 294 rows vs 272 files (295/273 after ADR 273), 27 duplicated ADR numbers (171, 172, 176–196, 217–219), a misplaced YAML frontmatter block mid-file (lines ~6–10), a stray second `| Page |` table header, and 5 ADRs with no index row (239, 249, 250, 255, 266). This breaks any \"row count == file count\" integrity check. It is NOT caused by recent ADRs — it was already broken at 8fb54725^ (293/271). Needs a dedicated index-repair pass (dedupe rows, add missing rows, move frontmatter to the top, drop the stray header). Tracked as followup-adr-index-duplicate-rows-and-missing-entries."
+  },
+  {
+    "timestamp": "2026-11-09T22:44:06.416Z",
+    "insight": "Regression-proof technique on this host: to prove a test fails pre-fix, back up the fixed files with `cp` to /tmp, restore the pre-fix version with `git show <rev>:<path> > <path>`, run the tests, then `cp` the backups back. Do NOT use `git stash` for this — per HOST.md, `git stash push` with a non-matching pathspec exits 0 while stashing nothing, and a chained `git stash pop` then grabs the wrong stash. `cp` + `git show` is deterministic and leaves the tree verifiable (grep for a fix marker to confirm the restore)."
   }
 ]
