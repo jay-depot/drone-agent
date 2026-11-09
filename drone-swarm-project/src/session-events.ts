@@ -1,11 +1,5 @@
-import type {
-  DroneSessionEndedEvent,
-  DroneSessionSnapshot,
-} from 'drone-core';
-import type {
-  ExtensionNode,
-  ExtensionNodeHandlers,
-} from 'drone-swarm-common';
+import type { DroneSessionEndedEvent, DroneSessionSnapshot } from 'drone-core';
+import type { ExtensionNode, ExtensionNodeHandlers } from 'drone-swarm-common';
 import type { Card, Project } from './board-types.js';
 import { CARD_TOOL_CAPABILITIES } from './capabilities.js';
 import type { ReconcileTracker } from './scheduler-reconcile.js';

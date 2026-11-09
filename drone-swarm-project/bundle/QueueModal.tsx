@@ -47,7 +47,9 @@ export function QueueModal(props: { onClose: () => void }) {
             {jobs.map(job => (
               <tr key={job.id}>
                 <td>
-                  <span className={`dsp-pill dsp-pill-${job.state}`}>{job.state}</span>
+                  <span className={`dsp-pill dsp-pill-${job.state}`}>
+                    {job.state}
+                  </span>
                 </td>
                 <td>{job.cardId}</td>
                 <td>{new Date(job.createdAt).toLocaleString()}</td>

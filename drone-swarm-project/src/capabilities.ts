@@ -73,7 +73,10 @@ export const CAPABILITIES: DroneExtensionCapability[] = [
         projectId: projectIdParam,
         cardId: cardIdParam,
         toColumnId: str('Destination column id.'),
-        position: { type: 'number', description: 'Target position in the column.' },
+        position: {
+          type: 'number',
+          description: 'Target position in the column.',
+        },
       },
       required: ['toColumnId'],
     },
@@ -175,7 +178,10 @@ export const CAPABILITIES: DroneExtensionCapability[] = [
     description: 'Delete an empty column from a project.',
     paramSchema: {
       type: 'object',
-      properties: { projectId: str('Project id.'), columnId: str('Column id.') },
+      properties: {
+        projectId: str('Project id.'),
+        columnId: str('Column id.'),
+      },
       required: ['projectId', 'columnId'],
     },
     exposed: 'ui',
@@ -198,7 +204,10 @@ export const CAPABILITIES: DroneExtensionCapability[] = [
       properties: {
         projectId: str('Project id.'),
         name: str('Automation name.'),
-        enabled: { type: 'boolean', description: 'Whether the automation is on.' },
+        enabled: {
+          type: 'boolean',
+          description: 'Whether the automation is on.',
+        },
         when: {
           type: 'object',
           description: 'Transition pair. `*` is allowed on one side only.',

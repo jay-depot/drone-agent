@@ -31,9 +31,9 @@ authored as TypeScript JSX under `bundle/` and compiled with esbuild into
 The catalog (`src/capabilities.ts`) is the single source of truth for the
 manifest and the handlers.
 
-| Tier  | Capabilities                                                                                                                                                     |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mcp` | `project.list`, `board.get`, `card.get`, `card.create`, `card.update`, `card.move`                                                                               |
+| Tier  | Capabilities                                                                                                                                                    |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mcp` | `project.list`, `board.get`, `card.get`, `card.create`, `card.update`, `card.move`                                                                              |
 | `ui`  | `project.create/update/delete`, `column.list/create/update/reorder/delete`, `automation.list/create/update/delete`, `queue.list/retry/cancel`, `limits.get/set` |
 
 `mcp`-tier capabilities are agent-callable and visible to MCP clients. `ui`-tier
@@ -86,11 +86,11 @@ version.
 
 Data lives under `dataDir` (default `~/.drone-agent/drone-swarm-project`):
 
-| Path                          | Contents                                     |
-| ----------------------------- | -------------------------------------------- |
-| `index.json`                  | Project index (`{ version, projects[] }`).   |
-| `projects/<projectId>.json`   | One project (columns, cards, automations).   |
-| `queue.json`                  | Limits plus the job queue.                   |
+| Path                        | Contents                                   |
+| --------------------------- | ------------------------------------------ |
+| `index.json`                | Project index (`{ version, projects[] }`). |
+| `projects/<projectId>.json` | One project (columns, cards, automations). |
+| `queue.json`                | Limits plus the job queue.                 |
 
 All access goes through the `BoardStore` and `SchedulerStore` interfaces, so a
 future SQLite implementation can replace the JSON one.
@@ -105,14 +105,14 @@ node drone-swarm-project/bin/drone-swarm-project
 
 ### Environment
 
-| Variable                                | Default                                | Purpose                     |
-| --------------------------------------- | -------------------------------------- | --------------------------- |
-| `DRONE_SWARM_PROJECT_COORDINATOR_URL`   | `http://127.0.0.1:8080`                | Coordinator to connect to.  |
-| `DRONE_SWARM_PROJECT_DATA_DIR`          | `~/.drone-agent/drone-swarm-project`   | Board, queue, identity.     |
-| `DRONE_SWARM_PROJECT_ID`                | `drone-swarm-project`                  | Node id.                    |
-| `DRONE_SWARM_PROJECT_INJECT_TOOLS`      | `true`                                 | Inject card tools.          |
-| `DRONE_SWARM_PROJECT_MAX_CONCURRENT`    | `1`                                    | Concurrent session limit.   |
-| `DRONE_SWARM_PROJECT_MAX_DAILY`         | `12`                                   | Rolling-24h session limit.  |
+| Variable                              | Default                              | Purpose                    |
+| ------------------------------------- | ------------------------------------ | -------------------------- |
+| `DRONE_SWARM_PROJECT_COORDINATOR_URL` | `http://127.0.0.1:8080`              | Coordinator to connect to. |
+| `DRONE_SWARM_PROJECT_DATA_DIR`        | `~/.drone-agent/drone-swarm-project` | Board, queue, identity.    |
+| `DRONE_SWARM_PROJECT_ID`              | `drone-swarm-project`                | Node id.                   |
+| `DRONE_SWARM_PROJECT_INJECT_TOOLS`    | `true`                               | Inject card tools.         |
+| `DRONE_SWARM_PROJECT_MAX_CONCURRENT`  | `1`                                  | Concurrent session limit.  |
+| `DRONE_SWARM_PROJECT_MAX_DAILY`       | `12`                                 | Rolling-24h session limit. |
 
 `--pre-approval-token-path` (both `=` and space forms) performs a one-shot
 registration against a remote coordinator and exits, mirroring `mcp-swarm`.
@@ -125,18 +125,18 @@ Docker images are **deferred** for this version, following the `mcp-swarm` and
 
 ## Layout
 
-| File                          | Purpose                                                    |
-| ----------------------------- | ---------------------------------------------------------- |
-| `src/board-types.ts`          | Domain types (Project, Column, Card, Automation, Job).     |
-| `src/ids.ts`                  | Id helpers (`p_`, `c_`, `a_`, `j_`, `col_`).               |
-| `src/store/*.ts`              | Store interfaces + the JSON implementation.                |
-| `src/automations.ts`          | Transition matching and prompt rendering.                  |
-| `src/scheduler.ts`            | The paced drain loop.                                      |
-| `src/scheduler-reconcile.ts`  | Boot reconcile after a restart.                            |
-| `src/spawn.ts`                | Coordinator spawn + message calls.                         |
-| `src/session-events.ts`       | Session lifecycle handlers and injection.                  |
-| `src/capabilities.ts`         | The capability catalog.                                    |
-| `src/handlers.ts`             | Action/tool dispatch.                                      |
-| `bundle/`                     | The TSX front-end (built by esbuild).                      |
-| `src/index.ts`                | Wires the node, store, scheduler, and bundle.              |
-| `bin/drone-swarm-project`     | Executable shim.                                           |
+| File                         | Purpose                                                |
+| ---------------------------- | ------------------------------------------------------ |
+| `src/board-types.ts`         | Domain types (Project, Column, Card, Automation, Job). |
+| `src/ids.ts`                 | Id helpers (`p_`, `c_`, `a_`, `j_`, `col_`).           |
+| `src/store/*.ts`             | Store interfaces + the JSON implementation.            |
+| `src/automations.ts`         | Transition matching and prompt rendering.              |
+| `src/scheduler.ts`           | The paced drain loop.                                  |
+| `src/scheduler-reconcile.ts` | Boot reconcile after a restart.                        |
+| `src/spawn.ts`               | Coordinator spawn + message calls.                     |
+| `src/session-events.ts`      | Session lifecycle handlers and injection.              |
+| `src/capabilities.ts`        | The capability catalog.                                |
+| `src/handlers.ts`            | Action/tool dispatch.                                  |
+| `bundle/`                    | The TSX front-end (built by esbuild).                  |
+| `src/index.ts`               | Wires the node, store, scheduler, and bundle.          |
+| `bin/drone-swarm-project`    | Executable shim.                                       |

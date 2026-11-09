@@ -37,8 +37,9 @@ function packageRoot(): string {
  * error when a file is absent; the caller logs it and continues (non-fatal),
  * exactly like `mcp-swarm`.
  */
-export async function buildBundleFiles(): Promise<BundleFileDefinition[]> {
-  const root = packageRoot();
+export async function buildBundleFiles(
+  root: string = packageRoot()
+): Promise<BundleFileDefinition[]> {
   const files: BundleFileDefinition[] = [];
   for (const file of BUNDLE_FILES) {
     const filePath = path.join(root, 'dist', 'bundle', file.name);

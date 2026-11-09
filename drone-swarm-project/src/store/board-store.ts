@@ -12,7 +12,9 @@ import type {
  * touching the automations, scheduler, or handler code.
  */
 export interface BoardStore {
-  listProjects(): Promise<Array<{ id: string; name: string; cardCount: number }>>;
+  listProjects(): Promise<
+    Array<{ id: string; name: string; cardCount: number }>
+  >;
   getProject(id: string): Promise<Project | undefined>;
   createProject(input: {
     name: string;
@@ -26,7 +28,9 @@ export interface BoardStore {
     >
   ): Promise<Project | undefined>;
   deleteProject(id: string): Promise<boolean>;
-  getCard(cardId: string): Promise<{ project: Project; card: Card } | undefined>;
+  getCard(
+    cardId: string
+  ): Promise<{ project: Project; card: Card } | undefined>;
   createCard(input: {
     projectId: string;
     title: string;
@@ -47,14 +51,20 @@ export interface BoardStore {
     position?: number;
     actor: MoveRecord['actor'];
   }): Promise<{ card: Card; fromColumnId: string | null } | undefined>;
-  addColumn(input: { projectId: string; name: string }): Promise<Column | undefined>;
+  addColumn(input: {
+    projectId: string;
+    name: string;
+  }): Promise<Column | undefined>;
   updateColumn(input: {
     projectId: string;
     columnId: string;
     name?: string;
     order?: number;
   }): Promise<Column | undefined>;
-  deleteColumn(input: { projectId: string; columnId: string }): Promise<boolean>;
+  deleteColumn(input: {
+    projectId: string;
+    columnId: string;
+  }): Promise<boolean>;
   listAutomations(projectId: string): Promise<Automation[]>;
   createAutomation(input: {
     projectId: string;

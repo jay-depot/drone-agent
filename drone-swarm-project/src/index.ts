@@ -47,7 +47,9 @@ export async function startProjectService(
     maxDailySessions: cfg.maxDailySessions,
   });
 
-  const settings = { injectToolsIntoAllSessions: cfg.injectToolsIntoAllSessions };
+  const settings = {
+    injectToolsIntoAllSessions: cfg.injectToolsIntoAllSessions,
+  };
   const coordinatorFetch = fetch;
 
   const scheduler = new Scheduler({
@@ -81,8 +83,7 @@ export async function startProjectService(
     },
   });
 
-  let node!: ExtensionNode;
-  node = await createExtensionNode({
+  const node = await createExtensionNode({
     coordinatorUrl: cfg.coordinatorUrl,
     dataDir: cfg.dataDir,
     id: cfg.id,

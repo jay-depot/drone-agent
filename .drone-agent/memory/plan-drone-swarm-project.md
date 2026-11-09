@@ -30,44 +30,46 @@ of the spawns, so a human can intervene.
 
 ## 2. Decisions (locked — do not re-litigate)
 
-| # | Decision |
-| --- | --- |
-| D1 | New workspace package `drone-swarm-project`. Model it on `mcp-swarm` (see §3). |
-| D2 | A **project is a namespace**: `{ id, name, defaultBeaconId?, defaultWorkingDir?, columns[], cards[], automations[] }`. |
-| D3 | Columns are configurable, ordered, per project. Seed **Todo / In Progress / Done** at project creation. |
-| D4 | The **node owns the board**. Every mutation (UI drag and agent tool call) lands on the node. Automations fire in-process. No coordinator board tables. No cross-process bus. |
-| D5 | An automation is `{ id, name, enabled, when: { from, to }, then: { action: 'launch-session', personaId, model?, promptTemplate } }`. |
-| D6 | `when.from`/`when.to` are column ids. `*` is a wildcard. `*` is allowed on **one side only**, never on both. |
-| D7 | `promptTemplate` is rendered with `{{card.title}}`, `{{card.description}}`, `{{column.name}}` (destination column), `{{project.name}}`. |
-| D8 | Launch is **two steps**: `POST /api/spawn` (with `config.extensionHint`), then `POST /api/sessions/:id/message` when the matching `sessionStarted` arrives. |
-| D9 | The automation **inherits** `project.defaultBeaconId` and `project.defaultWorkingDir`. A per-automation override is **reserved** for a later version. Do not build it now. But keep the shape open (put the values in a small resolver, not inline). |
-| D10 | Speed limits are **node-wide**: `maxConcurrentSessions` (default 1) and `maxDailySessions` (default 12). |
-| D11 | The limits constrain **speed**, not the actor. Record `actor` (`user`/`agent`) on every move for audit and display. The actor gates nothing. |
-| D12 | Every matching move **enqueues a job**. A drain loop paces the starts. Job states: `queued → running → done | failed | cancelled`. |
-| D13 | Pacing interval = `24h / maxDailySessions` (2h at the default). The first job starts at once. |
-| D14 | Persist the real start timestamps. Derive the rolling 24h window **on read**. Never keep the pacing in an in-memory counter. Never keep it in a `setInterval` that a restart resets. |
-| D15 | The daily cap applies at **drain time only**. Enqueue always succeeds. The queue can hold more jobs than `maxDailySessions`. Nothing is refused at enqueue. |
-| D16 | When a session ends, **nothing moves automatically**. The job closes (`done`, or `failed`). The card keeps its `sessionId`/`spawnId` as history. The agent moves the card itself with `card_move`. |
-| D17 | Store: one JSON file per project, plus an index, plus one queue file. All access goes through store interfaces, so a later SQLite version can replace the JSON version. |
-| D18 | Card ids are UUIDs from the start: `c_<uuid>`. They are unique for all time. |
-| D19 | The extension hint is `drone-swarm-project:card:<cardId>`. |
-| D20 | The front-end panel is **real TSX**, built with **esbuild** into `dist/bundle/index.js`. This is the first real TSX extension bundle in this repository. Treat it as a worked example. |
-| D21 | Card tools are injected into **every top-level session**. A node option `injectToolsIntoAllSessions` (default `true`) controls it. |
-| D22 | Do **not** inject into subagent sessions (`snapshot.isSubagent === true`) in this version. Reserve an exception mechanism for later. |
-| D23 | Card tools are injected **unmounted**. The model must call `runtime__mount_tool` first. |
-| D24 | Tiers: board and card management are `mcp` tier. Columns, automations, limits, and queue administration are `ui` tier (never agent-callable). |
-| D25 | A card-bound session can omit `projectId`/`cardId`. The tool uses the bound card. Inject one fragment that tells the agent which card it owns. |
-| D26 | The UI polls for board and queue data. There is no push channel from the extension to the UI. |
+| #   | Decision                                                                                                                                                                                                                                             |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | New workspace package `drone-swarm-project`. Model it on `mcp-swarm` (see §3).                                                                                                                                                                       |
+| D2  | A **project is a namespace**: `{ id, name, defaultBeaconId?, defaultWorkingDir?, columns[], cards[], automations[] }`.                                                                                                                               |
+| D3  | Columns are configurable, ordered, per project. Seed **Todo / In Progress / Done** at project creation.                                                                                                                                              |
+| D4  | The **node owns the board**. Every mutation (UI drag and agent tool call) lands on the node. Automations fire in-process. No coordinator board tables. No cross-process bus.                                                                         |
+| D5  | An automation is `{ id, name, enabled, when: { from, to }, then: { action: 'launch-session', personaId, model?, promptTemplate } }`.                                                                                                                 |
+| D6  | `when.from`/`when.to` are column ids. `*` is a wildcard. `*` is allowed on **one side only**, never on both.                                                                                                                                         |
+| D7  | `promptTemplate` is rendered with `{{card.title}}`, `{{card.description}}`, `{{column.name}}` (destination column), `{{project.name}}`.                                                                                                              |
+| D8  | Launch is **two steps**: `POST /api/spawn` (with `config.extensionHint`), then `POST /api/sessions/:id/message` when the matching `sessionStarted` arrives.                                                                                          |
+| D9  | The automation **inherits** `project.defaultBeaconId` and `project.defaultWorkingDir`. A per-automation override is **reserved** for a later version. Do not build it now. But keep the shape open (put the values in a small resolver, not inline). |
+| D10 | Speed limits are **node-wide**: `maxConcurrentSessions` (default 1) and `maxDailySessions` (default 12).                                                                                                                                             |
+| D11 | The limits constrain **speed**, not the actor. Record `actor` (`user`/`agent`) on every move for audit and display. The actor gates nothing.                                                                                                         |
+| D12 | Every matching move **enqueues a job**. A drain loop paces the starts. Job states: `queued → running → done                                                                                                                                          | failed | cancelled`. |
+| D13 | Pacing interval = `24h / maxDailySessions` (2h at the default). The first job starts at once.                                                                                                                                                        |
+| D14 | Persist the real start timestamps. Derive the rolling 24h window **on read**. Never keep the pacing in an in-memory counter. Never keep it in a `setInterval` that a restart resets.                                                                 |
+| D15 | The daily cap applies at **drain time only**. Enqueue always succeeds. The queue can hold more jobs than `maxDailySessions`. Nothing is refused at enqueue.                                                                                          |
+| D16 | When a session ends, **nothing moves automatically**. The job closes (`done`, or `failed`). The card keeps its `sessionId`/`spawnId` as history. The agent moves the card itself with `card_move`.                                                   |
+| D17 | Store: one JSON file per project, plus an index, plus one queue file. All access goes through store interfaces, so a later SQLite version can replace the JSON version.                                                                              |
+| D18 | Card ids are UUIDs from the start: `c_<uuid>`. They are unique for all time.                                                                                                                                                                         |
+| D19 | The extension hint is `drone-swarm-project:card:<cardId>`.                                                                                                                                                                                           |
+| D20 | The front-end panel is **real TSX**, built with **esbuild** into `dist/bundle/index.js`. This is the first real TSX extension bundle in this repository. Treat it as a worked example.                                                               |
+| D21 | Card tools are injected into **every top-level session**. A node option `injectToolsIntoAllSessions` (default `true`) controls it.                                                                                                                   |
+| D22 | Do **not** inject into subagent sessions (`snapshot.isSubagent === true`) in this version. Reserve an exception mechanism for later.                                                                                                                 |
+| D23 | Card tools are injected **unmounted**. The model must call `runtime__mount_tool` first.                                                                                                                                                              |
+| D24 | Tiers: board and card management are `mcp` tier. Columns, automations, limits, and queue administration are `ui` tier (never agent-callable).                                                                                                        |
+| D25 | A card-bound session can omit `projectId`/`cardId`. The tool uses the bound card. Inject one fragment that tells the agent which card it owns.                                                                                                       |
+| D26 | The UI polls for board and queue data. There is no push channel from the extension to the UI.                                                                                                                                                        |
 
 ## 3. Ground truth (verified against source — rely on this)
 
 ### SDK (`drone-swarm-common/src/extension-server.ts`)
+
 - `createExtensionNode({ coordinatorUrl, dataDir, id, name, capabilities, handlers, host?, awaitRegistration?, requestTimeoutMs?, expectedCoordinatorFingerprint? })`.
 - Handlers: `onInvokeAction(cap, params, ctx)`, `onInvokeTool(cap, params, ctx)`, `onSessionStarted(snapshot)`, `onSessionEnded(event)`.
 - Node methods: `getFetch()`, `injectFragment({target,id,content,phase?,ttlMs?})`, `injectReminder({target,id,content})`, `injectTools({target,capabilities:string[]})`, `removeInjection({target,kind,injectionId?,tools?})`, `declareManifest(manifest)`, `uploadBundle({name,version,files})`, `stop()`.
 - Connect to the coordinator **web port** (default `http://127.0.0.1:8080`). Loopback callers are auto-approved (ADR 257). Do not use the mTLS primary port.
 
 ### Coordinator routes (`drone-coordinator/src/routes/extensions.ts`)
+
 - `GET /api/extensions` → `[{ nodeId, connected, isExtension, protocolVersion, capabilities, bundles: [{ name, version, hash, scriptUrls, styleUrls }] }]`.
 - `POST /api/extensions/:nodeId/actions/:action` (caller `ui`). Body `{ params?, sessionId? }`.
 - `POST /api/extensions/:nodeId/tools/:tool` (caller `agent`). Body `{ params?, sessionId? }`. A `ui`-tier capability returns `403 CAPABILITY_NOT_AGENT_CALLABLE`.
@@ -75,20 +77,24 @@ of the spawns, so a human can intervene.
 - Bundles are served at `/plugin-scripts/:nodeId/:hash/:name` and `/plugin-styles/:nodeId/:hash/:name`.
 
 ### Session lifecycle
+
 - `sessionStarted` and `sessionEnded` frames are broadcast to **every** node. They are **replayed on connect** for active sessions.
 - `DroneSessionSnapshot` = `{ protocolVersion, sessionId, personaId, beaconId, interactive, isSubagent, cwd, enabledPlugins, mountedTools, extensionHint? }`.
 - `DroneSessionEndedEvent` = `{ sessionId, extensionHint? }`.
 
 ### Spawn and message
+
 - `POST /api/spawn` body `{ targetBeaconId (required), personaId?, task?, config?: { model?, preamble?, workingDir?, env?, extensionHint? }, spawnId? }`. Returns `201` with the beacon body plus `targetBeaconId`. `404 BEACON_NOT_FOUND`. `503 BEACON_UNAVAILABLE`. The beacon body contains `agentId` (this equals the session id).
 - `POST /api/sessions/:id/message` body `{ content, steer? }` → `{ success, delivered }`. The session must be known to the coordinator. If not, retry with backoff.
 
 ### Agent side
+
 - Plugin `drone-agent/src/plugins/extensions/`. An injected tool has the canonical name `extensions__<extId>__<tool>` and is **unmounted**.
 - The injection target is the session id.
 - `extensionHint` is set by `--extension-hint` / `DRONE_EXTENSION_HINT` and appears in the snapshot.
 
 ### Repository conventions for a new package (all required, or the package will not build or test)
+
 - `pnpm-workspace.yaml` → add `- drone-swarm-project`.
 - `pnpm-lock.yaml` → run `pnpm install` and commit.
 - Per-package `package.json` and `tsconfig.json` → copy the `mcp-swarm` shape.
@@ -148,6 +154,7 @@ Note: `react` is a devDependency only. The bundle must not import it at runtime.
 Copy the `mcp-swarm` file. Add `../drone-extension-ui-types` to `references`. Keep `include: ["src/**/*"]`.
 
 **Step 4 — Create `drone-swarm-project/bin/drone-swarm-project`.** Agent: `code`.
+
 ```js
 #!/usr/bin/env node
 import { main } from '../dist/index.js';
@@ -157,9 +164,11 @@ main().catch(err => {
   process.exit(1);
 });
 ```
+
 Run `chmod +x`. Confirm the mode bit is `100755` in git.
 
 **Step 5 — Update the root test and typecheck wiring.** Agent: `code`.
+
 - `vitest.config.ts`: add `'drone-swarm-project/test/**/*.test.ts'` to `test.include`. Add `'drone-swarm-project/src/**/*.ts'` to `coverage.include`.
 - `tsconfig.test.json`: add `"drone-swarm-project/src/**/*.ts"` and `"drone-swarm-project/test/**/*.ts"` to `include`. Add them after the `mcp-swarm` lines.
 - Run `pnpm install`. Commit the changed `pnpm-lock.yaml`.
@@ -173,7 +182,12 @@ Describe the node, the two env config sets, the run command, the capability tier
 Define the domain types. Exact shapes:
 
 ```ts
-export interface Column { id: string; name: string; order: number; isTerminal?: boolean; }
+export interface Column {
+  id: string;
+  name: string;
+  order: number;
+  isTerminal?: boolean;
+}
 
 export interface MoveRecord {
   at: number;
@@ -183,12 +197,12 @@ export interface MoveRecord {
 }
 
 export interface Card {
-  id: string;              // 'c_<uuid>'
+  id: string; // 'c_<uuid>'
   title: string;
   description?: string;
   columnId: string;
   position: number;
-  history: MoveRecord[];   // bounded to the last 50
+  history: MoveRecord[]; // bounded to the last 50
   sessionId?: string;
   spawnId?: string;
   sessionStatus?: 'running' | 'ended' | 'failed';
@@ -202,15 +216,15 @@ export interface AutomationThen {
 }
 
 export interface Automation {
-  id: string;              // 'a_<uuid>'
+  id: string; // 'a_<uuid>'
   name: string;
   enabled: boolean;
-  when: { from: string; to: string };  // column ids, or '*'
+  when: { from: string; to: string }; // column ids, or '*'
   then: AutomationThen;
 }
 
 export interface Project {
-  id: string;              // 'p_<uuid>'
+  id: string; // 'p_<uuid>'
   name: string;
   defaultBeaconId?: string;
   defaultWorkingDir?: string;
@@ -222,11 +236,11 @@ export interface Project {
 export type JobState = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
 
 export interface Job {
-  id: string;              // 'j_<uuid>'
+  id: string; // 'j_<uuid>'
   projectId: string;
   cardId: string;
   ruleId: string;
-  prompt: string;          // rendered at enqueue time
+  prompt: string; // rendered at enqueue time
   state: JobState;
   createdAt: number;
   startedAt?: number;
@@ -238,37 +252,94 @@ export interface Job {
   error?: string;
 }
 
-export interface Limits { maxConcurrentSessions: number; maxDailySessions: number; }
+export interface Limits {
+  maxConcurrentSessions: number;
+  maxDailySessions: number;
+}
 ```
 
 **Step 8 — Create `src/ids.ts`.** Agent: `code`.
 Small helpers: `newProjectId()`, `newColumnId()`, `newCardId()`, `newAutomationId()`, `newJobId()`. Each returns the prefix plus `randomUUID()`.
 
 **Step 9 — Create `src/store/board-store.ts`** (the interface). Agent: `code`.
+
 ```ts
 export interface BoardStore {
-  listProjects(): Promise<Array<{ id: string; name: string; cardCount: number }>>;
+  listProjects(): Promise<
+    Array<{ id: string; name: string; cardCount: number }>
+  >;
   getProject(id: string): Promise<Project | undefined>;
-  createProject(input: { name: string; defaultBeaconId?: string; defaultWorkingDir?: string }): Promise<Project>;
-  updateProject(id: string, patch: Partial<Pick<Project, 'name' | 'defaultBeaconId' | 'defaultWorkingDir'>>): Promise<Project | undefined>;
+  createProject(input: {
+    name: string;
+    defaultBeaconId?: string;
+    defaultWorkingDir?: string;
+  }): Promise<Project>;
+  updateProject(
+    id: string,
+    patch: Partial<
+      Pick<Project, 'name' | 'defaultBeaconId' | 'defaultWorkingDir'>
+    >
+  ): Promise<Project | undefined>;
   deleteProject(id: string): Promise<boolean>;
-  getCard(cardId: string): Promise<{ project: Project; card: Card } | undefined>;
-  createCard(input: { projectId: string; title: string; description?: string; columnId?: string; actor: MoveRecord['actor'] }): Promise<Card | undefined>;
-  updateCard(input: { projectId: string; cardId: string; title?: string; description?: string }): Promise<Card | undefined>;
-  moveCard(input: { projectId: string; cardId: string; toColumnId: string; position?: number; actor: MoveRecord['actor'] }): Promise<{ card: Card; fromColumnId: string | null } | undefined>;
-  addColumn(input: { projectId: string; name: string }): Promise<Column | undefined>;
-  updateColumn(input: { projectId: string; columnId: string; name?: string; order?: number }): Promise<Column | undefined>;
-  deleteColumn(input: { projectId: string; columnId: string }): Promise<boolean>;
+  getCard(
+    cardId: string
+  ): Promise<{ project: Project; card: Card } | undefined>;
+  createCard(input: {
+    projectId: string;
+    title: string;
+    description?: string;
+    columnId?: string;
+    actor: MoveRecord['actor'];
+  }): Promise<Card | undefined>;
+  updateCard(input: {
+    projectId: string;
+    cardId: string;
+    title?: string;
+    description?: string;
+  }): Promise<Card | undefined>;
+  moveCard(input: {
+    projectId: string;
+    cardId: string;
+    toColumnId: string;
+    position?: number;
+    actor: MoveRecord['actor'];
+  }): Promise<{ card: Card; fromColumnId: string | null } | undefined>;
+  addColumn(input: {
+    projectId: string;
+    name: string;
+  }): Promise<Column | undefined>;
+  updateColumn(input: {
+    projectId: string;
+    columnId: string;
+    name?: string;
+    order?: number;
+  }): Promise<Column | undefined>;
+  deleteColumn(input: {
+    projectId: string;
+    columnId: string;
+  }): Promise<boolean>;
   listAutomations(projectId: string): Promise<Automation[]>;
-  createAutomation(input: { projectId: string; automation: Omit<Automation, 'id'> }): Promise<Automation | undefined>;
-  updateAutomation(input: { projectId: string; automationId: string; patch: Partial<Omit<Automation, 'id'>> }): Promise<Automation | undefined>;
-  deleteAutomation(input: { projectId: string; automationId: string }): Promise<boolean>;
+  createAutomation(input: {
+    projectId: string;
+    automation: Omit<Automation, 'id'>;
+  }): Promise<Automation | undefined>;
+  updateAutomation(input: {
+    projectId: string;
+    automationId: string;
+    patch: Partial<Omit<Automation, 'id'>>;
+  }): Promise<Automation | undefined>;
+  deleteAutomation(input: {
+    projectId: string;
+    automationId: string;
+  }): Promise<boolean>;
   getCardProjectId(cardId: string): string | undefined;
 }
 ```
+
 `getCardProjectId` is synchronous. It reads the in-memory card-to-project map.
 
 **Step 10 — Create `src/store/scheduler-store.ts`** (the interface). Agent: `code`.
+
 ```ts
 export interface SchedulerStore {
   getLimits(): Promise<Limits>;
@@ -281,6 +352,7 @@ export interface SchedulerStore {
 
 **Step 11 — Create `src/store/json-store.ts`.** Agent: `code`.
 Implement **both** interfaces (`JsonStore implements BoardStore, SchedulerStore`). Rules:
+
 - Files: `dataDir/index.json`, `dataDir/projects/<projectId>.json`, `dataDir/queue.json`.
 - In-memory state is the source of truth. Load at construction.
 - Every write goes through `withPathLock(path, fn)` from `drone-swarm-common`, then a temp-file write and a `rename` (atomic). Reuse the `token-store.ts` pattern from `mcp-swarm`.
@@ -295,10 +367,19 @@ Provide a factory: `async function createJsonStore(dataDir: string, seedLimits: 
 ### Phase 2 — Automations and prompt rendering
 
 **Step 12 — Create `src/automations.ts`.** Agent: `code`.
+
 ```ts
-export function matchesTransition(automation: Automation, from: string | null, to: string): boolean;
-export function renderPrompt(template: string, ctx: { card: Card; column: Column; project: Project }): string;
+export function matchesTransition(
+  automation: Automation,
+  from: string | null,
+  to: string
+): boolean;
+export function renderPrompt(
+  template: string,
+  ctx: { card: Card; column: Column; project: Project }
+): string;
 ```
+
 - `matchesTransition`: `(a.when.from === '*' || a.when.from === from) && (a.when.to === '*' || a.when.to === to)`. `from` may be `null` (card creation) — a `null` from matches only `when.from === '*'`.
 - `renderPrompt`: replace `{{card.title}}`, `{{card.description}}`, `{{column.name}}` (destination column), `{{project.name}}`. Replace an unknown token with an empty string.
 - `selectAutomations(project, from, to)` returns the enabled, matching automations.
@@ -312,21 +393,25 @@ A `Scheduler` class. It holds the `SchedulerStore` and a spawn function (injecte
 export interface SchedulerDeps {
   store: SchedulerStore;
   board: BoardStore;
-  spawn: (job: Job, project: Project) => Promise<{ spawnId: string; agentId: string }>;
+  spawn: (
+    job: Job,
+    project: Project
+  ) => Promise<{ spawnId: string; agentId: string }>;
   now?: () => number;
   logger?: (msg: string) => void;
 }
 
 export class Scheduler {
-  enqueue(job: Job): Promise<void>;   // store.enqueueJob, then tick()
-  tick(): Promise<void>;              // evaluate the three gates, start at most one job
-  reconcile(): Promise<void>;         // mark stale 'running' jobs failed (see Step 16)
-  start(intervalMs?: number): void;   // setInterval(() => tick(), ...)
+  enqueue(job: Job): Promise<void>; // store.enqueueJob, then tick()
+  tick(): Promise<void>; // evaluate the three gates, start at most one job
+  reconcile(): Promise<void>; // mark stale 'running' jobs failed (see Step 16)
+  start(intervalMs?: number): void; // setInterval(() => tick(), ...)
   stop(): void;
 }
 ```
 
 The three gates in `tick()`, in this order:
+
 1. **Concurrency**: `count(jobs where state === 'running') < limits.maxConcurrentSessions`.
 2. **Daily**: `count(jobs where startedAt && startedAt > now - 24h) < limits.maxDailySessions`.
 3. **Spacing**: `now >= lastStartedAt + intervalMs`, where `intervalMs = 24h / limits.maxDailySessions` and `lastStartedAt = max(startedAt)` over all jobs.
@@ -337,6 +422,7 @@ Add `intervalMs(limits)` as a pure function. Unit-test it and the gates directly
 
 **Step 14 — Create `src/scheduler-reconcile.ts`.** Agent: `code`.
 Boot reconcile. Do not call the coordinator. Use the replay:
+
 - On `sessionStarted`, mark the matching job `running` (it was already `running`; this confirms it after a restart).
 - Add a `pendingReconcile` set: at boot, every job with `state === 'running'` goes into the set.
 - A `sessionStarted` removes its job from the set.
@@ -347,32 +433,54 @@ Hide the settle logic behind a small `ReconcileTracker` class so it is unit-test
 ### Phase 4 — Spawn, message, and session events
 
 **Step 15 — Create `src/spawn.ts`.** Agent: `code`.
+
 ```ts
-export interface SpawnDeps { fetch: typeof fetch; coordinatorUrl: string; logger?: (m: string) => void; }
+export interface SpawnDeps {
+  fetch: typeof fetch;
+  coordinatorUrl: string;
+  logger?: (m: string) => void;
+}
 
-export async function spawnSession(deps, input: {
-  targetBeaconId: string; personaId: string; model?: string;
-  workingDir?: string; extensionHint: string;
-}): Promise<{ spawnId: string; agentId: string }>;
+export async function spawnSession(
+  deps,
+  input: {
+    targetBeaconId: string;
+    personaId: string;
+    model?: string;
+    workingDir?: string;
+    extensionHint: string;
+  }
+): Promise<{ spawnId: string; agentId: string }>;
 
-export async function instructSession(deps, input: {
-  sessionId: string; content: string; retries?: number;
-}): Promise<boolean>;
+export async function instructSession(
+  deps,
+  input: {
+    sessionId: string;
+    content: string;
+    retries?: number;
+  }
+): Promise<boolean>;
 ```
+
 - `spawnSession`: `POST ${coordinatorUrl}/api/spawn` with the body from the ground truth section. Read `spawnId` and `agentId` from the reply. Throw on a non-201.
 - `instructSession`: `POST ${coordinatorUrl}/api/sessions/${sessionId}/message` with `{ content }`. Retry on a non-2xx with backoff (e.g. 5 tries, 500ms × 2^n). Return `true` on success, `false` after the last try. This covers the race where the agent has not registered yet.
 - Put this fetch through `node.getFetch()` so the coordinator call carries the node identity.
 
 **Step 16 — Create `src/session-events.ts`.** Agent: `code`.
+
 ```ts
 export function makeSessionHandlers(deps: {
-  store: SchedulerStore; board: BoardStore; node: ExtensionNode;
+  store: SchedulerStore;
+  board: BoardStore;
+  node: ExtensionNode;
   instruct: (sessionId: string, content: string) => Promise<boolean>;
   settings: { injectToolsIntoAllSessions: boolean };
   reconcile: ReconcileTracker;
 }): Pick<ExtensionNodeHandlers, 'onSessionStarted' | 'onSessionEnded'>;
 ```
+
 `onSessionStarted(snapshot)`:
+
 1. Parse the card id from `snapshot.extensionHint` when it matches `/^drone-swarm-project:card:(.+)$/`.
 2. If a job exists with `agentId === snapshot.sessionId` (or, failing that, with `cardId === parsedCardId` and `state === 'running'`):
    - Set `job.sessionId = snapshot.sessionId`, `job.instructionSent = true`.
@@ -385,6 +493,7 @@ export function makeSessionHandlers(deps: {
    - If the hint parsed a card id → also `node.injectFragment({ target: snapshot.sessionId, id: 'card-binding', content: cardBindingFragment(card, project) })`.
 
 `onSessionEnded(event)`:
+
 1. Find the job with `sessionId === event.sessionId` and `state === 'running'`.
 2. Set `state='done'`, `endedAt=now`.
 3. Set the card `sessionStatus='ended'`. Keep `sessionId`/`spawnId`.
@@ -398,9 +507,11 @@ Write `cardBindingFragment(card, project)` in this file. It returns a short Mark
 Declare the catalog exactly as designed. The single source of truth for both the manifest and the handlers.
 
 `mcp` tier (agent-callable, `exposed` omitted = `mcp`):
+
 - `project.list`, `board.get`, `card.get`, `card.create`, `card.update`, `card.move`.
 
 `ui` tier (`exposed: 'ui'`):
+
 - `project.create`, `project.update`, `project.delete`,
 - `column.list`, `column.create`, `column.update`, `column.reorder`, `column.delete`,
 - `automation.list`, `automation.create`, `automation.update`, `automation.delete`,
@@ -410,30 +521,37 @@ Declare the catalog exactly as designed. The single source of truth for both the
 Each capability: `{ name, description, paramSchema, exposed? }`. Give each `card.*` capability optional `projectId` and (for `card.get`/`card.update`/`card.move`) optional `cardId`, so the card-bound shortcut works.
 
 Export:
+
 - `CAPABILITIES: DroneExtensionCapability[]`
 - `CARD_TOOL_CAPABILITIES: string[]` = the six `mcp`-tier names.
 
 **Step 18 — Create `src/handlers.ts`.** Agent: `code`.
+
 ```ts
 export function makeHandlers(deps: {
-  board: BoardStore; scheduler: Scheduler; store: SchedulerStore;
+  board: BoardStore;
+  scheduler: Scheduler;
+  store: SchedulerStore;
   settings: { injectToolsIntoAllSessions: boolean };
 }): Pick<ExtensionNodeHandlers, 'onInvokeAction' | 'onInvokeTool'>;
 ```
+
 `dispatch(cap, params, ctx)`:
+
 1. Find the capability in `CAPABILITIES`. Unknown → `{ ok: false, status: 404 }`.
 2. If `cap.exposed === 'ui'` and `ctx.caller !== 'ui'` → `{ ok: false, status: 403 }`. (The coordinator also blocks this; keep the guard.)
 3. Resolve card-bound defaults: when the capability is `card.*` and `ctx.sessionId` is set, look up the session's card (use `getCardProjectId` plus a session→card lookup in the reconcile/store layer) and fill a missing `projectId`/`cardId`. If the parameters are still incomplete → `{ ok: false, status: 400 }`.
 4. Run the operation against the store.
 5. **After a card mutation that moves a card** (`card.move` and `card.create`): call `selectAutomations(project, fromColumnId, toColumnId)`. For each match, render the prompt and `scheduler.enqueue(job)`. A card create is a move from `null` to the first column.
 6. Return `{ ok: true, status: 200, body }`.
-`onInvokeAction` calls `dispatch` with `ctx.caller === 'ui'`. `onInvokeTool` calls `dispatch` with `ctx.caller === 'agent'`.
+   `onInvokeAction` calls `dispatch` with `ctx.caller === 'ui'`. `onInvokeTool` calls `dispatch` with `ctx.caller === 'agent'`.
 
 Also export a session→card map accessor, so the card-bound shortcut is a lookup. Keep this map in the in-memory store (a spawned card session id is written when the session starts).
 
 ### Phase 6 — Front-end bundle (TSX + esbuild)
 
 **Step 19 — Create `scripts/build-bundle.mjs`.** Agent: `code`.
+
 ```js
 import { build } from 'esbuild';
 import { copyFile, mkdir } from 'node:fs/promises';
@@ -457,6 +575,7 @@ console.log('bundle written to dist/bundle/');
 
 **Step 20 — Create `bundle/tsconfig.json` and `bundle/globals.d.ts`.** Agent: `code`.
 `bundle/tsconfig.json` (typecheck-only):
+
 ```json
 {
   "compilerOptions": {
@@ -476,7 +595,9 @@ console.log('bundle written to dist/bundle/');
   "include": ["**/*.ts", "**/*.tsx", "globals.d.ts"]
 }
 ```
+
 `bundle/globals.d.ts`:
+
 ```ts
 import type * as ReactNS from 'react';
 declare global {
@@ -486,6 +607,7 @@ export {};
 ```
 
 **Step 21 — Create the bundle source files.** Agent: `code`.
+
 - `bundle/index.tsx` — the default export:
   ```tsx
   import type { PluginClientExport } from 'drone-extension-ui-types';
@@ -496,7 +618,9 @@ export {};
   const client: PluginClientExport = {
     routes: [{ path: '/board', title: 'Board', component: BoardPage }],
     regions: { 'sidebar-nav': BoardNav, 'settings-panel': BoardSettings },
-    onReady(api) { /* stash api for the action calls */ },
+    onReady(api) {
+      /* stash api for the action calls */
+    },
   };
   export default client;
   ```
@@ -510,34 +634,50 @@ export {};
 
 **Step 22 — Create `src/bundle.ts`.** Agent: `code`.
 Read the built files from disk and return the upload payload.
+
 ```ts
 export const BUNDLE = { name: 'board', version: '0.1.0' };
-export async function buildBundleFiles(): Promise<Array<{ name: string; contentBase64: string; contentType: string }>>;
+export async function buildBundleFiles(): Promise<
+  Array<{ name: string; contentBase64: string; contentType: string }>
+>;
 ```
+
 Resolve the package root from `import.meta.url`: `const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')` gives `dist/` in production and `src/` in tests; use two levels: `path.resolve(dirname, '..', '..')` is the package root for `dist/index.js`, but `src/bundle.ts` is compiled into `dist/bundle.js`, so the package root is `path.resolve(dirname(fileURLToPath(import.meta.url)), '..')`. Confirm both at runtime by trying `dist/bundle/index.js` under the package root. If a file is absent, throw a clear error; the caller logs it and continues (non-fatal), exactly like `mcp-swarm`.
 
 ### Phase 7 — Wiring, docs, and ADR
 
 **Step 23 — Create `src/config.ts`.** Agent: `code`.
+
 ```ts
 export interface ProjectConfig {
-  coordinatorUrl: string; dataDir: string; id: string;
+  coordinatorUrl: string;
+  dataDir: string;
+  id: string;
   injectToolsIntoAllSessions: boolean;
-  maxConcurrentSessions: number; maxDailySessions: number;
+  maxConcurrentSessions: number;
+  maxDailySessions: number;
   preApprovalTokenPath?: string;
 }
-export function resolveConfig(env?: NodeJS.ProcessEnv, argv?: string[]): ProjectConfig;
+export function resolveConfig(
+  env?: NodeJS.ProcessEnv,
+  argv?: string[]
+): ProjectConfig;
 ```
+
 Defaults: `coordinatorUrl` = `http://127.0.0.1:8080`, `dataDir` = `~/.drone-agent/drone-swarm-project`, `id` = `drone-swarm-project`, `injectToolsIntoAllSessions` = `true`, `maxConcurrentSessions` = `1`, `maxDailySessions` = `12`. Env prefix `DRONE_SWARM_PROJECT_*`. Support `--pre-approval-token-path` in both forms.
 
 **Step 24 — Create `src/index.ts`.** Agent: `code`.
+
 ```ts
 export async function startProjectService(cfg?: ProjectConfig): Promise<{
-  node: ExtensionNode; stop: () => Promise<void>;
+  node: ExtensionNode;
+  stop: () => Promise<void>;
 }>;
 export async function main(): Promise<void>;
 ```
+
 `startProjectService`:
+
 1. `const store = await createJsonStore(cfg.dataDir, { maxConcurrentSessions, maxDailySessions })`.
 2. Build the `Scheduler` with a `spawn` that calls `spawnSession` and stores the ids back on the job.
 3. Build the `ReconcileTracker`.
@@ -555,6 +695,7 @@ Explain: what the node is, the capability tiers, the automation model, the queue
 Record the decision and the non-obvious parts: (a) a card move enqueues a paced spawn, not an immediate spawn; (b) limits constrain speed, not the actor; (c) the card does not auto-advance on session end; (d) the first real esbuild TSX bundle; (e) JSON store behind an interface with a reserved SQLite upgrade.
 
 **Step 27 — Update `README.md` and `CONTEXT-MAP.md`; add `drone-swarm-project/CONTEXT.md`.** Agent: `code`.
+
 - `README.md`: add a package-list line for `drone-swarm-project`.
 - `CONTEXT-MAP.md`: add a context entry and its relationships.
 - `drone-swarm-project/CONTEXT.md`: a short glossary (Project, Column, Card, Automation, Job, Queue, Card-bound session). Glossary only — no implementation detail.
@@ -564,6 +705,7 @@ Record the decision and the non-obvious parts: (a) a card move enqueues a paced 
 Write all tests under `drone-swarm-project/test/`. Use the root vitest.
 
 **Step 28 — Unit tests.** Agent: `code`.
+
 - `test/config.test.ts` — defaults and each env override.
 - `test/store.test.ts` — project CRUD; card create/update/move; the card-to-project map; persistence across a reload; the index stays consistent; an atomic write does not corrupt the file (write, reload, compare).
 - `test/automations.test.ts` — `matchesTransition` for each wildcard case; a both-wildcard automation is rejected at creation; `renderPrompt` for each token and for an unknown token.
@@ -573,7 +715,7 @@ Write all tests under `drone-swarm-project/test/`. Use the root vitest.
 - `test/handlers.test.ts` — `card.move` enqueues one job per matching automation; a non-matching move enqueues nothing; a `ui` capability is refused for `ctx.caller === 'agent'`; the card-bound default fills a missing `cardId`; a card create is a `null`→column move.
 - `test/session-events.test.ts` — a card-bound `sessionStarted` calls `injectTools` and `injectFragment` and sends the instruction; a non-subagent session with `injectToolsIntoAllSessions` gets `injectTools` only; a subagent gets nothing; `sessionEnded` closes the job to `done` and sets the card status.
 - `test/bundle.test.ts` — `buildBundleFiles()` throws a clear error when the built file is absent (do not depend on a build).
-Use `vi.fn()` for the fetch and the node. Use `mkdtemp` for the data dir.
+  Use `vi.fn()` for the fetch and the node. Use `mkdtemp` for the data dir.
 
 **Step 29 — Integration smoke test.** Agent: `code`.
 `test/e2e-smoke.test.ts`. Gate it on `RUN_INTEGRATION_TESTS==='true'` and an explicit `DRONE_SWARM_PROJECT_COORDINATOR_URL`. Mirror `mcp-swarm/test/e2e-smoke.test.ts`. Assert: the node appears in `GET /api/extensions` with the full catalog; a `project.create` action round-trips; a `card.create` then `card.move` enqueues a job (`queue.list`). Run `pnpm --filter drone-swarm-project run build` first so the bundle exists.

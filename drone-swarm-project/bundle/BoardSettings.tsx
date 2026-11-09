@@ -16,13 +16,13 @@ export function BoardSettings() {
   const [newColumn, setNewColumn] = React.useState('');
 
   const refresh = React.useCallback(() => {
-    void action<ActionReply<{ projects: ProjectSummary[] }>>('project.list').then(
-      reply => {
-        const list = reply.body?.projects ?? [];
-        setProjects(list);
-        setSelected(current => current ?? list[0]?.id);
-      }
-    );
+    void action<ActionReply<{ projects: ProjectSummary[] }>>(
+      'project.list'
+    ).then(reply => {
+      const list = reply.body?.projects ?? [];
+      setProjects(list);
+      setSelected(current => current ?? list[0]?.id);
+    });
     void action<ActionReply<{ limits: Limits }>>('limits.get').then(reply =>
       setLimits(reply.body?.limits)
     );
@@ -53,12 +53,14 @@ export function BoardSettings() {
 
   function deleteColumn(columnId: string): void {
     if (!selected) return;
-    void action('column.delete', { projectId: selected, columnId }).then(refresh);
+    void action('column.delete', { projectId: selected, columnId }).then(
+      refresh
+    );
   }
 
   function saveLimits(patch: Partial<Limits>): void {
-    void action<ActionReply<{ limits: Limits }>>('limits.set', patch).then(reply =>
-      setLimits(reply.body?.limits)
+    void action<ActionReply<{ limits: Limits }>>('limits.set', patch).then(
+      reply => setLimits(reply.body?.limits)
     );
   }
 
@@ -110,7 +112,9 @@ export function BoardSettings() {
                 type="number"
                 value={limits.maxConcurrentSessions}
                 onChange={event =>
-                  saveLimits({ maxConcurrentSessions: Number(event.target.value) })
+                  saveLimits({
+                    maxConcurrentSessions: Number(event.target.value),
+                  })
                 }
               />
             </label>

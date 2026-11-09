@@ -39,9 +39,9 @@ An automation **inherits** the project's `defaultBeaconId` and
 The catalog (`src/capabilities.ts`) is the single source of truth for the
 manifest and the handlers.
 
-| Tier  | Capabilities                                                                                                                                                     |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mcp` | `project.list`, `board.get`, `card.get`, `card.create`, `card.update`, `card.move`                                                                               |
+| Tier  | Capabilities                                                                                                                                                    |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mcp` | `project.list`, `board.get`, `card.get`, `card.create`, `card.update`, `card.move`                                                                              |
 | `ui`  | `project.create/update/delete`, `column.list/create/update/reorder/delete`, `automation.list/create/update/delete`, `queue.list/retry/cancel`, `limits.get/set` |
 
 `mcp`-tier capabilities are agent-callable and visible to MCP clients. `ui`-tier
@@ -55,7 +55,7 @@ Launch is **two steps** (because the spawn path silently ignores `--task`):
 1. `POST /api/spawn` with the project's inherited beacon/working dir and an
    `extensionHint` of `drone-swarm-project:card:<cardId>`.
 2. When the matching `sessionStarted` snapshot arrives, `POST
-   /api/sessions/:id/message` with the rendered prompt.
+/api/sessions/:id/message` with the rendered prompt.
 
 The card then carries `sessionId` / `spawnId` / `sessionStatus` as history.
 

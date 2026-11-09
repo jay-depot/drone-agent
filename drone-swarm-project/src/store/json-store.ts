@@ -34,10 +34,7 @@ interface QueueFile {
   jobs: Job[];
 }
 
-async function writeJsonAtomic(
-  filePath: string,
-  data: unknown
-): Promise<void> {
+async function writeJsonAtomic(filePath: string, data: unknown): Promise<void> {
   await withPathLock(filePath, async () => {
     const tmp = `${filePath}.tmp-${randomUUID()}`;
     await writeFile(tmp, JSON.stringify(data, null, 2));
@@ -142,7 +139,9 @@ export class JsonStore implements BoardStore, SchedulerStore {
       path.join(this.projectsDir, `${projectId}.json`),
       project
     );
-    const entry = this.indexProjects.find(candidate => candidate.id === projectId);
+    const entry = this.indexProjects.find(
+      candidate => candidate.id === projectId
+    );
     if (entry) {
       entry.name = project.name;
       entry.updatedAt = now();
@@ -208,7 +207,9 @@ export class JsonStore implements BoardStore, SchedulerStore {
       columns,
       cards: [],
       automations: [],
-      ...(input.defaultBeaconId ? { defaultBeaconId: input.defaultBeaconId } : {}),
+      ...(input.defaultBeaconId
+        ? { defaultBeaconId: input.defaultBeaconId }
+        : {}),
       ...(input.defaultWorkingDir
         ? { defaultWorkingDir: input.defaultWorkingDir }
         : {}),
@@ -220,7 +221,9 @@ export class JsonStore implements BoardStore, SchedulerStore {
 
   async updateProject(
     id: string,
-    patch: Partial<Pick<Project, 'name' | 'defaultBeaconId' | 'defaultWorkingDir'>>
+    patch: Partial<
+      Pick<Project, 'name' | 'defaultBeaconId' | 'defaultWorkingDir'>
+    >
   ): Promise<Project | undefined> {
     const project = this.requireProject(id);
     if (!project) return undefined;
@@ -280,7 +283,12 @@ export class JsonStore implements BoardStore, SchedulerStore {
       columnId,
       position: 0,
       history: [
-        { at: now(), actor: input.actor, fromColumnId: null, toColumnId: columnId },
+        {
+          at: now(),
+          actor: input.actor,
+          fromColumnId: null,
+          toColumnId: columnId,
+        },
       ],
       ...(input.description !== undefined
         ? { description: input.description }
@@ -325,7 +333,8 @@ export class JsonStore implements BoardStore, SchedulerStore {
       this.sessionToCard.set(input.sessionId, card.id);
     }
     if (input.spawnId !== undefined) card.spawnId = input.spawnId;
-    if (input.sessionStatus !== undefined) card.sessionStatus = input.sessionStatus;
+    if (input.sessionStatus !== undefined)
+      card.sessionStatus = input.sessionStatus;
     await this.persistProject(project.id);
     return card;
   }
@@ -359,7 +368,10 @@ export class JsonStore implements BoardStore, SchedulerStore {
       .filter(candidate => candidate.columnId === input.toColumnId)
       .sort((a, b) => a.position - b.position)
       .filter(candidate => candidate.id !== card.id);
-    const at = Math.max(0, Math.min(input.position ?? target.length, target.length));
+    const at = Math.max(
+      0,
+      Math.min(input.position ?? target.length, target.length)
+    );
     target.splice(at, 0, card);
     target.forEach((candidate, index) => {
       candidate.position = index;
@@ -392,7 +404,9 @@ export class JsonStore implements BoardStore, SchedulerStore {
   }): Promise<Column | undefined> {
     const project = this.requireProject(input.projectId);
     if (!project) return undefined;
-    const column = project.columns.find(candidate => candidate.id === input.columnId);
+    const column = project.columns.find(
+      candidate => candidate.id === input.columnId
+    );
     if (!column) return undefined;
     if (input.name !== undefined) column.name = input.name;
     if (input.order !== undefined) column.order = input.order;
@@ -407,12 +421,15 @@ export class JsonStore implements BoardStore, SchedulerStore {
     const project = this.requireProject(input.projectId);
     if (!project) return false;
     if (project.columns.length <= 1) return false;
-    if (project.cards.some(card => card.columnId === input.columnId)) return false;
+    if (project.cards.some(card => card.columnId === input.columnId))
+      return false;
     const next = project.columns.filter(column => column.id !== input.columnId);
     if (next.length === project.columns.length) return false;
-    next.sort((a, b) => a.order - b.order).forEach((column, order) => {
-      column.order = order;
-    });
+    next
+      .sort((a, b) => a.order - b.order)
+      .forEach((column, order) => {
+        column.order = order;
+      });
     project.columns = next;
     await this.persistProject(project.id);
     return true;
@@ -428,7 +445,10 @@ export class JsonStore implements BoardStore, SchedulerStore {
   }): Promise<Automation | undefined> {
     const project = this.requireProject(input.projectId);
     if (!project) return undefined;
-    if (input.automation.when.from === '*' && input.automation.when.to === '*') {
+    if (
+      input.automation.when.from === '*' &&
+      input.automation.when.to === '*'
+    ) {
       return undefined;
     }
     const automation: Automation = {
@@ -455,7 +475,8 @@ export class JsonStore implements BoardStore, SchedulerStore {
     const to = input.patch.when?.to ?? automation.when.to;
     if (from === '*' && to === '*') return undefined;
     if (input.patch.name !== undefined) automation.name = input.patch.name;
-    if (input.patch.enabled !== undefined) automation.enabled = input.patch.enabled;
+    if (input.patch.enabled !== undefined)
+      automation.enabled = input.patch.enabled;
     if (input.patch.when !== undefined) automation.when = { from, to };
     if (input.patch.then !== undefined) automation.then = input.patch.then;
     await this.persistProject(project.id);
@@ -504,7 +525,10 @@ export class JsonStore implements BoardStore, SchedulerStore {
     await this.persistQueue();
   }
 
-  async updateJob(jobId: string, patch: Partial<Job>): Promise<Job | undefined> {
+  async updateJob(
+    jobId: string,
+    patch: Partial<Job>
+  ): Promise<Job | undefined> {
     const job = this.jobs.find(candidate => candidate.id === jobId);
     if (!job) return undefined;
     Object.assign(job, patch);

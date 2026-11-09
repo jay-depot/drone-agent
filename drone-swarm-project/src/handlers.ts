@@ -1,14 +1,12 @@
-import type {
-  Automation,
-  Card,
-  Job,
-  MoveRecord,
-  Project,
-} from './board-types.js';
+import type { Automation, Card, Job, Project } from './board-types.js';
 import { CAPABILITIES } from './capabilities.js';
 import { newJobId } from './ids.js';
 import { renderPrompt, selectAutomations } from './automations.js';
-import type { ExtensionNodeHandlers, InvokeCtx, InvokeResult } from 'drone-swarm-common';
+import type {
+  ExtensionNodeHandlers,
+  InvokeCtx,
+  InvokeResult,
+} from 'drone-swarm-common';
 import type { Scheduler } from './scheduler.js';
 import type { BoardStore } from './store/board-store.js';
 import type { SchedulerStore } from './store/scheduler-store.js';
@@ -29,7 +27,9 @@ function asString(value: unknown): string | undefined {
 }
 
 function asNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function findCapability(name: string) {
@@ -67,10 +67,11 @@ export function makeHandlers(
     project: Project,
     card: Card,
     fromColumnId: string | null,
-    toColumnId: string,
-    actor: MoveRecord['actor']
+    toColumnId: string
   ): Promise<void> {
-    const destination = project.columns.find(column => column.id === toColumnId);
+    const destination = project.columns.find(
+      column => column.id === toColumnId
+    );
     if (!destination) return;
     const matches = selectAutomations(project, fromColumnId, toColumnId);
     for (const automation of matches) {
@@ -89,7 +90,6 @@ export function makeHandlers(
       };
       await scheduler.enqueue(job);
     }
-    void actor;
   }
 
   async function dispatch(
@@ -116,7 +116,11 @@ export function makeHandlers(
 
     switch (capability) {
       case 'project.list':
-        return { ok: true, status: 200, body: { projects: await board.listProjects() } };
+        return {
+          ok: true,
+          status: 200,
+          body: { projects: await board.listProjects() },
+        };
       case 'board.get': {
         if (!projectId) return badRequest('projectId is required');
         const project = await board.getProject(projectId);
@@ -127,7 +131,11 @@ export function makeHandlers(
         if (!cardId) return badRequest('cardId is required');
         const found = await board.getCard(cardId);
         if (!found) return notFound('card');
-        return { ok: true, status: 200, body: { card: found.card, project: found.project } };
+        return {
+          ok: true,
+          status: 200,
+          body: { card: found.card, project: found.project },
+        };
       }
       case 'card.create': {
         if (!projectId) return badRequest('projectId is required');
@@ -143,7 +151,7 @@ export function makeHandlers(
         if (!card) return badRequest('could not create card');
         const project = await board.getProject(projectId);
         if (project) {
-          await enqueueForMove(project, card, null, card.columnId, 'automation');
+          await enqueueForMove(project, card, null, card.columnId);
         }
         return { ok: true, status: 200, body: { card } };
       }
@@ -176,8 +184,7 @@ export function makeHandlers(
             project,
             moved.card,
             moved.fromColumnId,
-            toColumnId,
-            'automation'
+            toColumnId
           );
         }
         return { ok: true, status: 200, body: { card: moved.card } };
@@ -241,7 +248,11 @@ export function makeHandlers(
           ? (params.columnIds as unknown[]).map(String)
           : [];
         for (let order = 0; order < columnIds.length; order++) {
-          await board.updateColumn({ projectId, columnId: columnIds[order]!, order });
+          await board.updateColumn({
+            projectId,
+            columnId: columnIds[order]!,
+            order,
+          });
         }
         const project = await board.getProject(projectId);
         if (!project) return notFound('project');
@@ -288,12 +299,19 @@ export function makeHandlers(
         if (!projectId) return badRequest('projectId is required');
         const automationId = asString(params.automationId);
         if (!automationId) return badRequest('automationId is required');
-        const deleted = await board.deleteAutomation({ projectId, automationId });
+        const deleted = await board.deleteAutomation({
+          projectId,
+          automationId,
+        });
         if (!deleted) return notFound('automation');
         return { ok: true, status: 200, body: { deleted: true } };
       }
       case 'queue.list':
-        return { ok: true, status: 200, body: { jobs: await store.listJobs() } };
+        return {
+          ok: true,
+          status: 200,
+          body: { jobs: await store.listJobs() },
+        };
       case 'queue.retry': {
         const jobId = asString(params.jobId);
         if (!jobId) return badRequest('jobId is required');
@@ -320,7 +338,11 @@ export function makeHandlers(
         return { ok: true, status: 200, body: { job: updated } };
       }
       case 'limits.get':
-        return { ok: true, status: 200, body: { limits: await store.getLimits() } };
+        return {
+          ok: true,
+          status: 200,
+          body: { limits: await store.getLimits() },
+        };
       case 'limits.set': {
         const limits = await store.setLimits({
           maxConcurrentSessions: asNumber(params.maxConcurrentSessions),
@@ -329,7 +351,11 @@ export function makeHandlers(
         return { ok: true, status: 200, body: { limits } };
       }
       default:
-        return { ok: false, status: 404, body: { error: 'Unknown capability' } };
+        return {
+          ok: false,
+          status: 404,
+          body: { error: 'Unknown capability' },
+        };
     }
   }
 

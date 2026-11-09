@@ -58,10 +58,7 @@ export function resolveConfig(
       env[`${ENV_PREFIX}INJECT_TOOLS`],
       true
     ),
-    maxConcurrentSessions: parseNumber(
-      env[`${ENV_PREFIX}MAX_CONCURRENT`],
-      1
-    ),
+    maxConcurrentSessions: parseNumber(env[`${ENV_PREFIX}MAX_CONCURRENT`], 1),
     maxDailySessions: parseNumber(env[`${ENV_PREFIX}MAX_DAILY`], 12),
     ...(preApprovalTokenPath ? { preApprovalTokenPath } : {}),
   };

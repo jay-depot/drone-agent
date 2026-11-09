@@ -1,4 +1,10 @@
-import type { ActionReply, Card, Column, Project, ProjectSummary } from './types';
+import type {
+  ActionReply,
+  Card,
+  Column,
+  Project,
+  ProjectSummary,
+} from './types';
 import { action } from './api';
 import { QueueModal } from './QueueModal';
 
@@ -51,9 +57,11 @@ export function BoardPage() {
     const cardId = dragCard.current;
     dragCard.current = undefined;
     if (!cardId || !selected) return;
-    void action('card.move', { projectId: selected, cardId, toColumnId: columnId }).then(
-      () => loadBoard(selected)
-    );
+    void action('card.move', {
+      projectId: selected,
+      cardId,
+      toColumnId: columnId,
+    }).then(() => loadBoard(selected));
   }
 
   const columns: Column[] = project
