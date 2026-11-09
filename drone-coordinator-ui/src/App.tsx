@@ -5,8 +5,11 @@ import {
   Route,
   NavLink,
   Navigate,
+  useLocation,
 } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { ErrorBoundary } from '@/components/error-boundary';
 import { ToastProvider } from '@/hooks/use-toast';
 import { WebSocketProvider } from '@/hooks/use-websocket';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
@@ -81,6 +84,11 @@ function DarkModeToggle() {
   );
 }
 
+function KeyedErrorBoundary({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  return <ErrorBoundary key={location.pathname}>{children}</ErrorBoundary>;
+}
+
 function AppLayout() {
   const { isAuthenticated } = useAuth();
   const { routes: pluginRoutes } = useExtensionRegistry();
@@ -148,7 +156,8 @@ function AppLayout() {
 
       {/* Main content */}
       <main className="flex-1 overflow-auto p-6">
-        <Routes>
+        <KeyedErrorBoundary>
+          <Routes>
           <Route path="/" element={<TopologyPage />} />
           <Route path="/beacons/:id" element={<BeaconDetailPage />} />
           <Route path="/sessions" element={<SessionsPage />} />
@@ -191,6 +200,7 @@ function AppLayout() {
           ))}
           <Route path="*" element={<ExtensionRouteFallback />} />
         </Routes>
+        </KeyedErrorBoundary>
       </main>
     </div>
   );

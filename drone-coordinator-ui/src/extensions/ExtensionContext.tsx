@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ComponentType,
   type ReactNode,
@@ -75,6 +76,8 @@ export function ExtensionProvider({ children }: { children: ReactNode }) {
   const [routes, setRoutes] = useState<PluginClientRoute[]>([]);
   const [loaded, setLoaded] = useState<string[]>([]);
 
+  const disposersRef = useRef<Array<() => void>>([]);
+
   const registerComponent = useMemo(
     () => (region: UIRegion, component: ComponentType, label?: string) => {
       setComponents(prev => {
@@ -107,18 +110,26 @@ export function ExtensionProvider({ children }: { children: ReactNode }) {
 
   const extensions = useExtensions();
   useEffect(() => {
-    const disposers = extensions.load(
-      (region, component, label) =>
-        registerComponent(
+    extensions.load(
+      (region, component, label) => {
+        const dispose = registerComponent(
           region as UIRegion,
           component as ComponentType,
           label
-        ),
-      registerRoute
+        );
+        disposersRef.current.push(dispose);
+        return dispose;
+      },
+      route => {
+        const dispose = registerRoute(route);
+        disposersRef.current.push(dispose);
+        return dispose;
+      }
     );
     if (extensions.loaded.length > 0) setLoaded(extensions.loaded);
     return () => {
-      for (const dispose of disposers) dispose();
+      for (const dispose of disposersRef.current) dispose();
+      disposersRef.current = [];
     };
   }, [extensions.load, registerComponent, registerRoute]);
 

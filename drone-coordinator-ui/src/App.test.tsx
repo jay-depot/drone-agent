@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import App from './App';
 
 // WebSocket stub (the app opens a socket on mount).
@@ -102,5 +103,20 @@ describe('App extension routes', () => {
         '/board'
       );
     });
+  });
+
+  it('keeps the extension route and its nav link after navigating to it', async () => {
+    const user = userEvent.setup();
+    window.history.pushState({}, '', '/');
+    render(<App />);
+
+    const link = await screen.findByRole('link', { name: /Board/ });
+    await user.click(link);
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/board');
+      expect(screen.getByText('BOARD')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('link', { name: /Board/ })).toBeInTheDocument();
   });
 });

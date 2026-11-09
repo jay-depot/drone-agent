@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { PluginClientRoute, UIRegion } from './types';
 import { loadExtensionBundles, defaultInjectStylesheet } from './loader';
@@ -9,6 +9,11 @@ import { useAuthenticatedFetch } from '@/hooks/use-auth';
  * that hands each bundle's contributions to the registry callbacks. The heavy
  * lifting lives in the pure `loadExtensionBundles` so it is unit-testable
  * without a real dynamic `import()`.
+ *
+ * `load` MUST be reference-stable. The provider's effect depends on it, so an
+ * unstable `load` re-runs that effect on every navigation and disposes the
+ * whole registry. `navigate` (and `authFetch`) therefore live in refs, not in
+ * the `useCallback` dependency list.
  */
 
 export interface ExtensionsLoader {
@@ -33,6 +38,13 @@ export function useExtensions(): ExtensionsLoader {
   const didLoadRef = useRef(false);
   const [loading, setLoading] = useState(true);
 
+  const authFetchRef = useRef(authFetch);
+  const navigateRef = useRef(navigate);
+  useEffect(() => {
+    authFetchRef.current = authFetch;
+    navigateRef.current = navigate;
+  }, [authFetch, navigate]);
+
   const load = useCallback(
     (
       registerComponent: (
@@ -50,7 +62,7 @@ export function useExtensions(): ExtensionsLoader {
         try {
           let entries: Parameters<typeof loadExtensionBundles>[0];
           try {
-            const res = await authFetch('/api/extensions');
+            const res = await authFetchRef.current('/api/extensions');
             if (!res.ok) return;
             entries = await res.json();
           } catch {
@@ -62,8 +74,8 @@ export function useExtensions(): ExtensionsLoader {
             registerComponent,
             registerRoute,
             injectStylesheet: defaultInjectStylesheet,
-            fetch: (path, init) => authFetch(path, init),
-            navigate,
+            fetch: (path, init) => authFetchRef.current(path, init),
+            navigate: path => navigateRef.current(path),
           });
           disposers.push(...result.disposers);
           loadedRef.current = result.loaded;
@@ -74,7 +86,7 @@ export function useExtensions(): ExtensionsLoader {
 
       return disposers;
     },
-    [authFetch, navigate]
+    []
   );
 
   return useMemo(
