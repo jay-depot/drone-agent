@@ -1122,5 +1122,17 @@
   {
     "timestamp": "2026-11-08T18:49:51.458Z",
     "insight": "The extension-node / callee direction (ADR 270) is now live in drone-gateway: the node declares `schedule_wakeup`/`schedule_list`/`schedule_cancel` (exposed:'mcp', no dots), which materialize as agent tools `extensions__drone-gateway__schedule_*` left unmounted. An extension node's `onInvokeTool` ctx carries the calling agent's `sessionId` — that is the ONLY handle tying an invoke back to a conversation, so the gateway builds a `sessionId -> {adapterId, conversationId}` map from `sessionStarted`/`sessionEnded` events (hint prefix-stripped). A `tools` injection is discoverable/mountable but the model must mount before calling; the wake itself is a synthetic turn via `SessionLifecycle.send` and only works in LOCAL spawn mode (coordinator mode returns no reply). This is the pattern for any future callee capability."
+  },
+  {
+    "timestamp": "2026-11-09T18:53:44.801Z",
+    "insight": "Plan gap (drone-swarm-project Step 16): the plan passed the extension `node` directly into `makeSessionHandlers`, but the handlers object is an argument to `createExtensionNode(...)` — so `node` does not exist yet when the handlers are built (TS2454 \"used before assigned\", and a real TDZ at runtime). Correct pattern: inject a lazy `getNode: () => ExtensionNode` and call it inside the event handlers (which only fire after the node exists). Any extension-node handler that needs the node itself must take a getter, not the node."
+  },
+  {
+    "timestamp": "2026-11-09T18:53:44.804Z",
+    "insight": "Plan gap (drone-swarm-project Step 9/16/18): the written `BoardStore` interface had no way to write a card's `sessionId`/`spawnId`/`sessionStatus`, nor to resolve session-id → card. Both are required by the session-event handler (set the card's session on start; find the card on end) and by the card-bound tool shortcut. Added `setCardSession(input)` and `getCardIdForSession(sessionId)` to the interface. When a plan defines a store interface, check every later step's needs against it before implementing — interface gaps surface as ad-hoc store access."
+  },
+  {
+    "timestamp": "2026-11-09T18:53:44.807Z",
+    "insight": "First real TSX esbuild extension bundle (drone-swarm-project): `@types/react` v19 removed the GLOBAL `JSX` namespace, so a bundle compiled with `jsxFactory: 'globalThis.React.createElement'` fails typecheck with TS7026 (\"no interface 'JSX.IntrinsicElements' exists\") on every element. Fix: declare a global `JSX` namespace in a `bundle/globals.d.ts` aliasing `ReactNS.JSX.*` — and use `type` aliases, not empty `interface X extends Y {}` (eslint `@typescript-eslint/no-empty-object-type`). Also annotate components with an inferred return type, not `: unknown` (a `: unknown` return is not a valid `ComponentType`/JSX element type)."
   }
 ]
