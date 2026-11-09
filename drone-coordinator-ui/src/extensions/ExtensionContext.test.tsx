@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { act } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider } from '@/hooks/use-auth';
 import {
   ExtensionProvider,
@@ -11,7 +12,7 @@ import {
 
 // The provider's loader does a dynamic import(); stub it out globally.
 vi.mock('./useExtensions', () => ({
-  useExtensions: () => ({ load: () => [], loaded: [] }),
+  useExtensions: () => ({ load: () => [], loaded: [], loading: false }),
 }));
 
 const localStorageMock = (() => {
@@ -57,10 +58,12 @@ function Probe() {
 function renderWithProvider(ui: React.ReactNode) {
   return render(
     <AuthProvider>
-      <ExtensionProvider>
-        <Probe />
-        {ui}
-      </ExtensionProvider>
+      <MemoryRouter>
+        <ExtensionProvider>
+          <Probe />
+          {ui}
+        </ExtensionProvider>
+      </MemoryRouter>
     </AuthProvider>
   );
 }

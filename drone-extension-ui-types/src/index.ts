@@ -47,6 +47,8 @@ export interface UIExtensionApi {
   registerRoute: (route: PluginClientRoute) => () => void;
   /** Authenticated same-origin fetch against the coordinator API. */
   fetch: (path: string, init?: RequestInit) => Promise<Response>;
+  /** Navigate to a client route without a page reload. */
+  navigate: (path: string) => void;
 }
 
 /** The `default` export shape of a front-end ESM bundle. */

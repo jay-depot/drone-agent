@@ -174,12 +174,28 @@ The client contract mirrors the alice model: a bundle's `module.default` is
 `globalThis.React`. Bundles are loaded by dynamic `import()` — same-origin,
 full page trust, no sandbox in v0.
 
+The `onReady(api)` hook receives a `UIExtensionApi` with `registerComponent`,
+`registerRoute`, `fetch` (authenticated same-origin), and `navigate(path)`
+(client-side navigation without a page reload). Bundles cannot import
+`react-router-dom` — only react/react-dom are external — so `api.navigate` is
+how a bundle moves the app to another route.
+
+**The host owns extension navigation.** For every registered route the host
+renders one sidebar `NavLink` from `route.title`, styled with the same classes
+and `isActive` logic as the core nav items. A bundle **must not** draw its own
+sidebar entry — that would show two links and re-introduce a full page reload.
+
 **UI regions (v0):** `sidebar-nav`, `topology-widget`, `topology-card`,
 `topology-page`, `sessions-widget`, `session-card`, `session-page`,
 `settings-panel`. Arbitrary plugin routes (`{ path, title, component }`) are
 allowed. The Topology page splits into **Beacons** and **Extensions**; the
 **Settings** page hosts Coordinator Settings, Shared Agent Config (the moved
 Config page), and one core-headed section per extension.
+
+Extension routes load asynchronously. Until they settle, an unmatched path
+shows a `Skeleton` placeholder instead of redirecting, so a deep link to an
+extension route (`/board`) renders the route once its bundle arrives (ADR
+[272](../adr/272-extension-routes-first-class-nav.md)).
 
 ## Building an extension
 

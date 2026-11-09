@@ -33,6 +33,8 @@ export interface LoaderDeps {
   injectStylesheet: (href: string) => void;
   /** Authenticated same-origin fetch handed to bundles via `api.fetch`. */
   fetch: (path: string, init?: RequestInit) => Promise<Response>;
+  /** Client-side navigation handed to bundles via `api.navigate`. */
+  navigate: (path: string) => void;
   /** Called with any load error (defaults to console.warn). */
   onError?: (message: string) => void;
 }
@@ -55,13 +57,15 @@ function defaultInjectStylesheet(href: string): void {
 function makeApi(
   registerComponent: LoaderDeps['registerComponent'],
   registerRoute: LoaderDeps['registerRoute'],
-  fetchImpl: LoaderDeps['fetch']
+  fetchImpl: LoaderDeps['fetch'],
+  navigate: LoaderDeps['navigate']
 ): UIExtensionApi {
   return {
     registerComponent: (region, component) =>
       registerComponent(region, component),
     registerRoute,
     fetch: fetchImpl,
+    navigate,
   };
 }
 
@@ -101,7 +105,12 @@ export async function loadExtensionBundles(
             disposers.push(deps.registerRoute(route));
           }
           client.onReady?.(
-            makeApi(deps.registerComponent, deps.registerRoute, deps.fetch)
+            makeApi(
+              deps.registerComponent,
+              deps.registerRoute,
+              deps.fetch,
+              deps.navigate
+            )
           );
           loaded.push(entry.nodeId);
         } catch (err) {

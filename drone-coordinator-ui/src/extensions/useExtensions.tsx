@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { PluginClientRoute, UIRegion } from './types';
 import { loadExtensionBundles, defaultInjectStylesheet } from './loader';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
@@ -21,12 +22,16 @@ export interface ExtensionsLoader {
     registerRoute: (route: PluginClientRoute) => () => void
   ) => Array<() => void>;
   loaded: string[];
+  /** True until the bundle load settles (success or failure). */
+  loading: boolean;
 }
 
 export function useExtensions(): ExtensionsLoader {
   const authFetch = useAuthenticatedFetch();
+  const navigate = useNavigate();
   const loadedRef = useRef<string[]>([]);
   const didLoadRef = useRef(false);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(
     (
@@ -42,30 +47,38 @@ export function useExtensions(): ExtensionsLoader {
       didLoadRef.current = true;
 
       void (async () => {
-        let entries: Parameters<typeof loadExtensionBundles>[0];
         try {
-          const res = await authFetch('/api/extensions');
-          if (!res.ok) return;
-          entries = await res.json();
-        } catch {
-          return;
-        }
+          let entries: Parameters<typeof loadExtensionBundles>[0];
+          try {
+            const res = await authFetch('/api/extensions');
+            if (!res.ok) return;
+            entries = await res.json();
+          } catch {
+            return;
+          }
 
-        const result = await loadExtensionBundles(entries, {
-          importModule: url => import(/* @vite-ignore */ url),
-          registerComponent,
-          registerRoute,
-          injectStylesheet: defaultInjectStylesheet,
-          fetch: (path, init) => authFetch(path, init),
-        });
-        disposers.push(...result.disposers);
-        loadedRef.current = result.loaded;
+          const result = await loadExtensionBundles(entries, {
+            importModule: url => import(/* @vite-ignore */ url),
+            registerComponent,
+            registerRoute,
+            injectStylesheet: defaultInjectStylesheet,
+            fetch: (path, init) => authFetch(path, init),
+            navigate,
+          });
+          disposers.push(...result.disposers);
+          loadedRef.current = result.loaded;
+        } finally {
+          setLoading(false);
+        }
       })();
 
       return disposers;
     },
-    [authFetch]
+    [authFetch, navigate]
   );
 
-  return useMemo(() => ({ load, loaded: loadedRef.current }), [load]);
+  return useMemo(
+    () => ({ load, loaded: loadedRef.current, loading }),
+    [load, loading]
+  );
 }

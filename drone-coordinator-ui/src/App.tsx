@@ -12,6 +12,7 @@ import { WebSocketProvider } from '@/hooks/use-websocket';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import {
   ExtensionProvider,
+  ExtensionRouteFallback,
   RegionSlot,
   useExtensionRegistry,
 } from '@/extensions/ExtensionContext';
@@ -118,6 +119,23 @@ function AppLayout() {
             </NavLink>
           ))}
           {/* Extension-contributed nav links (sidebar-nav region). */}
+          {pluginRoutes.map(route => (
+            <NavLink
+              key={route.path}
+              to={route.path}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+                  isActive
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+                    : 'hover:bg-sidebar-accent/50 text-sidebar-foreground/80'
+                )
+              }
+            >
+              <span className="text-base">◧</span>
+              {route.title}
+            </NavLink>
+          ))}
           <RegionSlot region="sidebar-nav" />
         </nav>
         <div className="p-3 border-t border-sidebar-border space-y-2">
@@ -171,7 +189,7 @@ function AppLayout() {
               element={<route.component />}
             />
           ))}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<ExtensionRouteFallback />} />
         </Routes>
       </main>
     </div>
@@ -183,11 +201,11 @@ export default function App() {
     <ToastProvider>
       <AuthProvider>
         <WebSocketProvider>
-          <ExtensionProvider>
-            <BrowserRouter>
+          <BrowserRouter>
+            <ExtensionProvider>
               <AppLayout />
-            </BrowserRouter>
-          </ExtensionProvider>
+            </ExtensionProvider>
+          </BrowserRouter>
         </WebSocketProvider>
       </AuthProvider>
     </ToastProvider>

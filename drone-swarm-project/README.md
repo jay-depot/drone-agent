@@ -23,8 +23,9 @@ authored as TypeScript JSX under `bundle/` and compiled with esbuild into
    limits (`maxConcurrentSessions`, `maxDailySessions`).
 4. **Injects card tools** into top-level agent sessions (unmounted — the model
    mounts them with `runtime__mount_tool`).
-5. **Serves a front-end bundle** so the coordinator UI gets a `/board` route, a
-   `sidebar-nav` entry, and a `settings-panel`.
+5. **Serves a front-end bundle** so the coordinator UI gets a `/board` route and
+   a `settings-panel`. The host renders the sidebar entry for `/board` (from
+   the route's `title`) — the bundle draws no nav link of its own (ADR 272).
 
 ## Capability tiers
 

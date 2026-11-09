@@ -255,23 +255,25 @@ Do these changes:
    route:
 
 ```tsx
-{pluginRoutes.map(route => (
-  <NavLink
-    key={route.path}
-    to={route.path}
-    className={({ isActive }) =>
-      cn(
-        'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
-        isActive
-          ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
-          : 'hover:bg-sidebar-accent/50 text-sidebar-foreground/80'
-      )
-    }
-  >
-    <span className="text-base">◧</span>
-    {route.title}
-  </NavLink>
-))}
+{
+  pluginRoutes.map(route => (
+    <NavLink
+      key={route.path}
+      to={route.path}
+      className={({ isActive }) =>
+        cn(
+          'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+          isActive
+            ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+            : 'hover:bg-sidebar-accent/50 text-sidebar-foreground/80'
+        )
+      }
+    >
+      <span className="text-base">◧</span>
+      {route.title}
+    </NavLink>
+  ));
+}
 ```
 
 ### Step 7 — Stop the kanban bundle from drawing its own nav link
@@ -413,3 +415,73 @@ All of these must pass. Do not mark the work done until they do.
    to `/` after the bundles settle.
 10. **Bundle rebuild** — `pnpm --filter drone-swarm-project run build` passes.
     The built `dist/bundle/index.js` holds no `BoardNav` code.
+
+---
+
+## COMPLETED 2026-11-09 (branch `feat/kanban-extension-base`)
+
+All 13 steps executed. All validation criteria pass.
+
+### What shipped
+
+Extension routes are now first-class. The `/board` deep-link redirect is fixed.
+
+- **`drone-extension-ui-types/src/index.ts`** — `UIExtensionApi` gained
+  `navigate: (path: string) => void` (after `fetch`).
+- **`loader.ts`** — `LoaderDeps.navigate` added; `makeApi` threads it into the
+  bundle API at the `onReady` call site.
+- **`useExtensions.tsx`** — calls `useNavigate()`; exposes a reactive `loading`
+  boolean (`useState(true)`, settled in a `finally` so it always clears on a
+  failed fetch and a rejected import alike); passes `navigate` into
+  `loadExtensionBundles`.
+- **`ExtensionContext.tsx`** — `ExtensionRegistry` gained `loading`; the
+  provider publishes it; new exported `ExtensionRouteFallback` (Skeleton while
+  loading, `<Navigate to="/" replace />` after settle).
+- **`App.tsx`** — `<BrowserRouter>` moved ABOVE `<ExtensionProvider>` (the
+  provider now calls `useNavigate`); the `path="*"` element became
+  `<ExtensionRouteFallback />`; the sidebar renders one `NavLink` per extension
+  route from `route.title` with the core classes/`isActive` logic.
+- **`drone-swarm-project/bundle/`** — `BoardNav.tsx` deleted; the
+  `sidebar-nav` region dropped from `index.tsx` (kept `settings-panel`,
+  `routes`, `onReady`); bundle rebuilt.
+- **Docs** — new ADR 272 (+ index row); `docs/agents/swarm-extensions.md`
+  "Front-end bundles" updated; `drone-swarm-project/README.md` updated.
+- **Wiki** — coordinator-scope `drone-coordinator-ui-frontend-extension-system-as-built`
+  gained §"APPENDED 2026-11-09 (c)"; Obsidian `modules/drone-swarm-project.md`
+  updated; ADR 272 pointer stub + `decisions/index.md` row added.
+- **Tests** — `loader.test.ts` asserts `navigate` reaches bundles as
+  `api.navigate`; `ExtensionContext.test.tsx` mock gained `loading` and wraps in
+  `MemoryRouter`; new `ExtensionRouteFallback.test.tsx` (loading → skeleton,
+  settled → redirect); new `App.test.tsx` regression (deep-link `/board`
+  renders the board and keeps the path).
+
+### Validation (all pass)
+
+1. LSP clean on every changed file (only pre-existing CSS `@plugin` warnings in
+   the untouched `index.css`).
+2. `pnpm -r run build` — exit 0.
+3. `pnpm typecheck` — exit 0.
+4. `pnpm run lint` — exit 0.
+5. `pnpm run test` — 4706 passed / 19 skipped (baseline).
+10. `dist/bundle/index.js` — 0 `BoardNav`, 0 `sidebar-nav`; 1 `/board`,
+    1 `settings-panel`.
+
+### Note on UI test invocation
+
+`drone-coordinator-ui` tests MUST run under `NODE_ENV=test` (the package's own
+`test` script sets it). A bare `npx vitest run` resolves react-dom to its
+production build, where `React.act` is undefined, and ~all UI tests fail with
+`React.act is not a function` — a false signal, not a regression.
+
+### Insights logged
+
+- project `drone-agent` — the coordinator-UI async route-table load race and the
+  gated-catch-all fix.
+- persona `code` — the `NODE_ENV=test` requirement for the UI vitest run.
+
+### Behaviour criteria (6–9)
+
+Not directly openable in this headless session; covered by the new `App.test.tsx`
+regression (deep-link to an extension route keeps the path and renders the
+board) and `ExtensionRouteFallback.test.tsx` (skeleton while loading, redirect
+after settle).

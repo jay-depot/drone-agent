@@ -1134,5 +1134,9 @@
   {
     "timestamp": "2026-11-09T18:53:44.807Z",
     "insight": "First real TSX esbuild extension bundle (drone-swarm-project): `@types/react` v19 removed the GLOBAL `JSX` namespace, so a bundle compiled with `jsxFactory: 'globalThis.React.createElement'` fails typecheck with TS7026 (\"no interface 'JSX.IntrinsicElements' exists\") on every element. Fix: declare a global `JSX` namespace in a `bundle/globals.d.ts` aliasing `ReactNS.JSX.*` — and use `type` aliases, not empty `interface X extends Y {}` (eslint `@typescript-eslint/no-empty-object-type`). Also annotate components with an inferred return type, not `: unknown` (a `: unknown` return is not a valid `ComponentType`/JSX element type)."
+  },
+  {
+    "timestamp": "2026-11-09T21:47:35.679Z",
+    "insight": "Coordinator UI extension routes are added to the route table asynchronously (useExtensions fetches /api/extensions then dynamically imports each bundle). Any route supplied by a bundle is therefore ABSENT on first render, so a full page load of an extension route (e.g. /board) matches the catch-all `<Route path=\"*\" element={<Navigate to=\"/\" replace />} />` and the `<Navigate>` effect fires on commit — always winning the race against the async bundle load. The redirect is deterministic, not a flake. Fix (ADR 272): gate the catch-all behind a reactive `loading` flag (Skeleton placeholder while loading, redirect only after settle), move `<BrowserRouter>` ABOVE `<ExtensionProvider>` so the provider can call `useNavigate`, and let the host render extension nav (from `route.title`) plus expose `api.navigate(path)` so bundles never use a plain `<a href>` (which hard-reloads and re-runs the race). Lesson: any UI that renders a route table before its routes are known needs an explicit \"not-yet-known\" state; a catch-all redirect is a footgun when routes arrive async."
   }
 ]

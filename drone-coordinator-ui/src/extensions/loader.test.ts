@@ -24,6 +24,7 @@ function deps(
     registerRoute: vi.fn(() => vi.fn()),
     injectStylesheet: vi.fn(),
     fetch: vi.fn(),
+    navigate: vi.fn(),
     onError: vi.fn(),
     ...overrides,
   };
@@ -120,6 +121,26 @@ describe('loadExtensionBundles', () => {
     expect(fetchImpl).toHaveBeenCalledWith('/api/extensions', {
       method: 'POST',
     });
+  });
+
+  it('hands the injected navigate to bundles via api.navigate', async () => {
+    const onReady = vi.fn();
+    const navigate = vi.fn();
+    await loadExtensionBundles(
+      [
+        entry('node-1', [
+          { name: 'p', version: '1', hash: 'h', scriptUrls: ['/a.js'] },
+        ]),
+      ],
+      {
+        ...deps(),
+        importModule: vi.fn().mockResolvedValue({ default: { onReady } }),
+        navigate,
+      }
+    );
+    const api = onReady.mock.calls[0][0];
+    api.navigate('/board');
+    expect(navigate).toHaveBeenCalledWith('/board');
   });
 
   it('contains a failing bundle without breaking others', async () => {

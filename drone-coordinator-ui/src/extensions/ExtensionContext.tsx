@@ -7,6 +7,8 @@ import {
   type ComponentType,
   type ReactNode,
 } from 'react';
+import { Navigate } from 'react-router-dom';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { PluginClientRoute, UIRegion } from './types';
 import { useExtensions } from './useExtensions';
 
@@ -30,6 +32,8 @@ export interface ExtensionRegistry {
   routes: PluginClientRoute[];
   /** Node ids whose bundles loaded successfully. */
   loaded: string[];
+  /** True until the bundle load settles (success or failure). */
+  loading: boolean;
 }
 
 interface ExtensionContextValue extends ExtensionRegistry {
@@ -51,6 +55,7 @@ const EMPTY_REGISTRY: ExtensionContextValue = {
   components: new Map(),
   routes: [],
   loaded: [],
+  loading: false,
   registerComponent: () => () => {},
   registerRoute: () => () => {},
 };
@@ -121,6 +126,7 @@ export function ExtensionProvider({ children }: { children: ReactNode }) {
     components,
     routes,
     loaded,
+    loading: extensions.loading,
     registerComponent,
     registerRoute,
   };
@@ -178,4 +184,23 @@ export function ExtensionSections() {
       })}
     </>
   );
+}
+
+/**
+ * The catch-all element. While extension bundles load, an extension route is
+ * not yet in the route table. Show a placeholder and do not redirect. After
+ * the load settles, an unknown path goes to the topology page.
+ */
+export function ExtensionRouteFallback() {
+  const { loading } = useExtensionRegistry();
+  if (loading) {
+    return (
+      <div className="p-6 space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-3/4" />
+      </div>
+    );
+  }
+  return <Navigate to="/" replace />;
 }
