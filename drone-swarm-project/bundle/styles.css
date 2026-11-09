@@ -1,0 +1,126 @@
+.dsp-board,
+.dsp-settings {
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  color: inherit;
+}
+
+.dsp-board-header,
+.dsp-settings-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.dsp-columns {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  overflow-x: auto;
+}
+
+.dsp-column {
+  flex: 0 0 220px;
+  background: rgba(127, 127, 127, 0.08);
+  border-radius: 6px;
+  padding: 8px;
+  min-height: 80px;
+}
+
+.dsp-column h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.dsp-card {
+  background: rgba(127, 127, 127, 0.14);
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  cursor: grab;
+}
+
+.dsp-card-title {
+  margin-bottom: 4px;
+}
+
+.dsp-pill {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  background: rgba(127, 127, 127, 0.25);
+}
+
+.dsp-pill-running {
+  background: #2f6feb;
+  color: #fff;
+}
+
+.dsp-pill-ended {
+  background: #2f9e44;
+  color: #fff;
+}
+
+.dsp-pill-failed {
+  background: #e03131;
+  color: #fff;
+}
+
+.dsp-pill-queued {
+  background: #f08c00;
+  color: #fff;
+}
+
+.dsp-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.dsp-modal {
+  background: #fff;
+  color: #111;
+  border-radius: 8px;
+  padding: 16px;
+  min-width: 420px;
+  max-height: 80vh;
+  overflow: auto;
+}
+
+.dsp-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.dsp-queue-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dsp-queue-table th,
+.dsp-queue-table td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.25);
+}
+
+.dsp-column-list {
+  list-style: none;
+  padding: 0;
+}
+
+.dsp-column-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+}
