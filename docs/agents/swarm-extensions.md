@@ -226,6 +226,13 @@ serves a **settings-panel** bundle for token management. See
 [`mcp-swarm/README.md`](../../mcp-swarm/README.md) and ADR
 [`255-mcp-swarm-http-transport-and-tokens`](../adr/255-mcp-swarm-http-transport-and-tokens.md).
 
+The second reference extension is **`drone-swarm-project`**: a kanban board that
+owns its data and, on a matching card move, enqueues a paced agent spawn. It is
+also the **first real TSX bundle** in this repository — the board UI is authored
+as TypeScript JSX and compiled with esbuild (unlike `mcp-swarm`, which embeds a
+JS string). See [`drone-swarm-project.md`](drone-swarm-project.md) and ADR
+[`271-drone-swarm-project-kanban-extension`](../adr/271-drone-swarm-project-kanban-extension.md).
+
 ## Gateway as an extension
 
 `drone-gateway` uses this protocol to reach its coordinator. When
