@@ -26,7 +26,7 @@
     "drone-swarm-common": "workspace:*",
     "fastify": "^5.12.6",
     "ws": "^8.21.3",
-    "minimatch": "^10.2.5",
+    "minimatch": "^11.0.1",
     "pino": "^9.6.0",
     "sqlite-vec": "0.1.9",
     "tree-sitter-c": "^0.24.1",
