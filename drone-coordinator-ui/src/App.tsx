@@ -158,48 +158,54 @@ function AppLayout() {
       <main className="flex-1 overflow-auto p-6">
         <KeyedErrorBoundary>
           <Routes>
-          <Route path="/" element={<TopologyPage />} />
-          <Route path="/beacons/:id" element={<BeaconDetailPage />} />
-          <Route path="/sessions" element={<SessionsPage />} />
-          <Route path="/sessions/:sessionId" element={<SessionDetailPage />} />
-          <Route path="/personas" element={<PersonasPage />} />
-          <Route path="/personas/new" element={<PersonaEditorPage />} />
-          <Route path="/personas/:id" element={<PersonaDetailPage />} />
-          <Route path="/personas/:id/edit" element={<PersonaEditorPage />} />
-          <Route
-            path="/personas/:id/skills/new"
-            element={<PersonaSkillEditorPage />}
-          />
-          <Route
-            path="/personas/:id/skills/:skillId/edit"
-            element={<PersonaSkillEditorPage />}
-          />
-          <Route path="/skills" element={<SkillsPage />} />
-          <Route path="/skills/new" element={<SkillEditorPage />} />
-          <Route path="/skills/:id" element={<SkillDetailPage />} />
-          <Route path="/skills/:id/edit" element={<SkillEditorPage />} />
-          <Route path="/wiki" element={<WikiPage />} />
-          <Route path="/wiki/new" element={<WikiEditorPage />} />
-          <Route path="/wiki/tag/:tag" element={<WikiTagPage />} />
-          <Route path="/wiki/:pageId" element={<WikiDetailPage />} />
-          <Route path="/wiki/:pageId/edit" element={<WikiEditorPage />} />
-          <Route path="/config" element={<Navigate to="/settings" replace />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/identity" element={<IdentityPage />} />
-          <Route
-            path="/pre-approval-tokens"
-            element={<PreApprovalTokensPage />}
-          />
-          {/* Extension-contributed routes. */}
-          {pluginRoutes.map(route => (
+            <Route path="/" element={<TopologyPage />} />
+            <Route path="/beacons/:id" element={<BeaconDetailPage />} />
+            <Route path="/sessions" element={<SessionsPage />} />
             <Route
-              key={route.path}
-              path={route.path}
-              element={<route.component />}
+              path="/sessions/:sessionId"
+              element={<SessionDetailPage />}
             />
-          ))}
-          <Route path="*" element={<ExtensionRouteFallback />} />
-        </Routes>
+            <Route path="/personas" element={<PersonasPage />} />
+            <Route path="/personas/new" element={<PersonaEditorPage />} />
+            <Route path="/personas/:id" element={<PersonaDetailPage />} />
+            <Route path="/personas/:id/edit" element={<PersonaEditorPage />} />
+            <Route
+              path="/personas/:id/skills/new"
+              element={<PersonaSkillEditorPage />}
+            />
+            <Route
+              path="/personas/:id/skills/:skillId/edit"
+              element={<PersonaSkillEditorPage />}
+            />
+            <Route path="/skills" element={<SkillsPage />} />
+            <Route path="/skills/new" element={<SkillEditorPage />} />
+            <Route path="/skills/:id" element={<SkillDetailPage />} />
+            <Route path="/skills/:id/edit" element={<SkillEditorPage />} />
+            <Route path="/wiki" element={<WikiPage />} />
+            <Route path="/wiki/new" element={<WikiEditorPage />} />
+            <Route path="/wiki/tag/:tag" element={<WikiTagPage />} />
+            <Route path="/wiki/:pageId" element={<WikiDetailPage />} />
+            <Route path="/wiki/:pageId/edit" element={<WikiEditorPage />} />
+            <Route
+              path="/config"
+              element={<Navigate to="/settings" replace />}
+            />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/identity" element={<IdentityPage />} />
+            <Route
+              path="/pre-approval-tokens"
+              element={<PreApprovalTokensPage />}
+            />
+            {/* Extension-contributed routes. */}
+            {pluginRoutes.map(route => (
+              <Route
+                key={route.path}
+                path={route.path}
+                element={<route.component />}
+              />
+            ))}
+            <Route path="*" element={<ExtensionRouteFallback />} />
+          </Routes>
         </KeyedErrorBoundary>
       </main>
     </div>

@@ -197,6 +197,13 @@ shows a `Skeleton` placeholder instead of redirecting, so a deep link to an
 extension route (`/board`) renders the route once its bundle arrives (ADR
 [272](../adr/272-extension-routes-first-class-nav.md)).
 
+The registry is **mount-stable**: the loader runs once, and navigation does not
+re-run it. `useExtensions` keeps `navigate` and `authFetch` in refs, so `load`
+has a stable identity and the provider effect runs only at mount (ADR
+[273](../adr/273-extension-registry-navigation-teardown.md)). A render crash in
+a page is caught by a reusable `ErrorBoundary` (keyed by pathname) that shows a
+"Try again" panel and logs to `console.error`, instead of a silent blank area.
+
 ## Building an extension
 
 Use the SDK in `drone-swarm-common`:
