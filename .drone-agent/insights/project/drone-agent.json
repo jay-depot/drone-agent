@@ -1182,5 +1182,9 @@
   {
     "timestamp": "2026-11-10T00:37:13.193Z",
     "insight": "Adding a `useContext`-based hook (`useToast`) to a provider (`ExtensionProvider`) makes that provider require its context provider (`ToastProvider`) as an ancestor — true in the app (App.tsx nests them), but every test that renders the provider in isolation breaks with \"must be used within a ToastProvider\". The card-modal plan assumed \"ExtensionProvider is inside ToastProvider\" and did not list the affected test files. Fix: wrap the isolated test renders in the required provider. A plan that wires a context consumer into an existing component must enumerate the test renders of that component."
+  },
+  {
+    "timestamp": "2026-11-10T01:29:14.266Z",
+    "insight": "`GET /api/beacons` is NOT a list of real beacons — it also contains every swarm extension node. `createExtensionNode` (drone-swarm-common/src/extension-server.ts) POSTs to `/api/beacons` with `extension:{protocolVersion}`, no `port`, and no `spawnRoots`, and the coordinator's `POST /beacons` trust branch persists it into the `beacons` table (drone-coordinator/src/routes/beacons.ts). Once the node's `/ws/beacon` socket is up, `buildBeaconView` reports `connected: true` for it. So any UI that lists \"connected beacons\" as spawn targets — e.g. the coordinator UI's `NewSessionPanel` (drone-coordinator-ui/src/pages/sessions.tsx, filters `b.connected` only) — will offer extension nodes, which cannot spawn a session. The canonical discriminator is `GET /api/extensions`, which returns `{ nodeId, connected, isExtension }` (drone-coordinator/src/routes/extensions.ts). Any beacon picker must exclude `isExtension === true` nodes (or filter on a real signal like `port != null`). This is a live latent bug in `NewSessionPanel`, found 2026-11-09 while planning the drone-swarm-project project-create modal."
   }
 ]
