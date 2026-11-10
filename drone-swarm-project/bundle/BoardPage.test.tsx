@@ -19,7 +19,9 @@ const project = {
   ],
 };
 
-function installApi() {
+const projectSummaries = [{ id: 'p_1', name: 'Alpha', cardCount: 1 }];
+
+function installApi(projects = projectSummaries) {
   setApi({
     registerComponent: () => () => {},
     registerRoute: () => () => {},
@@ -27,11 +29,12 @@ function installApi() {
       ok: true,
       json: async () =>
         String(path).endsWith('/project.list')
-          ? {
-              ok: true,
-              body: { projects: [{ id: 'p_1', name: 'Alpha', cardCount: 1 }] },
-            }
-          : { ok: true, body: { project } },
+          ? { ok: true, body: { projects } }
+          : String(path).endsWith('/api/beacons')
+            ? []
+            : String(path).endsWith('/api/extensions')
+              ? []
+              : { ok: true, body: { project } },
     })) as unknown as typeof fetch,
     navigate: () => {},
     ui: {
@@ -69,5 +72,32 @@ describe('BoardPage', () => {
     fireEvent.dragEnd(cardEl);
     fireEvent.click(title);
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+  });
+
+  it('opens the New Project modal from the sentinel option', async () => {
+    const user = userEvent.setup();
+    installApi();
+    render(<BoardPage />);
+    const select = await screen.findByRole('combobox');
+    await user.selectOptions(select, '__new_project__');
+    expect(
+      await screen.findByRole('button', { name: 'Create' })
+    ).toBeInTheDocument();
+  });
+
+  it('disables Edit Project when there is no project', async () => {
+    installApi([]);
+    render(<BoardPage />);
+    const edit = await screen.findByRole('button', { name: 'Edit Project' });
+    expect(edit).toBeDisabled();
+  });
+
+  it('shows the empty hint and New Project button with zero projects', async () => {
+    installApi([]);
+    render(<BoardPage />);
+    expect(await screen.findByText('No projects yet.')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'New Project' })
+    ).toBeInTheDocument();
   });
 });

@@ -1,13 +1,10 @@
-import type {
-  ActionReply,
-  Card,
-  Column,
-  Project,
-  ProjectSummary,
-} from './types';
+import type { ActionReply, Card, Column, Project } from './types';
 import { action } from './api';
 import { QueueModal } from './QueueModal';
 import { CardModal } from './CardModal';
+import { ProjectModal } from './ProjectModal';
+import { ProjectSelect } from './ProjectSelect';
+import { useProjects } from './useProjects';
 
 const POLL_MS = 3000;
 
@@ -17,26 +14,17 @@ function statusClass(card: Card): string {
 
 export function BoardPage() {
   const React = globalThis.React;
-  const [projects, setProjects] = React.useState<ProjectSummary[]>([]);
-  const [selected, setSelected] = React.useState<string | undefined>(undefined);
+  const { projects, selected, setSelected, reload } = useProjects();
   const [project, setProject] = React.useState<Project | undefined>(undefined);
   const [queueOpen, setQueueOpen] = React.useState(false);
+  const [modal, setModal] = React.useState<
+    { mode: 'create' } | { mode: 'edit' } | undefined
+  >(undefined);
   const dragCard = React.useRef<string | undefined>(undefined);
   const [openCardId, setOpenCardId] = React.useState<string | undefined>(
     undefined
   );
   const didDrag = React.useRef(false);
-
-  const loadProjects = React.useCallback(() => {
-    return action<ActionReply<{ projects: ProjectSummary[] }>>(
-      'project.list'
-    ).then(reply => {
-      const list = reply.body?.projects ?? [];
-      setProjects(list);
-      setSelected(current => current ?? list[0]?.id);
-      return list;
-    });
-  }, []);
 
   const loadBoard = React.useCallback((projectId: string | undefined) => {
     if (!projectId) {
@@ -47,10 +35,6 @@ export function BoardPage() {
       projectId,
     }).then(reply => setProject(reply.body?.project));
   }, []);
-
-  React.useEffect(() => {
-    void loadProjects();
-  }, [loadProjects]);
 
   React.useEffect(() => {
     void loadBoard(selected);
@@ -76,20 +60,31 @@ export function BoardPage() {
   return (
     <div className="dsp-board">
       <header className="dsp-board-header">
-        <select
-          value={selected ?? ''}
-          onChange={event => setSelected(event.target.value || undefined)}
+        <ProjectSelect
+          projects={projects}
+          value={selected}
+          onChange={setSelected}
+          onNewProject={() => setModal({ mode: 'create' })}
+          showCount
+        />
+        <button
+          disabled={!selected || !project}
+          onClick={() => setModal({ mode: 'edit' })}
         >
-          {projects.map(item => (
-            <option key={item.id} value={item.id}>
-              {item.name} ({item.cardCount})
-            </option>
-          ))}
-        </select>
+          Edit Project
+        </button>
         <button onClick={() => setQueueOpen(true)}>Queue</button>
       </header>
 
       <div className="dsp-columns">
+        {projects.length === 0 ? (
+          <div className="dsp-empty-hint">
+            <p>No projects yet.</p>
+            <button onClick={() => setModal({ mode: 'create' })}>
+              New Project
+            </button>
+          </div>
+        ) : null}
         {columns.map(column => (
           <div
             key={column.id}
@@ -131,6 +126,17 @@ export function BoardPage() {
       </div>
 
       {queueOpen ? <QueueModal onClose={() => setQueueOpen(false)} /> : null}
+      {modal ? (
+        <ProjectModal
+          mode={modal.mode}
+          project={modal.mode === 'edit' ? project : undefined}
+          onClose={() => setModal(undefined)}
+          onSaved={saved => {
+            setModal(undefined);
+            void reload().then(() => setSelected(saved.id));
+          }}
+        />
+      ) : null}
       {openCardId
         ? (() => {
             const card = project?.cards.find(c => c.id === openCardId);

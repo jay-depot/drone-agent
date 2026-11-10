@@ -168,3 +168,13 @@
   padding: 2px 0;
   opacity: 0.8;
 }
+
+.dsp-empty-hint {
+  padding: 24px;
+  text-align: center;
+  opacity: 0.8;
+}
+
+.dsp-empty-hint p {
+  margin-bottom: 10px;
+}

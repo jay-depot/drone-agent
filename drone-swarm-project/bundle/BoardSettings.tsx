@@ -1,36 +1,29 @@
-import type {
-  ActionReply,
-  Column,
-  Limits,
-  Project,
-  ProjectSummary,
-} from './types';
-import { action } from './api';
+import type { ActionReply, Column, Limits, Project } from './types';
+import { action, apiNavigate } from './api';
+import { ProjectSelect } from './ProjectSelect';
+import { useProjects } from './useProjects';
 
 export function BoardSettings() {
   const React = globalThis.React;
-  const [projects, setProjects] = React.useState<ProjectSummary[]>([]);
-  const [selected, setSelected] = React.useState<string | undefined>(undefined);
+  const { projects, selected, setSelected, reload } = useProjects();
   const [project, setProject] = React.useState<Project | undefined>(undefined);
   const [limits, setLimits] = React.useState<Limits | undefined>(undefined);
   const [newColumn, setNewColumn] = React.useState('');
 
-  const refresh = React.useCallback(() => {
-    void action<ActionReply<{ projects: ProjectSummary[] }>>(
-      'project.list'
-    ).then(reply => {
-      const list = reply.body?.projects ?? [];
-      setProjects(list);
-      setSelected(current => current ?? list[0]?.id);
-    });
+  const loadLimits = React.useCallback(() => {
     void action<ActionReply<{ limits: Limits }>>('limits.get').then(reply =>
       setLimits(reply.body?.limits)
     );
   }, []);
 
+  const refresh = React.useCallback(() => {
+    void reload();
+    loadLimits();
+  }, [reload, loadLimits]);
+
   React.useEffect(() => {
-    refresh();
-  }, [refresh]);
+    loadLimits();
+  }, [loadLimits]);
 
   React.useEffect(() => {
     if (!selected) {
@@ -71,16 +64,12 @@ export function BoardSettings() {
   return (
     <div className="dsp-settings">
       <header className="dsp-settings-header">
-        <select
-          value={selected ?? ''}
-          onChange={event => setSelected(event.target.value || undefined)}
-        >
-          {projects.map(item => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </select>
+        <ProjectSelect
+          projects={projects}
+          value={selected}
+          onChange={setSelected}
+          onNewProject={() => apiNavigate('/board')}
+        />
         <button onClick={refresh}>Refresh</button>
       </header>
 
