@@ -1162,5 +1162,17 @@
   {
     "timestamp": "2026-11-09T22:44:06.416Z",
     "insight": "Regression-proof technique on this host: to prove a test fails pre-fix, back up the fixed files with `cp` to /tmp, restore the pre-fix version with `git show <rev>:<path> > <path>`, run the tests, then `cp` the backups back. Do NOT use `git stash` for this — per HOST.md, `git stash push` with a non-matching pathspec exits 0 while stashing nothing, and a chained `git stash pop` then grabs the wrong stash. `cp` + `git show` is deterministic and leaves the tree verifiable (grep for a fix marker to confirm the restore)."
+  },
+  {
+    "timestamp": "2026-11-10T00:07:08.187Z",
+    "insight": "CI gap (found while planning the card modal): the `drone-coordinator-ui` package's test suite (371 tests) does NOT run in CI. `.github/workflows/integration-test.yml`'s `unit-tests` job runs root `pnpm test`, but the root `vitest.config.ts` include list has no `drone-coordinator-ui` entry (that package has its own `vitest.config.ts` + `NODE_ENV=test vitest run` script). So the UI suite is green only locally. Any plan touching `drone-coordinator-ui` should add `pnpm --filter drone-coordinator-ui test` to the `unit-tests` job. Worth a repo-wide followup to sweep for other packages whose suites are excluded from the root include list (mcp-swarm and drone-gateway ARE included; the UI package is the outlier)."
+  },
+  {
+    "timestamp": "2026-11-10T00:07:08.190Z",
+    "insight": "`drone-swarm-project` has no bundle-component test infrastructure: no `jsdom`, no `@testing-library`, no `.tsx` tests, and the root vitest config only matches `drone-swarm-project/test/**/*.test.ts` under a `node` environment. Adding a bundle component test therefore requires a package-local jsdom `vitest.config.ts`, a `test-setup.ts` that installs `globalThis.React`/`ReactDOM` (the bundle's jsxFactory is `globalThis.React.createElement`, and react-dom is NOT resolvable from the package), a separate `bundle/tsconfig.test.json` (the bundle's own tsconfig has `types: []` for browser purity and must exclude test files), and new devDeps. The `drone-coordinator-ui` package is the pattern to copy."
+  },
+  {
+    "timestamp": "2026-11-10T00:07:08.193Z",
+    "insight": "Layering defect found while planning: the coordinator-UI host toast viewport is `z-50` (`drone-coordinator-ui/src/hooks/use-toast.tsx`), but the `drone-swarm-project` bundle modal backdrop is `position: fixed; z-index: 1000` (`bundle/styles.css`). So any host toast raised while a bundle modal is open renders BEHIND the modal — invisible. General rule: host chrome must always sit above extension UI. Extension bundles can (and do) use large z-index values, so the host's fixed overlays (toast, dialogs) should use values above any plausible bundle z-index (e.g. `z-[1100]`)."
   }
 ]
