@@ -1,6 +1,7 @@
 import { isRecord } from '../../shared/type-guards.js';
 import os from 'node:os';
 import { withKeyLock } from '../../shared/keyed-lock.js';
+import { sanitizeToolSegment } from '../../shared/tool-name.js';
 import { getCanonicalToolName } from 'drone-core';
 import type {
   DroneLlmCapability,
@@ -130,22 +131,6 @@ function toDroneInputSchema(
     required: required && required.length > 0 ? required : undefined,
     additionalProperties,
   };
-}
-
-function sanitizeToolSegment(name: string, usedNames: Set<string>): string {
-  const sanitized = name.replace(/[^a-zA-Z0-9_-]/g, '_');
-  if (!usedNames.has(sanitized)) {
-    usedNames.add(sanitized);
-    return sanitized;
-  }
-  // Collision — append a numeric suffix until unique
-  let counter = 1;
-  while (usedNames.has(`${sanitized}_${counter}`)) {
-    counter++;
-  }
-  const result = `${sanitized}_${counter}`;
-  usedNames.add(result);
-  return result;
 }
 
 export const mcpPlugin: DronePlugin = {

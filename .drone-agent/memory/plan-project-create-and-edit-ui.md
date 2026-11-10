@@ -1066,6 +1066,7 @@ All of these must pass.
 **Status: COMPLETE.** All 14 steps executed. Commit `80043465` (code) plus the docs/memory commit.
 
 ### What was done
+
 - **Steps 1–4 (bundle modules):** `types.ts` gained `defaultBeaconId`/`defaultWorkingDir` on `Project` plus `BeaconRow`/`ExtensionRow`; `api.ts` gained `apiFetch`/`apiNavigate`; new `beacons.ts` (`loadPickerBeacons`, filters `connected` and drops extension nodes); new `useProjects.ts` (`NEW_PROJECT_VALUE = '__new_project__'`, `current ?? first` selection); new `ProjectSelect.tsx`; new `ProjectModal.tsx` (create→`project.create`, edit→`project.update`, offline beacon/root annotated and preserved).
 - **Step 5:** `styles.css` gained `.dsp-empty-hint`.
 - **Step 6:** `BoardPage.tsx` rewritten to use `useProjects`/`ProjectSelect`/`ProjectModal`, added the `Edit Project` button (disabled with no selection) and the zero-projects hint.
@@ -1074,16 +1075,19 @@ All of these must pass.
 - **Step 13 (docs):** new ADR 275 + `docs/adr/index.md` row; `docs/agents/drone-swarm-project.md` "Project create and edit" section; README "What it does" item 6; `CONTEXT.md` Project term extended; Obsidian wiki (pointer stub `decisions/275-...`, decisions index row, module-page update note, `log.md` entry, `index.md` count→275, `meta.json` checkpoint).
 
 ### Validation (Step 14)
+
 - LSP clean. `pnpm -r run build`, `pnpm typecheck`, `pnpm run lint` all exit 0.
 - Fast suite: 4706 passed / 19 skipped. Bundle suite: 20/20.
 - **Regression proof** (file backups in `/tmp`, not `git stash`): with pre-change bundle sources + the new tests, 4 test files fail (3 fail to import the new modules; BoardPage's new cases fail). Restored to identical post-change state.
 - **No server change:** `drone-swarm-project/src/**` untouched.
 
 ### Gaps the plan did not list (fixed during execution)
+
 1. `apply_diff` could not rewrite `BoardPage.tsx`/`BoardSettings.tsx` (change zones too generic); used a full `file__write` rewrite instead.
 2. **Bundle-test mock trap:** the action endpoint is `POST /api/extensions/<nodeId>/actions/<name>`, so a mock matching `path.includes('/api/extensions')` wrongly catches **every** action call. The `/api/beacons` and `/api/extensions` REST reads must match on `path.endsWith(...)`. This surfaced as `project.create` resolving to the wrong mock reply (`Save failed (HTTP undefined)`).
 3. The `ProjectModal.test.tsx` mock needed a second `_init?: RequestInit` parameter so the `mock.calls` tuple exposes the request body (TS2493/TS2352 under the bundle's `tsconfig.test.json`).
 4. Lint `no-useless-assignment`: `ProjectSelect.tsx` declared `const React = globalThis.React` but used no hooks/JSX factory reference; removed.
 
 ### Out of scope (unchanged)
+
 Project delete; per-automation beacon/working-dir override; clearing a project default (`project.update` ignores an empty value); the `NewSessionPanel` extension-node bug; `docs/adr/index.md` duplicate-row repair.

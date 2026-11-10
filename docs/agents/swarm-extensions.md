@@ -133,14 +133,23 @@ generic `DroneSwarmCapability.registerWsHandler` seam.
 
 A `tools` injection selects catalog capabilities; the coordinator resolves the
 schema from the manifest (single source of truth) and the agent registers each
-as `extensions__<extId>__<toolName>`, **unmounted** in the `ToolRegistry` (the
+as `extensions__<extId>__<sanitized>`, **unmounted** in the `ToolRegistry` (the
 MCP pattern — the list/mount meta-tools and persona filters apply unchanged).
+
+The registered name is **sanitized**: every character outside `[a-zA-Z0-9_-]`
+becomes `_`, so a capability `card.move` yields the tool
+`extensions__<extId>__card_move`. A dot inside an LLM-facing tool name breaks
+the Kimi K2 parser (ADR [028](../adr/028-tool-name-separator.md)), so the raw
+capability name — which keeps its dots — must never become a tool name (ADR
+[276](../adr/276-extension-tool-name-sanitization.md)). Colliding sanitized
+names get a `_1`, `_2`, … suffix. The **proxy call still uses the raw
+capability**, because the manifest is keyed by it.
 
 Tool call path (the agent never talks to the coordinator directly):
 
 ```
-LLM calls extensions__<extId>__<toolName>
-  → agent POSTs /coordinator/extensions/<extId>/tools/<toolName> on its beacon
+LLM calls extensions__<extId>__<sanitized>
+  → agent POSTs /coordinator/extensions/<extId>/tools/<capability> on its beacon
   → beacon forwards to the coordinator (mTLS)
   → coordinator sendBeaconCommand(extId, 'invokeTool', { action, params, sessionId })
   → extension

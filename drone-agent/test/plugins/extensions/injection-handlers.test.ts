@@ -167,6 +167,60 @@ describe('handleInjection — tools', () => {
     expect(cap.registeredTools.has(canonical)).toBe(true);
   });
 
+  it('sanitizes a dotted capability into a dot-free tool name', () => {
+    const cap = createCapture();
+    const ctx = createExtensionsContext(cap.registration);
+    handleInjection(ctx, {
+      extensionId: 'ext-1',
+      id: 'tools-1',
+      kind: 'tools',
+      tools: [{ capability: 'card.move', description: 'Move a card' }],
+    });
+    const canonical = injectedToolCanonicalName('ext-1', 'card_move');
+    expect(canonical).toBe('extensions__ext-1__card_move');
+    expect(cap.registeredTools.has(canonical)).toBe(true);
+    expect(cap.registeredTools.has('extensions__ext-1__card.move')).toBe(false);
+  });
+
+  it('proxies with the raw dotted capability, not the sanitized name', async () => {
+    const cap = createCapture();
+    const ctx = createExtensionsContext(cap.registration);
+    handleInjection(ctx, {
+      extensionId: 'ext-1',
+      id: 'tools-1',
+      kind: 'tools',
+      tools: [{ capability: 'card.move', description: 'Move a card' }],
+    });
+    const tool = cap.registeredTools.get(
+      injectedToolCanonicalName('ext-1', 'card_move')
+    );
+    await tool!.execute({ toColumnId: 'col_done' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://beacon.test/coordinator/extensions/ext-1/tools/card.move',
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  it('gives colliding sanitized capabilities distinct tool names', () => {
+    const cap = createCapture();
+    const ctx = createExtensionsContext(cap.registration);
+    handleInjection(ctx, {
+      extensionId: 'ext-1',
+      id: 'tools-1',
+      kind: 'tools',
+      tools: [
+        { capability: 'card.move', description: 'Move' },
+        { capability: 'card move', description: 'Move again' },
+      ],
+    });
+    expect(
+      cap.registeredTools.has(injectedToolCanonicalName('ext-1', 'card_move'))
+    ).toBe(true);
+    expect(
+      cap.registeredTools.has(injectedToolCanonicalName('ext-1', 'card_move_1'))
+    ).toBe(true);
+  });
+
   it('unregisters the tool when its selection is removed', () => {
     const cap = createCapture();
     const ctx = createExtensionsContext(cap.registration);
