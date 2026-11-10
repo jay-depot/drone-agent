@@ -20,6 +20,21 @@ export function uiErrors(): DroneUIErrors {
   return api.ui.errors;
 }
 
+/** Authenticated same-origin fetch against the coordinator API. */
+export async function apiFetch(
+  path: string,
+  init?: RequestInit
+): Promise<Response> {
+  if (!api) throw new Error('drone-swarm-project: api not ready');
+  return api.fetch(path, init);
+}
+
+/** Navigate to a client route without a page reload. */
+export function apiNavigate(path: string): void {
+  if (!api) throw new Error('drone-swarm-project: api not ready');
+  api.navigate(path);
+}
+
 /** POST an action to this node and return the parsed JSON reply. */
 export async function action<T = unknown>(
   name: string,

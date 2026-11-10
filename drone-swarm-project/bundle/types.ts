@@ -29,6 +29,24 @@ export interface Project {
   name: string;
   columns: Column[];
   cards: Card[];
+  defaultBeaconId?: string;
+  defaultWorkingDir?: string;
+}
+
+/** One row of `GET /api/beacons`. */
+export interface BeaconRow {
+  id: string;
+  name: string;
+  connected?: boolean;
+  spawnRoots?: string[];
+  defaultSpawnRoot?: string;
+}
+
+/** One row of `GET /api/extensions`. */
+export interface ExtensionRow {
+  nodeId: string;
+  connected: boolean;
+  isExtension?: boolean;
 }
 
 export interface ProjectSummary {
