@@ -567,6 +567,60 @@ describe('loadGatewayConfig conversation parsing', () => {
     )?.surfaces;
     expect(surfaces?.[0].config).not.toHaveProperty('catchUp');
   });
+
+  it('keeps a valid schedule.enabled boolean', async () => {
+    writeConversation('matrix', 'sched.json', {
+      conversationId: '!sched:server',
+      controlSurfaces: [
+        {
+          type: 'persona-assignment',
+          personaId: 'me',
+          config: { schedule: { enabled: true } },
+        },
+      ],
+    });
+    const config = await load();
+    const surface = config.serviceAdapters[0].conversations.get('!sched:server')
+      ?.surfaces?.[0].config as { schedule?: { enabled?: boolean } };
+    expect(surface.schedule?.enabled).toBe(true);
+  });
+
+  it('drops a non-boolean schedule.enabled but keeps the bag', async () => {
+    writeConversation('matrix', 'sched-bad.json', {
+      conversationId: '!sched-bad:server',
+      controlSurfaces: [
+        {
+          type: 'persona-assignment',
+          personaId: 'me',
+          config: { schedule: { enabled: 'yes' } },
+        },
+      ],
+    });
+    const config = await load();
+    const surface = config.serviceAdapters[0].conversations.get(
+      '!sched-bad:server'
+    )?.surfaces?.[0].config as { schedule?: { enabled?: boolean } };
+    expect(surface.schedule).toBeDefined();
+    expect(surface.schedule).not.toHaveProperty('enabled');
+  });
+
+  it('warns about and drops a non-object schedule', async () => {
+    writeConversation('matrix', 'sched-nonobj.json', {
+      conversationId: '!sched-nonobj:server',
+      controlSurfaces: [
+        {
+          type: 'persona-assignment',
+          personaId: 'me',
+          config: { schedule: 42 },
+        },
+      ],
+    });
+    const config = await load();
+    const surface = config.serviceAdapters[0].conversations.get(
+      '!sched-nonobj:server'
+    )?.surfaces?.[0].config;
+    expect(surface).not.toHaveProperty('schedule');
+  });
 });
 
 describe('loadGatewayConfig idleTimeoutMs validation', () => {

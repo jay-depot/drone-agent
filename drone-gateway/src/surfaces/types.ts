@@ -4,6 +4,7 @@ import type { SwarmApi } from '../console/swarm-api.js';
 import type {
   ContextSnapshotStore,
   OutboundLedgerHandle,
+  ScheduledWakeupStore,
 } from '../store/gateway-state-store.js';
 import type { SurfaceMode } from './mode.js';
 
@@ -63,6 +64,16 @@ export interface SurfaceContext {
    * (coordinator-less) mode still stamps a stable hint.
    */
   extensionHintPrefix: string;
+  /** Post text into this conversation from a surface. Internal, no opt-in gate. */
+  postMessage: (conversationId: string, text: string) => Promise<void>;
+  /** Absent when the adapter has no persistent DB (scheduling disabled). */
+  wakeupStore?: ScheduledWakeupStore;
+  /** Present when the surface opted into scheduling. */
+  scheduleReadiness?: {
+    isReady: (conversationId: string) => boolean;
+    timeoutMs: number;
+    pollMs: number;
+  };
 }
 
 export type SurfaceFactory = (

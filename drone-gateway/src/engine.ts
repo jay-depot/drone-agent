@@ -9,6 +9,16 @@ import type {
 } from './types.js';
 import type { SpawnBackend } from './spawn-backend.js';
 import { SpawnBackendRegistry } from './spawn-backend-registry.js';
+import type { ScheduledWakeupStore } from './store/gateway-state-store.js';
+import {
+  ScheduleService,
+  findConversationAdapter,
+} from './schedule/service.js';
+import type { ExtensionNodeHandle } from './extension-node.js';
+import {
+  SCHEDULE_READY_POLL_MS,
+  SCHEDULE_READY_TIMEOUT_MS,
+} from './schedule/constants.js';
 import type { SwarmApi } from './console/swarm-api.js';
 import { SurfaceRegistry } from './surfaces/registry.js';
 import { registerBuiltInSurfaces } from './surfaces/builtins.js';
@@ -96,6 +106,12 @@ function resolveDebounceMs(
   return DEFAULT_DEBOUNCE_MS;
 }
 
+/** True when a surface opted into scheduling via `config.schedule.enabled`. */
+function isScheduleEnabled(spec: ControlSurfaceSpec): boolean {
+  const schedule = spec.config?.schedule as { enabled?: unknown } | undefined;
+  return schedule?.enabled === true;
+}
+
 export class GatewayEngine {
   private adapters: Map<string, DroneServiceAdapter> = new Map();
   private controlSurfaces: Map<string, AdapterSurfaces> = new Map();
@@ -103,16 +119,37 @@ export class GatewayEngine {
   private backends: SpawnBackendRegistry;
   private swarm: SwarmApi | undefined;
   private surfaceRegistry = new SurfaceRegistry();
+  private node: ExtensionNodeHandle | undefined;
+  private scheduleService: ScheduleService;
 
   constructor(
     config: GatewayConfig,
     backends: SpawnBackendRegistry,
-    swarm?: SwarmApi
+    swarm?: SwarmApi,
+    node?: ExtensionNodeHandle
   ) {
     this.config = config;
     this.backends = backends;
     this.swarm = swarm;
+    this.node = node;
     registerBuiltInSurfaces(this.surfaceRegistry);
+    this.scheduleService = new ScheduleService({
+      getNode: () => this.node,
+      getWakeupStore: adapterId => this.getWakeupStore(adapterId),
+      resolveAdapter: conversationId =>
+        findConversationAdapter(this.config.serviceAdapters, conversationId),
+      logger,
+      extensionId: this.config.swarmExtension?.id,
+    });
+    if (node) {
+      node.setHandlers({
+        onSessionStarted: snapshot =>
+          this.scheduleService.registerSession(snapshot),
+        onSessionEnded: event => this.scheduleService.unregisterSession(event),
+        onInvokeTool: (cap, params, ctx) =>
+          this.scheduleService.handleInvokeTool(cap, params, ctx),
+      });
+    }
   }
 
   async start(): Promise<void> {
@@ -120,6 +157,8 @@ export class GatewayEngine {
       `Starting gateway with ${this.config.serviceAdapters.length} adapter(s) ` +
         `(spawn backends: ${this.backends.types().join(', ') || 'none'})`
     );
+
+    const scheduleEnabled = new Set<string>();
 
     for (const adapterConfig of this.config.serviceAdapters) {
       const adapter = await this.createAdapter(adapterConfig);
@@ -194,10 +233,32 @@ export class GatewayEngine {
         );
       }
 
+      const schedulingRequested = [
+        ...adapterConfig.conversations.values(),
+      ].some(conv => conv.surfaces.some(isScheduleEnabled));
+      if (schedulingRequested && !hasDataPath) {
+        logger.warn(
+          { adapterId: adapterConfig.id },
+          'scheduling is disabled: this adapter has no "dataPath"'
+        );
+      }
+      if (hasDataPath) {
+        for (const [convId, conv] of adapterConfig.conversations) {
+          if (convId !== '*' && conv.surfaces.some(isScheduleEnabled)) {
+            scheduleEnabled.add(convId);
+          }
+        }
+      }
+
       logger.info(
         `Adapter "${adapterConfig.id}" (${adapterConfig.type}) started ` +
           `with ${adapterConfig.conversations.size} conversation(s)`
       );
+    }
+
+    this.scheduleService.setEnabledConversations(scheduleEnabled);
+    for (const conversationId of scheduleEnabled) {
+      logger.info({ conversationId }, 'scheduling enabled for conversation');
     }
   }
 
@@ -330,6 +391,11 @@ export class GatewayEngine {
     return [...this.adapters.keys()];
   }
 
+  /** The wake-up store for an adapter, or undefined when it has no DB. */
+  getWakeupStore(adapterId: string): ScheduledWakeupStore | undefined {
+    return this.adapters.get(adapterId)?.wakeupStore;
+  }
+
   /** Conversations that opted into injection. Backs GET /conversations. */
   listInjectableConversations(): Array<{
     adapterId: string;
@@ -362,6 +428,19 @@ export class GatewayEngine {
     if (!conv.injectionEnabled) {
       throw new InjectionNotEnabledError(adapterId, conversationId);
     }
+    await this.postToConversation(adapterId, conversationId, text);
+  }
+
+  /**
+   * Send text to a conversation and record one outbound-ledger row per chunk.
+   * Shared by the injection API (which gates on opt-in first) and the schedule
+   * surface (internal, no gate).
+   */
+  private async postToConversation(
+    adapterId: string,
+    conversationId: string,
+    text: string
+  ): Promise<void> {
     const adapter = this.adapters.get(adapterId);
     if (!adapter) throw new UnknownAdapterError(adapterId);
     const chunks = adapter.splitOutbound?.(text) ?? [text];
@@ -459,6 +538,8 @@ export class GatewayEngine {
     const lifecycle = cfg.lifecycle as { idleTimeoutMs?: number } | undefined;
     const catchUp = cfg.catchUp as { intervalMs?: number } | undefined;
     const adapter = this.adapters.get(adapterId);
+    const scheduleOn =
+      isScheduleEnabled(spec) && adapter?.wakeupStore !== undefined;
     return {
       spawnBackend: this.resolveSpawnBackend(spec),
       swarm: this.swarm,
@@ -472,6 +553,17 @@ export class GatewayEngine {
       catchUpIntervalMs: catchUp?.intervalMs ?? DEFAULT_CATCH_UP_INTERVAL_MS,
       extensionHintPrefix:
         this.config.swarmExtension?.id ?? DEFAULT_GATEWAY_EXTENSION_ID,
+      postMessage: (conversationId, text) =>
+        this.postToConversation(adapterId, conversationId, text),
+      wakeupStore: scheduleOn ? adapter?.wakeupStore : undefined,
+      scheduleReadiness: scheduleOn
+        ? {
+            isReady: (conversationId: string) =>
+              this.scheduleService.isReady(conversationId),
+            timeoutMs: SCHEDULE_READY_TIMEOUT_MS,
+            pollMs: SCHEDULE_READY_POLL_MS,
+          }
+        : undefined,
     };
   }
 }

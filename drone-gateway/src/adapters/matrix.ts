@@ -13,8 +13,10 @@ import { SqliteSyncStore } from '../store/sqlite-sync-store.js';
 import {
   createContextSnapshotStore,
   createOutboundLedger,
+  createScheduledWakeupStore,
   type ContextSnapshotStore,
   type OutboundLedgerHandle,
+  type ScheduledWakeupStore,
 } from '../store/gateway-state-store.js';
 import type { GatewayDatabase } from '../store/db.js';
 import type { IRoomTimelineData } from 'matrix-js-sdk/lib/models/event-timeline-set.js';
@@ -103,6 +105,7 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
   private db: GatewayDatabase | null = null;
   snapshotStore?: ContextSnapshotStore;
   outboundLedger?: OutboundLedgerHandle;
+  wakeupStore?: ScheduledWakeupStore;
 
   /**
    * Track the last event per conversation for read receipts.
@@ -169,6 +172,7 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
       clientOpts.cryptoStore = new SqliteCryptoStore(this.db);
       this.snapshotStore = createContextSnapshotStore(this.db);
       this.outboundLedger = createOutboundLedger(this.db);
+      this.wakeupStore = createScheduledWakeupStore(this.db);
     }
 
     // Create the Matrix client
@@ -434,6 +438,7 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
 
     this.snapshotStore = undefined;
     this.outboundLedger = undefined;
+    this.wakeupStore = undefined;
     this.client = null;
     this.started = false;
     this.lastEvent.clear();

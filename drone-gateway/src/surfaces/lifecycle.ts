@@ -24,6 +24,7 @@ export class SessionLifecycle {
   private disposed = false;
   private tail: Promise<unknown> = Promise.resolve();
   private readonly idleTimeoutMs: number;
+  private readinessDone = false;
 
   constructor(private readonly opts: SessionLifecycleOptions) {
     this.idleTimeoutMs = opts.ctx.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
@@ -89,6 +90,7 @@ export class SessionLifecycle {
     const session = this.session;
     if (!session || this.disposed) return;
     this.session = null;
+    this.readinessDone = false;
     logger.info(
       { conversationId: this.opts.conversationId },
       `Idle timeout: terminating ${this.opts.surfaceType} agent`
@@ -100,10 +102,33 @@ export class SessionLifecycle {
     }
   }
 
+  /**
+   * Wait (bounded) until the gateway's schedule registry knows this
+   * conversation's session, so the injected schedule tools exist before the
+   * first turn (D10). Runs ONCE per session; on timeout it continues and logs
+   * a degradation. A no-op when the surface did not opt into scheduling.
+   */
+  private async awaitReadiness(): Promise<void> {
+    const r = this.opts.ctx.scheduleReadiness;
+    if (!r || this.readinessDone) return;
+    this.readinessDone = true;
+    const deadline = Date.now() + r.timeoutMs;
+    while (!r.isReady(this.opts.conversationId) && Date.now() < deadline) {
+      await new Promise(res => setTimeout(res, r.pollMs));
+    }
+    if (!r.isReady(this.opts.conversationId)) {
+      logger.warn(
+        { conversationId: this.opts.conversationId },
+        'schedule tools not ready before first turn; continuing'
+      );
+    }
+  }
+
   async send(text: string, opts?: SendMessageOptions): Promise<string | null> {
     return this.run(async () => {
       if (this.disposed) throw new Error('surface disposed');
       const session = await this.ensureSession();
+      await this.awaitReadiness();
       try {
         const response = await this.opts.ctx.spawnBackend.sendMessage(
           session,

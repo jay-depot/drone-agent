@@ -57,6 +57,7 @@ describe('registerBuiltInSurfaces', () => {
     const surface = factory({ type: 'discard' }, 'conv-1', {
       spawnBackend: {} as never,
       swarm: undefined,
+      postMessage: vi.fn(async () => undefined),
       mode: 'active',
       catchUpIntervalMs: 900_000,
       extensionHintPrefix: 'drone-gateway',
@@ -80,6 +81,7 @@ describe('registerBuiltInSurfaces', () => {
       factory({ type: 'persona-assignment' }, 'conv-1', {
         spawnBackend: {} as never,
         swarm: undefined,
+        postMessage: vi.fn(async () => undefined),
         mode: 'active',
         catchUpIntervalMs: 900_000,
         extensionHintPrefix: 'drone-gateway',
@@ -109,6 +111,7 @@ describe('registerBuiltInSurfaces', () => {
       {
         spawnBackend,
         swarm: undefined,
+        postMessage: vi.fn(async () => undefined),
         mode: 'active',
         catchUpIntervalMs: 900_000,
         extensionHintPrefix: 'drone-gateway',
@@ -150,6 +153,7 @@ describe('registerBuiltInSurfaces', () => {
       {
         spawnBackend,
         swarm: undefined,
+        postMessage: vi.fn(async () => undefined),
         targetBeaconId: 'beacon-9',
         mode: 'active',
         catchUpIntervalMs: 900_000,
@@ -188,6 +192,7 @@ describe('registerBuiltInSurfaces', () => {
       {
         spawnBackend,
         swarm: undefined,
+        postMessage: vi.fn(async () => undefined),
         mode: 'active',
         catchUpIntervalMs: 900_000,
         extensionHintPrefix: 'drone-gateway',

@@ -43,9 +43,11 @@ vi.mock('../src/store/sqlite-crypto-store.js', () => ({
 
 const mockCreateContextSnapshotStore = vi.fn();
 const mockCreateOutboundLedger = vi.fn();
+const mockCreateScheduledWakeupStore = vi.fn();
 vi.mock('../src/store/gateway-state-store.js', () => ({
   createContextSnapshotStore: mockCreateContextSnapshotStore,
   createOutboundLedger: mockCreateOutboundLedger,
+  createScheduledWakeupStore: mockCreateScheduledWakeupStore,
 }));
 
 const { MatrixServiceAdapter } = await import('../src/adapters/matrix.js');

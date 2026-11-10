@@ -333,3 +333,19 @@ mismatch is refused.
   (ADR [256](../adr/256-gateway-swarm-extension.md)); the callee direction, tool
   and prompt injection, the gateway config UI, and remote extensions are
   deferred.
+
+## Gateway as an extension
+
+With `coordinatorUrl` set, the gateway registers as an extension node (ADR
+[256](../adr/256-gateway-swarm-extension.md)). As of ADR
+[270](../adr/270-gateway-agent-self-scheduling.md) it is no longer **sender
+only**: it declares three callable capabilities — `schedule_wakeup`,
+`schedule_list`, `schedule_cancel` — so a `persona-assignment` agent can
+schedule a one-time wake-up for itself. Each capability is `exposed: 'mcp'`, so
+it materializes as the agent tools `extensions__drone-gateway__schedule_*`
+(left **unmounted**; the model mounts them with `runtime__mount_tool`). A
+`tools` injection plus one `# Scheduled Wake-ups` guidance fragment are pushed
+on `sessionStarted` for a schedule-enabled conversation. This requires the
+spawned agent to run the `swarm` and `extensions` plugins and the gateway to
+reach a beacon. v1 supports **local spawn mode only** — the coordinator path
+returns no reply.

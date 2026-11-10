@@ -201,6 +201,25 @@ function sanitizeSurfaceConfig(
     }
   }
 
+  const schedule = rest.schedule;
+  if (schedule !== undefined) {
+    if (
+      typeof schedule !== 'object' ||
+      schedule === null ||
+      Array.isArray(schedule)
+    ) {
+      warn('schedule is not an object; ignoring');
+      delete rest.schedule;
+    } else {
+      const bag = { ...(schedule as Record<string, unknown>) };
+      if (bag.enabled !== undefined && typeof bag.enabled !== 'boolean') {
+        warn('schedule.enabled must be a boolean; ignoring');
+        delete bag.enabled;
+      }
+      rest.schedule = bag;
+    }
+  }
+
   return rest;
 }
 
