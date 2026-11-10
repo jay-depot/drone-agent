@@ -6,12 +6,21 @@ export interface Column {
   order: number;
 }
 
+export interface MoveRecord {
+  at: number;
+  actor: 'user' | 'agent' | 'automation';
+  fromColumnId: string | null;
+  toColumnId: string;
+}
+
 export interface Card {
   id: string;
   title: string;
   description?: string;
   columnId: string;
   position: number;
+  history?: MoveRecord[];
+  sessionId?: string;
   sessionStatus?: 'running' | 'ended' | 'failed';
 }
 

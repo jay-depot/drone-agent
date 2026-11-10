@@ -25,6 +25,7 @@ function deps(
     injectStylesheet: vi.fn(),
     fetch: vi.fn(),
     navigate: vi.fn(),
+    showError: vi.fn(),
     onError: vi.fn(),
     ...overrides,
   };
@@ -186,5 +187,73 @@ describe('loadExtensionBundles', () => {
     );
     expect(registerComponent).not.toHaveBeenCalled();
     expect(result.loaded).toEqual([]);
+  });
+
+  it('hands the error helpers to bundles via api.ui.errors', async () => {
+    const onReady = vi.fn();
+    const showError = vi.fn();
+    await loadExtensionBundles(
+      [
+        entry('node-1', [
+          { name: 'p', version: '1', hash: 'h', scriptUrls: ['/a.js'] },
+        ]),
+      ],
+      {
+        ...deps(),
+        importModule: vi.fn().mockResolvedValue({ default: { onReady } }),
+        showError,
+      }
+    );
+    const api = onReady.mock.calls[0][0];
+    api.ui.errors.show('boom');
+    expect(showError).toHaveBeenCalledWith('boom');
+  });
+
+  it('normalizes a non-ok response in fromResponse', async () => {
+    const onReady = vi.fn();
+    const showError = vi.fn();
+    await loadExtensionBundles(
+      [
+        entry('node-1', [
+          { name: 'p', version: '1', hash: 'h', scriptUrls: ['/a.js'] },
+        ]),
+      ],
+      {
+        ...deps(),
+        importModule: vi.fn().mockResolvedValue({ default: { onReady } }),
+        showError,
+      }
+    );
+    const api = onReady.mock.calls[0][0];
+    const res = {
+      ok: false,
+      status: 500,
+      statusText: 'Server Error',
+      json: async () => ({ error: 'nope' }),
+    } as unknown as Response;
+    const message = await api.ui.errors.fromResponse(res);
+    expect(message).toBe('nope');
+    expect(showError).toHaveBeenCalledWith('nope');
+  });
+
+  it('normalizes a thrown error in fromThrown', async () => {
+    const onReady = vi.fn();
+    const showError = vi.fn();
+    await loadExtensionBundles(
+      [
+        entry('node-1', [
+          { name: 'p', version: '1', hash: 'h', scriptUrls: ['/a.js'] },
+        ]),
+      ],
+      {
+        ...deps(),
+        importModule: vi.fn().mockResolvedValue({ default: { onReady } }),
+        showError,
+      }
+    );
+    const api = onReady.mock.calls[0][0];
+    const message = api.ui.errors.fromThrown(new Error('offline'));
+    expect(message).toBe('offline');
+    expect(showError).toHaveBeenCalledWith('offline');
   });
 });

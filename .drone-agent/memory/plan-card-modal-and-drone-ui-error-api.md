@@ -11,13 +11,27 @@ tags:
   - error-api
   - ADR-274
 created: 2026-11-10T00:06:32.241Z
-updated: 2026-11-10T00:06:32.241Z
+updated: 2026-11-10T00:37:03.259Z
 ---
 
 # Plan — Card modal for the kanban bundle, and a `DroneUI` error API
 
 **Status**: Ready for execution. Branch `feat/kanban-extension-base`.
 **Executor**: persona `code`. One reviewer pass at the end.
+
+**EXECUTED — 2026-11-10 (persona `code`).** All 13 steps carried out; validation criteria 1-13 satisfied. Branch `feat/kanban-extension-base`. LSP clean; `pnpm -r run build` / `pnpm typecheck` / `pnpm run lint` exit 0; fast suite 4706 passed / 19 skipped; bundle suite 7/7; host `loader.test.ts` 10/10. Regression proven with `/tmp` file backups (not git stash): CardModal/BoardPage tests fail with Steps 5-7 reverted, pass after. `mcp-swarm` and `src/capabilities.ts` unchanged.
+
+**Gaps the plan did not list (fixed during execution):**
+1. `drone-coordinator-ui/src/extensions/types.ts` had to re-export `DroneUI`/`DroneUIErrors` — `loader.ts` imports them from `./types`.
+2. Two existing host tests needed the new required `showError` param: `loader.test.ts` `deps()` (added `showError: vi.fn()`) and `useExtensions.test.tsx` `Probe` (`useExtensions(() => {})`).
+3. `ExtensionProvider` calls `useToast()`, which throws outside a `ToastProvider` — two extension test files rendered the provider bare and were wrapped in `ToastProvider`.
+4. `@types/react-dom` was missing from `drone-swarm-project` devDependencies (`test-setup.ts` imports `react-dom`); added (same version as coordinator-ui).
+5. `globals: false` in the bundle vitest config means no testing-library auto-cleanup — `test-setup.ts` registers `afterEach(cleanup)`.
+6. The drag-guard test drives `dragstart`/`dragend`/`click` synchronously (`userEvent.click` yields to the event loop and lets the scheduled `didDrag` reset win).
+
+**Pre-existing flake (not a regression):** `drone-coordinator-ui/src/pages/sessions.test.tsx` (untouched file) fails ~30-50% of full-suite runs, a different test name each time, passes 19/19 standalone. WebSocket-debounce timing.
+
+**Validation numbers:** loader.ts 155, useExtensions.tsx 104, ExtensionContext.tsx 219, use-toast.tsx 84, drone-extension-ui-types/src/index.ts 107.
 
 ## 1. Summary — what and why
 

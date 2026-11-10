@@ -5,7 +5,7 @@ import { AuthProvider } from '@/hooks/use-auth';
 import { useExtensions } from './useExtensions';
 
 function Probe({ onLoad }: { onLoad: (load: unknown) => void }) {
-  const { load } = useExtensions();
+  const { load } = useExtensions(() => {});
   const navigate = useNavigate();
   useLocation();
   onLoad(load);

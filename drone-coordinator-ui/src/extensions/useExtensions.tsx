@@ -31,7 +31,9 @@ export interface ExtensionsLoader {
   loading: boolean;
 }
 
-export function useExtensions(): ExtensionsLoader {
+export function useExtensions(
+  showError: (message: string) => void
+): ExtensionsLoader {
   const authFetch = useAuthenticatedFetch();
   const navigate = useNavigate();
   const loadedRef = useRef<string[]>([]);
@@ -40,10 +42,12 @@ export function useExtensions(): ExtensionsLoader {
 
   const authFetchRef = useRef(authFetch);
   const navigateRef = useRef(navigate);
+  const showErrorRef = useRef(showError);
   useEffect(() => {
     authFetchRef.current = authFetch;
     navigateRef.current = navigate;
-  }, [authFetch, navigate]);
+    showErrorRef.current = showError;
+  }, [authFetch, navigate, showError]);
 
   const load = useCallback(
     (
@@ -76,6 +80,7 @@ export function useExtensions(): ExtensionsLoader {
             injectStylesheet: defaultInjectStylesheet,
             fetch: (path, init) => authFetchRef.current(path, init),
             navigate: path => navigateRef.current(path),
+            showError: message => showErrorRef.current(message),
           });
           disposers.push(...result.disposers);
           loadedRef.current = result.loaded;

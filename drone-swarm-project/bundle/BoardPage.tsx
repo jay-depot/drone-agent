@@ -7,6 +7,7 @@ import type {
 } from './types';
 import { action } from './api';
 import { QueueModal } from './QueueModal';
+import { CardModal } from './CardModal';
 
 const POLL_MS = 3000;
 
@@ -21,6 +22,10 @@ export function BoardPage() {
   const [project, setProject] = React.useState<Project | undefined>(undefined);
   const [queueOpen, setQueueOpen] = React.useState(false);
   const dragCard = React.useRef<string | undefined>(undefined);
+  const [openCardId, setOpenCardId] = React.useState<string | undefined>(
+    undefined
+  );
+  const didDrag = React.useRef(false);
 
   const loadProjects = React.useCallback(() => {
     return action<ActionReply<{ projects: ProjectSummary[] }>>(
@@ -102,7 +107,17 @@ export function BoardPage() {
                   className="dsp-card"
                   draggable
                   onDragStart={() => {
+                    didDrag.current = true;
                     dragCard.current = card.id;
+                  }}
+                  onDragEnd={() => {
+                    setTimeout(() => {
+                      didDrag.current = false;
+                    }, 0);
+                  }}
+                  onClick={() => {
+                    if (didDrag.current) return;
+                    setOpenCardId(card.id);
                   }}
                 >
                   <div className="dsp-card-title">{card.title}</div>
@@ -116,6 +131,22 @@ export function BoardPage() {
       </div>
 
       {queueOpen ? <QueueModal onClose={() => setQueueOpen(false)} /> : null}
+      {openCardId
+        ? (() => {
+            const card = project?.cards.find(c => c.id === openCardId);
+            return card && project ? (
+              <CardModal
+                project={project}
+                card={card}
+                onClose={() => setOpenCardId(undefined)}
+                onSaved={() => {
+                  setOpenCardId(undefined);
+                  void loadBoard(selected);
+                }}
+              />
+            ) : null;
+          })()
+        : null}
     </div>
   );
 }

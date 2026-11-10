@@ -15,9 +15,10 @@
   "private": true,
   "scripts": {
     "build": "tsc -b && node scripts/build-bundle.mjs",
-    "typecheck": "tsc -b --pretty false && tsc -p bundle/tsconfig.json",
+    "typecheck": "tsc -b --pretty false && tsc -p bundle/tsconfig.json && tsc -p bundle/tsconfig.test.json",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "test": "echo 'drone-swarm-project tests run via root vitest'",
+    "test:ui": "NODE_ENV=test vitest run -c vitest.config.ts",
     "start": "node ./bin/drone-swarm-project"
   },
   "dependencies": {
@@ -28,6 +29,12 @@
   "devDependencies": {
     "@types/node": "^24.0.10",
     "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "jsdom": "^29.1.1",
+    "react-dom": "^19.0.0",
     "react": "^19.0.0",
     "esbuild": "^0.25.12"
   }

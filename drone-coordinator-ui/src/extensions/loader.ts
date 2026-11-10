@@ -1,10 +1,12 @@
 import type {
   ExtensionManifestEntry,
+  DroneUI,
   PluginClientExport,
   PluginClientRoute,
   UIExtensionApi,
   UIRegion,
 } from './types';
+import { extractApiError, networkErrorMessage } from '@/hooks/use-api';
 
 /**
  * The pure bundle-loader core, extracted from the `useExtensions` hook so it
@@ -35,6 +37,8 @@ export interface LoaderDeps {
   fetch: (path: string, init?: RequestInit) => Promise<Response>;
   /** Client-side navigation handed to bundles via `api.navigate`. */
   navigate: (path: string) => void;
+  /** Show an error to the user. Handed to bundles via `api.ui.errors`. */
+  showError: (message: string) => void;
   /** Called with any load error (defaults to console.warn). */
   onError?: (message: string) => void;
 }
@@ -58,7 +62,8 @@ function makeApi(
   registerComponent: LoaderDeps['registerComponent'],
   registerRoute: LoaderDeps['registerRoute'],
   fetchImpl: LoaderDeps['fetch'],
-  navigate: LoaderDeps['navigate']
+  navigate: LoaderDeps['navigate'],
+  showError: LoaderDeps['showError']
 ): UIExtensionApi {
   return {
     registerComponent: (region, component) =>
@@ -66,6 +71,25 @@ function makeApi(
     registerRoute,
     fetch: fetchImpl,
     navigate,
+    ui: makeDroneUI(showError),
+  };
+}
+
+function makeDroneUI(showError: (message: string) => void): DroneUI {
+  return {
+    errors: {
+      show: message => showError(message),
+      fromResponse: async res => {
+        const message = await extractApiError(res);
+        showError(message);
+        return message;
+      },
+      fromThrown: err => {
+        const message = networkErrorMessage(err);
+        showError(message);
+        return message;
+      },
+    },
   };
 }
 
@@ -109,7 +133,8 @@ export async function loadExtensionBundles(
               deps.registerComponent,
               deps.registerRoute,
               deps.fetch,
-              deps.navigate
+              deps.navigate,
+              deps.showError
             )
           );
           loaded.push(entry.nodeId);

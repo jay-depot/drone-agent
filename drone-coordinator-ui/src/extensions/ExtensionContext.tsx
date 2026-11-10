@@ -12,6 +12,7 @@ import { Navigate } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { PluginClientRoute, UIRegion } from './types';
 import { useExtensions } from './useExtensions';
+import { useToast } from '@/hooks/use-toast';
 
 /** One component registered into a region, with the owning node's label. */
 export interface RegionEntry {
@@ -108,7 +109,8 @@ export function ExtensionProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const extensions = useExtensions();
+  const { error: showError } = useToast();
+  const extensions = useExtensions(showError);
   useEffect(() => {
     extensions.load(
       (region, component, label) => {

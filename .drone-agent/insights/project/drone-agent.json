@@ -1174,5 +1174,13 @@
   {
     "timestamp": "2026-11-10T00:07:08.193Z",
     "insight": "Layering defect found while planning: the coordinator-UI host toast viewport is `z-50` (`drone-coordinator-ui/src/hooks/use-toast.tsx`), but the `drone-swarm-project` bundle modal backdrop is `position: fixed; z-index: 1000` (`bundle/styles.css`). So any host toast raised while a bundle modal is open renders BEHIND the modal — invisible. General rule: host chrome must always sit above extension UI. Extension bundles can (and do) use large z-index values, so the host's fixed overlays (toast, dialogs) should use values above any plausible bundle z-index (e.g. `z-[1100]`)."
+  },
+  {
+    "timestamp": "2026-11-10T00:37:13.189Z",
+    "insight": "Plan gap class — a \"new required param on an interface + new re-exported type\" plan undercounts its blast radius. In the card-modal plan the locked design correctly added a required `LoaderDeps.showError` and a `UIExtensionApi.ui` field, but the plan's file list missed three consumers that only surface at build/typecheck: (1) `drone-coordinator-ui/src/extensions/types.ts`, the local re-export barrel, needs every new type (`DroneUI`/`DroneUIErrors`) or `import ... from './types'` fails; (2) every test that constructs a `LoaderDeps` needs the new required member (`loader.test.ts`'s `deps()` helper); (3) every existing caller of a changed signature needs updating (`useExtensions.test.tsx`'s `useExtensions()` → `useExtensions(() => {})`). Sweep the type barrel and grep for direct constructor/call sites before declaring a cross-cutting interface change done — the plan's own step list is not enough."
+  },
+  {
+    "timestamp": "2026-11-10T00:37:13.193Z",
+    "insight": "Adding a `useContext`-based hook (`useToast`) to a provider (`ExtensionProvider`) makes that provider require its context provider (`ToastProvider`) as an ancestor — true in the app (App.tsx nests them), but every test that renders the provider in isolation breaks with \"must be used within a ToastProvider\". The card-modal plan assumed \"ExtensionProvider is inside ToastProvider\" and did not list the affected test files. Fix: wrap the isolated test renders in the required provider. A plan that wires a context consumer into an existing component must enumerate the test renders of that component."
   }
 ]

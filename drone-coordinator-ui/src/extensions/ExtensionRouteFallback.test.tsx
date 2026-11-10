@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ExtensionProvider, ExtensionRouteFallback } from './ExtensionContext';
+import { ToastProvider } from '@/hooks/use-toast';
 
 // The provider's loader does a dynamic import(); stub it out. The mutable
 // `loading` value drives the fallback under test.
@@ -18,15 +19,17 @@ function PathProbe() {
 
 function renderAtBoard() {
   return render(
-    <MemoryRouter initialEntries={['/board']}>
-      <ExtensionProvider>
-        <Routes>
-          <Route path="/" element={<div>HOME</div>} />
-          <Route path="*" element={<ExtensionRouteFallback />} />
-        </Routes>
-        <PathProbe />
-      </ExtensionProvider>
-    </MemoryRouter>
+    <ToastProvider>
+      <MemoryRouter initialEntries={['/board']}>
+        <ExtensionProvider>
+          <Routes>
+            <Route path="/" element={<div>HOME</div>} />
+            <Route path="*" element={<ExtensionRouteFallback />} />
+          </Routes>
+          <PathProbe />
+        </ExtensionProvider>
+      </MemoryRouter>
+    </ToastProvider>
   );
 }
 

@@ -35,6 +35,11 @@ jobs:
       - name: Run unit tests
         run: pnpm test
 
+      - name: Run UI package tests
+        run: |
+          pnpm --filter drone-coordinator-ui test
+          pnpm --filter drone-swarm-project test:ui
+
       - name: Run linter
         run: pnpm lint
 

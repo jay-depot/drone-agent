@@ -6,12 +6,18 @@
  * `api.fetch`, which carries the coordinator web token.
  */
 
-import type { UIExtensionApi } from 'drone-extension-ui-types';
+import type { DroneUIErrors, UIExtensionApi } from 'drone-extension-ui-types';
 
 let api: UIExtensionApi | undefined;
 
 export function setApi(next: UIExtensionApi): void {
   api = next;
+}
+
+/** The host error helpers. Throws when the api is not ready yet. */
+export function uiErrors(): DroneUIErrors {
+  if (!api) throw new Error('drone-swarm-project: api not ready');
+  return api.ui.errors;
 }
 
 /** POST an action to this node and return the parsed JSON reply. */

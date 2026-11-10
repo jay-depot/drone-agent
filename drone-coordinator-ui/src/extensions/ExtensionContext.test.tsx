@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { act } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider } from '@/hooks/use-auth';
+import { ToastProvider } from '@/hooks/use-toast';
 import {
   ExtensionProvider,
   RegionSlot,
@@ -57,14 +58,16 @@ function Probe() {
 
 function renderWithProvider(ui: React.ReactNode) {
   return render(
-    <AuthProvider>
-      <MemoryRouter>
-        <ExtensionProvider>
-          <Probe />
-          {ui}
-        </ExtensionProvider>
-      </MemoryRouter>
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <MemoryRouter>
+          <ExtensionProvider>
+            <Probe />
+            {ui}
+          </ExtensionProvider>
+        </MemoryRouter>
+      </AuthProvider>
+    </ToastProvider>
   );
 }
 

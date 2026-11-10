@@ -180,6 +180,18 @@ The `onReady(api)` hook receives a `UIExtensionApi` with `registerComponent`,
 `react-router-dom` — only react/react-dom are external — so `api.navigate` is
 how a bundle moves the app to another route.
 
+It also receives `api.ui: DroneUI`, the host-provided UI helpers. `DroneUI` is a
+bag of sub-objects keyed by area; its first sub-object is `errors`, with three
+methods that report through the **host error toast** (so a bundle needs no error
+surface of its own): `show(message)`, `fromResponse(res)` (reads a non-ok
+`Response`, shows the message, returns it), and `fromThrown(err)` (turns a
+thrown error into a message, shows it, returns it). `fromResponse` and
+`fromThrown` return the normalized message so a caller can show the **same**
+message inline and in the toast; a fire-and-forget caller ignores the return
+value (ADR [274](../adr/274-card-modal-and-drone-ui-error-api.md)). The host
+toast viewport sits at `z-[1100]`, above the extension modal backdrop
+(`z-index: 1000`), so a toast raised from inside a bundle modal is visible.
+
 **The host owns extension navigation.** For every registered route the host
 renders one sidebar `NavLink` from `route.title`, styled with the same classes
 and `isActive` logic as the core nav items. A bundle **must not** draw its own

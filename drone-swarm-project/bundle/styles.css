@@ -124,3 +124,47 @@
   justify-content: space-between;
   padding: 2px 0;
 }
+
+.dsp-field {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.dsp-field input,
+.dsp-field textarea {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  font: inherit;
+}
+
+.dsp-field textarea {
+  min-height: 80px;
+}
+
+.dsp-error {
+  color: #e03131;
+  margin: 4px 0;
+}
+
+.dsp-modal-actions {
+  margin: 8px 0;
+}
+
+.dsp-card-meta dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 0;
+}
+
+.dsp-card-history ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.dsp-card-history li {
+  padding: 2px 0;
+  opacity: 0.8;
+}

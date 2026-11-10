@@ -13,5 +13,6 @@
     "esModuleInterop": true,
     "types": []
   },
-  "include": ["**/*.ts", "**/*.tsx", "globals.d.ts"]
+  "include": ["**/*.ts", "**/*.tsx", "globals.d.ts"],
+  "exclude": ["**/*.test.tsx", "test-setup.ts"]
 }
