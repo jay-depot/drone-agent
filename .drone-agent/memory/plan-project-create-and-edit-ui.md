@@ -413,10 +413,7 @@ export function ProjectModal(props: ProjectModalProps) {
 
         <label className="dsp-field">
           Name
-          <input
-            value={name}
-            onChange={event => setName(event.target.value)}
-          />
+          <input value={name} onChange={event => setName(event.target.value)} />
         </label>
 
         <label className="dsp-field">
@@ -501,48 +498,48 @@ import { useProjects } from './useProjects';
 2. Replace the local `projects` and `selected` state with the hook, and add the modal state:
 
 ```ts
-  const { projects, selected, setSelected, reload } = useProjects();
-  const [project, setProject] = React.useState<Project | undefined>(undefined);
-  const [queueOpen, setQueueOpen] = React.useState(false);
-  const [modal, setModal] = React.useState<
-    { mode: 'create' } | { mode: 'edit' } | undefined
-  >(undefined);
-  const dragCard = React.useRef<string | undefined>(undefined);
-  const [openCardId, setOpenCardId] = React.useState<string | undefined>(
-    undefined
-  );
-  const didDrag = React.useRef(false);
+const { projects, selected, setSelected, reload } = useProjects();
+const [project, setProject] = React.useState<Project | undefined>(undefined);
+const [queueOpen, setQueueOpen] = React.useState(false);
+const [modal, setModal] = React.useState<
+  { mode: 'create' } | { mode: 'edit' } | undefined
+>(undefined);
+const dragCard = React.useRef<string | undefined>(undefined);
+const [openCardId, setOpenCardId] = React.useState<string | undefined>(
+  undefined
+);
+const didDrag = React.useRef(false);
 ```
 
 3. Remove `loadProjects`. Keep `loadBoard` and the two effects. The board effect stays:
 
 ```ts
-  React.useEffect(() => {
-    void loadBoard(selected);
-    const timer = setInterval(() => void loadBoard(selected), POLL_MS);
-    return () => clearInterval(timer);
-  }, [selected, loadBoard]);
+React.useEffect(() => {
+  void loadBoard(selected);
+  const timer = setInterval(() => void loadBoard(selected), POLL_MS);
+  return () => clearInterval(timer);
+}, [selected, loadBoard]);
 ```
 
 4. Replace the header block. The `Edit Project` button is disabled when no project is selected or the project is not loaded.
 
 ```tsx
-      <header className="dsp-board-header">
-        <ProjectSelect
-          projects={projects}
-          value={selected}
-          onChange={setSelected}
-          onNewProject={() => setModal({ mode: 'create' })}
-          showCount
-        />
-        <button
-          disabled={!selected || !project}
-          onClick={() => setModal({ mode: 'edit' })}
-        >
-          Edit Project
-        </button>
-        <button onClick={() => setQueueOpen(true)}>Queue</button>
-      </header>
+<header className="dsp-board-header">
+  <ProjectSelect
+    projects={projects}
+    value={selected}
+    onChange={setSelected}
+    onNewProject={() => setModal({ mode: 'create' })}
+    showCount
+  />
+  <button
+    disabled={!selected || !project}
+    onClick={() => setModal({ mode: 'edit' })}
+  >
+    Edit Project
+  </button>
+  <button onClick={() => setQueueOpen(true)}>Queue</button>
+</header>
 ```
 
 5. Add the empty-board hint. Put it inside `dsp-columns` when `projects.length === 0`.
@@ -566,17 +563,19 @@ import { useProjects } from './useProjects';
 6. Render the modal next to the `QueueModal` line. The `onSaved` handler reloads the list, then selects the saved project.
 
 ```tsx
-      {modal ? (
-        <ProjectModal
-          mode={modal.mode}
-          project={modal.mode === 'edit' ? project : undefined}
-          onClose={() => setModal(undefined)}
-          onSaved={saved => {
-            setModal(undefined);
-            void reload().then(() => setSelected(saved.id));
-          }}
-        />
-      ) : null}
+{
+  modal ? (
+    <ProjectModal
+      mode={modal.mode}
+      project={modal.mode === 'edit' ? project : undefined}
+      onClose={() => setModal(undefined)}
+      onSaved={saved => {
+        setModal(undefined);
+        void reload().then(() => setSelected(saved.id));
+      }}
+    />
+  ) : null;
+}
 ```
 
 ## Step 7 — Use the shared pieces on the settings panel [agent: code]
@@ -595,35 +594,35 @@ import { useProjects } from './useProjects';
 2. Replace the local `projects` and `selected` state with the hook:
 
 ```ts
-  const { projects, selected, setSelected, reload } = useProjects();
-  const [project, setProject] = React.useState<Project | undefined>(undefined);
-  const [limits, setLimits] = React.useState<Limits | undefined>(undefined);
-  const [newColumn, setNewColumn] = React.useState('');
+const { projects, selected, setSelected, reload } = useProjects();
+const [project, setProject] = React.useState<Project | undefined>(undefined);
+const [limits, setLimits] = React.useState<Limits | undefined>(undefined);
+const [newColumn, setNewColumn] = React.useState('');
 
-  const loadLimits = React.useCallback(() => {
-    void action<ActionReply<{ limits: Limits }>>('limits.get').then(reply =>
-      setLimits(reply.body?.limits)
-    );
-  }, []);
+const loadLimits = React.useCallback(() => {
+  void action<ActionReply<{ limits: Limits }>>('limits.get').then(reply =>
+    setLimits(reply.body?.limits)
+  );
+}, []);
 
-  const refresh = React.useCallback(() => {
-    void reload();
-    loadLimits();
-  }, [reload, loadLimits]);
+const refresh = React.useCallback(() => {
+  void reload();
+  loadLimits();
+}, [reload, loadLimits]);
 
-  React.useEffect(() => {
-    loadLimits();
-  }, [loadLimits]);
+React.useEffect(() => {
+  loadLimits();
+}, [loadLimits]);
 
-  React.useEffect(() => {
-    if (!selected) {
-      setProject(undefined);
-      return;
-    }
-    void action<ActionReply<{ project: Project }>>('board.get', {
-      projectId: selected,
-    }).then(reply => setProject(reply.body?.project));
-  }, [selected]);
+React.useEffect(() => {
+  if (!selected) {
+    setProject(undefined);
+    return;
+  }
+  void action<ActionReply<{ project: Project }>>('board.get', {
+    projectId: selected,
+  }).then(reply => setProject(reply.body?.project));
+}, [selected]);
 ```
 
 3. Replace the header select with the shared component. The `New Project` action only needs to select the new project on this page. It does not need a modal here (the modal lives on the board page). So pass a handler that does nothing visible except that the sentinel must not change the selection. The simplest correct option is to keep the sentinel purely presentational: it opens nothing.
@@ -877,13 +876,7 @@ describe('ProjectModal', () => {
       actionReply: { ok: true, body: { project: { id: 'p_new', name: 'X' } } },
     });
     const onSaved = vi.fn();
-    render(
-      <ProjectModal
-        mode="create"
-        onClose={() => {}}
-        onSaved={onSaved}
-      />
-    );
+    render(<ProjectModal mode="create" onClose={() => {}} onSaved={onSaved} />);
     await user.type(screen.getByLabelText('Name'), 'Gamma');
     await user.click(screen.getByRole('button', { name: 'Create' }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
@@ -904,8 +897,12 @@ describe('ProjectModal', () => {
       ],
       extensions: [{ nodeId: 'b_ext', connected: true, isExtension: true }],
     });
-    render(<ProjectModal mode="create" onClose={() => {}} onSaved={() => {}} />);
-    expect(await screen.findByRole('option', { name: 'Beacon One' })).toBeInTheDocument();
+    render(
+      <ProjectModal mode="create" onClose={() => {}} onSaved={() => {}} />
+    );
+    expect(
+      await screen.findByRole('option', { name: 'Beacon One' })
+    ).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Ext' })).toBeNull();
   });
 
@@ -922,7 +919,9 @@ describe('ProjectModal', () => {
     expect(
       await screen.findByRole('option', { name: 'b_gone (offline)' })
     ).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: '/srv/gone' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: '/srv/gone' })
+    ).toBeInTheDocument();
   });
 
   it('sends project.update with projectId in edit mode', async () => {
@@ -956,13 +955,7 @@ describe('ProjectModal', () => {
       actionReply: { ok: false, status: 400, body: { error: 'bad name' } },
     });
     const onSaved = vi.fn();
-    render(
-      <ProjectModal
-        mode="create"
-        onClose={() => {}}
-        onSaved={onSaved}
-      />
-    );
+    render(<ProjectModal mode="create" onClose={() => {}} onSaved={onSaved} />);
     await user.type(screen.getByLabelText('Name'), 'Z');
     await user.click(screen.getByRole('button', { name: 'Create' }));
     expect(await screen.findByText('bad name')).toBeInTheDocument();
@@ -1065,3 +1058,32 @@ All of these must pass.
 - **Clearing a project default.** `project.update` ignores an empty value. The handler is unchanged.
 - **A fix to `NewSessionPanel`.** It has the same extension-node bug in its beacon list. It is noted, not fixed here.
 - **Repair of the `docs/adr/index.md` duplicates.** Tracked as a separate followup.
+
+---
+
+## Execution summary (2026-11-10, branch `feat/kanban-extension-base`)
+
+**Status: COMPLETE.** All 14 steps executed. Commit `80043465` (code) plus the docs/memory commit.
+
+### What was done
+- **Steps 1–4 (bundle modules):** `types.ts` gained `defaultBeaconId`/`defaultWorkingDir` on `Project` plus `BeaconRow`/`ExtensionRow`; `api.ts` gained `apiFetch`/`apiNavigate`; new `beacons.ts` (`loadPickerBeacons`, filters `connected` and drops extension nodes); new `useProjects.ts` (`NEW_PROJECT_VALUE = '__new_project__'`, `current ?? first` selection); new `ProjectSelect.tsx`; new `ProjectModal.tsx` (create→`project.create`, edit→`project.update`, offline beacon/root annotated and preserved).
+- **Step 5:** `styles.css` gained `.dsp-empty-hint`.
+- **Step 6:** `BoardPage.tsx` rewritten to use `useProjects`/`ProjectSelect`/`ProjectModal`, added the `Edit Project` button (disabled with no selection) and the zero-projects hint.
+- **Step 7:** `BoardSettings.tsx` rewritten to use the shared `ProjectSelect`; the sentinel calls `apiNavigate('/board')`.
+- **Steps 8–12 (tests):** board-page mock now answers `/api/beacons` and `/api/extensions`; new `useProjects.test.tsx`, `ProjectSelect.test.tsx`, `ProjectModal.test.tsx`; `BoardPage.test.tsx` gained sentinel/disabled-edit/empty-hint cases. Bundle suite: 20/20.
+- **Step 13 (docs):** new ADR 275 + `docs/adr/index.md` row; `docs/agents/drone-swarm-project.md` "Project create and edit" section; README "What it does" item 6; `CONTEXT.md` Project term extended; Obsidian wiki (pointer stub `decisions/275-...`, decisions index row, module-page update note, `log.md` entry, `index.md` count→275, `meta.json` checkpoint).
+
+### Validation (Step 14)
+- LSP clean. `pnpm -r run build`, `pnpm typecheck`, `pnpm run lint` all exit 0.
+- Fast suite: 4706 passed / 19 skipped. Bundle suite: 20/20.
+- **Regression proof** (file backups in `/tmp`, not `git stash`): with pre-change bundle sources + the new tests, 4 test files fail (3 fail to import the new modules; BoardPage's new cases fail). Restored to identical post-change state.
+- **No server change:** `drone-swarm-project/src/**` untouched.
+
+### Gaps the plan did not list (fixed during execution)
+1. `apply_diff` could not rewrite `BoardPage.tsx`/`BoardSettings.tsx` (change zones too generic); used a full `file__write` rewrite instead.
+2. **Bundle-test mock trap:** the action endpoint is `POST /api/extensions/<nodeId>/actions/<name>`, so a mock matching `path.includes('/api/extensions')` wrongly catches **every** action call. The `/api/beacons` and `/api/extensions` REST reads must match on `path.endsWith(...)`. This surfaced as `project.create` resolving to the wrong mock reply (`Save failed (HTTP undefined)`).
+3. The `ProjectModal.test.tsx` mock needed a second `_init?: RequestInit` parameter so the `mock.calls` tuple exposes the request body (TS2493/TS2352 under the bundle's `tsconfig.test.json`).
+4. Lint `no-useless-assignment`: `ProjectSelect.tsx` declared `const React = globalThis.React` but used no hooks/JSX factory reference; removed.
+
+### Out of scope (unchanged)
+Project delete; per-automation beacon/working-dir override; clearing a project default (`project.update` ignores an empty value); the `NewSessionPanel` extension-node bug; `docs/adr/index.md` duplicate-row repair.

@@ -1186,5 +1186,13 @@
   {
     "timestamp": "2026-11-10T01:29:14.266Z",
     "insight": "`GET /api/beacons` is NOT a list of real beacons — it also contains every swarm extension node. `createExtensionNode` (drone-swarm-common/src/extension-server.ts) POSTs to `/api/beacons` with `extension:{protocolVersion}`, no `port`, and no `spawnRoots`, and the coordinator's `POST /beacons` trust branch persists it into the `beacons` table (drone-coordinator/src/routes/beacons.ts). Once the node's `/ws/beacon` socket is up, `buildBeaconView` reports `connected: true` for it. So any UI that lists \"connected beacons\" as spawn targets — e.g. the coordinator UI's `NewSessionPanel` (drone-coordinator-ui/src/pages/sessions.tsx, filters `b.connected` only) — will offer extension nodes, which cannot spawn a session. The canonical discriminator is `GET /api/extensions`, which returns `{ nodeId, connected, isExtension }` (drone-coordinator/src/routes/extensions.ts). Any beacon picker must exclude `isExtension === true` nodes (or filter on a real signal like `port != null`). This is a live latent bug in `NewSessionPanel`, found 2026-11-09 while planning the drone-swarm-project project-create modal."
+  },
+  {
+    "timestamp": "2026-11-10T01:59:03.125Z",
+    "insight": "In the drone-swarm-project bundle, a test mock's `vi.fn(async (path: string) => ...)` produces a `mock.calls` tuple of length 1, so `(call[1] as RequestInit)` fails the bundle's `tsconfig.test.json` typecheck (TS2493 no element at index 1; TS2352 undefined→RequestInit). Give the mock a second parameter `_init?: RequestInit` when the test reads the request body from `mock.calls`."
+  },
+  {
+    "timestamp": "2026-11-10T01:59:03.133Z",
+    "insight": "In the drone-swarm-project bundle, a component that renders JSX but uses no hooks (e.g. ProjectSelect) must NOT declare `const React = globalThis.React` — eslint `no-useless-assignment` fails it because the JSX transform emits `globalThis.React.createElement` directly and the local binding is never read. Only declare the local `React` when the component calls `React.useState`/`useEffect`/`useCallback`/`useRef`."
   }
 ]

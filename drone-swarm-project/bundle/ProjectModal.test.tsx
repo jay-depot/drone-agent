@@ -10,7 +10,7 @@ function installApi(options: {
   extensions?: unknown[];
   actionReply?: unknown;
 }) {
-  const fetchImpl = vi.fn(async (path: string) => {
+  const fetchImpl = vi.fn(async (path: string, _init?: RequestInit) => {
     if (String(path).endsWith('/api/beacons')) {
       return {
         ok: true,
@@ -71,9 +71,7 @@ describe('ProjectModal', () => {
       actionReply: { ok: true, body: { project: { id: 'p_new', name: 'X' } } },
     });
     const onSaved = vi.fn();
-    render(
-      <ProjectModal mode="create" onClose={() => {}} onSaved={onSaved} />
-    );
+    render(<ProjectModal mode="create" onClose={() => {}} onSaved={onSaved} />);
     await user.type(screen.getByLabelText('Name'), 'Gamma');
     await user.click(screen.getByRole('button', { name: 'Create' }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
@@ -94,7 +92,9 @@ describe('ProjectModal', () => {
       ],
       extensions: [{ nodeId: 'b_ext', connected: true, isExtension: true }],
     });
-    render(<ProjectModal mode="create" onClose={() => {}} onSaved={() => {}} />);
+    render(
+      <ProjectModal mode="create" onClose={() => {}} onSaved={() => {}} />
+    );
     expect(
       await screen.findByRole('option', { name: 'Beacon One' })
     ).toBeInTheDocument();
@@ -114,7 +114,9 @@ describe('ProjectModal', () => {
     expect(
       await screen.findByRole('option', { name: 'b_gone (offline)' })
     ).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: '/srv/gone' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: '/srv/gone' })
+    ).toBeInTheDocument();
   });
 
   it('sends project.update with projectId in edit mode', async () => {
@@ -148,9 +150,7 @@ describe('ProjectModal', () => {
       actionReply: { ok: false, status: 400, body: { error: 'bad name' } },
     });
     const onSaved = vi.fn();
-    render(
-      <ProjectModal mode="create" onClose={() => {}} onSaved={onSaved} />
-    );
+    render(<ProjectModal mode="create" onClose={() => {}} onSaved={onSaved} />);
     await user.type(screen.getByLabelText('Name'), 'Z');
     await user.click(screen.getByRole('button', { name: 'Create' }));
     expect(await screen.findByText('bad name')).toBeInTheDocument();

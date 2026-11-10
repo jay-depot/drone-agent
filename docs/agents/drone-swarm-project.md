@@ -100,6 +100,34 @@ gets a shortcut: `card.get`/`card.update`/`card.move` accept an omitted
 `projectId`/`cardId` and default to the bound card, plus a one-time fragment
 telling the agent which card it owns.
 
+## Project create and edit
+
+The board page and the settings panel share a `ProjectSelect` dropdown and a
+`useProjects()` hook. The dropdown gains a `New Project…` sentinel
+(`__new_project__`) as its last option. A pick of the sentinel opens a
+`ProjectModal` and does **not** change the selection, so the sentinel value
+never becomes the selection.
+
+The modal has three fields: **Name** (required), **Beacon**, and **Working
+directory**. The Beacon picker lists connected beacons. It removes extension
+nodes, which the coordinator registers as beacons but which cannot spawn a
+session (it reads `isExtension` from `GET /api/extensions`). The Working
+directory picker lists the selected beacon's `spawnRoots`, seeded
+`defaultSpawnRoot ?? spawnRoots[0]` and re-seeded when the beacon changes.
+
+On the board page a separate **Edit Project** button sits next to the dropdown.
+It acts on the currently selected project and is disabled when no project is
+selected. The settings panel shows the sentinel too; a pick there navigates to
+`/board`, so one modal lives in one place.
+
+One `ProjectModal` serves both modes through a `mode` prop. In edit mode a
+stored beacon or working directory that is not in the live list is still shown,
+annotated `(offline)`, and preselected — it is never silently rewritten.
+`project.update` treats an empty `defaultWorkingDir` as "no change", so the
+modal cannot clear a working directory.
+
+See ADR [`275-kanban-project-create-and-edit-ui`](../adr/275-kanban-project-create-and-edit-ui.md).
+
 ## Running it
 
 ```bash

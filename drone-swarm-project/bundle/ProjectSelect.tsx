@@ -18,7 +18,6 @@ export interface ProjectSelectProps {
  * does not call `onChange`. So the sentinel value never becomes the selection.
  */
 export function ProjectSelect(props: ProjectSelectProps) {
-  const React = globalThis.React;
   const { projects, value, onChange, onNewProject, showCount, className } =
     props;
 

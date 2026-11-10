@@ -131,10 +131,7 @@ export function ProjectModal(props: ProjectModalProps) {
 
         <label className="dsp-field">
           Name
-          <input
-            value={name}
-            onChange={event => setName(event.target.value)}
-          />
+          <input value={name} onChange={event => setName(event.target.value)} />
         </label>
 
         <label className="dsp-field">

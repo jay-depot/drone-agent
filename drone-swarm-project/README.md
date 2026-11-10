@@ -26,6 +26,10 @@ authored as TypeScript JSX under `bundle/` and compiled with esbuild into
 5. **Serves a front-end bundle** so the coordinator UI gets a `/board` route and
    a `settings-panel`. The host renders the sidebar entry for `/board` (from
    the route's `title`) — the bundle draws no nav link of its own (ADR 272).
+6. **Creates and edits projects from the UI.** The project dropdown on both the
+   board page and the settings panel gains a `New Project…` option that opens a
+   project modal (name, beacon, working directory). The board page also has an
+   `Edit Project` button for the selected project (ADR 275).
 
 ## Capability tiers
 

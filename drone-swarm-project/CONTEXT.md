@@ -7,7 +7,8 @@ agent sessions. This page is a **glossary only**.
 
 - **Project** — A namespace. It owns ordered columns, a collection of cards, and
   the automations that act on them. It is not bound to a single beacon or
-  working directory; it carries defaults that automations inherit.
+  working directory; it carries `defaultBeaconId` and `defaultWorkingDir`
+  defaults that automations inherit.
 - **Column** — An ordered stage within a project (seeded Todo / In Progress /
   Done). Moving a card between columns is a transition.
 - **Card** — A unit of work on the board. It has a title, an optional
