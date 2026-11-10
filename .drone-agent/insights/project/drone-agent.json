@@ -1194,5 +1194,9 @@
   {
     "timestamp": "2026-11-10T01:59:03.133Z",
     "insight": "In the drone-swarm-project bundle, a component that renders JSX but uses no hooks (e.g. ProjectSelect) must NOT declare `const React = globalThis.React` — eslint `no-useless-assignment` fails it because the JSX transform emits `globalThis.React.createElement` directly and the local binding is never read. Only declare the local `React` when the component calls `React.useState`/`useEffect`/`useCallback`/`useRef`."
+  },
+  {
+    "timestamp": "2026-11-10T02:26:25.637Z",
+    "insight": "Two sibling code paths in drone-agent build LLM-facing tool names from foreign names, and only one sanitized: `mcp/index.ts` ran each MCP tool name through `sanitizeToolSegment` (`[^a-zA-Z0-9_-]`→`_`), but `plugins/extensions/tools.ts` concatenated the raw extension capability verbatim, so `extensions__<extId>__card.move` reached the model with a dot (ADR 028 / Kimi K2). Fixed by extracting `sanitizeToolSegment` to `drone-agent/src/shared/tool-name.ts` and using it in both. Lesson: when one of two parallel \"foreign name → tool name\" paths sanitizes, check the other; they drift silently because each has its own tests. Still unsanitized in the same path: the extension **id** segment (`extensions__<extId>__...`) — safe today because real ext ids are hyphenated node ids, but a dotted ext id would leak. Tracked as a latent edge, not fixed."
   }
 ]
