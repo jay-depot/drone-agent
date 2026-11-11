@@ -1218,5 +1218,9 @@
   {
     "timestamp": "2026-11-11T19:28:31.797Z",
     "insight": "Persona ids are not guaranteed to exist for a persona named in a subagent dispatch. A dispatch with `persona: \"self-improvement\"` failed with `persona \"self-improvement\" not found` (exit 1), because no such persona is registered — `self-improvement` is a plugin, not a persona. When a plan step needs an insight logged, either call `self-improvement__insight` from the current session (mount the tool first with `runtime__mount_tool`) or dispatch a subagent with an existing persona such as `worker`."
+  },
+  {
+    "timestamp": "2026-11-11T19:39:27.429Z",
+    "insight": "file__apply_diff defect observed 2026-11-11 (drone-swarm-project bundle styling): a patch containing MULTIPLE @@ hunk headers is parsed as ONE contiguous hunk (the tool's docs say hunks are applied top-to-bottom, but the parser merged them). Two consequences: (1) when the merged old-code zone spans non-adjacent lines, matching fails with \"old code not found\"; (2) a mixed patch that DID apply produced a DUPLICATE block (the new header group was added while the old ProjectSelect was left in place), requiring a follow-up removal. Workaround that worked reliably: issue ONE @@ hunk per apply_diff call. Also: a pure-insertion hunk (only + lines) anchored on the file's `---` frontmatter delimiter is ambiguous (matches both the frontmatter close and the same delimiter elsewhere) — include the preceding frontmatter lines (tags/related) as context to disambiguate. Recommend fixing the multi-hunk parser in file__apply_diff (it is a core dev tool; the project principle says fix the tool, don't route around it)."
   }
 ]
