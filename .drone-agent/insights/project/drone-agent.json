@@ -1198,5 +1198,25 @@
   {
     "timestamp": "2026-11-10T02:26:25.637Z",
     "insight": "Two sibling code paths in drone-agent build LLM-facing tool names from foreign names, and only one sanitized: `mcp/index.ts` ran each MCP tool name through `sanitizeToolSegment` (`[^a-zA-Z0-9_-]`→`_`), but `plugins/extensions/tools.ts` concatenated the raw extension capability verbatim, so `extensions__<extId>__card.move` reached the model with a dot (ADR 028 / Kimi K2). Fixed by extracting `sanitizeToolSegment` to `drone-agent/src/shared/tool-name.ts` and using it in both. Lesson: when one of two parallel \"foreign name → tool name\" paths sanitizes, check the other; they drift silently because each has its own tests. Still unsanitized in the same path: the extension **id** segment (`extensions__<extId>__...`) — safe today because real ext ids are hyphenated node ids, but a dotted ext id would leak. Tracked as a latent edge, not fixed."
+  },
+  {
+    "timestamp": "2026-11-11T19:26:29.771Z",
+    "insight": "file__glob matches node_modules. A broad pattern such as `drone-swarm-project/**/*` returns the whole dependency tree and the result is truncated at about 157k tokens, which wastes a large part of the context window. Scope globs narrowly: by directory (`drone-swarm-project/bundle/*`) or by extension (`**/*.tsx` under a package). The same caution applies to file__list on a package root, which is safe, and to search__text, which is safe because it honours ignore rules."
+  },
+  {
+    "timestamp": "2026-11-11T19:28:21.685Z",
+    "insight": "The Obsidian project wiki index (`/home/unleet/Obsidian/drone-agent-project/index.md`) lags the repository. It said \"All 275 architecture decision records\" and \"Latest: 275-kanban-project-create-and-edit-ui\", but `docs/adr/` already held 276 (extension tool-name sanitization). A planner must discover the next free ADR number from the repository (`file__glob` on `docs/adr/27*.md`), never from the wiki index. The wiki index needs a maintenance pass."
+  },
+  {
+    "timestamp": "2026-11-11T19:28:21.688Z",
+    "insight": "swarm__wiki_read re-inflates the context on every call. In one planning session the page `plan-project-create-and-edit-ui` was read seven times, and each read returned the full page body (about 1000 words) even though the tool already tracked the read (its `agentReadCount` field went from 4 to 7). A re-read of a page already read in the same session should return the id, title, and a note instead of the full body. Until that exists, a planner must track what it has read and not re-call the tool."
+  },
+  {
+    "timestamp": "2026-11-11T19:28:31.794Z",
+    "insight": "A drone-swarm-project front-end bundle file must not import React. React is shared only through `globalThis.React`, and the bundle tsconfig sets `\"types\": []` with a hand-written `bundle/globals.d.ts` that declares the global `JSX` namespace. So a local component (for example the new `bundle/Button.tsx`) references `JSX.IntrinsicElements['button']` and returns plain JSX, and it declares no React import. The esbuild config externalises `react` and `react-dom`, and the host injects them. A bundle also cannot import host components (the host `Button`) or use Tailwind utility classes; it themes itself by reading the host CSS custom properties with `var(--...)`."
+  },
+  {
+    "timestamp": "2026-11-11T19:28:31.797Z",
+    "insight": "Persona ids are not guaranteed to exist for a persona named in a subagent dispatch. A dispatch with `persona: \"self-improvement\"` failed with `persona \"self-improvement\" not found` (exit 1), because no such persona is registered — `self-improvement` is a plugin, not a persona. When a plan step needs an insight logged, either call `self-improvement__insight` from the current session (mount the tool first with `runtime__mount_tool`) or dispatch a subagent with an existing persona such as `worker`."
   }
 ]
