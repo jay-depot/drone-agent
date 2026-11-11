@@ -1,5 +1,6 @@
 import type { ActionReply, Job } from './types';
 import { action } from './api';
+import { Button } from './Button';
 
 const POLL_MS = 3000;
 
@@ -32,7 +33,7 @@ export function QueueModal(props: { onClose: () => void }) {
       <div className="dsp-modal" onClick={event => event.stopPropagation()}>
         <header className="dsp-modal-header">
           <h2>Queue</h2>
-          <button onClick={props.onClose}>Close</button>
+          <Button onClick={props.onClose}>Close</Button>
         </header>
         <table className="dsp-queue-table">
           <thead>
@@ -55,10 +56,10 @@ export function QueueModal(props: { onClose: () => void }) {
                 <td>{new Date(job.createdAt).toLocaleString()}</td>
                 <td>
                   {job.state === 'failed' ? (
-                    <button onClick={() => retry(job.id)}>Retry</button>
+                    <Button onClick={() => retry(job.id)}>Retry</Button>
                   ) : null}
                   {job.state === 'queued' ? (
-                    <button onClick={() => cancel(job.id)}>Cancel</button>
+                    <Button onClick={() => cancel(job.id)}>Cancel</Button>
                   ) : null}
                 </td>
               </tr>

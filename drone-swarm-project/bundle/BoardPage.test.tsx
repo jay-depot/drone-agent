@@ -100,4 +100,29 @@ describe('BoardPage', () => {
       screen.getByRole('button', { name: 'New Project' })
     ).toBeInTheDocument();
   });
+
+  it('centers the columns area when there are no projects', async () => {
+    installApi([]);
+    render(<BoardPage />);
+    const hint = (await screen.findByText('No projects yet.')).closest(
+      '.dsp-columns'
+    );
+    expect(hint).toHaveClass('dsp-columns-empty');
+  });
+
+  it('shows the selected project name as the title', async () => {
+    installApi();
+    render(<BoardPage />);
+    expect(
+      await screen.findByRole('heading', { name: 'Alpha' })
+    ).toBeInTheDocument();
+  });
+
+  it('falls back to the Board title with no projects', async () => {
+    installApi([]);
+    render(<BoardPage />);
+    expect(
+      await screen.findByRole('heading', { name: 'Board' })
+    ).toBeInTheDocument();
+  });
 });

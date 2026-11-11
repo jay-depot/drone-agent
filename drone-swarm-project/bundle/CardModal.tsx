@@ -1,5 +1,6 @@
 import type { ActionReply, Card, MoveRecord, Project } from './types';
 import { action, uiErrors } from './api';
+import { Button } from './Button';
 
 function columnName(project: Project, columnId: string): string {
   const found = project.columns.find(column => column.id === columnId);
@@ -67,12 +68,13 @@ export function CardModal(props: {
       <div className="dsp-modal" onClick={event => event.stopPropagation()}>
         <header className="dsp-modal-header">
           <h2>Card</h2>
-          <button onClick={onClose}>Close</button>
+          <Button onClick={onClose}>Close</Button>
         </header>
 
         <label className="dsp-field">
           Title
           <input
+            className="dsp-input"
             value={title}
             onChange={event => setTitle(event.target.value)}
           />
@@ -81,6 +83,7 @@ export function CardModal(props: {
         <label className="dsp-field">
           Description
           <textarea
+            className="dsp-input"
             value={description}
             onChange={event => setDescription(event.target.value)}
           />
@@ -89,9 +92,9 @@ export function CardModal(props: {
         {error ? <p className="dsp-error">{error}</p> : null}
 
         <div className="dsp-modal-actions">
-          <button onClick={save} disabled={saving}>
+          <Button variant="primary" onClick={save} disabled={saving}>
             {saving ? 'Saving…' : 'Save'}
-          </button>
+          </Button>
         </div>
 
         <section className="dsp-card-meta">

@@ -5,6 +5,7 @@ import { CardModal } from './CardModal';
 import { ProjectModal } from './ProjectModal';
 import { ProjectSelect } from './ProjectSelect';
 import { useProjects } from './useProjects';
+import { Button } from './Button';
 
 const POLL_MS = 3000;
 
@@ -60,29 +61,40 @@ export function BoardPage() {
   return (
     <div className="dsp-board">
       <header className="dsp-board-header">
-        <ProjectSelect
-          projects={projects}
-          value={selected}
-          onChange={setSelected}
-          onNewProject={() => setModal({ mode: 'create' })}
-          showCount
-        />
-        <button
-          disabled={!selected || !project}
-          onClick={() => setModal({ mode: 'edit' })}
-        >
-          Edit Project
-        </button>
-        <button onClick={() => setQueueOpen(true)}>Queue</button>
+        <h1 className="dsp-title">
+          {projects.find(item => item.id === selected)?.name ?? 'Board'}
+        </h1>
+        <div className="dsp-header-controls">
+          <ProjectSelect
+            projects={projects}
+            value={selected}
+            onChange={setSelected}
+            onNewProject={() => setModal({ mode: 'create' })}
+            showCount
+          />
+          <Button
+            disabled={!selected || !project}
+            onClick={() => setModal({ mode: 'edit' })}
+          >
+            Edit Project
+          </Button>
+          <Button onClick={() => setQueueOpen(true)}>Queue</Button>
+        </div>
       </header>
 
-      <div className="dsp-columns">
+      <div
+        className={
+          projects.length === 0
+            ? 'dsp-columns dsp-columns-empty'
+            : 'dsp-columns'
+        }
+      >
         {projects.length === 0 ? (
           <div className="dsp-empty-hint">
             <p>No projects yet.</p>
-            <button onClick={() => setModal({ mode: 'create' })}>
+            <Button onClick={() => setModal({ mode: 'create' })}>
               New Project
-            </button>
+            </Button>
           </div>
         ) : null}
         {columns.map(column => (

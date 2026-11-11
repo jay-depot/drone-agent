@@ -54,4 +54,34 @@ describe('ProjectSelect', () => {
     await user.selectOptions(screen.getByRole('combobox'), 'p_2');
     expect(onChange).toHaveBeenCalledWith('p_2');
   });
+
+  it('shows an inert placeholder when there are no projects', () => {
+    render(
+      <ProjectSelect
+        projects={[]}
+        value={undefined}
+        onChange={() => {}}
+        onNewProject={() => {}}
+      />
+    );
+    const options = screen.getAllByRole('option');
+    expect(options[0]).toHaveTextContent('No projects yet');
+    expect(options[0]).toBeDisabled();
+    expect(options[options.length - 1]).toHaveTextContent('New Project…');
+  });
+
+  it('opens the modal from the sentinel when there are no projects', async () => {
+    const user = userEvent.setup();
+    const onNewProject = vi.fn();
+    render(
+      <ProjectSelect
+        projects={[]}
+        value={undefined}
+        onChange={() => {}}
+        onNewProject={onNewProject}
+      />
+    );
+    await user.selectOptions(screen.getByRole('combobox'), '__new_project__');
+    expect(onNewProject).toHaveBeenCalledTimes(1);
+  });
 });

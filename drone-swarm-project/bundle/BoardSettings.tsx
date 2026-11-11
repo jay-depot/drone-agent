@@ -2,6 +2,7 @@ import type { ActionReply, Column, Limits, Project } from './types';
 import { action, apiNavigate } from './api';
 import { ProjectSelect } from './ProjectSelect';
 import { useProjects } from './useProjects';
+import { Button } from './Button';
 
 export function BoardSettings() {
   const React = globalThis.React;
@@ -70,7 +71,7 @@ export function BoardSettings() {
           onChange={setSelected}
           onNewProject={() => apiNavigate('/board')}
         />
-        <button onClick={refresh}>Refresh</button>
+        <Button onClick={refresh}>Refresh</Button>
       </header>
 
       <section>
@@ -79,25 +80,29 @@ export function BoardSettings() {
           {columns.map(column => (
             <li key={column.id}>
               {column.name}
-              <button onClick={() => deleteColumn(column.id)}>Delete</button>
+              <Button onClick={() => deleteColumn(column.id)}>Delete</Button>
             </li>
           ))}
         </ul>
-        <input
-          placeholder="New column"
-          value={newColumn}
-          onChange={event => setNewColumn(event.target.value)}
-        />
-        <button onClick={addColumn}>Add column</button>
+        <div className="dsp-column-actions">
+          <input
+            className="dsp-input"
+            placeholder="New column"
+            value={newColumn}
+            onChange={event => setNewColumn(event.target.value)}
+          />
+          <Button onClick={addColumn}>Add column</Button>
+        </div>
       </section>
 
       <section>
         <h3>Limits</h3>
         {limits ? (
           <div>
-            <label>
+            <label className="dsp-field">
               Max concurrent
               <input
+                className="dsp-input"
                 type="number"
                 value={limits.maxConcurrentSessions}
                 onChange={event =>
@@ -107,9 +112,10 @@ export function BoardSettings() {
                 }
               />
             </label>
-            <label>
+            <label className="dsp-field">
               Max daily
               <input
+                className="dsp-input"
                 type="number"
                 value={limits.maxDailySessions}
                 onChange={event =>

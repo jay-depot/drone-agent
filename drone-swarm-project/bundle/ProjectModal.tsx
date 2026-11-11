@@ -1,6 +1,7 @@
 import type { ActionReply, Project } from './types';
 import { action, uiErrors } from './api';
 import { loadPickerBeacons, type PickerBeacon } from './beacons';
+import { Button } from './Button';
 
 export interface ProjectModalProps {
   mode: 'create' | 'edit';
@@ -126,17 +127,22 @@ export function ProjectModal(props: ProjectModalProps) {
       <div className="dsp-modal" onClick={event => event.stopPropagation()}>
         <header className="dsp-modal-header">
           <h2>{title}</h2>
-          <button onClick={onClose}>Close</button>
+          <Button onClick={onClose}>Close</Button>
         </header>
 
         <label className="dsp-field">
           Name
-          <input value={name} onChange={event => setName(event.target.value)} />
+          <input
+            className="dsp-input"
+            value={name}
+            onChange={event => setName(event.target.value)}
+          />
         </label>
 
         <label className="dsp-field">
           Beacon
           <select
+            className="dsp-select"
             value={beaconId}
             onChange={event => onBeaconChange(event.target.value)}
           >
@@ -152,6 +158,7 @@ export function ProjectModal(props: ProjectModalProps) {
         <label className="dsp-field">
           Working directory
           <select
+            className="dsp-select"
             value={workingDir}
             onChange={event => setWorkingDir(event.target.value)}
           >
@@ -167,9 +174,13 @@ export function ProjectModal(props: ProjectModalProps) {
         {error ? <p className="dsp-error">{error}</p> : null}
 
         <div className="dsp-modal-actions">
-          <button onClick={save} disabled={saving || !name.trim()}>
+          <Button
+            variant="primary"
+            onClick={save}
+            disabled={saving || !name.trim()}
+          >
             {saving ? 'Saving…' : submitLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

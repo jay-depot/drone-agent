@@ -128,6 +128,18 @@ modal cannot clear a working directory.
 
 See ADR [`275-kanban-project-create-and-edit-ui`](../adr/275-kanban-project-create-and-edit-ui.md).
 
+## Styling
+
+The bundle themes itself with `dsp-*` classes that read the host design tokens
+(`var(--primary)`, `var(--border)`, `var(--input)`, `var(--radius)`,
+`var(--foreground)`, `var(--muted-foreground)`, and so on) with fallback values.
+It cannot import the host components and cannot use Tailwind, because it is a
+separate esbuild build and only React is shared. A shared local `Button`
+component (`bundle/Button.tsx`) applies the button classes, so the class string
+is not repeated at every call site.
+
+See ADR [`277-kanban-bundle-host-theme-tokens`](../adr/277-kanban-bundle-host-theme-tokens.md).
+
 ## Running it
 
 ```bash

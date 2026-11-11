@@ -10,12 +10,26 @@ tags:
   - css-tokens
   - ADR-277
 created: 2026-11-11T19:25:47.249Z
-updated: 2026-11-11T19:25:47.249Z
+updated: 2026-11-11T19:38:51.452Z
 ---
 
 # Plan — Style the kanban bundle from the host's design tokens
 
 **Status**: Ready for execution. Branch `feat/kanban-extension-base`.
+
+**EXECUTED 2026-11-11** — all 14 steps done. LSP clean on every changed bundle
+file (the only repo diagnostics are pre-existing Tailwind v4 `@plugin`/
+`@custom-variant`/`@theme`/`@apply` warnings in the untouched
+`drone-coordinator-ui/src/index.css`). `pnpm -r run build` / `pnpm typecheck` /
+`pnpm run lint` exit 0; `pnpm test` 4714 passed / 19 skipped; bundle suite
+`pnpm --filter drone-swarm-project test:ui` 25/25. `drone-swarm-project/src/**`
+unchanged (D14 held). Files: `bundle/styles.css` (rewritten), new
+`bundle/Button.tsx`, `ProjectSelect.tsx`, `BoardPage.tsx`, `BoardSettings.tsx`,
+`ProjectModal.tsx`, `CardModal.tsx`, `QueueModal.tsx`, both test files. Docs:
+ADR 277, `docs/adr/index.md` row, `docs/agents/drone-swarm-project.md` Styling
+section, plus the Obsidian pointer stub / decisions index / module page / log /
+meta. Note: multi-hunk `file__apply_diff` patches were parsed as one contiguous
+hunk on this host — single-hunk patches per call worked reliably.
 **Executor**: persona `code` for the code steps. Persona `test` for the test and
 validation steps. One review pass at the end.
 **Origin**: planning session, 2026-11-11.
