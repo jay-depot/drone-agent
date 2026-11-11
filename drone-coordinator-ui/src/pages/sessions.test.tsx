@@ -68,8 +68,17 @@ const wsInstances: MockWebSocket[] = [];
 // Scripted list responses: each entry is the body returned by one successive
 // GET /api/sessions? call. The final entry repeats for any further calls.
 function pushWsMessage(msg: unknown) {
-  const ws = wsInstances[wsInstances.length - 1];
-  ws.onmessage?.({ data: JSON.stringify(msg) });
+  const data = JSON.stringify(msg);
+  for (const ws of wsInstances) {
+    ws.onmessage?.({ data });
+  }
+}
+
+async function waitForWsHandlers() {
+  await waitFor(() => {
+    expect(wsInstances.length).toBeGreaterThan(0);
+    expect(wsInstances.some(ws => ws.onmessage !== null)).toBe(true);
+  });
 }
 
 function scriptedFetch(
@@ -485,6 +494,7 @@ describe('SessionsPage live session events', () => {
 
     renderSessions();
     await screen.findByText('s-1');
+    await waitForWsHandlers();
     expect(sessionsCallCount(mockFetch)).toBe(1);
 
     await act(async () => {
@@ -508,6 +518,7 @@ describe('SessionsPage live session events', () => {
 
     renderSessions();
     await screen.findByText('s-1');
+    await waitForWsHandlers();
     expect(sessionsCallCount(mockFetch)).toBe(1);
 
     await act(async () => {
@@ -548,6 +559,7 @@ describe('SessionsPage live session events', () => {
 
     renderSessions();
     await screen.findByText('s-1');
+    await waitForWsHandlers();
     expect(sessionsCallCount(mockFetch)).toBe(1);
 
     await act(async () => {
@@ -578,6 +590,7 @@ describe('SessionsPage live session events', () => {
 
     renderSessions();
     await screen.findByText('s-arch');
+    await waitForWsHandlers();
 
     // The coordinator's reconnect snapshot is active-sessions-only; the old
     // handler injected these at the top of the list (the original bug).
@@ -612,6 +625,7 @@ describe('SessionsPage live session events', () => {
 
     renderSessions('?view=archived');
     await screen.findByText('s-1');
+    await waitForWsHandlers();
     expect(sessionsCallCount(mockFetch)).toBe(1);
     expect(String(lastSessionsCall(mockFetch))).toContain('status=archived');
 
