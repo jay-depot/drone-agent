@@ -59,7 +59,7 @@ const logger = {
  * Register this agent with the beacon
  */
 async function registerWithBeacon(): Promise<void> {
-  const maxRetries = 10;
+  const maxRetries = 30;
   const retryDelayMs = 2000;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
