@@ -2,6 +2,7 @@ import type { ActionReply, Card, Column, Project } from './types';
 import { action } from './api';
 import { QueueModal } from './QueueModal';
 import { CardModal } from './CardModal';
+import { CardCreateModal } from './CardCreateModal';
 import { ProjectModal } from './ProjectModal';
 import { ProjectSelect } from './ProjectSelect';
 import { useProjects } from './useProjects';
@@ -18,6 +19,9 @@ export function BoardPage() {
   const { projects, selected, setSelected, reload } = useProjects();
   const [project, setProject] = React.useState<Project | undefined>(undefined);
   const [queueOpen, setQueueOpen] = React.useState(false);
+  const [newCard, setNewCard] = React.useState<
+    { columnId: string; columnName: string } | undefined
+  >(undefined);
   const [modal, setModal] = React.useState<
     { mode: 'create' } | { mode: 'edit' } | undefined
   >(undefined);
@@ -133,11 +137,34 @@ export function BoardPage() {
                   </span>
                 </div>
               ))}
+            <Button
+              variant="ghost"
+              className="dsp-add-card"
+              aria-label={`Add card to ${column.name}`}
+              onClick={() =>
+                setNewCard({ columnId: column.id, columnName: column.name })
+              }
+            >
+              + Add card
+            </Button>
           </div>
         ))}
       </div>
 
       {queueOpen ? <QueueModal onClose={() => setQueueOpen(false)} /> : null}
+      {newCard && selected ? (
+        <CardCreateModal
+          projectId={selected}
+          columnId={newCard.columnId}
+          columnName={newCard.columnName}
+          onClose={() => setNewCard(undefined)}
+          onCreated={() => {
+            setNewCard(undefined);
+            void loadBoard(selected);
+            void reload();
+          }}
+        />
+      ) : null}
       {modal ? (
         <ProjectModal
           mode={modal.mode}

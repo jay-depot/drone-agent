@@ -125,4 +125,25 @@ describe('BoardPage', () => {
       await screen.findByRole('heading', { name: 'Board' })
     ).toBeInTheDocument();
   });
+
+  it('renders one Add card button per column with a column label', async () => {
+    installApi();
+    render(<BoardPage />);
+    const button = await screen.findByRole('button', {
+      name: 'Add card to Todo',
+    });
+    expect(button).toBeInTheDocument();
+  });
+
+  it('opens the new-card modal from the column button', async () => {
+    const user = userEvent.setup();
+    installApi();
+    render(<BoardPage />);
+    await user.click(
+      await screen.findByRole('button', { name: 'Add card to Todo' })
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'New card' })
+    ).toBeInTheDocument();
+  });
 });
