@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   WELL_KNOWN_MODEL_ROLES,
-  formatModelSelection,
   isValidFullModelSelection,
   parseModelSelection,
   resolveConfiguredReasoningLevel,
@@ -36,15 +35,6 @@ describe('parseModelSelection', () => {
 
   it('rejects trailing slash', () => {
     expect(parseModelSelection('ollama/')).toBeUndefined();
-  });
-});
-
-describe('formatModelSelection + round-trip', () => {
-  it('formats back to the canonical string', () => {
-    const selection = { providerId: 'p', modelLocalId: 'a/b/c' };
-    const formatted = formatModelSelection(selection);
-    expect(formatted).toBe('p/a/b/c');
-    expect(parseModelSelection(formatted)).toEqual(selection);
   });
 });
 

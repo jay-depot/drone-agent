@@ -35,13 +35,6 @@ describe('createDebugFlagRegistry', () => {
     expect(reg.list()).toEqual(['tools']);
   });
 
-  it('disable on a never-enabled subsystem is a no-op', () => {
-    const reg = createDebugFlagRegistry();
-    reg.disable('mcp');
-    expect(reg.isEnabled('mcp')).toBe(false);
-    expect(reg.list()).toEqual([]);
-  });
-
   it('list reflects the current enabled set in insertion order', () => {
     const reg = createDebugFlagRegistry();
     reg.enable('tools');

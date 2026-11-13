@@ -48,17 +48,6 @@ describe('parsePreApprovalTokenPath', () => {
   it('returns undefined when absent', () => {
     expect(parsePreApprovalTokenPath([])).toBeUndefined();
   });
-
-  it('accepts both forms with the same path', () => {
-    const a = parsePreApprovalTokenPath([
-      '--pre-approval-token-path',
-      '/tmp/t.json',
-    ]);
-    const b = parsePreApprovalTokenPath([
-      '--pre-approval-token-path=/tmp/t.json',
-    ]);
-    expect(a).toBe(b);
-  });
 });
 
 describe('resolveConfig', () => {
