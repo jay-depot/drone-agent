@@ -1,6 +1,6 @@
 [
   {
-    "principle": "When a core developer tool fails repeatedly against its own domain, invest in fixing the tool rather than permanently routing around it. (Historical note: file__apply_diff reliability complaints fell off completely after the aggressive format-aware fuzz rewrite landed 2026-07-19/20; the remaining 08-01 concern is under-utilization, not failure.)",
+    "principle": "When a core developer tool fails repeatedly against its own domain, invest in fixing the tool rather than permanently routing around it. (Status note, corrected 2026-11-13: the format-aware fuzz rewrite of 2026-07-19/20 fixed the older failure class - context and whitespace mismatch - and those complaints stopped. A different class persists and recurs: a hunk can land in the wrong place, apply twice, merge with a neighbouring hunk, or report success while writing nothing. See the theme review of 2026-11-13. The principle stands.)",
     "source": "Promoted from apply_diff reliability insights (item 1 of theme review)",
     "createdAt": "2026-08-11T00:01:21.921Z"
   },
@@ -23,5 +23,30 @@
     "principle": "After editing drone-core (or any dependency package) types, run `pnpm -r run build` before relying on LSP/typecheck in dependent packages — they resolve the dependency from its built dist/ (package.json \"types\": \"./dist/index.d.ts\"), not from source, so you'll otherwise chase stale diagnostics.",
     "source": "Promoted from build/package-resolution insight (item 6 of theme review)",
     "createdAt": "2026-08-11T00:12:10.002Z"
+  },
+  {
+    "principle": "After each file change, verify that the change is present. A tool can report success and write nothing. A cached diagnostic can show errors that are gone, or hide errors that are present. Search the file for the new text, and for the old text. A summary of zero changes is a failure. Use the compiler first for the truth about the tree, then a search, then the language server. The language server is a convenience, not a gate.",
+    "source": "Promoted from \"verify the write; build is truth\" insights (item 2 of the 2026-11-13 theme review)",
+    "createdAt": "2026-11-13T19:47:41.522Z"
+  },
+  {
+    "principle": "A test that a mock satisfies proves nothing about the product. When an assertion is satisfied by an injected fake, the fake is the thing under test — and it can hide a missing implementation for months. For code that crosses a process, network, native, or library boundary, assert against the real implementation at least once. When you write or review a regression test, name the assertion that discriminates: ask whether the test fails if the change is reverted, and prove it by reverting. A doc or plan claim about a user-visible behaviour is not evidence that the behaviour exists — read the code, or recover the originating spec from git, before deciding which side is wrong.",
+    "source": "Promoted from \"a test a mock satisfies proves nothing\" insights (item 3 of the 2026-11-13 theme review)",
+    "createdAt": "2026-11-13T19:47:49.968Z"
+  },
+  {
+    "principle": "When two code paths must agree on one rule, extract the rule into one shared pure function; do not implement it twice. Duplicated rules drift in silence, because each copy has its own tests. This covers precedence and ordering rules, \"estimate vs actual\" pairs, and any policy that two sibling paths, two server packages, or two plugins must honour. Before writing a rule a second time, search for an existing implementation.",
+    "source": "Promoted from \"one rule, one implementation\" insights (item 4 of the 2026-11-13 theme review)",
+    "createdAt": "2026-11-13T19:47:54.441Z"
+  },
+  {
+    "principle": "A gate that covers nothing is worse than no gate, because it reports green. Prove a validation gate bites before you trust it: inject a deliberate error, or count the files the gate actually loaded. A clean exit code proves nothing when a pattern matched no files. Check that CI runs the suite; check that the test runner type-checks; check that a config glob matches what it appears to match.",
+    "source": "Promoted from \"a gate that covers nothing still reports green\" insights (item 5 of the 2026-11-13 theme review)",
+    "createdAt": "2026-11-13T19:47:59.510Z"
+  },
+  {
+    "principle": "A claim that a capability exists is not evidence that it exists. A config key, a doc, a spec, a wiki page, or a contract field that nothing reads is a false statement that reads as fact — and it is invisible to the type checker, the linter, and the tests. Before depending on a documented behaviour, find the code that reads it. When a refactor removes the only consumer of a producer, delete the producer in the same change. When a doc and the code disagree, recover the originating spec from git before deciding which side is wrong.",
+    "source": "Promoted from \"dead seams and stale docs claim behaviour the code lacks\" insights (items 5 and 6 of the 2026-11-13 theme review)",
+    "createdAt": "2026-11-13T19:48:06.708Z"
   }
 ]

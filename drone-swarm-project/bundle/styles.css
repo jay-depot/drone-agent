@@ -80,6 +80,28 @@
   filter: brightness(0.92);
 }
 
+.dsp-btn-ghost {
+  color: var(--muted-foreground, inherit);
+  background: transparent;
+  border-color: transparent;
+}
+
+.dsp-btn-ghost:hover:not(:disabled) {
+  color: var(--foreground, inherit);
+  background: var(--muted, rgba(127, 127, 127, 0.12));
+}
+
+.dsp-add-card {
+  display: flex;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.dsp-muted {
+  margin: 0 0 10px;
+  color: var(--muted-foreground, inherit);
+}
+
 .dsp-input,
 .dsp-select {
   font: inherit;

@@ -30,6 +30,10 @@ authored as TypeScript JSX under `bundle/` and compiled with esbuild into
    board page and the settings panel gains a `New Project…` option that opens a
    project modal (name, beacon, working directory). The board page also has an
    `Edit Project` button for the selected project (ADR 275).
+7. **Creates cards from the board.** Every column has an **Add card** button at
+   its bottom that opens a new-card modal (title, description). The card is
+   created in that column; on success the modal closes and the board and the
+   project list reload (ADR 278).
 
 ## Capability tiers
 

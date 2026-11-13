@@ -128,6 +128,35 @@ modal cannot clear a working directory.
 
 See ADR [`275-kanban-project-create-and-edit-ui`](../adr/275-kanban-project-create-and-edit-ui.md).
 
+## Create a card from the board
+
+Every column has an **Add card** button at its bottom. The button is a full
+width **ghost** button and is always visible. Its label is `+ Add card`, and its
+accessible name is `Add card to <column name>`.
+
+A click opens the **New card** modal. The target column is fixed: it is the
+column whose button was clicked. The modal shows the column name as read-only
+text; there is no column picker. The modal has a **Title** field and a
+**Description** field. The Title field is focused on open. The Create button is
+disabled while the title is empty and while a create is in progress. A failed
+create shows an inline error and keeps the modal open.
+
+On success the modal closes, the board reloads, and the project list reloads
+(the dropdown shows a card count). The new card goes to the **end** of the
+column.
+
+`card.create` is `mcp`-tier, so the UI can already call it. No server change was
+needed. A create can fire an automation: `card.create` already enqueues for a
+wildcard-from rule (`* → <column>`). This is accepted — card creation is an
+arrival in the column. A card created by the UI records `actor: 'user'`.
+
+The `New card` modal, `CardModal`, `ProjectModal`, and `QueueModal` all use a
+shared `Modal` shell (`bundle/Modal.tsx`). The shell owns the backdrop, the
+panel, the header (`<h2>` + Close), and the Escape listener; the children are
+the body only. `Button` gains a third variant, `ghost`, for the add-card button.
+
+See ADR [`278-kanban-add-card-ui`](../adr/278-kanban-add-card-ui.md).
+
 ## Styling
 
 The bundle themes itself with `dsp-*` classes that read the host design tokens

@@ -1,5 +1,6 @@
 import type { ActionReply, Card, MoveRecord, Project } from './types';
 import { action, uiErrors } from './api';
+import { Modal } from './Modal';
 import { Button } from './Button';
 
 function columnName(project: Project, columnId: string): string {
@@ -29,14 +30,6 @@ export function CardModal(props: {
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | undefined>(undefined);
 
-  React.useEffect(() => {
-    function onKey(event: KeyboardEvent): void {
-      if (event.key === 'Escape') onClose();
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
   function save(): void {
     if (saving) return;
     setSaving(true);
@@ -64,64 +57,57 @@ export function CardModal(props: {
   const history = card.history ?? [];
 
   return (
-    <div className="dsp-modal-backdrop" onClick={onClose}>
-      <div className="dsp-modal" onClick={event => event.stopPropagation()}>
-        <header className="dsp-modal-header">
-          <h2>Card</h2>
-          <Button onClick={onClose}>Close</Button>
-        </header>
+    <Modal title="Card" onClose={onClose}>
+      <label className="dsp-field">
+        Title
+        <input
+          className="dsp-input"
+          value={title}
+          onChange={event => setTitle(event.target.value)}
+        />
+      </label>
 
-        <label className="dsp-field">
-          Title
-          <input
-            className="dsp-input"
-            value={title}
-            onChange={event => setTitle(event.target.value)}
-          />
-        </label>
+      <label className="dsp-field">
+        Description
+        <textarea
+          className="dsp-input"
+          value={description}
+          onChange={event => setDescription(event.target.value)}
+        />
+      </label>
 
-        <label className="dsp-field">
-          Description
-          <textarea
-            className="dsp-input"
-            value={description}
-            onChange={event => setDescription(event.target.value)}
-          />
-        </label>
+      {error ? <p className="dsp-error">{error}</p> : null}
 
-        {error ? <p className="dsp-error">{error}</p> : null}
-
-        <div className="dsp-modal-actions">
-          <Button variant="primary" onClick={save} disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
-          </Button>
-        </div>
-
-        <section className="dsp-card-meta">
-          <h3>Details</h3>
-          <dl>
-            <dt>Status</dt>
-            <dd>{card.sessionStatus ?? 'idle'}</dd>
-            <dt>Column</dt>
-            <dd>{columnName(project, card.columnId)}</dd>
-            <dt>Session</dt>
-            <dd>{card.sessionId ?? 'none'}</dd>
-          </dl>
-        </section>
-
-        <section className="dsp-card-history">
-          <h3>History</h3>
-          {history.length === 0 ? (
-            <p>No moves recorded.</p>
-          ) : (
-            <ul>
-              {[...history].reverse().map((record, index) => (
-                <li key={index}>{historyLine(project, record)}</li>
-              ))}
-            </ul>
-          )}
-        </section>
+      <div className="dsp-modal-actions">
+        <Button variant="primary" onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save'}
+        </Button>
       </div>
-    </div>
+
+      <section className="dsp-card-meta">
+        <h3>Details</h3>
+        <dl>
+          <dt>Status</dt>
+          <dd>{card.sessionStatus ?? 'idle'}</dd>
+          <dt>Column</dt>
+          <dd>{columnName(project, card.columnId)}</dd>
+          <dt>Session</dt>
+          <dd>{card.sessionId ?? 'none'}</dd>
+        </dl>
+      </section>
+
+      <section className="dsp-card-history">
+        <h3>History</h3>
+        {history.length === 0 ? (
+          <p>No moves recorded.</p>
+        ) : (
+          <ul>
+            {[...history].reverse().map((record, index) => (
+              <li key={index}>{historyLine(project, record)}</li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </Modal>
   );
 }

@@ -1,6 +1,7 @@
 [
   {
     "timestamp": "2026-06-30T02:05:39.646Z",
-    "insight": "The coordinator web UI plan (3.11) was designed as a separate monorepo package (drone-coordinator-ui) with React/shadcn/ui/tweakcn, served by the coordinator via @fastify/static. Key architectural decision: the UI is a workspace dependency of the coordinator, making npm publishing straightforward. WebSocket-based real-time updates were chosen over polling for the session peek feature."
+    "insight": "The coordinator web UI plan (3.11) was designed as a separate monorepo package (drone-coordinator-ui) with React/shadcn/ui/tweakcn, served by the coordinator via @fastify/static. Key architectural decision: the UI is a workspace dependency of the coordinator, making npm publishing straightforward. WebSocket-based real-time updates were chosen over polling for the session peek feature.",
+    "lastExamined": "2026-11-13T19:48:37.380Z"
   }
 ]

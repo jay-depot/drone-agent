@@ -1,58 +1,72 @@
 [
   {
     "timestamp": "2026-06-23T00:44:07.359Z",
-    "insight": "The InputLine's MultilineTextInput uses a <Text> component with default textWrap='wrap', which causes the input box to grow vertically when text exceeds the available width. This breaks the single-line input assumption and causes border rendering artifacts."
+    "insight": "The InputLine's MultilineTextInput uses a <Text> component with default textWrap='wrap', which causes the input box to grow vertically when text exceeds the available width. This breaks the single-line input assumption and causes border rendering artifacts.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-06-23T01:13:31.189Z",
-    "insight": "The MultilineTextInput's renderWithCursor uses nested <Text inverse>{' '}</Text> for the cursor block. Nested <Text> elements create separate yoga nodes, and during re-render the text node measurement gets confused, causing the inverse cursor space to be positioned on the BOTTOM BORDER LINE instead of the content line. This is why every character typed adds a \"copy of the top border\" to the chat stream: the cursor renders on the border, corrupting it, and the log-update eraseLines mechanism leaves artifacts. Using raw ANSI escape codes (\\u001b[7m \\u001b[27m) within a single <Text> string avoids this entirely — only one text node to measure and position."
+    "insight": "The MultilineTextInput's renderWithCursor uses nested <Text inverse>{' '}</Text> for the cursor block. Nested <Text> elements create separate yoga nodes, and during re-render the text node measurement gets confused, causing the inverse cursor space to be positioned on the BOTTOM BORDER LINE instead of the content line. This is why every character typed adds a \"copy of the top border\" to the chat stream: the cursor renders on the border, corrupting it, and the log-update eraseLines mechanism leaves artifacts. Using raw ANSI escape codes (\\u001b[7m \\u001b[27m) within a single <Text> string avoids this entirely — only one text node to measure and position.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-06-23T01:13:37.539Z",
-    "insight": "The MultilineTextInput's <Text> uses default textWrap='wrap', which causes the input box to grow vertically when text exceeds the available width. This breaks the single-line input assumption and pushes the right border to the next line. Using wrap=\"truncate\" keeps the input on a single line and truncates with an ellipsis, which is the correct behavior for a chat input line."
+    "insight": "The MultilineTextInput's <Text> uses default textWrap='wrap', which causes the input box to grow vertically when text exceeds the available width. This breaks the single-line input assumption and pushes the right border to the next line. Using wrap=\"truncate\" keeps the input on a single line and truncates with an ellipsis, which is the correct behavior for a chat input line.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-06-23T01:13:40.303Z",
-    "insight": "ink-text-input (the original library that was replaced by MultilineTextInput) uses chalk.inverse() to render the cursor within a single text string, not nested <Text> elements. This is the correct pattern — a single text node with ANSI escape codes for styling avoids the yoga layout/measure bugs that nested <Text> causes during re-render."
+    "insight": "ink-text-input (the original library that was replaced by MultilineTextInput) uses chalk.inverse() to render the cursor within a single text string, not nested <Text> elements. This is the correct pattern — a single text node with ANSI escape codes for styling avoids the yoga layout/measure bugs that nested <Text> causes during re-render.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-01T23:25:09.695Z",
-    "insight": "The TUI's formatDiffResult checks for obj.written === true but file__apply_diff returns obj.patched === true. Additionally, formatDiffOutput classifies lines by their first character (+/-/@@/---), but when the tool returns colored output, lines start with ANSI escape codes instead, breaking classification. The tool should return plain text and let the TUI handle coloring."
+    "insight": "The TUI's formatDiffResult checks for obj.written === true but file__apply_diff returns obj.patched === true. Additionally, formatDiffOutput classifies lines by their first character (+/-/@@/---), but when the tool returns colored output, lines start with ANSI escape codes instead, breaking classification. The tool should return plain text and let the TUI handle coloring.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-02T00:29:21.574Z",
-    "insight": "Ink 6.8.0's `incrementalRendering` mode has a bug with bordered `<Box>` components — the line-by-line diffing mispositions content when text inside a bordered box changes. The `useDebouncedWindowSize` hook already mitigates resize flicker, so incremental rendering is unnecessary. Standard full-redraw mode works correctly with Ink 6."
+    "insight": "Ink 6.8.0's `incrementalRendering` mode has a bug with bordered `<Box>` components — the line-by-line diffing mispositions content when text inside a bordered box changes. The `useDebouncedWindowSize` hook already mitigates resize flicker, so incremental rendering is unnecessary. Standard full-redraw mode works correctly with Ink 6.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-02T00:42:40.047Z",
-    "insight": "When the terminal window is shrunk during a resize drag, Ink's log.clear() (which uses eraseLines) can't reach stamped characters above the new viewport. Writing \\u001B[2J (eraseScreen) on the trailing edge of the debounced resize, just before the React re-render, cleans up artifacts without visible flash because both the clear and repaint happen in the same synchronous JS task."
+    "insight": "When the terminal window is shrunk during a resize drag, Ink's log.clear() (which uses eraseLines) can't reach stamped characters above the new viewport. Writing \\u001B[2J (eraseScreen) on the trailing edge of the debounced resize, just before the React re-render, cleans up artifacts without visible flash because both the clear and repaint happen in the same synchronous JS task.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-02T00:44:50.198Z",
-    "insight": "Writing \\u001B[2J to stdout on the trailing edge of debounced resize caused flicker because Ink's `resized()` handler already fires on every resize event during the drag. The eraseScreen + repaint in the debounce callback was too noticeable. Accept the stamped border artifact on terminal shrink as an Ink 6 limitation."
+    "insight": "Writing \\u001B[2J to stdout on the trailing edge of debounced resize caused flicker because Ink's `resized()` handler already fires on every resize event during the drag. The eraseScreen + repaint in the debounce callback was too noticeable. Accept the stamped border artifact on terminal shrink as an Ink 6 limitation.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-08T04:02:24.792Z",
-    "insight": "TUI tail→scrollback handoff loses formatting: commitItem() serializes TailItems to plain {text,kind} ChatEntries via toEntry(), discarding the live React component. Assistant messages commit as kind:'plain' (no color, no markdown), and the 'markdown' ChatEntry kind + Markdown component are dead code (never produced). Tool results flatten custom renderComponents and truncate to 200 chars (preview). Fix: have toEntry() return a ReactNode snapshot stored on ChatEntry.node, rendered inside <Static> instead of re-deriving a coerced string; lets assistant messages/git diffs keep exact formatting and removes duplicated preview()/tryParseJson()/diff-formatters across app.tsx, diff-format.ts, ToolCallProgress.tsx, GitDiffBlock.tsx."
+    "insight": "TUI tail→scrollback handoff loses formatting: commitItem() serializes TailItems to plain {text,kind} ChatEntries via toEntry(), discarding the live React component. Assistant messages commit as kind:'plain' (no color, no markdown), and the 'markdown' ChatEntry kind + Markdown component are dead code (never produced). Tool results flatten custom renderComponents and truncate to 200 chars (preview). Fix: have toEntry() return a ReactNode snapshot stored on ChatEntry.node, rendered inside <Static> instead of re-deriving a coerced string; lets assistant messages/git diffs keep exact formatting and removes duplicated preview()/tryParseJson()/diff-formatters across app.tsx, diff-format.ts, ToolCallProgress.tsx, GitDiffBlock.tsx.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-08T04:15:55.718Z",
-    "insight": "TUI code (drone-agent/src/tui/**) has ZERO direct test coverage and is excluded from the vitest coverage config (vitest.config.ts coverage.exclude). Planning the tail→scrollback refactor required building tests for useTailRegion/useChatLog/ChatLog/App commit-flow entirely from scratch because the only harness precedent is InputLineShell. Consider removing tui from the coverage exclusion so future regressions in the TUI are caught."
+    "insight": "TUI code (drone-agent/src/tui/**) has ZERO direct test coverage and is excluded from the vitest coverage config (vitest.config.ts coverage.exclude). Planning the tail→scrollback refactor required building tests for useTailRegion/useChatLog/ChatLog/App commit-flow entirely from scratch because the only harness precedent is InputLineShell. Consider removing tui from the coverage exclusion so future regressions in the TUI are caught.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-08T04:50:37.905Z",
-    "insight": "Pre-existing bug surfaced during the tail→scrollback refactor: Markdown.tsx called `marked.parse(children)` which returns a STRING in marked v18, but renderToken expects a token array, so `tokens.map is not a function` crashed. Fix: `marked.lexer(children)`. The `markdown` ChatEntry kind + Markdown component were dead code precisely because they never worked — when wiring assistant messages through Markdown, fix this first or the TUI crashes at runtime. Also: file__apply_diff was unreliable on several files here (block-comment/comment-adjacent hunks failed to match even when exact); sed / full file__write were far more reliable for those edits."
+    "insight": "Pre-existing bug surfaced during the tail→scrollback refactor: Markdown.tsx called `marked.parse(children)` which returns a STRING in marked v18, but renderToken expects a token array, so `tokens.map is not a function` crashed. Fix: `marked.lexer(children)`. The `markdown` ChatEntry kind + Markdown component were dead code precisely because they never worked — when wiring assistant messages through Markdown, fix this first or the TUI crashes at runtime. Also: file__apply_diff was unreliable on several files here (block-comment/comment-adjacent hunks failed to match even when exact); sed / full file__write were far more reliable for those edits.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-08T17:24:15.779Z",
-    "insight": "Tool calls lost their color at the Tail→Static handoff whenever a color override (persona/plugin tint) was active. Root cause: applyTint() in theme.tsx tinted `toolCall` but NOT `toolResult`. A running call rendered with the tint (scheme.toolCall=tint), but the committed done-result rendered white (scheme.toolResult=untinted) — visible magenta→white de-coloring at commit. Fixed by adding `toolResult: tint` to applyTint so a tool's color identity survives the handoff. ADR 055 was correct that node carries formatting; the gap was purely a scheme/tint scoping bug."
+    "insight": "Tool calls lost their color at the Tail→Static handoff whenever a color override (persona/plugin tint) was active. Root cause: applyTint() in theme.tsx tinted `toolCall` but NOT `toolResult`. A running call rendered with the tint (scheme.toolCall=tint), but the committed done-result rendered white (scheme.toolResult=untinted) — visible magenta→white de-coloring at commit. Fixed by adding `toolResult: tint` to applyTint so a tool's color identity survives the handoff. ADR 055 was correct that node carries formatting; the gap was purely a scheme/tint scoping bug.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-20T01:00:18.491Z",
-    "insight": "The file__apply_diff tool can silently apply hunks multiple times when the context matches multiple locations. In this session, the first hunk (inserting helper functions) was applied twice because the context lines matched both the intended location and another location in the file. Always verify the result of apply_diff by checking for duplicate content, especially when inserting new code blocks rather than modifying existing ones."
+    "insight": "The file__apply_diff tool can silently apply hunks multiple times when the context matches multiple locations. In this session, the first hunk (inserting helper functions) was applied twice because the context lines matched both the intended location and another location in the file. Always verify the result of apply_diff by checking for duplicate content, especially when inserting new code blocks rather than modifying existing ones.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-20T01:15:13.955Z",
-    "insight": "renderHighlightedTree fix: lowlight's AST is flat (tree.children is an array of tokens, not lines). Newlines are embedded inside text node values. The fix builds a single ANSI string from all tokens, then splits on \\n to create one <Text> per logical line. This was the second bug after the initial ANSI escape code fix — the first fix treated each token as a line, causing spurious line breaks between every token."
+    "insight": "renderHighlightedTree fix: lowlight's AST is flat (tree.children is an array of tokens, not lines). Newlines are embedded inside text node values. The fix builds a single ANSI string from all tokens, then splits on \\n to create one <Text> per logical line. This was the second bug after the initial ANSI escape code fix — the first fix treated each token as a line, causing spurious line breaks between every token.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   }
 ]

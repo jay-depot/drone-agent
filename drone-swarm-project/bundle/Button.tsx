@@ -1,6 +1,6 @@
 type ButtonProps = JSX.IntrinsicElements['button'] & {
-  /** `primary` is the filled style. The default is the outline style. */
-  variant?: 'default' | 'primary';
+  /** `primary` is filled. `ghost` is low emphasis. The default is outline. */
+  variant?: 'default' | 'primary' | 'ghost';
 };
 
 /**
@@ -14,7 +14,12 @@ export function Button({
   className,
   ...rest
 }: ButtonProps) {
-  const base = variant === 'primary' ? 'dsp-btn dsp-btn-primary' : 'dsp-btn';
+  const base =
+    variant === 'primary'
+      ? 'dsp-btn dsp-btn-primary'
+      : variant === 'ghost'
+        ? 'dsp-btn dsp-btn-ghost'
+        : 'dsp-btn';
   return (
     <button className={className ? `${base} ${className}` : base} {...rest} />
   );

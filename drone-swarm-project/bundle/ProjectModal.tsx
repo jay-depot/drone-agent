@@ -1,6 +1,7 @@
 import type { ActionReply, Project } from './types';
 import { action, uiErrors } from './api';
 import { loadPickerBeacons, type PickerBeacon } from './beacons';
+import { Modal } from './Modal';
 import { Button } from './Button';
 
 export interface ProjectModalProps {
@@ -52,14 +53,6 @@ export function ProjectModal(props: ProjectModalProps) {
       cancelled = true;
     };
   }, [mode]);
-
-  React.useEffect(() => {
-    function onKey(event: KeyboardEvent): void {
-      if (event.key === 'Escape') onClose();
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
 
   const beaconOptions: PickerBeacon[] = [...beacons];
   if (beaconId && !beaconOptions.some(beacon => beacon.id === beaconId)) {
@@ -123,66 +116,59 @@ export function ProjectModal(props: ProjectModalProps) {
   const submitLabel = mode === 'edit' ? 'Save' : 'Create';
 
   return (
-    <div className="dsp-modal-backdrop" onClick={onClose}>
-      <div className="dsp-modal" onClick={event => event.stopPropagation()}>
-        <header className="dsp-modal-header">
-          <h2>{title}</h2>
-          <Button onClick={onClose}>Close</Button>
-        </header>
+    <Modal title={title} onClose={onClose}>
+      <label className="dsp-field">
+        Name
+        <input
+          className="dsp-input"
+          value={name}
+          onChange={event => setName(event.target.value)}
+        />
+      </label>
 
-        <label className="dsp-field">
-          Name
-          <input
-            className="dsp-input"
-            value={name}
-            onChange={event => setName(event.target.value)}
-          />
-        </label>
+      <label className="dsp-field">
+        Beacon
+        <select
+          className="dsp-select"
+          value={beaconId}
+          onChange={event => onBeaconChange(event.target.value)}
+        >
+          <option value={NONE}>None</option>
+          {beaconOptions.map(beacon => (
+            <option key={beacon.id} value={beacon.id}>
+              {beacon.name}
+            </option>
+          ))}
+        </select>
+      </label>
 
-        <label className="dsp-field">
-          Beacon
-          <select
-            className="dsp-select"
-            value={beaconId}
-            onChange={event => onBeaconChange(event.target.value)}
-          >
-            <option value={NONE}>None</option>
-            {beaconOptions.map(beacon => (
-              <option key={beacon.id} value={beacon.id}>
-                {beacon.name}
-              </option>
-            ))}
-          </select>
-        </label>
+      <label className="dsp-field">
+        Working directory
+        <select
+          className="dsp-select"
+          value={workingDir}
+          onChange={event => setWorkingDir(event.target.value)}
+        >
+          <option value={NONE}>None</option>
+          {rootOptions.map(root => (
+            <option key={root} value={root}>
+              {root}
+            </option>
+          ))}
+        </select>
+      </label>
 
-        <label className="dsp-field">
-          Working directory
-          <select
-            className="dsp-select"
-            value={workingDir}
-            onChange={event => setWorkingDir(event.target.value)}
-          >
-            <option value={NONE}>None</option>
-            {rootOptions.map(root => (
-              <option key={root} value={root}>
-                {root}
-              </option>
-            ))}
-          </select>
-        </label>
+      {error ? <p className="dsp-error">{error}</p> : null}
 
-        {error ? <p className="dsp-error">{error}</p> : null}
-
-        <div className="dsp-modal-actions">
-          <Button
-            variant="primary"
-            onClick={save}
-            disabled={saving || !name.trim()}
-          >
-            {saving ? 'Saving…' : submitLabel}
-          </Button>
-        </div>
+      <div className="dsp-modal-actions">
+        <Button
+          variant="primary"
+          onClick={save}
+          disabled={saving || !name.trim()}
+        >
+          {saving ? 'Saving…' : submitLabel}
+        </Button>
       </div>
-    </div>
+    </Modal>
   );
 }
