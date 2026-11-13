@@ -1,222 +1,277 @@
 [
   {
     "timestamp": "2026-06-22T20:05:57.739Z",
-    "insight": "The `file.apply_diff` tool can produce incorrect results when the oldLines don't exactly match the file content. In this case, the diff was applied inside the wrong block (inside the `log` block instead of after it). I had to fall back to `file.write` with the full file content to fix it. For large files, it's safer to use `file.read` + `file.write` for structural changes rather than `file.apply_diff`."
+    "insight": "The `file.apply_diff` tool can produce incorrect results when the oldLines don't exactly match the file content. In this case, the diff was applied inside the wrong block (inside the `log` block instead of after it). I had to fall back to `file.write` with the full file content to fix it. For large files, it's safer to use `file.read` + `file.write` for structural changes rather than `file.apply_diff`.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-06-27T19:39:59.971Z",
-    "insight": "When implementing database schema changes or complex code, avoid sed for multi-line insertions - it breaks easily and produces syntax errors. Write complete files or use proper tooling instead."
+    "insight": "When implementing database schema changes or complex code, avoid sed for multi-line insertions - it breaks easily and produces syntax errors. Write complete files or use proper tooling instead.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-06-29T00:24:14.754Z",
-    "insight": "The `file.apply_diff` tool has issues with multi-line hunks containing special characters. It failed multiple times during the slash command refactor. Using `file.write` to write complete files was more reliable for complex changes."
+    "insight": "The `file.apply_diff` tool has issues with multi-line hunks containing special characters. It failed multiple times during the slash command refactor. Using `file.write` to write complete files was more reliable for complex changes.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-06-29T00:24:14.759Z",
-    "insight": "The `sed` command is fragile for multi-line code insertions in TypeScript files. It's better to use `file.write` with the complete file content or use targeted `file.apply_diff` with simple hunks. The macros test file got accidentally truncated by a bad sed command and had to be restored from git."
+    "insight": "The `sed` command is fragile for multi-line code insertions in TypeScript files. It's better to use `file.write` with the complete file content or use targeted `file.apply_diff` with simple hunks. The macros test file got accidentally truncated by a bad sed command and had to be restored from git.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-06-29T02:35:51.619Z",
-    "insight": "The beacon routes.ts had a syntax error in the principles delete handler (missing closing braces) that caused the wiki routes to be placed outside the registerRoutes function. This was a pre-existing bug that needed fixing alongside the wiki implementation. Always check for syntax errors in files you're modifying."
+    "insight": "The beacon routes.ts had a syntax error in the principles delete handler (missing closing braces) that caused the wiki routes to be placed outside the registerRoutes function. This was a pre-existing bug that needed fixing alongside the wiki implementation. Always check for syntax errors in files you're modifying.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-06-29T03:47:20.915Z",
-    "insight": "The wiki storage uses `./knowledge-base/` as default directory (relative to CWD). When the beacon is started from the project root, wiki pages end up in the project tree. The `setKnowledgeBaseDir()` function exists but is never called from the CLI args — there's no `--knowledge-base-dir` flag. This could cause confusion if the beacon is run from unexpected directories."
+    "insight": "The wiki storage uses `./knowledge-base/` as default directory (relative to CWD). When the beacon is started from the project root, wiki pages end up in the project tree. The `setKnowledgeBaseDir()` function exists but is never called from the CLI args — there's no `--knowledge-base-dir` flag. This could cause confusion if the beacon is run from unexpected directories.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-06-29T19:28:12.223Z",
-    "insight": "The migrate subcommand is detected before the main CLI parser's `--` option check, which required restructuring parseCliArgs to check for 'migrate' as the first positional arg before entering the option-parsing loop. This is a clean pattern for future subcommands."
+    "insight": "The migrate subcommand is detected before the main CLI parser's `--` option check, which required restructuring parseCliArgs to check for 'migrate' as the first positional arg before entering the option-parsing loop. This is a clean pattern for future subcommands.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-06-29T20:43:48.203Z",
-    "insight": "Both drone-beacon and drone-coordinator bin scripts imported ./index.js (relative to bin/) instead of ../dist/index.js, causing ERR_MODULE_NOT_FOUND at runtime. The drone-agent bin script had it right. This suggests the other two were never tested as CLI binaries after the build output was moved to dist/."
+    "insight": "Both drone-beacon and drone-coordinator bin scripts imported ./index.js (relative to bin/) instead of ../dist/index.js, causing ERR_MODULE_NOT_FOUND at runtime. The drone-agent bin script had it right. This suggests the other two were never tested as CLI binaries after the build output was moved to dist/.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-06-29T20:43:48.208Z",
-    "insight": "better-sqlite3 throws if the directory for the database file doesn't exist. Neither drone-beacon nor drone-coordinator created the config directory before calling initDatabase(). Fixed by adding fs.mkdirSync inside initDatabase() in both db.ts files so all callers (serve, approve, list-beacons) benefit."
+    "insight": "better-sqlite3 throws if the directory for the database file doesn't exist. Neither drone-beacon nor drone-coordinator created the config directory before calling initDatabase(). Fixed by adding fs.mkdirSync inside initDatabase() in both db.ts files so all callers (serve, approve, list-beacons) benefit.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-06-29T21:32:14.756Z",
-    "insight": "The swarm plugin hardcodes https:// for the beacon URL, but the beacon generates self-signed certs by default. Node.js fetch() rejects self-signed certs, so the agent can't connect to a local HTTPS beacon without either disabling TLS verification or switching to HTTP. Added beaconUseHttps config option as a workaround."
+    "insight": "The swarm plugin hardcodes https:// for the beacon URL, but the beacon generates self-signed certs by default. Node.js fetch() rejects self-signed certs, so the agent can't connect to a local HTTPS beacon without either disabling TLS verification or switching to HTTP. Added beaconUseHttps config option as a workaround.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-06-29T21:32:14.760Z",
-    "insight": "The beacon's coordinator registration failure is non-fatal (graceful degradation to offline mode), but the periodic sync retries every 5 minutes and logs the timeout error each time. This is noisy when the coordinator isn't running yet. Could suppress repeated failures after the first."
+    "insight": "The beacon's coordinator registration failure is non-fatal (graceful degradation to offline mode), but the periodic sync retries every 5 minutes and logs the timeout error each time. This is noisy when the coordinator isn't running yet. Could suppress repeated failures after the first.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-06-30T00:52:49.074Z",
-    "insight": "The vitest config currently only includes drone-core and drone-agent test directories. Adding beacon and coordinator tests requires updating the root vitest.config.ts. The coordinator already has a test/ directory with one test file, but the beacon has no test/ directory at all."
+    "insight": "The vitest config currently only includes drone-core and drone-agent test directories. Adding beacon and coordinator tests requires updating the root vitest.config.ts. The coordinator already has a test/ directory with one test file, but the beacon has no test/ directory at all.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-06-30T01:17:51.310Z",
-    "insight": "The coordinator-client uses Node.js http/https modules internally, not the global fetch API. Mocking requires vi.spyOn on http.request, not globalThis.fetch. This is different from the migration.test.ts pattern which uses fetch."
+    "insight": "The coordinator-client uses Node.js http/https modules internally, not the global fetch API. Mocking requires vi.spyOn on http.request, not globalThis.fetch. This is different from the migration.test.ts pattern which uses fetch.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-06-30T01:17:51.314Z",
-    "insight": "vi.spyOn on 'node:child_process' execSync fails because the module is already loaded and the property is non-configurable. For mocking openssl-dependent code, it's better to skip tests when openssl isn't available (itIfOpenssl pattern) rather than trying to mock execSync."
+    "insight": "vi.spyOn on 'node:child_process' execSync fails because the module is already loaded and the property is non-configurable. For mocking openssl-dependent code, it's better to skip tests when openssl isn't available (itIfOpenssl pattern) rather than trying to mock execSync.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-01T00:06:23.702Z",
-    "insight": "The use-auth.ts file was initially created as .ts but contained JSX (AuthProvider component), causing TypeScript errors. It needed to be renamed to .tsx. This is a common gotcha — any file with JSX must use the .tsx extension, even if it's primarily a hook/context file."
+    "insight": "The use-auth.ts file was initially created as .ts but contained JSX (AuthProvider component), causing TypeScript errors. It needed to be renamed to .tsx. This is a common gotcha — any file with JSX must use the .tsx extension, even if it's primarily a hook/context file.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-01T00:52:44.690Z",
-    "insight": "Using sed for multi-line code changes in TypeScript is error-prone. Python scripts or writing complete files are more reliable for complex transformations."
+    "insight": "Using sed for multi-line code changes in TypeScript is error-prone. Python scripts or writing complete files are more reliable for complex transformations.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-01T01:13:21.408Z",
-    "insight": "The ambitious-refactoring-wiki-storage-deduplication memory was a good high-level proposal but needed significant clarification before it could become an actionable plan. The original proposal had 4 phases but the user wanted to scope down to just Phase 1 (wiki-storage + TLS) and defer the DB extraction. The plan now has 10 concrete steps with exact file paths, code samples, and validation criteria."
+    "insight": "The ambitious-refactoring-wiki-storage-deduplication memory was a good high-level proposal but needed significant clarification before it could become an actionable plan. The original proposal had 4 phases but the user wanted to scope down to just Phase 1 (wiki-storage + TLS) and defer the DB extraction. The plan now has 10 concrete steps with exact file paths, code samples, and validation criteria.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-01T02:14:52.150Z",
-    "insight": "The tool name separator change (dot to double underscore) had a much larger blast radius than initially estimated. Beyond the core function and its tests, it required updates to: CLI workflow parser, plugin error messages (6 files), internal dispatch calls (8 files), MCP mounting, TUI event handlers, prompt fragments, and 15 test files. The initial plan missed the CLI parser, self-improvement plugin prompt fragments, and several test files. For future cross-cutting changes, a comprehensive grep-based sweep should be done before declaring the plan complete."
+    "insight": "The tool name separator change (dot to double underscore) had a much larger blast radius than initially estimated. Beyond the core function and its tests, it required updates to: CLI workflow parser, plugin error messages (6 files), internal dispatch calls (8 files), MCP mounting, TUI event handlers, prompt fragments, and 15 test files. The initial plan missed the CLI parser, self-improvement plugin prompt fragments, and several test files. For future cross-cutting changes, a comprehensive grep-based sweep should be done before declaring the plan complete.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-01T18:38:19.772Z",
-    "insight": "Using sed for multi-line code insertions is extremely error-prone. The sed 'c' command with embedded newlines and special characters (quotes, backslashes) frequently mangles files. For database schema changes or complex multi-line code insertions, it's much more reliable to write complete files or use proper tooling. This session had several sed-related file corruptions that required manual cleanup."
+    "insight": "Using sed for multi-line code insertions is extremely error-prone. The sed 'c' command with embedded newlines and special characters (quotes, backslashes) frequently mangles files. For database schema changes or complex multi-line code insertions, it's much more reliable to write complete files or use proper tooling. This session had several sed-related file corruptions that required manual cleanup.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-01T20:58:32.807Z",
-    "insight": "The notepad plugin was created as a standalone .ts file but not wired into the plugin registry. The pattern for adding a new built-in plugin is: (1) create the plugin file exporting a DronePlugin, (2) add an import in plugins/index.ts, (3) add it to the staticBuiltInPlugins array. The plugin uses defaultEnabled: false so it won't activate unless the user enables it in config or via --plugin notepad."
+    "insight": "The notepad plugin was created as a standalone .ts file but not wired into the plugin registry. The pattern for adding a new built-in plugin is: (1) create the plugin file exporting a DronePlugin, (2) add an import in plugins/index.ts, (3) add it to the staticBuiltInPlugins array. The plugin uses defaultEnabled: false so it won't activate unless the user enables it in config or via --plugin notepad.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-01T22:19:54.661Z",
-    "insight": "The `file__edit` tool is not available in drone-agent's tool set — I had to use `file__write` to rewrite entire files instead. This is fine for small files but would be painful for large ones. The new `file__apply_diff` with content anchors should make targeted edits much easier."
+    "insight": "The `file__edit` tool is not available in drone-agent's tool set — I had to use `file__write` to rewrite entire files instead. This is fine for small files but would be painful for large ones. The new `file__apply_diff` with content anchors should make targeted edits much easier.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-01T23:02:13.437Z",
-    "insight": "When researching Ink resize artifacts, found that the Ink 5→6 upgrade requires a React 18→19 jump because Ink 6.x requires React >=19. The ink-text-input@6.0.0 and ink-testing-library@4.0.0 are already compatible with both versions, so no cascade of dependency changes is needed beyond react + @types/react."
+    "insight": "When researching Ink resize artifacts, found that the Ink 5→6 upgrade requires a React 18→19 jump because Ink 6.x requires React >=19. The ink-text-input@6.0.0 and ink-testing-library@4.0.0 are already compatible with both versions, so no cascade of dependency changes is needed beyond react + @types/react.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-01T23:12:06.545Z",
-    "insight": "When using getCapability() for the persona capability in the TUI, use optional chaining on the method (e.g., personaCap?.getFilteredTools) rather than just checking the cap object is truthy. Mock persona caps in tests (e.g., tui-persona-color.test.tsx) may exist but not include all methods, causing runtime crashes."
+    "insight": "When using getCapability() for the persona capability in the TUI, use optional chaining on the method (e.g., personaCap?.getFilteredTools) rather than just checking the cap object is truthy. Mock persona caps in tests (e.g., tui-persona-color.test.tsx) may exist but not include all methods, causing runtime crashes.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-01T23:36:12.341Z",
-    "insight": "The file__apply_diff tool's own context matching struggled when applied to files with minimal or unique content around the edit point, as seen when trying to patch app.tsx. For small precise edits, file__write with complete-file replacement was more reliable despite being more verbose. This is an ironical bootstrapping issue worth documenting."
+    "insight": "The file__apply_diff tool's own context matching struggled when applied to files with minimal or unique content around the edit point, as seen when trying to patch app.tsx. For small precise edits, file__write with complete-file replacement was more reliable despite being more verbose. This is an ironical bootstrapping issue worth documenting.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-01T23:48:06.299Z",
-    "insight": "When planning Ink/dependency upgrades, always verify actual exported API surface of the target version by inspecting the installed package's .d.ts files rather than relying on documentation assumptions. The `useWindowSize` hook mentioned in the plan doesn't exist in Ink 6.8.0 — had to use `useStdout` + `stdout.on('resize')` instead."
+    "insight": "When planning Ink/dependency upgrades, always verify actual exported API surface of the target version by inspecting the installed package's .d.ts files rather than relying on documentation assumptions. The `useWindowSize` hook mentioned in the plan doesn't exist in Ink 6.8.0 — had to use `useStdout` + `stdout.on('resize')` instead.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-01T23:48:17.959Z",
-    "insight": "After upgrading react/ink to React 19, the `JSX.Element` → `React.JSX.Element` rename is a predictable mechanical change across all TUI files. Using `sed` across all affected files is much faster than editing each file individually."
+    "insight": "After upgrading react/ink to React 19, the `JSX.Element` → `React.JSX.Element` rename is a predictable mechanical change across all TUI files. Using `sed` across all affected files is much faster than editing each file individually.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-02T01:12:36.879Z",
-    "insight": "Added debug logging to file__apply_diff that dumps the full input parameters (path, hunks, color) via registration.logger.error on failure. This pattern of wrapping tool execute handlers in a try-catch with verbose param logging on failure could be extended to other tools for easier debugging."
+    "insight": "Added debug logging to file__apply_diff that dumps the full input parameters (path, hunks, color) via registration.logger.error on failure. This pattern of wrapping tool execute handlers in a try-catch with verbose param logging on failure could be extended to other tools for easier debugging.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-02T02:40:23.672Z",
-    "insight": "The diff-based file patching in drone-agent is fragile — it keeps failing on context matching for simple insertions. Using sed for single-line insertions or writing complete files via file__write is more reliable for code changes in this project."
+    "insight": "The diff-based file patching in drone-agent is fragile — it keeps failing on context matching for simple insertions. Using sed for single-line insertions or writing complete files via file__write is more reliable for code changes in this project.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-02T02:42:44.545Z",
-    "insight": "The terminal plugin plan is the first feature plan that required adding a native dependency (node-pty). The compile step for node-pty on different architectures may surface issues — should consider documenting build prerequisites or adding a fallback mode that doesn't require it. Also, the plan followed a clean pattern of examining existing stateful subprocess plugins (LSP, MCP, subagent) for architectural precedent before designing the new one."
+    "insight": "The terminal plugin plan is the first feature plan that required adding a native dependency (node-pty). The compile step for node-pty on different architectures may surface issues — should consider documenting build prerequisites or adding a fallback mode that doesn't require it. Also, the plan followed a clean pattern of examining existing stateful subprocess plugins (LSP, MCP, subagent) for architectural precedent before designing the new one.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-02T02:54:53.774Z",
-    "insight": "When implementing the terminal key-codec, the test looped over Ctrl-A through Ctrl-Z and found that Ctrl-I (Tab/0x09), Ctrl-J (linefeed/0x0a), and Ctrl-M (carriage return/0x0d) were missing from the named sequences. The lesson: when building a mapping table from a spec like \"all control characters\", always cross-reference against a complete list (e.g., ASCII control characters 0x00-0x1f) rather than cherry-picking, and write exhaustive tests that catch gaps."
+    "insight": "When implementing the terminal key-codec, the test looped over Ctrl-A through Ctrl-Z and found that Ctrl-I (Tab/0x09), Ctrl-J (linefeed/0x0a), and Ctrl-M (carriage return/0x0d) were missing from the named sequences. The lesson: when building a mapping table from a spec like \"all control characters\", always cross-reference against a complete list (e.g., ASCII control characters 0x00-0x1f) rather than cherry-picking, and write exhaustive tests that catch gaps.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-02T02:55:01.248Z",
-    "insight": "The project has pre-existing lint errors in `drone-swarm-common/src/tls.ts` (no-empty, preserve-caught-error) that cause `pnpm lint` to fail even when our changes are clean. Consider fixing these or adding them to an ignore list so lint failures are actionable."
+    "insight": "The project has pre-existing lint errors in `drone-swarm-common/src/tls.ts` (no-empty, preserve-caught-error) that cause `pnpm lint` to fail even when our changes are clean. Consider fixing these or adding them to an ignore list so lint failures are actionable.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-02T03:00:09.171Z",
-    "insight": "The drone-swarm-common/src/tls.ts lint errors (no-empty, preserve-caught-error) were pre-existing and caused pnpm lint to fail even when working on unrelated code. Now fixed by adding a comment to the empty catch block and removing the unused caught variable from the openssl error handler. The whole project now passes lint cleanly."
+    "insight": "The drone-swarm-common/src/tls.ts lint errors (no-empty, preserve-caught-error) were pre-existing and caused pnpm lint to fail even when working on unrelated code. Now fixed by adding a comment to the empty catch block and removing the unused caught variable from the openssl error handler. The whole project now passes lint cleanly.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-06T17:22:33.601Z",
-    "insight": "The `file__apply_diff` tool is unreliable for patches that modify function signatures (adding `export` keyword). It failed 3 times on simple `function` → `export function` changes. Writing the complete file with `file__write` is more reliable for this kind of change."
+    "insight": "The `file__apply_diff` tool is unreliable for patches that modify function signatures (adding `export` keyword). It failed 3 times on simple `function` → `export function` changes. Writing the complete file with `file__write` is more reliable for this kind of change.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-06T17:22:33.609Z",
-    "insight": "The vitest fork pool (`pool: 'forks'` with `singleFork: true`) does not have `globalThis.fetch` available. Tests that need to mock `fetch` must use `vi.stubGlobal('fetch', mockFn)` instead of `vi.spyOn(globalThis, 'fetch')`."
+    "insight": "The vitest fork pool (`pool: 'forks'` with `singleFork: true`) does not have `globalThis.fetch` available. Tests that need to mock `fetch` must use `vi.stubGlobal('fetch', mockFn)` instead of `vi.spyOn(globalThis, 'fetch')`.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-06T17:22:33.615Z",
-    "insight": "The `@vitest/coverage-v8` package is not installed in the project, so coverage reports don't work. The coverage config changes are correct but can't be verified until the dependency is added."
+    "insight": "The `@vitest/coverage-v8` package is not installed in the project, so coverage reports don't work. The coverage config changes are correct but can't be verified until the dependency is added.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-06T21:28:09.952Z",
-    "insight": "The plugin-customizable-tool-render plan revealed a subtlety: the `toEntry()` functions on TailItems produce text for the static scrollback, which is separate from the live tail component rendering. For git diff, we need both a colored Ink component (for the tail) and ANSI-colored text (for the scrollback). The shared diff-format.ts utility serves both consumers."
+    "insight": "The plugin-customizable-tool-render plan revealed a subtlety: the `toEntry()` functions on TailItems produce text for the static scrollback, which is separate from the live tail component rendering. For git diff, we need both a colored Ink component (for the tail) and ANSI-colored text (for the scrollback). The shared diff-format.ts utility serves both consumers.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-06T21:43:30.948Z",
-    "insight": "When extracting formatDiffResult from app.tsx into a shared utility, I also needed to update the test that referenced `App.__testing.formatDiffResult`. The test uses dynamic `await import(...)` so the import path change was straightforward. Always check for `__testing` exports when moving internal code."
+    "insight": "When extracting formatDiffResult from app.tsx into a shared utility, I also needed to update the test that referenced `App.__testing.formatDiffResult`. The test uses dynamic `await import(...)` so the import path change was straightforward. Always check for `__testing` exports when moving internal code.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-06T22:03:50.225Z",
-    "insight": "The getTool() method was added to DronePluginEngine but 4 test files (systemprompt.test.tsx, tui-persona-color.test.tsx, tui.test.tsx) still use mock objects that don't include it. This is a pattern failure: when adding a new method to a core interface, the test mocks need to be updated in the same commit. These 5 TS errors have been present for at least 10 days."
+    "insight": "The getTool() method was added to DronePluginEngine but 4 test files (systemprompt.test.tsx, tui-persona-color.test.tsx, tui.test.tsx) still use mock objects that don't include it. This is a pattern failure: when adding a new method to a core interface, the test mocks need to be updated in the same commit. These 5 TS errors have been present for at least 10 days.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-06T22:08:16.270Z",
-    "insight": "Fixed 5 TS errors in test mocks by adding getTool: () => undefined to 3 test files. These were introduced when getTool() was added to the DronePluginEngine interface but test mocks weren't updated. This is a pattern that could be prevented with a shared helper that ensures mock engine objects always satisfy the required interface."
+    "insight": "Fixed 5 TS errors in test mocks by adding getTool: () => undefined to 3 test files. These were introduced when getTool() was added to the DronePluginEngine interface but test mocks weren't updated. This is a pattern that could be prevented with a shared helper that ensures mock engine objects always satisfy the required interface.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-06T22:31:54.573Z",
-    "insight": "Removed ~80 unused declarations across 47 files in a single cleanup session. The most common patterns were: (1) unused type imports from drone-core, (2) unused type aliases (WizardContext), (3) unused Fastify handler params (reply, request), (4) unused variables assigned during refactoring (stuckSignature, pushedEventCount). Using Python for bulk sed-like operations was more reliable than the diff tool for these mechanical changes."
+    "insight": "Removed ~80 unused declarations across 47 files in a single cleanup session. The most common patterns were: (1) unused type imports from drone-core, (2) unused type aliases (WizardContext), (3) unused Fastify handler params (reply, request), (4) unused variables assigned during refactoring (stuckSignature, pushedEventCount). Using Python for bulk sed-like operations was more reliable than the diff tool for these mechanical changes.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-06T23:31:59.248Z",
-    "insight": "The large-file-splitting plan was completed successfully. 10 files totaling ~14,000 lines were split into ~80 focused modules. Key patterns: (1) factory closures with shared state → context object pattern, (2) repetitive CRUD → shared generic helpers, (3) test files → one file per describe block. The vitest exclude pattern '**/spawn.test.ts' was too broad and caught the new coordinator route test — had to narrow it to 'drone-agent/test/spawn.test.ts'."
+    "insight": "The large-file-splitting plan was completed successfully. 10 files totaling ~14,000 lines were split into ~80 focused modules. Key patterns: (1) factory closures with shared state → context object pattern, (2) repetitive CRUD → shared generic helpers, (3) test files → one file per describe block. The vitest exclude pattern '**/spawn.test.ts' was too broad and caught the new coordinator route test — had to narrow it to 'drone-agent/test/spawn.test.ts'.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-08T02:09:20.319Z",
-    "insight": "The `file__apply_diff` tool frequently fails to match hunks in drone-agent TS files (context/whitespace mismatch errors reported even on exact content), making it unreliable for multi-hunk edits. For reliable edits here, fall back to a `python3` script that does exact string `replace` with `assert old in s`. This is faster and avoids the failure loop."
+    "insight": "The `file__apply_diff` tool frequently fails to match hunks in drone-agent TS files (context/whitespace mismatch errors reported even on exact content), making it unreliable for multi-hunk edits. For reliable edits here, fall back to a `python3` script that does exact string `replace` with `assert old in s`. This is faster and avoids the failure loop.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-08T02:42:14.741Z",
-    "insight": "The reasoning-level planning session revealed that the provider interface (DroneLlmProvider.chat) needs a new optional parameter threaded through the conversation service. This is a pattern worth noting: any future provider-level feature (e.g., structured outputs, response format) will need the same three-layer touch: (1) provider-types.ts interface, (2) conversation-service.ts call site, (3) each provider's chat() handler. Consider whether a generic \"options bag\" on the chat input would reduce future churn."
+    "insight": "The reasoning-level planning session revealed that the provider interface (DroneLlmProvider.chat) needs a new optional parameter threaded through the conversation service. This is a pattern worth noting: any future provider-level feature (e.g., structured outputs, response format) will need the same three-layer touch: (1) provider-types.ts interface, (2) conversation-service.ts call site, (3) each provider's chat() handler. Consider whether a generic \"options bag\" on the chat input would reduce future churn.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-08T02:59:16.001Z",
-    "insight": "The reasoning-level implementation required touching 11+ files across drone-core and drone-agent packages. The pattern of threading a new parameter through the provider interface (provider-types.ts → conversation-service.ts → each provider's chat handler) is now well-documented. A future improvement could be to add a generic `options` bag on the chat input to reduce churn for future provider-level features."
+    "insight": "The reasoning-level implementation required touching 11+ files across drone-core and drone-agent packages. The pattern of threading a new parameter through the provider interface (provider-types.ts → conversation-service.ts → each provider's chat handler) is now well-documented. A future improvement could be to add a generic `options` bag on the chat input to reduce churn for future provider-level features.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-08T19:02:08.195Z",
-    "insight": "file__apply_diff frequently fails to apply hunks when the `-` context lines are empty or whitespace-only (it errors with \"The `-` lines didn't match\" / \"no hunks found\"). When editing TS/TSX files with newlines-in-strings or pure-no-op context, prefer rewriting the whole file with file__write rather than fighting the diff tool — it cost several retries this session. Also, vitest path-filter args like `npx vitest run drone-agent/test/x.test.ts` from the repo root work fine; the `--project`/`--dir` variations did not resolve the test files."
+    "insight": "file__apply_diff frequently fails to apply hunks when the `-` context lines are empty or whitespace-only (it errors with \"The `-` lines didn't match\" / \"no hunks found\"). When editing TS/TSX files with newlines-in-strings or pure-no-op context, prefer rewriting the whole file with file__write rather than fighting the diff tool — it cost several retries this session. Also, vitest path-filter args like `npx vitest run drone-agent/test/x.test.ts` from the repo root work fine; the `--project`/`--dir` variations did not resolve the test files.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-08T19:41:00.586Z",
-    "insight": "In the drone-gateway Matrix adapter (4.2), `dataPath` holds the sync store + Rust crypto store (`@matrix-org/matrix-sdk-crypto-nodejs`). \"Crypto cleanup\" must NOT mean deletion — deleting it breaks E2EE decryption (loses Megolm inbound keys) and forces full re-sync. The only runtime cleanup is a graceful store close (flush + release handles) in `stop()`. Deletion is only for intentional decommission after `client.logout()`. Plan wording should say \"graceful close\", never \"clean/wipe dataPath\"."
+    "insight": "In the drone-gateway Matrix adapter (4.2), `dataPath` holds the sync store + Rust crypto store (`@matrix-org/matrix-sdk-crypto-nodejs`). \"Crypto cleanup\" must NOT mean deletion — deleting it breaks E2EE decryption (loses Megolm inbound keys) and forces full re-sync. The only runtime cleanup is a graceful store close (flush + release handles) in `stop()`. Deletion is only for intentional decommission after `client.logout()`. Plan wording should say \"graceful close\", never \"clean/wipe dataPath\".",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-08T20:14:08.713Z",
-    "insight": "When mocking `matrix-js-sdk/lib/store/indexeddb` in vitest, the mock must export a class that can be constructed (not throw), because `getStoreClass()` catches import errors but not construction errors. The mock should provide a working stub constructor, not throw."
+    "insight": "When mocking `matrix-js-sdk/lib/store/indexeddb` in vitest, the mock must export a class that can be constructed (not throw), because `getStoreClass()` catches import errors but not construction errors. The mock should provide a working stub constructor, not throw.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-08T20:41:53.286Z",
-    "insight": "The cleanup subcommand (step 9) uses `process.exit()` for early termination on errors/cancellation. In tests, `process.exit` is mocked to not actually exit, so the function continues executing past the intended exit point. Adding `return` after each `process.exit()` call prevents this. The `confirmFn` injection pattern (optional parameter) is cleaner than mocking `readline` for testing confirmation prompts."
+    "insight": "The cleanup subcommand (step 9) uses `process.exit()` for early termination on errors/cancellation. In tests, `process.exit` is mocked to not actually exit, so the function continues executing past the intended exit point. Adding `return` after each `process.exit()` call prevents this. The `confirmFn` injection pattern (optional parameter) is cleaner than mocking `readline` for testing confirmation prompts.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-08T23:41:58.472Z",
-    "insight": "The todo plugin's custom TUI render component (TodoBlock) follows the same pattern as the git plugin's render components. This pattern works well — plugins define a React component that receives ToolRenderState and returns JSX, wired via the renderComponent field on DroneToolDefinition. The TUI's app.tsx automatically picks it up in the conversation event listener. This is a clean, extensible pattern for any plugin that wants rich TUI output."
+    "insight": "The todo plugin's custom TUI render component (TodoBlock) follows the same pattern as the git plugin's render components. This pattern works well — plugins define a React component that receives ToolRenderState and returns JSX, wired via the renderComponent field on DroneToolDefinition. The TUI's app.tsx automatically picks it up in the conversation event listener. This is a clean, extensible pattern for any plugin that wants rich TUI output.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-09T17:01:44.978Z",
-    "insight": "Vitest 3.x (vite-node) intercepts dynamic import() calls and fails for files outside the project root. Any code using import() to load external modules (like external-loader.ts) must use createRequire from node:module instead to bypass Vite's module interception."
+    "insight": "Vitest 3.x (vite-node) intercepts dynamic import() calls and fails for files outside the project root. Any code using import() to load external modules (like external-loader.ts) must use createRequire from node:module instead to bypass Vite's module interception.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-11T17:30:40.990Z",
-    "insight": "When rewriting large functions like createStreamableHttpJsonRpcClient, it's critical to understand the full architecture before making changes. The SSE reconnection implementation accidentally changed the response channel from POST HTTP body to GET SSE stream, which broke all 35 unit tests. Always verify the test suite passes before committing."
+    "insight": "When rewriting large functions like createStreamableHttpJsonRpcClient, it's critical to understand the full architecture before making changes. The SSE reconnection implementation accidentally changed the response channel from POST HTTP body to GET SSE stream, which broke all 35 unit tests. Always verify the test suite passes before committing.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-14T00:18:03.216Z",
-    "insight": "The self-improvement insight JSON files can become corrupted if text gets appended after the closing bracket. The insight tool should validate JSON before writing, or the file engine should guard against this. This caused a CI lint failure on the feat/mcp-list-mount-deferred-loading branch."
+    "insight": "The self-improvement insight JSON files can become corrupted if text gets appended after the closing bracket. The insight tool should validate JSON before writing, or the file engine should guard against this. This caused a CI lint failure on the feat/mcp-list-mount-deferred-loading branch.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-14T01:23:42.623Z",
-    "insight": "When investigating MCP server connection failures, always check the HTTP headers being sent first — the MCP 2025-06-18 spec requires MCP-Protocol-Version on all requests, and missing it causes 400 errors that look like auth or URL issues. The DELETE-on-disconnect issue was a red herring; the real problem was the missing protocol version header."
+    "insight": "When investigating MCP server connection failures, always check the HTTP headers being sent first — the MCP 2025-06-18 spec requires MCP-Protocol-Version on all requests, and missing it causes 400 errors that look like auth or URL issues. The DELETE-on-disconnect issue was a red herring; the real problem was the missing protocol version header.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-14T01:34:33.379Z",
-    "insight": "When adding a new required method to the JsonRpcClient interface, all three transport implementations (content-length, line-delimited, streamable HTTP) must be updated. The stdio transports just need no-op stubs since they don't use HTTP headers."
+    "insight": "When adding a new required method to the JsonRpcClient interface, all three transport implementations (content-length, line-delimited, streamable HTTP) must be updated. The stdio transports just need no-op stubs since they don't use HTTP headers.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-14T06:32:10.559Z",
-    "insight": "When consolidating tools with action-based parameters, the `required` field in the JSON schema should only include `action` — the other fields become conditionally required based on the action value. This is a limitation of JSON Schema (no conditional required), but it works well in practice because the LLM reads the descriptions."
+    "insight": "When consolidating tools with action-based parameters, the `required` field in the JSON schema should only include `action` — the other fields become conditionally required based on the action value. This is a limitation of JSON Schema (no conditional required), but it works well in practice because the LLM reads the descriptions.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   }
 ]

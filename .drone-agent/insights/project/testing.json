@@ -1,94 +1,117 @@
 [
   {
     "timestamp": "2026-06-29T03:47:20.903Z",
-    "insight": "The beacon's coordinator-independent operation was verified via live endpoint testing (starting the beacon with no coordinator and hitting all endpoints with curl). This is effective but manual — adding automated integration tests that start the beacon and test endpoints without a coordinator would prevent regressions."
+    "insight": "The beacon's coordinator-independent operation was verified via live endpoint testing (starting the beacon with no coordinator and hitting all endpoints with curl). This is effective but manual — adding automated integration tests that start the beacon and test endpoints without a coordinator would prevent regressions.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-06-29T05:47:57.067Z",
-    "insight": "The external loader tests revealed that `os.homedir()` reads from the OS user database, not `process.env.HOME`. Tests that need to override the home directory for user-scoped paths must set `process.env.HOME` before calling functions that use `os.homedir()`. This is a subtle gotcha that could trip up future test authors."
+    "insight": "The external loader tests revealed that `os.homedir()` reads from the OS user database, not `process.env.HOME`. Tests that need to override the home directory for user-scoped paths must set `process.env.HOME` before calling functions that use `os.homedir()`. This is a subtle gotcha that could trip up future test authors.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-01T23:25:09.699Z",
-    "insight": "The file.test.ts has 28 tests for applyPatch in isolation but zero integration tests for the full file__apply_diff tool execution path (schema parsing → applyPatch → JSON response → TUI rendering). This allowed bugs in the glue code (patched vs written field name, ANSI codes in LLM context) to go undetected."
+    "insight": "The file.test.ts has 28 tests for applyPatch in isolation but zero integration tests for the full file__apply_diff tool execution path (schema parsing → applyPatch → JSON response → TUI rendering). This allowed bugs in the glue code (patched vs written field name, ANSI codes in LLM context) to go undetected.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-06T00:25:41.214Z",
-    "insight": "The vitest alias configuration in vitest.config.ts resolves 'drone-swarm-common/wiki-storage' and 'drone-swarm-common/tls' to source files, but these aliases don't work for dynamic import() calls from test files. This means route tests that use dynamic imports (like the wiki routes) can't easily set up the wiki directory before the routes are registered. A workaround is to use the dist file path directly, but that creates a different module instance than the route files use."
+    "insight": "The vitest alias configuration in vitest.config.ts resolves 'drone-swarm-common/wiki-storage' and 'drone-swarm-common/tls' to source files, but these aliases don't work for dynamic import() calls from test files. This means route tests that use dynamic imports (like the wiki routes) can't easily set up the wiki directory before the routes are registered. A workaround is to use the dist file path directly, but that creates a different module instance than the route files use.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-06T00:25:41.221Z",
-    "insight": "The coordinator and beacon index.ts files have top-level imports of TLS, spawner, and WebSocket modules that don't resolve in the test environment. To test routes, we need app-helper.ts files that build a minimal Fastify instance with just route registrations, avoiding the full index.ts import chain."
+    "insight": "The coordinator and beacon index.ts files have top-level imports of TLS, spawner, and WebSocket modules that don't resolve in the test environment. To test routes, we need app-helper.ts files that build a minimal Fastify instance with just route registrations, avoiding the full index.ts import chain.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-06T00:36:44.771Z",
-    "insight": "The plan-coordinator-route-tests plan specified per-route test files (e.g., test/routes/health.test.ts, test/routes/personas.test.ts), but I used a single monolithic file (test/routes.test.ts). The monolithic approach is simpler and avoids duplication of the beforeEach/afterEach setup, but the per-route approach would be better for CI parallelism and readability. For now the monolithic file is fine since vitest uses singleFork anyway."
+    "insight": "The plan-coordinator-route-tests plan specified per-route test files (e.g., test/routes/health.test.ts, test/routes/personas.test.ts), but I used a single monolithic file (test/routes.test.ts). The monolithic approach is simpler and avoids duplication of the beforeEach/afterEach setup, but the per-route approach would be better for CI parallelism and readability. For now the monolithic file is fine since vitest uses singleFork anyway.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-06T00:36:44.775Z",
-    "insight": "The plan specified a shared harness (makeApp) that sets up DB+storage+wiki in one call using buildApp() from index.ts. However, buildApp() imports drone-swarm-common/tls which doesn't resolve in the test environment. I created a test-specific app-helper.ts instead. The helpers/server.ts file exists as a reference but can't be used until the TLS import issue is resolved."
+    "insight": "The plan specified a shared harness (makeApp) that sets up DB+storage+wiki in one call using buildApp() from index.ts. However, buildApp() imports drone-swarm-common/tls which doesn't resolve in the test environment. I created a test-specific app-helper.ts instead. The helpers/server.ts file exists as a reference but can't be used until the TLS import issue is resolved.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-06T00:36:44.784Z",
-    "insight": "Wiki route tests were deferred because the route files use dynamic import('drone-swarm-common/wiki-storage') which goes through vitest's alias, but dynamic imports from test files don't go through the alias. This means setKnowledgeBaseDir() called from a test file uses a different module instance than the route files. The wiki storage is tested separately in wiki-storage.test.ts."
+    "insight": "Wiki route tests were deferred because the route files use dynamic import('drone-swarm-common/wiki-storage') which goes through vitest's alias, but dynamic imports from test files don't go through the alias. This means setKnowledgeBaseDir() called from a test file uses a different module instance than the route files. The wiki storage is tested separately in wiki-storage.test.ts.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-06T00:43:08.979Z",
-    "insight": "The DroneToolDescriptor type (used by LLM provider chat() methods) does not have an 'execute' property — that's on DroneToolDefinition (used by the plugin engine). Several test files were passing 'execute' in tool objects to chat(), which caused TS errors. The fix was to remove the 'execute' property since it's not needed by the LLM provider."
+    "insight": "The DroneToolDescriptor type (used by LLM provider chat() methods) does not have an 'execute' property — that's on DroneToolDefinition (used by the plugin engine). Several test files were passing 'execute' in tool objects to chat(), which caused TS errors. The fix was to remove the 'execute' property since it's not needed by the LLM provider.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-06T00:43:08.983Z",
-    "insight": "The DroneAgentConfig type requires 'openai' and 'anthropic' fields (not optional), but several test files were constructing partial config objects without them. The fix was to add minimal openai/anthropic config stubs. This suggests the config type might benefit from a PartialDroneAgentConfig-based helper or a test fixture factory."
+    "insight": "The DroneAgentConfig type requires 'openai' and 'anthropic' fields (not optional), but several test files were constructing partial config objects without them. The fix was to add minimal openai/anthropic config stubs. This suggests the config type might benefit from a PartialDroneAgentConfig-based helper or a test fixture factory.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-06T01:41:26.489Z",
-    "insight": "The swarm plugin's register() function returns early if beacon registration fails, which means tools registered after that point never get added. This required a registration-capture pattern for testing (calling plugin.register() with a mock registration that records tools) rather than using createDronePluginEngine with vi.stubGlobal('fetch'), since vi.stubGlobal doesn't propagate through vitest's fork pool."
+    "insight": "The swarm plugin's register() function returns early if beacon registration fails, which means tools registered after that point never get added. This required a registration-capture pattern for testing (calling plugin.register() with a mock registration that records tools) rather than using createDronePluginEngine with vi.stubGlobal('fetch'), since vi.stubGlobal doesn't propagate through vitest's fork pool.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-07T16:58:51.012Z",
-    "insight": "The TUI's conversation-event render path (assistantMessage/assistantMessageComplete -> tail -> Static scrollback) is not exercised by any test. tui.test.tsx mocks onConversationEvent as a no-op and only asserts status bar / mid-panel / help. This gap let a double-render bug (redundant log(response,'plain') in runSlashCommand) ship undetected. Recommend a regression test that emits assistantMessage+assistantMessageComplete via a real onConversationEvent mock and asserts the reply appears exactly once in the frame."
+    "insight": "The TUI's conversation-event render path (assistantMessage/assistantMessageComplete -> tail -> Static scrollback) is not exercised by any test. tui.test.tsx mocks onConversationEvent as a no-op and only asserts status bar / mid-panel / help. This gap let a double-render bug (redundant log(response,'plain') in runSlashCommand) ship undetected. Recommend a regression test that emits assistantMessage+assistantMessageComplete via a real onConversationEvent mock and asserts the reply appears exactly once in the frame.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-07T17:35:17.050Z",
-    "insight": "`test/lsp-fake-server.ts` imports `SERVER_SCRIPT = path.join(__dirname, 'lsp-fake-server.mjs')` but no such `.mjs` exists in the repo (glob `**/lsp-fake-server*.mjs` returns nothing). The LSP tests using it may be silently broken or relying on a missing artifact — verify before modeling the new `mcp-fake-server.mjs` on it, and consider auditing/strengthening the LSP fake-server harness."
+    "insight": "`test/lsp-fake-server.ts` imports `SERVER_SCRIPT = path.join(__dirname, 'lsp-fake-server.mjs')` but no such `.mjs` exists in the repo (glob `**/lsp-fake-server*.mjs` returns nothing). The LSP tests using it may be silently broken or relying on a missing artifact — verify before modeling the new `mcp-fake-server.mjs` on it, and consider auditing/strengthening the LSP fake-server harness.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-07T18:29:50.308Z",
-    "insight": "When writing an integration test for the MCP plugin, do NOT spawn the fake server yourself and assert on that process. `createMcpClientConnection` spawns its OWN child from the server config inside the client; a test-spawned child is never used by the client. Instead, return a `serverConfig` descriptor (with `command`/`args`/`env`) and let the client spawn it, then observe the client-owned child via a `vi.mock('node:child_process')` spawn spy. Also: tools mount under the canonical name `mcp__<serverId>__<toolName>` (plugin-id prefix), not `<serverId>__<tool>`."
+    "insight": "When writing an integration test for the MCP plugin, do NOT spawn the fake server yourself and assert on that process. `createMcpClientConnection` spawns its OWN child from the server config inside the client; a test-spawned child is never used by the client. Instead, return a `serverConfig` descriptor (with `command`/`args`/`env`) and let the client spawn it, then observe the client-owned child via a `vi.mock('node:child_process')` spawn spy. Also: tools mount under the canonical name `mcp__<serverId>__<toolName>` (plugin-id prefix), not `<serverId>__<tool>`.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-08T03:24:20.704Z",
-    "insight": "Bogus tests that build a fresh plugin/capture instance for the second call of a two-phase scenario can silently mask cross-call state bugs (locks, re-entrancy guards, accumulators). The compaction `compactionInFlight` latch bug survived because the \"resets compactionInFlight after the empty-turns early return\" test reused a brand-new instance for the follow-up call. When testing state that must persist across hook calls, reuse the SAME instance, and prefer driving the realistic runtime sequence (e.g. onBeforePrompt empty -> append turns -> onAfterToolCall). Add a planning-check step: when a reported test \"covers\" a bug but the bug is live, verify the test actually exercises the persistent state, not a fresh one."
+    "insight": "Bogus tests that build a fresh plugin/capture instance for the second call of a two-phase scenario can silently mask cross-call state bugs (locks, re-entrancy guards, accumulators). The compaction `compactionInFlight` latch bug survived because the \"resets compactionInFlight after the empty-turns early return\" test reused a brand-new instance for the follow-up call. When testing state that must persist across hook calls, reuse the SAME instance, and prefer driving the realistic runtime sequence (e.g. onBeforePrompt empty -> append turns -> onAfterToolCall). Add a planning-check step: when a reported test \"covers\" a bug but the bug is live, verify the test actually exercises the persistent state, not a fresh one.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-08T05:44:45.437Z",
-    "insight": "When mocking `fetch` for non-POST verbs in tests, record the HTTP method (init.method) for GET/DELETE separately from the JSON-RPC `method` (which lives in the POST body). Also, client code that issues a best-effort fetch must check `response.ok` (not just `.catch`) because a mocked failure returns a non-ok *resolved* Response rather than rejecting."
+    "insight": "When mocking `fetch` for non-POST verbs in tests, record the HTTP method (init.method) for GET/DELETE separately from the JSON-RPC `method` (which lives in the POST body). Also, client code that issues a best-effort fetch must check `response.ok` (not just `.catch`) because a mocked failure returns a non-ok *resolved* Response rather than rejecting.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-08T17:05:01.855Z",
-    "insight": "TUI tests across drone-agent/test rely on `const tick = () => new Promise(r => setTimeout(r, 0))` as a render-flush barrier before reading `lastFrame()`. This is racy and flakes in CI (Node 22 cold VM): `lastFrame()` returns the empty pre-render frame ('\\n') and content assertions fail. ChatLog.test.tsx was fixed with a `waitUntilFrame` poll-until-content-appears helper. The same `tick()` anti-pattern exists in many other *.test.tsx files (app-commit-flow, systemprompt via bare setTimeout, multiline-text-input, etc.) and should be migrated to content-aware polling or ink-testing-library frame subscription."
+    "insight": "TUI tests across drone-agent/test rely on `const tick = () => new Promise(r => setTimeout(r, 0))` as a render-flush barrier before reading `lastFrame()`. This is racy and flakes in CI (Node 22 cold VM): `lastFrame()` returns the empty pre-render frame ('\\n') and content assertions fail. ChatLog.test.tsx was fixed with a `waitUntilFrame` poll-until-content-appears helper. The same `tick()` anti-pattern exists in many other *.test.tsx files (app-commit-flow, systemprompt via bare setTimeout, multiline-text-input, etc.) and should be migrated to content-aware polling or ink-testing-library frame subscription.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-08T17:42:22.900Z",
-    "insight": "All TUI test files that used racy fixed-tick/setTimeout barriers before lastFrame() have been migrated to content-aware polling (waitUntilFrame) or await-tick. This should eliminate the class of CI-only flaky failures where lastFrame() returns the empty pre-render frame on slower runners. The pattern to follow: waitUntilFrame(inst, f => f.includes('expected content')) with 10ms polling and 1s timeout."
+    "insight": "All TUI test files that used racy fixed-tick/setTimeout barriers before lastFrame() have been migrated to content-aware polling (waitUntilFrame) or await-tick. This should eliminate the class of CI-only flaky failures where lastFrame() returns the empty pre-render frame on slower runners. The pattern to follow: waitUntilFrame(inst, f => f.includes('expected content')) with 10ms polling and 1s timeout.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-08-25T17:26:05.205Z",
-    "insight": "A DroneLlmError's instanceof check in a vitest test can fail across `vi.resetModules()` because the module is re-imported fresh, giving the test file a different class identity than the driver's copy. Assert on `err?.name === 'DroneLlmError'` plus the structured fields instead of `toBeInstanceOf` when mocking via doMock/resetModules. Also, with the conversation-service retry config, the semantics of `maxRetries` is retries AFTER the initial call, so a `maxRetries: 2` test sees 3 total chat() invocations before prompting — count calls as initial + maxRetries."
+    "insight": "A DroneLlmError's instanceof check in a vitest test can fail across `vi.resetModules()` because the module is re-imported fresh, giving the test file a different class identity than the driver's copy. Assert on `err?.name === 'DroneLlmError'` plus the structured fields instead of `toBeInstanceOf` when mocking via doMock/resetModules. Also, with the conversation-service retry config, the semantics of `maxRetries` is retries AFTER the initial call, so a `maxRetries: 2` test sees 3 total chat() invocations before prompting — count calls as initial + maxRetries.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-10-05T19:16:44.813Z",
-    "insight": "A fully-mocked test cannot detect a hard abort in a real dependency: `drone-gateway/test/matrix-adapter.test.ts` mocked `initRustCrypto` and asserted only that it was called, so all 288 tests passed while the real Matrix adapter could not start on Node (native WASM panic → process exit 1). For any native/WASM/process-boundary dependency, add at least one test that loads the REAL module (no `vi.mock`) and asserts the observable outcome (here: `adapter.start()` resolves, and `initRustCrypto` is not called when feature-off). A crash surfaces in such a test as a vitest unhandled error / 90s timeout, which is the intended signal. Note: a WASM abort is an unhandled error that hangs the run rather than a clean per-test failure, so keep these tests few and fast."
+    "insight": "A fully-mocked test cannot detect a hard abort in a real dependency: `drone-gateway/test/matrix-adapter.test.ts` mocked `initRustCrypto` and asserted only that it was called, so all 288 tests passed while the real Matrix adapter could not start on Node (native WASM panic → process exit 1). For any native/WASM/process-boundary dependency, add at least one test that loads the REAL module (no `vi.mock`) and asserts the observable outcome (here: `adapter.start()` resolves, and `initRustCrypto` is not called when feature-off). A crash surfaces in such a test as a vitest unhandled error / 90s timeout, which is the intended signal. Note: a WASM abort is an unhandled error that hangs the run rather than a clean per-test failure, so keep these tests few and fast.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-10-05T19:39:38.009Z",
-    "insight": "Contract-mismatch bugs against a third-party SDK are invisible to both isolated unit tests and fully-mocked tests. `sqlite-sync-store.test.ts` tested the store by itself and could not see that the SDK needs accumulated sync state; `matrix-adapter.test.ts` mocked the SDK entirely. What caught DRONE-GW-BUG-002 was a test that drives the REAL client (no `vi.mock`) through the actual lifecycle: start -> sync -> restart over the same SQLite file -> sync, asserting the observable outcome (`getSavedSync().roomsData` lists the room; `client.getRooms()` is non-empty). Rule: for code that implements a documented interface of an external library, add at least one integration-style test that exercises the real library, not a mock. The bug reproduced cleanly in ~60ms with a 1-room + incremental fixture."
+    "insight": "Contract-mismatch bugs against a third-party SDK are invisible to both isolated unit tests and fully-mocked tests. `sqlite-sync-store.test.ts` tested the store by itself and could not see that the SDK needs accumulated sync state; `matrix-adapter.test.ts` mocked the SDK entirely. What caught DRONE-GW-BUG-002 was a test that drives the REAL client (no `vi.mock`) through the actual lifecycle: start -> sync -> restart over the same SQLite file -> sync, asserting the observable outcome (`getSavedSync().roomsData` lists the room; `client.getRooms()` is non-empty). Rule: for code that implements a documented interface of an external library, add at least one integration-style test that exercises the real library, not a mock. The bug reproduced cleanly in ~60ms with a 1-room + incremental fixture.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-10-05T19:56:06.996Z",
-    "insight": "Real-library tests caught another contract bug that mocks hid: the \"wrong/duplicate reply\" symptom was caused by matrix-js-sdk re-emitting cached-sync timeline events on restart, which the fully-mocked adapter suite could never see (it invoked the handler manually with only 3 args). The decisive test seeded a SqliteSyncStore with a sync containing a `swarm.beacon.list` message, then started the REAL MatrixClient over that store and asserted no AdapterMessage was emitted (test/matrix-adapter-replay.test.ts). Keep adding at least one real-client test whenever adapter behavior depends on SDK-internal event semantics — payload shape (`data.liveEvent`), not just event name, is part of the contract."
+    "insight": "Real-library tests caught another contract bug that mocks hid: the \"wrong/duplicate reply\" symptom was caused by matrix-js-sdk re-emitting cached-sync timeline events on restart, which the fully-mocked adapter suite could never see (it invoked the handler manually with only 3 args). The decisive test seeded a SqliteSyncStore with a sync containing a `swarm.beacon.list` message, then started the REAL MatrixClient over that store and asserted no AdapterMessage was emitted (test/matrix-adapter-replay.test.ts). Keep adding at least one real-client test whenever adapter behavior depends on SDK-internal event semantics — payload shape (`data.liveEvent`), not just event name, is part of the contract.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-11-02T23:19:17.000Z",
-    "insight": "The drone-coordinator-ui vitest full-suite run has pre-existing load-dependent flake: waitFor timeouts at ~1s in the WS-debounce/refetch family of sessions.test.tsx (occasionally agent-detail), with the failing test rotating between runs while the same file passes in isolation (NODE_ENV=test). Verified 2026-11-02: three full runs failed 2, then 1, then 0 of 358 tests; every failure was in a debounce/snapshot/placeholder-timeout test unrelated to the change under test. Protocol: identify the failing test; if it rotates between runs and the touched file passes in isolation, treat as flake and re-run — do not chase it as a regression. Open root-cause candidate: the project principle forbids fixed-tick/setTimeout barriers before reading render output (poll instead); these debounce tests appear to use setTimeout barriers."
+    "insight": "The drone-coordinator-ui vitest full-suite run has pre-existing load-dependent flake: waitFor timeouts at ~1s in the WS-debounce/refetch family of sessions.test.tsx (occasionally agent-detail), with the failing test rotating between runs while the same file passes in isolation (NODE_ENV=test). Verified 2026-11-02: three full runs failed 2, then 1, then 0 of 358 tests; every failure was in a debounce/snapshot/placeholder-timeout test unrelated to the change under test. Protocol: identify the failing test; if it rotates between runs and the touched file passes in isolation, treat as flake and re-run — do not chase it as a regression. Open root-cause candidate: the project principle forbids fixed-tick/setTimeout barriers before reading render output (poll instead); these debounce tests appear to use setTimeout barriers.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   }
 ]

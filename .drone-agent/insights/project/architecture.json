@@ -1,54 +1,67 @@
 [
   {
     "timestamp": "2026-07-13T02:52:43.034Z",
-    "insight": "When plugins convert from eagerly-mounted tools to list/mount, defaultHidden on individual tools becomes redundant — the persona filter on __list_tools handles visibility before mounting, and the persona filter in getLlmTools() handles visibility after mounting. Plugin authors should drop defaultHidden from cached tools and rely on persona filtering instead. This means personas need explicit allowedTools lists to control which list/mount tools are visible."
+    "insight": "When plugins convert from eagerly-mounted tools to list/mount, defaultHidden on individual tools becomes redundant — the persona filter on __list_tools handles visibility before mounting, and the persona filter in getLlmTools() handles visibility after mounting. Plugin authors should drop defaultHidden from cached tools and rely on persona filtering instead. This means personas need explicit allowedTools lists to control which list/mount tools are visible.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-13T19:54:28.670Z",
-    "insight": "The MCP plugin's meta-tools (__list_tools, __mount_tool, __unmount_tool) and resource/prompt tools are now tracked via a metaToolNames set to prevent re-registration on reconnect. The server_status tool is registered once at plugin registration time, not in listAndMountTools, avoiding duplicate registration errors."
+    "insight": "The MCP plugin's meta-tools (__list_tools, __mount_tool, __unmount_tool) and resource/prompt tools are now tracked via a metaToolNames set to prevent re-registration on reconnect. The server_status tool is registered once at plugin registration time, not in listAndMountTools, avoiding duplicate registration errors.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-14T04:38:03.720Z",
-    "insight": "The list/mount pattern from MCP was successfully expanded to git and swarm plugins, reducing native tool surface by ~18 tools. The pattern is now established as a reusable convention: 3 meta-tools (list_tools, mount_tool, unmount_tool) backed by ToolMountingCache, hardcoded descriptions, persona filtering, and no pre-mounting."
+    "insight": "The list/mount pattern from MCP was successfully expanded to git and swarm plugins, reducing native tool surface by ~18 tools. The pattern is now established as a reusable convention: 3 meta-tools (list_tools, mount_tool, unmount_tool) backed by ToolMountingCache, hardcoded descriptions, persona filtering, and no pre-mounting.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-28T22:57:56.918Z",
-    "insight": "The swarm session status system had a terminology mismatch: the end-session path used 'ended' while the pipeline expected 'finished'. The fix consolidated to 'ended' as the canonical pre-processing terminal status, added 'ended' to SESSION_STATUSES, and added automatic stale-session marking via a periodic interval on the coordinator. This revealed that the status system had no central state machine — each caller decides transitions independently via transitionSessionStatus()."
+    "insight": "The swarm session status system had a terminology mismatch: the end-session path used 'ended' while the pipeline expected 'finished'. The fix consolidated to 'ended' as the canonical pre-processing terminal status, added 'ended' to SESSION_STATUSES, and added automatic stale-session marking via a periodic interval on the coordinator. This revealed that the status system had no central state machine — each caller decides transitions independently via transitionSessionStatus().",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-29T00:22:30.585Z",
-    "insight": "The macros plugin's chat prompt step was broken by the conversation-loop refactor (commit 5e9e263) which introduced enqueueUserMessage. The macro handler called enqueueUserMessage but nobody called sendUserMessage to drain the queue, so the LLM never responded. The fix is to use sendUserMessage directly, which also restores the onBeforePrompt/onAfterToolCall lifecycle hooks that were lost in the same refactor. Additionally, the dispatchSlashCommand context construction in the macro handler was unnecessarily constructing a subset of ctx when passing ctx directly works fine."
+    "insight": "The macros plugin's chat prompt step was broken by the conversation-loop refactor (commit 5e9e263) which introduced enqueueUserMessage. The macro handler called enqueueUserMessage but nobody called sendUserMessage to drain the queue, so the LLM never responded. The fix is to use sendUserMessage directly, which also restores the onBeforePrompt/onAfterToolCall lifecycle hooks that were lost in the same refactor. Additionally, the dispatchSlashCommand context construction in the macro handler was unnecessarily constructing a subset of ctx when passing ctx directly works fine.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-29T00:25:54.258Z",
-    "insight": "The DroneSlashCommandContext.conversation.sendUserMessage types its onEvent parameter as (event: unknown) => void, which means plugins that want to use it with a typed event handler need to cast. This is a deliberate design choice (the context type is in drone-core and can't import runtime types), but it means any plugin using sendUserMessage with an event handler needs to cast the event parameter. The macros plugin now does this with `const event = rawEvent as DroneConversationEvent`."
+    "insight": "The DroneSlashCommandContext.conversation.sendUserMessage types its onEvent parameter as (event: unknown) => void, which means plugins that want to use it with a typed event handler need to cast. This is a deliberate design choice (the context type is in drone-core and can't import runtime types), but it means any plugin using sendUserMessage with an event handler needs to cast the event parameter. The macros plugin now does this with `const event = rawEvent as DroneConversationEvent`.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-29T01:10:19.710Z",
-    "insight": "The config deep merge refactor replaced 136 lines of repetitive if-blocks with a 60-line generic deepMerge utility and a 20-line declarative MergeSpec. The key challenge was TypeScript type compatibility: deepMerge returns T (which is Record<string, unknown>), but the actual DroneAgentConfig has required fields that Partial<DroneLlmConfig> etc. can make optional. A single `as DroneAgentConfig` cast at the call site was the cleanest solution. The refactor reduced config-types.ts from 639 to 537 lines and makes adding new config sections a one-line spec addition."
+    "insight": "The config deep merge refactor replaced 136 lines of repetitive if-blocks with a 60-line generic deepMerge utility and a 20-line declarative MergeSpec. The key challenge was TypeScript type compatibility: deepMerge returns T (which is Record<string, unknown>), but the actual DroneAgentConfig has required fields that Partial<DroneLlmConfig> etc. can make optional. A single `as DroneAgentConfig` cast at the call site was the cleanest solution. The refactor reduced config-types.ts from 639 to 537 lines and makes adding new config sections a one-line spec addition.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-29T02:24:27.344Z",
-    "insight": "The `deepMerge` function's generic type `T extends Record<string, unknown>` is overly restrictive for test scenarios. Tests that exercise runtime behavior like merging extra properties (z, c, y) or passing null values into a field typed as `number` require `as any` casts. The `PartialDroneAgentConfig` type also has deeply nested required fields (e.g., `tui.syntaxHighlighting.codeBackground`) that make partial test overlays fail typecheck. Consider relaxing the generic constraint or using a more permissive type for the overlay parameter to avoid needing casts in tests."
+    "insight": "The `deepMerge` function's generic type `T extends Record<string, unknown>` is overly restrictive for test scenarios. Tests that exercise runtime behavior like merging extra properties (z, c, y) or passing null values into a field typed as `number` require `as any` casts. The `PartialDroneAgentConfig` type also has deeply nested required fields (e.g., `tui.syntaxHighlighting.codeBackground`) that make partial test overlays fail typecheck. Consider relaxing the generic constraint or using a more permissive type for the overlay parameter to avoid needing casts in tests.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-07-29T04:04:52.518Z",
-    "insight": "Tool result truncation was added at the conversation-service layer (after executeToolSafely returns, before session append) rather than at individual tool level. This is the right pattern because it covers all tools generically with a single config key (session.maxToolResultTokensPercent, default 15%). The token estimation uses the same estimateTextTokens function (chars/4) used elsewhere in the project, keeping the estimation consistent. The truncation note includes guidance for both file__read (request smaller window) and exec__run (pipe to temp file) to help the LLM recover from truncation."
+    "insight": "Tool result truncation was added at the conversation-service layer (after executeToolSafely returns, before session append) rather than at individual tool level. This is the right pattern because it covers all tools generically with a single config key (session.maxToolResultTokensPercent, default 15%). The token estimation uses the same estimateTextTokens function (chars/4) used elsewhere in the project, keeping the estimation consistent. The truncation note includes guidance for both file__read (request smaller window) and exec__run (pipe to temp file) to help the LLM recover from truncation.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-08-25T17:26:05.205Z",
-    "insight": "Adding a required field (e.g. session.retry) to a DroneSessionConfig-like type in drone-core propagates typecheck failures to EVERY hand-rolled session literal across all test files (drone-agent and drone-core). The pattern to expect and sweep: createDefaultAgentConfig-override blocks, getConfig() mocks, and inline sessionConfig literals in estimate tests. Use `pnpm typecheck` (which surfaces all of them) plus grep for the parent key to find every site; LSP diagnostics can lag behind rapid apply_diff and serve stale errors, so trust typecheck over the LSP once a file is verified. The conversation-service retry wrapper (`runWithRetry`) closure-captures `emit`/`retryConfig`/`onRetryPrompt` from the enclosing sendUserMessage scope, avoiding parameter threading — a clean pattern for adding policy that the loop owns."
+    "insight": "Adding a required field (e.g. session.retry) to a DroneSessionConfig-like type in drone-core propagates typecheck failures to EVERY hand-rolled session literal across all test files (drone-agent and drone-core). The pattern to expect and sweep: createDefaultAgentConfig-override blocks, getConfig() mocks, and inline sessionConfig literals in estimate tests. Use `pnpm typecheck` (which surfaces all of them) plus grep for the parent key to find every site; LSP diagnostics can lag behind rapid apply_diff and serve stale errors, so trust typecheck over the LSP once a file is verified. The conversation-service retry wrapper (`runWithRetry`) closure-captures `emit`/`retryConfig`/`onRetryPrompt` from the enclosing sendUserMessage scope, avoiding parameter threading — a clean pattern for adding policy that the loop owns.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-09-11T18:13:32.140Z",
-    "insight": "The codebase already had a consistent command-channel rule: leading '/' on the whole user-role line = command (readline + TUI idle both use startsWith('/')). The bug was that the remote submitUserMessage path skipped that check and the TUI busy branch enqueued as text. The clean fix is to apply the EXISTING rule uniformly at every user-role entry point, not invent new slash-detection heuristics. This naturally resolves the \"quoted /command mid-sentence\" concern (leading position only; mid-utterance is language). Agent-role output is a separate channel, untouched."
+    "insight": "The codebase already had a consistent command-channel rule: leading '/' on the whole user-role line = command (readline + TUI idle both use startsWith('/')). The bug was that the remote submitUserMessage path skipped that check and the TUI busy branch enqueued as text. The clean fix is to apply the EXISTING rule uniformly at every user-role entry point, not invent new slash-detection heuristics. This naturally resolves the \"quoted /command mid-sentence\" concern (leading position only; mid-utterance is language). Agent-role output is a separate channel, untouched.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-09-11T18:13:32.141Z",
-    "insight": "The --now universal immediate-override flag requires a shared subcommand/flag parse layer. Backward-compat constraint from inventorying all 36 ctx.args consumers: every handler reads ctx.args as the raw whitespace-split array (subcommand = args[0], flags via indexOf/includes), so the reserved --now must be stripped BEFORE arg derivation while all other flags (/tools --all, /todo --status, /model --once, /search-files --semantic) stay in ctx.args. Structured access (ctx.flags/subcommand/invocation) must be opt-in."
+    "insight": "The --now universal immediate-override flag requires a shared subcommand/flag parse layer. Backward-compat constraint from inventorying all 36 ctx.args consumers: every handler reads ctx.args as the raw whitespace-split array (subcommand = args[0], flags via indexOf/includes), so the reserved --now must be stripped BEFORE arg derivation while all other flags (/tools --all, /todo --status, /model --once, /search-files --semantic) stay in ctx.args. Structured access (ctx.flags/subcommand/invocation) must be opt-in.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   },
   {
     "timestamp": "2026-09-11T18:13:32.141Z",
-    "insight": "Plan sessions should check for an existing feature branch before writing a plan (repo was already on feat/slash-commands-during-working-fix). Also, before re-diagnosing, read the ADR wiki (drone-agent-conversation-loop-tightening-design) — the read-only slash-command split was explicitly deferred \"for simplicity\" in ADR 040 (commit 5e9e263); and if a prior planning session explored the same problem, its durable page (drone-agent-slash-command-steering-path-planning) carries the exploration map — read it early."
+    "insight": "Plan sessions should check for an existing feature branch before writing a plan (repo was already on feat/slash-commands-during-working-fix). Also, before re-diagnosing, read the ADR wiki (drone-agent-conversation-loop-tightening-design) — the read-only slash-command split was explicitly deferred \"for simplicity\" in ADR 040 (commit 5e9e263); and if a prior planning session explored the same problem, its durable page (drone-agent-slash-command-steering-path-planning) carries the exploration map — read it early.",
+    "lastExamined": "2026-11-13T19:48:31.442Z"
   }
 ]

@@ -1,6 +1,7 @@
 [
   {
     "timestamp": "2026-11-02T23:19:17.000Z",
-    "insight": "A plan sweep step like \"search for the type and add the new field to each construction site\" fails silently when the grep pipe ends in `head -N`: the truncation hid `drone-coordinator/test/transcript.test.ts` typed SwarmSession literal and only `pnpm typecheck` caught it — which worked solely because the new field was REQUIRED (TS2741); a nullable/optional field change would slip through compile checking. Rule: pipe type-name sweeps through `wc -l` or drop `head`, and treat the build/typecheck as the real site-enumerator, not grep. Matches the established principle: sweep every implementer/consumer/test mock; the compiler is the verifier."
+    "insight": "A plan sweep step like \"search for the type and add the new field to each construction site\" fails silently when the grep pipe ends in `head -N`: the truncation hid `drone-coordinator/test/transcript.test.ts` typed SwarmSession literal and only `pnpm typecheck` caught it — which worked solely because the new field was REQUIRED (TS2741); a nullable/optional field change would slip through compile checking. Rule: pipe type-name sweeps through `wc -l` or drop `head`, and treat the build/typecheck as the real site-enumerator, not grep. Matches the established principle: sweep every implementer/consumer/test mock; the compiler is the verifier.",
+    "lastExamined": "2026-11-13T19:48:37.381Z"
   }
 ]
