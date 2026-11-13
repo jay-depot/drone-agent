@@ -9,6 +9,7 @@
 - [drone-coordinator](./drone-coordinator/CONTEXT.md) — Central hub connecting beacons for swarm-wide coordination
 - [drone-gateway](./drone-gateway/CONTEXT.md) — Chat API integration layer connecting chat platforms to the drone swarm
 - [mcp-swarm](./mcp-swarm/README.md) — Reference swarm extension: a beacon that declares a capability manifest and exposes swarm functions to MCP clients over stdio
+- [drone-swarm-project](./drone-swarm-project/CONTEXT.md) — Kanban board swarm extension: projects, columns, cards, transition automations, a paced spawn queue, and injected card tools
 - [drone-extension-ui-types](./drone-extension-ui-types/src/index.ts) — Types-only package: the coordinator UI extension-bundle contract (`PluginClientExport`, `UIRegion`, `UIExtensionApi`, `PluginClientRoute`)
 
 ## Relationships

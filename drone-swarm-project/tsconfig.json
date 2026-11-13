@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../drone-core" },
+    { "path": "../drone-swarm-common" },
+    { "path": "../drone-extension-ui-types" }
+  ]
+}

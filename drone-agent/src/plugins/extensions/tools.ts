@@ -13,19 +13,34 @@
  */
 
 import type { DroneToolDefinition, DroneToolJsonSchema } from 'drone-core';
+import { sanitizeToolSegment } from '../../shared/tool-name.js';
 import type { ExtensionsContext } from './context.js';
 
-/** Canonical tool name for a catalog capability. */
+/** One tool selection from an extension's catalog. */
+type ToolSelection = {
+  capability: string;
+  description?: string;
+  paramSchema?: Record<string, unknown>;
+};
+
+/**
+ * Canonical tool name for an injected extension tool.
+ *
+ * `segment` is an already-sanitized tool-name segment (`card_move`), NOT the
+ * raw capability name (`card.move`): a dot inside an LLM-facing tool name is
+ * unsafe, so the raw capability never becomes the tool name (see the module
+ * header).
+ */
 export function injectedToolCanonicalName(
   extensionId: string,
-  toolName: string
+  segment: string
 ): string {
-  return `extensions__${extensionId}__${toolName}`;
+  return `extensions__${extensionId}__${segment}`;
 }
 
 /** The name the engine scopes under the `extensions` plugin id. */
-function registeredToolName(extensionId: string, toolName: string): string {
-  return `${extensionId}__${toolName}`;
+function registeredToolName(extensionId: string, segment: string): string {
+  return `${extensionId}__${segment}`;
 }
 
 /**
@@ -37,7 +52,7 @@ function registeredToolName(extensionId: string, toolName: string): string {
 async function invokeExtensionTool(
   ctx: ExtensionsContext,
   extensionId: string,
-  toolName: string,
+  capability: string,
   params: unknown
 ): Promise<string> {
   const beaconUrl = ctx.swarmCap?.getBeaconUrl();
@@ -46,7 +61,7 @@ async function invokeExtensionTool(
   }
   try {
     const res = await fetch(
-      `${beaconUrl}/coordinator/extensions/${encodeURIComponent(extensionId)}/tools/${encodeURIComponent(toolName)}`,
+      `${beaconUrl}/coordinator/extensions/${encodeURIComponent(extensionId)}/tools/${encodeURIComponent(capability)}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -78,18 +93,19 @@ async function invokeExtensionTool(
   }
 }
 
-/** Build the tool definition for one catalog selection. */
+/**
+ * Build the tool definition for one catalog selection. `segment` is the
+ * sanitized tool name; the raw `selection.capability` still travels on the
+ * proxy call, because the extension's catalog is keyed by the raw name.
+ */
 function buildToolDefinition(
   ctx: ExtensionsContext,
   extensionId: string,
-  selection: {
-    capability: string;
-    description?: string;
-    paramSchema?: Record<string, unknown>;
-  }
+  segment: string,
+  selection: ToolSelection
 ): DroneToolDefinition {
   return {
-    name: registeredToolName(extensionId, selection.capability),
+    name: registeredToolName(extensionId, segment),
     description:
       selection.description ??
       `Extension capability ${selection.capability} from ${extensionId}.`,
@@ -108,21 +124,26 @@ export function reconcileInjectedTools(ctx: ExtensionsContext): void {
     string,
     {
       extensionId: string;
-      selection: {
-        capability: string;
-        description?: string;
-        paramSchema?: Record<string, unknown>;
-      };
+      segment: string;
+      selection: ToolSelection;
     }
   >();
+  const usedNamesByExtension = new Map<string, Set<string>>();
   for (const inj of ctx.store.list()) {
     if (inj.kind !== 'tools') continue;
+    let usedNames = usedNamesByExtension.get(inj.extensionId);
+    if (!usedNames) {
+      usedNames = new Set<string>();
+      usedNamesByExtension.set(inj.extensionId, usedNames);
+    }
     for (const selection of inj.tools) {
-      const canonical = injectedToolCanonicalName(
-        inj.extensionId,
-        selection.capability
-      );
-      desired.set(canonical, { extensionId: inj.extensionId, selection });
+      const segment = sanitizeToolSegment(selection.capability, usedNames);
+      const canonical = injectedToolCanonicalName(inj.extensionId, segment);
+      desired.set(canonical, {
+        extensionId: inj.extensionId,
+        segment,
+        selection,
+      });
     }
   }
 
@@ -133,15 +154,15 @@ export function reconcileInjectedTools(ctx: ExtensionsContext): void {
     }
   }
 
-  for (const [canonical, { extensionId, selection }] of desired) {
+  for (const [canonical, { extensionId, segment, selection }] of desired) {
     if (ctx.injectedTools.has(canonical)) continue;
     try {
       ctx.registration.registerTool(
-        buildToolDefinition(ctx, extensionId, selection)
+        buildToolDefinition(ctx, extensionId, segment, selection)
       );
       ctx.injectedTools.set(canonical, {
         extensionId,
-        toolName: selection.capability,
+        capability: selection.capability,
       });
     } catch (err) {
       ctx.registration.logger.warn(

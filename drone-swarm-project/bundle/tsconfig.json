@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react",
+    "jsxFactory": "globalThis.React.createElement",
+    "jsxFragmentFactory": "globalThis.React.Fragment",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "types": []
+  },
+  "include": ["**/*.ts", "**/*.tsx", "globals.d.ts"],
+  "exclude": ["**/*.test.tsx", "test-setup.ts"]
+}

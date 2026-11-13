@@ -36,6 +36,27 @@ export interface PluginClientRoute {
 }
 
 /**
+ * Error-reporting helpers the host gives to a bundle. All three report through
+ * the host error toast, so a bundle does not need its own error surface.
+ */
+export interface DroneUIErrors {
+  /** Show a message to the user. */
+  show: (message: string) => void;
+  /**
+   * Read a non-ok Response, turn it into a message, show it, and return the
+   * message. Ignore the returned promise for a fire-and-forget call.
+   */
+  fromResponse: (res: Response) => Promise<string>;
+  /** Turn a thrown error into a message, show it, and return the message. */
+  fromThrown: (err: unknown) => string;
+}
+
+/** Host-provided UI helpers. Add a new area as a new field. */
+export interface DroneUI {
+  errors: DroneUIErrors;
+}
+
+/**
  * The API handed to a bundle's `onReady(api)` hook. Lets a bundle register
  * components/routes imperatively in addition to the declarative `regions` +
  * `routes` fields.
@@ -47,6 +68,10 @@ export interface UIExtensionApi {
   registerRoute: (route: PluginClientRoute) => () => void;
   /** Authenticated same-origin fetch against the coordinator API. */
   fetch: (path: string, init?: RequestInit) => Promise<Response>;
+  /** Navigate to a client route without a page reload. */
+  navigate: (path: string) => void;
+  /** Host-provided UI helpers. */
+  ui: DroneUI;
 }
 
 /** The `default` export shape of a front-end ESM bundle. */

@@ -31,6 +31,8 @@
     "drone-gateway/test/**/*.ts",
     "mcp-swarm/src/**/*.ts",
     "mcp-swarm/test/**/*.ts",
+    "drone-swarm-project/src/**/*.ts",
+    "drone-swarm-project/test/**/*.ts",
     "vitest.config.ts"
   ]
 }

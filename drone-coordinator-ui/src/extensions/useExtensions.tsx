@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { PluginClientRoute, UIRegion } from './types';
 import { loadExtensionBundles, defaultInjectStylesheet } from './loader';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
@@ -8,6 +9,11 @@ import { useAuthenticatedFetch } from '@/hooks/use-auth';
  * that hands each bundle's contributions to the registry callbacks. The heavy
  * lifting lives in the pure `loadExtensionBundles` so it is unit-testable
  * without a real dynamic `import()`.
+ *
+ * `load` MUST be reference-stable. The provider's effect depends on it, so an
+ * unstable `load` re-runs that effect on every navigation and disposes the
+ * whole registry. `navigate` (and `authFetch`) therefore live in refs, not in
+ * the `useCallback` dependency list.
  */
 
 export interface ExtensionsLoader {
@@ -21,12 +27,27 @@ export interface ExtensionsLoader {
     registerRoute: (route: PluginClientRoute) => () => void
   ) => Array<() => void>;
   loaded: string[];
+  /** True until the bundle load settles (success or failure). */
+  loading: boolean;
 }
 
-export function useExtensions(): ExtensionsLoader {
+export function useExtensions(
+  showError: (message: string) => void
+): ExtensionsLoader {
   const authFetch = useAuthenticatedFetch();
+  const navigate = useNavigate();
   const loadedRef = useRef<string[]>([]);
   const didLoadRef = useRef(false);
+  const [loading, setLoading] = useState(true);
+
+  const authFetchRef = useRef(authFetch);
+  const navigateRef = useRef(navigate);
+  const showErrorRef = useRef(showError);
+  useEffect(() => {
+    authFetchRef.current = authFetch;
+    navigateRef.current = navigate;
+    showErrorRef.current = showError;
+  }, [authFetch, navigate, showError]);
 
   const load = useCallback(
     (
@@ -42,30 +63,39 @@ export function useExtensions(): ExtensionsLoader {
       didLoadRef.current = true;
 
       void (async () => {
-        let entries: Parameters<typeof loadExtensionBundles>[0];
         try {
-          const res = await authFetch('/api/extensions');
-          if (!res.ok) return;
-          entries = await res.json();
-        } catch {
-          return;
-        }
+          let entries: Parameters<typeof loadExtensionBundles>[0];
+          try {
+            const res = await authFetchRef.current('/api/extensions');
+            if (!res.ok) return;
+            entries = await res.json();
+          } catch {
+            return;
+          }
 
-        const result = await loadExtensionBundles(entries, {
-          importModule: url => import(/* @vite-ignore */ url),
-          registerComponent,
-          registerRoute,
-          injectStylesheet: defaultInjectStylesheet,
-          fetch: (path, init) => authFetch(path, init),
-        });
-        disposers.push(...result.disposers);
-        loadedRef.current = result.loaded;
+          const result = await loadExtensionBundles(entries, {
+            importModule: url => import(/* @vite-ignore */ url),
+            registerComponent,
+            registerRoute,
+            injectStylesheet: defaultInjectStylesheet,
+            fetch: (path, init) => authFetchRef.current(path, init),
+            navigate: path => navigateRef.current(path),
+            showError: message => showErrorRef.current(message),
+          });
+          disposers.push(...result.disposers);
+          loadedRef.current = result.loaded;
+        } finally {
+          setLoading(false);
+        }
       })();
 
       return disposers;
     },
-    [authFetch]
+    []
   );
 
-  return useMemo(() => ({ load, loaded: loadedRef.current }), [load]);
+  return useMemo(
+    () => ({ load, loaded: loadedRef.current, loading }),
+    [load, loading]
+  );
 }

@@ -6,4 +6,6 @@ export type {
   UIExtensionApi,
   PluginClientExport,
   ExtensionManifestEntry,
+  DroneUI,
+  DroneUIErrors,
 } from 'drone-extension-ui-types';

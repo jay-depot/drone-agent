@@ -5,13 +5,17 @@ import {
   Route,
   NavLink,
   Navigate,
+  useLocation,
 } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { ErrorBoundary } from '@/components/error-boundary';
 import { ToastProvider } from '@/hooks/use-toast';
 import { WebSocketProvider } from '@/hooks/use-websocket';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import {
   ExtensionProvider,
+  ExtensionRouteFallback,
   RegionSlot,
   useExtensionRegistry,
 } from '@/extensions/ExtensionContext';
@@ -80,6 +84,11 @@ function DarkModeToggle() {
   );
 }
 
+function KeyedErrorBoundary({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  return <ErrorBoundary key={location.pathname}>{children}</ErrorBoundary>;
+}
+
 function AppLayout() {
   const { isAuthenticated } = useAuth();
   const { routes: pluginRoutes } = useExtensionRegistry();
@@ -118,6 +127,23 @@ function AppLayout() {
             </NavLink>
           ))}
           {/* Extension-contributed nav links (sidebar-nav region). */}
+          {pluginRoutes.map(route => (
+            <NavLink
+              key={route.path}
+              to={route.path}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+                  isActive
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+                    : 'hover:bg-sidebar-accent/50 text-sidebar-foreground/80'
+                )
+              }
+            >
+              <span className="text-base">◧</span>
+              {route.title}
+            </NavLink>
+          ))}
           <RegionSlot region="sidebar-nav" />
         </nav>
         <div className="p-3 border-t border-sidebar-border space-y-2">
@@ -130,49 +156,57 @@ function AppLayout() {
 
       {/* Main content */}
       <main className="flex-1 overflow-auto p-6">
-        <Routes>
-          <Route path="/" element={<TopologyPage />} />
-          <Route path="/beacons/:id" element={<BeaconDetailPage />} />
-          <Route path="/sessions" element={<SessionsPage />} />
-          <Route path="/sessions/:sessionId" element={<SessionDetailPage />} />
-          <Route path="/personas" element={<PersonasPage />} />
-          <Route path="/personas/new" element={<PersonaEditorPage />} />
-          <Route path="/personas/:id" element={<PersonaDetailPage />} />
-          <Route path="/personas/:id/edit" element={<PersonaEditorPage />} />
-          <Route
-            path="/personas/:id/skills/new"
-            element={<PersonaSkillEditorPage />}
-          />
-          <Route
-            path="/personas/:id/skills/:skillId/edit"
-            element={<PersonaSkillEditorPage />}
-          />
-          <Route path="/skills" element={<SkillsPage />} />
-          <Route path="/skills/new" element={<SkillEditorPage />} />
-          <Route path="/skills/:id" element={<SkillDetailPage />} />
-          <Route path="/skills/:id/edit" element={<SkillEditorPage />} />
-          <Route path="/wiki" element={<WikiPage />} />
-          <Route path="/wiki/new" element={<WikiEditorPage />} />
-          <Route path="/wiki/tag/:tag" element={<WikiTagPage />} />
-          <Route path="/wiki/:pageId" element={<WikiDetailPage />} />
-          <Route path="/wiki/:pageId/edit" element={<WikiEditorPage />} />
-          <Route path="/config" element={<Navigate to="/settings" replace />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/identity" element={<IdentityPage />} />
-          <Route
-            path="/pre-approval-tokens"
-            element={<PreApprovalTokensPage />}
-          />
-          {/* Extension-contributed routes. */}
-          {pluginRoutes.map(route => (
+        <KeyedErrorBoundary>
+          <Routes>
+            <Route path="/" element={<TopologyPage />} />
+            <Route path="/beacons/:id" element={<BeaconDetailPage />} />
+            <Route path="/sessions" element={<SessionsPage />} />
             <Route
-              key={route.path}
-              path={route.path}
-              element={<route.component />}
+              path="/sessions/:sessionId"
+              element={<SessionDetailPage />}
             />
-          ))}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            <Route path="/personas" element={<PersonasPage />} />
+            <Route path="/personas/new" element={<PersonaEditorPage />} />
+            <Route path="/personas/:id" element={<PersonaDetailPage />} />
+            <Route path="/personas/:id/edit" element={<PersonaEditorPage />} />
+            <Route
+              path="/personas/:id/skills/new"
+              element={<PersonaSkillEditorPage />}
+            />
+            <Route
+              path="/personas/:id/skills/:skillId/edit"
+              element={<PersonaSkillEditorPage />}
+            />
+            <Route path="/skills" element={<SkillsPage />} />
+            <Route path="/skills/new" element={<SkillEditorPage />} />
+            <Route path="/skills/:id" element={<SkillDetailPage />} />
+            <Route path="/skills/:id/edit" element={<SkillEditorPage />} />
+            <Route path="/wiki" element={<WikiPage />} />
+            <Route path="/wiki/new" element={<WikiEditorPage />} />
+            <Route path="/wiki/tag/:tag" element={<WikiTagPage />} />
+            <Route path="/wiki/:pageId" element={<WikiDetailPage />} />
+            <Route path="/wiki/:pageId/edit" element={<WikiEditorPage />} />
+            <Route
+              path="/config"
+              element={<Navigate to="/settings" replace />}
+            />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/identity" element={<IdentityPage />} />
+            <Route
+              path="/pre-approval-tokens"
+              element={<PreApprovalTokensPage />}
+            />
+            {/* Extension-contributed routes. */}
+            {pluginRoutes.map(route => (
+              <Route
+                key={route.path}
+                path={route.path}
+                element={<route.component />}
+              />
+            ))}
+            <Route path="*" element={<ExtensionRouteFallback />} />
+          </Routes>
+        </KeyedErrorBoundary>
       </main>
     </div>
   );
@@ -183,11 +217,11 @@ export default function App() {
     <ToastProvider>
       <AuthProvider>
         <WebSocketProvider>
-          <ExtensionProvider>
-            <BrowserRouter>
+          <BrowserRouter>
+            <ExtensionProvider>
               <AppLayout />
-            </BrowserRouter>
-          </ExtensionProvider>
+            </ExtensionProvider>
+          </BrowserRouter>
         </WebSocketProvider>
       </AuthProvider>
     </ToastProvider>

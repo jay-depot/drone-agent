@@ -44,6 +44,7 @@ export default defineConfig({
       'drone-swarm/test/**/*.test.ts',
       'drone-gateway/test/**/*.test.ts',
       'mcp-swarm/test/**/*.test.ts',
+      'drone-swarm-project/test/**/*.test.ts',
     ],
     // Exclude integration tests that require external services:
     // - Docker: e2e-swarm, coordinator-sync, spawn, inter-agent, agent-beacon
@@ -74,6 +75,7 @@ export default defineConfig({
         'drone-swarm/src/**/*.ts',
         'drone-gateway/src/**/*.ts',
         'mcp-swarm/src/**/*.ts',
+        'drone-swarm-project/src/**/*.ts',
       ],
       exclude: [
         'drone-agent/src/tui/**',

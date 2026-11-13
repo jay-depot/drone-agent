@@ -1122,5 +1122,105 @@
   {
     "timestamp": "2026-11-08T18:49:51.458Z",
     "insight": "The extension-node / callee direction (ADR 270) is now live in drone-gateway: the node declares `schedule_wakeup`/`schedule_list`/`schedule_cancel` (exposed:'mcp', no dots), which materialize as agent tools `extensions__drone-gateway__schedule_*` left unmounted. An extension node's `onInvokeTool` ctx carries the calling agent's `sessionId` — that is the ONLY handle tying an invoke back to a conversation, so the gateway builds a `sessionId -> {adapterId, conversationId}` map from `sessionStarted`/`sessionEnded` events (hint prefix-stripped). A `tools` injection is discoverable/mountable but the model must mount before calling; the wake itself is a synthetic turn via `SessionLifecycle.send` and only works in LOCAL spawn mode (coordinator mode returns no reply). This is the pattern for any future callee capability."
+  },
+  {
+    "timestamp": "2026-11-09T18:53:44.801Z",
+    "insight": "Plan gap (drone-swarm-project Step 16): the plan passed the extension `node` directly into `makeSessionHandlers`, but the handlers object is an argument to `createExtensionNode(...)` — so `node` does not exist yet when the handlers are built (TS2454 \"used before assigned\", and a real TDZ at runtime). Correct pattern: inject a lazy `getNode: () => ExtensionNode` and call it inside the event handlers (which only fire after the node exists). Any extension-node handler that needs the node itself must take a getter, not the node."
+  },
+  {
+    "timestamp": "2026-11-09T18:53:44.804Z",
+    "insight": "Plan gap (drone-swarm-project Step 9/16/18): the written `BoardStore` interface had no way to write a card's `sessionId`/`spawnId`/`sessionStatus`, nor to resolve session-id → card. Both are required by the session-event handler (set the card's session on start; find the card on end) and by the card-bound tool shortcut. Added `setCardSession(input)` and `getCardIdForSession(sessionId)` to the interface. When a plan defines a store interface, check every later step's needs against it before implementing — interface gaps surface as ad-hoc store access."
+  },
+  {
+    "timestamp": "2026-11-09T18:53:44.807Z",
+    "insight": "First real TSX esbuild extension bundle (drone-swarm-project): `@types/react` v19 removed the GLOBAL `JSX` namespace, so a bundle compiled with `jsxFactory: 'globalThis.React.createElement'` fails typecheck with TS7026 (\"no interface 'JSX.IntrinsicElements' exists\") on every element. Fix: declare a global `JSX` namespace in a `bundle/globals.d.ts` aliasing `ReactNS.JSX.*` — and use `type` aliases, not empty `interface X extends Y {}` (eslint `@typescript-eslint/no-empty-object-type`). Also annotate components with an inferred return type, not `: unknown` (a `: unknown` return is not a valid `ComponentType`/JSX element type)."
+  },
+  {
+    "timestamp": "2026-11-09T21:47:35.679Z",
+    "insight": "Coordinator UI extension routes are added to the route table asynchronously (useExtensions fetches /api/extensions then dynamically imports each bundle). Any route supplied by a bundle is therefore ABSENT on first render, so a full page load of an extension route (e.g. /board) matches the catch-all `<Route path=\"*\" element={<Navigate to=\"/\" replace />} />` and the `<Navigate>` effect fires on commit — always winning the race against the async bundle load. The redirect is deterministic, not a flake. Fix (ADR 272): gate the catch-all behind a reactive `loading` flag (Skeleton placeholder while loading, redirect only after settle), move `<BrowserRouter>` ABOVE `<ExtensionProvider>` so the provider can call `useNavigate`, and let the host render extension nav (from `route.title`) plus expose `api.navigate(path)` so bundles never use a plain `<a href>` (which hard-reloads and re-runs the race). Lesson: any UI that renders a route table before its routes are known needs an explicit \"not-yet-known\" state; a catch-all redirect is a footgun when routes arrive async."
+  },
+  {
+    "timestamp": "2026-11-09T22:27:33.741Z",
+    "insight": "Coordinator-UI extension registry was torn down on EVERY navigation and never rebuilt (ADR 273, branch feat/kanban-extension-base). Chain: react-router 7.18.3 `useNavigate()` returns a callback whose identity changes per route change (useCallback deps include `locationPathname`); `useExtensions` built `load` as `useCallback(..., [authFetch, navigate])`, so `load` identity changed per navigation; `ExtensionProvider`'s effect depends on `extensions.load`, so it re-ran per navigation; its cleanup disposed the whole registry (route + region components); the re-run called `load` but `didLoadRef.current === true`, so `load` returned an empty disposer array and re-registered nothing. Result: `/board` fell out of the route table -> gated catch-all `ExtensionRouteFallback` with `loading=false` -> redirect to `/`, AND the host-drawn Board NavLink vanished. Both symptoms, one cause, deterministic, SILENT (cleanup is not an error path). Lesson: any hook whose return value is consumed as an effect dependency must be reference-stable; a ref-guarded one-shot `load` MUST have `[]` deps. Also: `App.test.tsx` (ADR 272) missed it because it rendered once at `/board` and never navigated — deep-link tests do not cover teardown-on-navigation."
+  },
+  {
+    "timestamp": "2026-11-09T22:27:33.743Z",
+    "insight": "Coordinator-UI has NO React error boundary anywhere (grep ErrorBoundary|componentDidCatch|getDerivedStateFromError across drone-coordinator-ui/src = 0). A render crash in any page or extension region component therefore unmounts the whole app silently, with no console output unless the crash itself throws during render (which React does log, but a caught-and-swallowed failure does not). The loader contains BUNDLE-LOAD failures (try/catch -> onError -> console.warn default), but nothing contains RENDER failures. ADR 273 adds a reusable `ErrorBoundary` (class component, src/components/error-boundary.tsx) wrapping `<Routes>`, keyed by `useLocation().pathname` for auto-reset on navigation."
+  },
+  {
+    "timestamp": "2026-11-09T22:44:06.391Z",
+    "insight": "Coordinator-UI extension registry teardown (ADR 273): `useNavigate()` in react-router 7.18.3 returns a `useCallback` whose identity changes on every navigation (it closes over `locationPathname`). Any `useCallback` that lists `navigate` (or a hook that wraps it) in its deps becomes unstable per-navigation; a provider effect depending on that callback re-runs and disposes the whole registry. Fix: hold `navigate`/`authFetch` in refs and use `useCallback(..., [])` so the effect is mount-only. General rule: NEVER put react-router's `navigate` in a `useCallback` dep list if the callback's identity is load-bearing for a mount-only effect."
+  },
+  {
+    "timestamp": "2026-11-09T22:44:06.398Z",
+    "insight": "Coordinator-UI StrictMode-safe disposal pattern: when an effect registers things and returns disposers, do NOT guard with a `cancelled` boolean captured in the effect closure. Under React StrictMode's simulated unmount, the flag is set, the `didLoadRef`-style idempotence guard blocks re-registration, and a late async registration would be disposed at once. Instead push every disposer into a persistent `useRef` array and have the cleanup dispose the ref then clear it: the simulated unmount disposes an as-yet-empty ref, the late registration lands in the fresh ref, and the real unmount disposes it."
+  },
+  {
+    "timestamp": "2026-11-09T22:44:06.409Z",
+    "insight": "`docs/adr/index.md` has pre-existing rot (as of 2026-11-09): 294 rows vs 272 files (295/273 after ADR 273), 27 duplicated ADR numbers (171, 172, 176–196, 217–219), a misplaced YAML frontmatter block mid-file (lines ~6–10), a stray second `| Page |` table header, and 5 ADRs with no index row (239, 249, 250, 255, 266). This breaks any \"row count == file count\" integrity check. It is NOT caused by recent ADRs — it was already broken at 8fb54725^ (293/271). Needs a dedicated index-repair pass (dedupe rows, add missing rows, move frontmatter to the top, drop the stray header). Tracked as followup-adr-index-duplicate-rows-and-missing-entries."
+  },
+  {
+    "timestamp": "2026-11-09T22:44:06.416Z",
+    "insight": "Regression-proof technique on this host: to prove a test fails pre-fix, back up the fixed files with `cp` to /tmp, restore the pre-fix version with `git show <rev>:<path> > <path>`, run the tests, then `cp` the backups back. Do NOT use `git stash` for this — per HOST.md, `git stash push` with a non-matching pathspec exits 0 while stashing nothing, and a chained `git stash pop` then grabs the wrong stash. `cp` + `git show` is deterministic and leaves the tree verifiable (grep for a fix marker to confirm the restore)."
+  },
+  {
+    "timestamp": "2026-11-10T00:07:08.187Z",
+    "insight": "CI gap (found while planning the card modal): the `drone-coordinator-ui` package's test suite (371 tests) does NOT run in CI. `.github/workflows/integration-test.yml`'s `unit-tests` job runs root `pnpm test`, but the root `vitest.config.ts` include list has no `drone-coordinator-ui` entry (that package has its own `vitest.config.ts` + `NODE_ENV=test vitest run` script). So the UI suite is green only locally. Any plan touching `drone-coordinator-ui` should add `pnpm --filter drone-coordinator-ui test` to the `unit-tests` job. Worth a repo-wide followup to sweep for other packages whose suites are excluded from the root include list (mcp-swarm and drone-gateway ARE included; the UI package is the outlier)."
+  },
+  {
+    "timestamp": "2026-11-10T00:07:08.190Z",
+    "insight": "`drone-swarm-project` has no bundle-component test infrastructure: no `jsdom`, no `@testing-library`, no `.tsx` tests, and the root vitest config only matches `drone-swarm-project/test/**/*.test.ts` under a `node` environment. Adding a bundle component test therefore requires a package-local jsdom `vitest.config.ts`, a `test-setup.ts` that installs `globalThis.React`/`ReactDOM` (the bundle's jsxFactory is `globalThis.React.createElement`, and react-dom is NOT resolvable from the package), a separate `bundle/tsconfig.test.json` (the bundle's own tsconfig has `types: []` for browser purity and must exclude test files), and new devDeps. The `drone-coordinator-ui` package is the pattern to copy."
+  },
+  {
+    "timestamp": "2026-11-10T00:07:08.193Z",
+    "insight": "Layering defect found while planning: the coordinator-UI host toast viewport is `z-50` (`drone-coordinator-ui/src/hooks/use-toast.tsx`), but the `drone-swarm-project` bundle modal backdrop is `position: fixed; z-index: 1000` (`bundle/styles.css`). So any host toast raised while a bundle modal is open renders BEHIND the modal — invisible. General rule: host chrome must always sit above extension UI. Extension bundles can (and do) use large z-index values, so the host's fixed overlays (toast, dialogs) should use values above any plausible bundle z-index (e.g. `z-[1100]`)."
+  },
+  {
+    "timestamp": "2026-11-10T00:37:13.189Z",
+    "insight": "Plan gap class — a \"new required param on an interface + new re-exported type\" plan undercounts its blast radius. In the card-modal plan the locked design correctly added a required `LoaderDeps.showError` and a `UIExtensionApi.ui` field, but the plan's file list missed three consumers that only surface at build/typecheck: (1) `drone-coordinator-ui/src/extensions/types.ts`, the local re-export barrel, needs every new type (`DroneUI`/`DroneUIErrors`) or `import ... from './types'` fails; (2) every test that constructs a `LoaderDeps` needs the new required member (`loader.test.ts`'s `deps()` helper); (3) every existing caller of a changed signature needs updating (`useExtensions.test.tsx`'s `useExtensions()` → `useExtensions(() => {})`). Sweep the type barrel and grep for direct constructor/call sites before declaring a cross-cutting interface change done — the plan's own step list is not enough."
+  },
+  {
+    "timestamp": "2026-11-10T00:37:13.193Z",
+    "insight": "Adding a `useContext`-based hook (`useToast`) to a provider (`ExtensionProvider`) makes that provider require its context provider (`ToastProvider`) as an ancestor — true in the app (App.tsx nests them), but every test that renders the provider in isolation breaks with \"must be used within a ToastProvider\". The card-modal plan assumed \"ExtensionProvider is inside ToastProvider\" and did not list the affected test files. Fix: wrap the isolated test renders in the required provider. A plan that wires a context consumer into an existing component must enumerate the test renders of that component."
+  },
+  {
+    "timestamp": "2026-11-10T01:29:14.266Z",
+    "insight": "`GET /api/beacons` is NOT a list of real beacons — it also contains every swarm extension node. `createExtensionNode` (drone-swarm-common/src/extension-server.ts) POSTs to `/api/beacons` with `extension:{protocolVersion}`, no `port`, and no `spawnRoots`, and the coordinator's `POST /beacons` trust branch persists it into the `beacons` table (drone-coordinator/src/routes/beacons.ts). Once the node's `/ws/beacon` socket is up, `buildBeaconView` reports `connected: true` for it. So any UI that lists \"connected beacons\" as spawn targets — e.g. the coordinator UI's `NewSessionPanel` (drone-coordinator-ui/src/pages/sessions.tsx, filters `b.connected` only) — will offer extension nodes, which cannot spawn a session. The canonical discriminator is `GET /api/extensions`, which returns `{ nodeId, connected, isExtension }` (drone-coordinator/src/routes/extensions.ts). Any beacon picker must exclude `isExtension === true` nodes (or filter on a real signal like `port != null`). This is a live latent bug in `NewSessionPanel`, found 2026-11-09 while planning the drone-swarm-project project-create modal."
+  },
+  {
+    "timestamp": "2026-11-10T01:59:03.125Z",
+    "insight": "In the drone-swarm-project bundle, a test mock's `vi.fn(async (path: string) => ...)` produces a `mock.calls` tuple of length 1, so `(call[1] as RequestInit)` fails the bundle's `tsconfig.test.json` typecheck (TS2493 no element at index 1; TS2352 undefined→RequestInit). Give the mock a second parameter `_init?: RequestInit` when the test reads the request body from `mock.calls`."
+  },
+  {
+    "timestamp": "2026-11-10T01:59:03.133Z",
+    "insight": "In the drone-swarm-project bundle, a component that renders JSX but uses no hooks (e.g. ProjectSelect) must NOT declare `const React = globalThis.React` — eslint `no-useless-assignment` fails it because the JSX transform emits `globalThis.React.createElement` directly and the local binding is never read. Only declare the local `React` when the component calls `React.useState`/`useEffect`/`useCallback`/`useRef`."
+  },
+  {
+    "timestamp": "2026-11-10T02:26:25.637Z",
+    "insight": "Two sibling code paths in drone-agent build LLM-facing tool names from foreign names, and only one sanitized: `mcp/index.ts` ran each MCP tool name through `sanitizeToolSegment` (`[^a-zA-Z0-9_-]`→`_`), but `plugins/extensions/tools.ts` concatenated the raw extension capability verbatim, so `extensions__<extId>__card.move` reached the model with a dot (ADR 028 / Kimi K2). Fixed by extracting `sanitizeToolSegment` to `drone-agent/src/shared/tool-name.ts` and using it in both. Lesson: when one of two parallel \"foreign name → tool name\" paths sanitizes, check the other; they drift silently because each has its own tests. Still unsanitized in the same path: the extension **id** segment (`extensions__<extId>__...`) — safe today because real ext ids are hyphenated node ids, but a dotted ext id would leak. Tracked as a latent edge, not fixed."
+  },
+  {
+    "timestamp": "2026-11-11T19:26:29.771Z",
+    "insight": "file__glob matches node_modules. A broad pattern such as `drone-swarm-project/**/*` returns the whole dependency tree and the result is truncated at about 157k tokens, which wastes a large part of the context window. Scope globs narrowly: by directory (`drone-swarm-project/bundle/*`) or by extension (`**/*.tsx` under a package). The same caution applies to file__list on a package root, which is safe, and to search__text, which is safe because it honours ignore rules."
+  },
+  {
+    "timestamp": "2026-11-11T19:28:21.685Z",
+    "insight": "The Obsidian project wiki index (`/home/unleet/Obsidian/drone-agent-project/index.md`) lags the repository. It said \"All 275 architecture decision records\" and \"Latest: 275-kanban-project-create-and-edit-ui\", but `docs/adr/` already held 276 (extension tool-name sanitization). A planner must discover the next free ADR number from the repository (`file__glob` on `docs/adr/27*.md`), never from the wiki index. The wiki index needs a maintenance pass."
+  },
+  {
+    "timestamp": "2026-11-11T19:28:21.688Z",
+    "insight": "swarm__wiki_read re-inflates the context on every call. In one planning session the page `plan-project-create-and-edit-ui` was read seven times, and each read returned the full page body (about 1000 words) even though the tool already tracked the read (its `agentReadCount` field went from 4 to 7). A re-read of a page already read in the same session should return the id, title, and a note instead of the full body. Until that exists, a planner must track what it has read and not re-call the tool."
+  },
+  {
+    "timestamp": "2026-11-11T19:28:31.794Z",
+    "insight": "A drone-swarm-project front-end bundle file must not import React. React is shared only through `globalThis.React`, and the bundle tsconfig sets `\"types\": []` with a hand-written `bundle/globals.d.ts` that declares the global `JSX` namespace. So a local component (for example the new `bundle/Button.tsx`) references `JSX.IntrinsicElements['button']` and returns plain JSX, and it declares no React import. The esbuild config externalises `react` and `react-dom`, and the host injects them. A bundle also cannot import host components (the host `Button`) or use Tailwind utility classes; it themes itself by reading the host CSS custom properties with `var(--...)`."
+  },
+  {
+    "timestamp": "2026-11-11T19:28:31.797Z",
+    "insight": "Persona ids are not guaranteed to exist for a persona named in a subagent dispatch. A dispatch with `persona: \"self-improvement\"` failed with `persona \"self-improvement\" not found` (exit 1), because no such persona is registered — `self-improvement` is a plugin, not a persona. When a plan step needs an insight logged, either call `self-improvement__insight` from the current session (mount the tool first with `runtime__mount_tool`) or dispatch a subagent with an existing persona such as `worker`."
+  },
+  {
+    "timestamp": "2026-11-11T19:39:27.429Z",
+    "insight": "file__apply_diff defect observed 2026-11-11 (drone-swarm-project bundle styling): a patch containing MULTIPLE @@ hunk headers is parsed as ONE contiguous hunk (the tool's docs say hunks are applied top-to-bottom, but the parser merged them). Two consequences: (1) when the merged old-code zone spans non-adjacent lines, matching fails with \"old code not found\"; (2) a mixed patch that DID apply produced a DUPLICATE block (the new header group was added while the old ProjectSelect was left in place), requiring a follow-up removal. Workaround that worked reliably: issue ONE @@ hunk per apply_diff call. Also: a pure-insertion hunk (only + lines) anchored on the file's `---` frontmatter delimiter is ambiguous (matches both the frontmatter close and the same delimiter elsewhere) — include the preceding frontmatter lines (tags/related) as context to disambiguate. Recommend fixing the multi-hunk parser in file__apply_diff (it is a core dev tool; the project principle says fix the tool, don't route around it)."
   }
 ]

@@ -1,10 +1,12 @@
 import type {
   ExtensionManifestEntry,
+  DroneUI,
   PluginClientExport,
   PluginClientRoute,
   UIExtensionApi,
   UIRegion,
 } from './types';
+import { extractApiError, networkErrorMessage } from '@/hooks/use-api';
 
 /**
  * The pure bundle-loader core, extracted from the `useExtensions` hook so it
@@ -33,6 +35,10 @@ export interface LoaderDeps {
   injectStylesheet: (href: string) => void;
   /** Authenticated same-origin fetch handed to bundles via `api.fetch`. */
   fetch: (path: string, init?: RequestInit) => Promise<Response>;
+  /** Client-side navigation handed to bundles via `api.navigate`. */
+  navigate: (path: string) => void;
+  /** Show an error to the user. Handed to bundles via `api.ui.errors`. */
+  showError: (message: string) => void;
   /** Called with any load error (defaults to console.warn). */
   onError?: (message: string) => void;
 }
@@ -55,13 +61,35 @@ function defaultInjectStylesheet(href: string): void {
 function makeApi(
   registerComponent: LoaderDeps['registerComponent'],
   registerRoute: LoaderDeps['registerRoute'],
-  fetchImpl: LoaderDeps['fetch']
+  fetchImpl: LoaderDeps['fetch'],
+  navigate: LoaderDeps['navigate'],
+  showError: LoaderDeps['showError']
 ): UIExtensionApi {
   return {
     registerComponent: (region, component) =>
       registerComponent(region, component),
     registerRoute,
     fetch: fetchImpl,
+    navigate,
+    ui: makeDroneUI(showError),
+  };
+}
+
+function makeDroneUI(showError: (message: string) => void): DroneUI {
+  return {
+    errors: {
+      show: message => showError(message),
+      fromResponse: async res => {
+        const message = await extractApiError(res);
+        showError(message);
+        return message;
+      },
+      fromThrown: err => {
+        const message = networkErrorMessage(err);
+        showError(message);
+        return message;
+      },
+    },
   };
 }
 
@@ -101,7 +129,13 @@ export async function loadExtensionBundles(
             disposers.push(deps.registerRoute(route));
           }
           client.onReady?.(
-            makeApi(deps.registerComponent, deps.registerRoute, deps.fetch)
+            makeApi(
+              deps.registerComponent,
+              deps.registerRoute,
+              deps.fetch,
+              deps.navigate,
+              deps.showError
+            )
           );
           loaded.push(entry.nodeId);
         } catch (err) {

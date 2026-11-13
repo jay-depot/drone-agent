@@ -29,7 +29,7 @@ export interface ExtensionsRuntime {
 /** One injected tool: its owner and the catalog capability it proxies. */
 export interface InjectedToolEntry {
   extensionId: string;
-  toolName: string;
+  capability: string;
 }
 
 export interface ExtensionsContext {

@@ -133,14 +133,23 @@ generic `DroneSwarmCapability.registerWsHandler` seam.
 
 A `tools` injection selects catalog capabilities; the coordinator resolves the
 schema from the manifest (single source of truth) and the agent registers each
-as `extensions__<extId>__<toolName>`, **unmounted** in the `ToolRegistry` (the
+as `extensions__<extId>__<sanitized>`, **unmounted** in the `ToolRegistry` (the
 MCP pattern — the list/mount meta-tools and persona filters apply unchanged).
+
+The registered name is **sanitized**: every character outside `[a-zA-Z0-9_-]`
+becomes `_`, so a capability `card.move` yields the tool
+`extensions__<extId>__card_move`. A dot inside an LLM-facing tool name breaks
+the Kimi K2 parser (ADR [028](../adr/028-tool-name-separator.md)), so the raw
+capability name — which keeps its dots — must never become a tool name (ADR
+[276](../adr/276-extension-tool-name-sanitization.md)). Colliding sanitized
+names get a `_1`, `_2`, … suffix. The **proxy call still uses the raw
+capability**, because the manifest is keyed by it.
 
 Tool call path (the agent never talks to the coordinator directly):
 
 ```
-LLM calls extensions__<extId>__<toolName>
-  → agent POSTs /coordinator/extensions/<extId>/tools/<toolName> on its beacon
+LLM calls extensions__<extId>__<sanitized>
+  → agent POSTs /coordinator/extensions/<extId>/tools/<capability> on its beacon
   → beacon forwards to the coordinator (mTLS)
   → coordinator sendBeaconCommand(extId, 'invokeTool', { action, params, sessionId })
   → extension
@@ -174,12 +183,47 @@ The client contract mirrors the alice model: a bundle's `module.default` is
 `globalThis.React`. Bundles are loaded by dynamic `import()` — same-origin,
 full page trust, no sandbox in v0.
 
+The `onReady(api)` hook receives a `UIExtensionApi` with `registerComponent`,
+`registerRoute`, `fetch` (authenticated same-origin), and `navigate(path)`
+(client-side navigation without a page reload). Bundles cannot import
+`react-router-dom` — only react/react-dom are external — so `api.navigate` is
+how a bundle moves the app to another route.
+
+It also receives `api.ui: DroneUI`, the host-provided UI helpers. `DroneUI` is a
+bag of sub-objects keyed by area; its first sub-object is `errors`, with three
+methods that report through the **host error toast** (so a bundle needs no error
+surface of its own): `show(message)`, `fromResponse(res)` (reads a non-ok
+`Response`, shows the message, returns it), and `fromThrown(err)` (turns a
+thrown error into a message, shows it, returns it). `fromResponse` and
+`fromThrown` return the normalized message so a caller can show the **same**
+message inline and in the toast; a fire-and-forget caller ignores the return
+value (ADR [274](../adr/274-card-modal-and-drone-ui-error-api.md)). The host
+toast viewport sits at `z-[1100]`, above the extension modal backdrop
+(`z-index: 1000`), so a toast raised from inside a bundle modal is visible.
+
+**The host owns extension navigation.** For every registered route the host
+renders one sidebar `NavLink` from `route.title`, styled with the same classes
+and `isActive` logic as the core nav items. A bundle **must not** draw its own
+sidebar entry — that would show two links and re-introduce a full page reload.
+
 **UI regions (v0):** `sidebar-nav`, `topology-widget`, `topology-card`,
 `topology-page`, `sessions-widget`, `session-card`, `session-page`,
 `settings-panel`. Arbitrary plugin routes (`{ path, title, component }`) are
 allowed. The Topology page splits into **Beacons** and **Extensions**; the
 **Settings** page hosts Coordinator Settings, Shared Agent Config (the moved
 Config page), and one core-headed section per extension.
+
+Extension routes load asynchronously. Until they settle, an unmatched path
+shows a `Skeleton` placeholder instead of redirecting, so a deep link to an
+extension route (`/board`) renders the route once its bundle arrives (ADR
+[272](../adr/272-extension-routes-first-class-nav.md)).
+
+The registry is **mount-stable**: the loader runs once, and navigation does not
+re-run it. `useExtensions` keeps `navigate` and `authFetch` in refs, so `load`
+has a stable identity and the provider effect runs only at mount (ADR
+[273](../adr/273-extension-registry-navigation-teardown.md)). A render crash in
+a page is caught by a reusable `ErrorBoundary` (keyed by pathname) that shows a
+"Try again" panel and logs to `console.error`, instead of a silent blank area.
 
 ## Building an extension
 
@@ -225,6 +269,13 @@ runs as a long-lived daemon, guards its endpoint with **named auth tokens**, and
 serves a **settings-panel** bundle for token management. See
 [`mcp-swarm/README.md`](../../mcp-swarm/README.md) and ADR
 [`255-mcp-swarm-http-transport-and-tokens`](../adr/255-mcp-swarm-http-transport-and-tokens.md).
+
+The second reference extension is **`drone-swarm-project`**: a kanban board that
+owns its data and, on a matching card move, enqueues a paced agent spawn. It is
+also the **first real TSX bundle** in this repository — the board UI is authored
+as TypeScript JSX and compiled with esbuild (unlike `mcp-swarm`, which embeds a
+JS string). See [`drone-swarm-project.md`](drone-swarm-project.md) and ADR
+[`271-drone-swarm-project-kanban-extension`](../adr/271-drone-swarm-project-kanban-extension.md).
 
 ## Gateway as an extension
 
