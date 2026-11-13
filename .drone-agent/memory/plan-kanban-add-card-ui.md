@@ -12,12 +12,14 @@ tags:
   - button-variant
   - ADR-278
 created: 2026-11-13T19:12:50.321Z
-updated: 2026-11-13T19:12:50.321Z
+updated: 2026-11-13T19:22:58.086Z
 ---
 
 # Plan — Add a card from the board: an "Add card" button per column and a new-card modal
 
 **Status**: Ready for execution. Branch `feat/kanban-addon-card-ui`.
+**Status**: EXECUTED (2026-11-13). Branch `feat/kanban-addon-card-ui`. Commit `7b11368b`.
+All 11 steps done; every validation criterion passed. See "Execution summary" at the end.
 **Executor**: persona `code`. Tests by persona `code` (test steps are marked). One review pass before
 validation.
 **Package**: `drone-swarm-project` — the kanban swarm extension. Front-end bundle only.
@@ -901,3 +903,30 @@ All of these must pass.
   through a matching wildcard-from automation (D11).
 - **A repair of the `docs/adr/index.md` duplicates.** It is a separate followup.
 - **A change to the `card.create` handler or its enqueue behaviour.**
+
+---
+
+## Execution summary (2026-11-13, persona `code`, branch `feat/kanban-addon-card-ui`)
+
+**Status: COMPLETE.** All 11 steps done. Commit `7b11368b` (15 files, +627/-171).
+
+### What landed
+
+- **Step 1** `bundle/Modal.tsx` — shared shell (backdrop, panel, header, Escape listener).
+- **Step 2** `bundle/Button.tsx` gains `variant="ghost"`; `bundle/styles.css` gains `.dsp-btn-ghost`, `.dsp-add-card`, `.dsp-muted`.
+- **Step 3** `bundle/CardCreateModal.tsx` — fixed column, Title + Description, `card.create`.
+- **Step 4** `CardModal`, `ProjectModal`, `QueueModal` migrated to the shell (Escape effect and wrapper divs/header removed). Rendered DOM unchanged; their tests unchanged.
+- **Step 5** `bundle/BoardPage.tsx` — `newCard` state, per-column ghost button (aria-label `Add card to <name>`), modal render; on create reloads board + `reload()`.
+- **Steps 6-8** `bundle/Modal.test.tsx` (4), `bundle/CardCreateModal.test.tsx` (5), `bundle/BoardPage.test.tsx` (+2 = 10).
+- **Step 9** ADR `docs/adr/278-kanban-add-card-ui.md` + index row; agent doc section; README bullet; Obsidian stub `decisions/278-kanban-add-card-ui.md` + index row + `modules/drone-swarm-project.md` note + `log.md` entry + `meta.json`.
+
+### Validation (all pass)
+
+- LSP: clean on every changed bundle file. The only diagnostics are the 6 pre-existing Tailwind `@plugin`/`@custom-variant`/`@theme`/`@apply` warnings in `drone-coordinator-ui/src/index.css` (untouched). One `hint` (80006 "may be converted to an async function") on the pre-existing `loadBoard` callback in `BoardPage.tsx`; a hint is below warning, and the line is unchanged by this work.
+- `pnpm -r run build` exit 0. `pnpm typecheck` exit 0. `pnpm run lint` exit 0. `pnpm test` 4714 passed / 19 skipped. `pnpm --filter drone-swarm-project test:ui` 36/36.
+- Regression proof via `/tmp` file backups (NOT `git stash`): reverting the 6 changed files + deleting the 2 new ones made the new tests fail (2 failed, 3 files failed to resolve); restoring made 36/36 pass.
+- `drone-swarm-project/src/**` untouched (git status: 0).
+
+### Plan gap found and fixed
+
+The Step 7 test snippet's base `props` object omits `onCreated`, which is a **required** `CardCreateModalProps` field. `tsc -p bundle/tsconfig.test.json` failed with TS2322/TS2741. Fixed by adding `onCreated: () => {}` to the base `props` in `CardCreateModal.test.tsx`. The component was left as written.
