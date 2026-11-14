@@ -1177,7 +1177,8 @@ describe('WikiGraphView', () => {
     // key assertion is Page2 overriding its earlier culling when focused.
   });
 
-  it('recomputes showdowns on engine ticks, throttled to 100ms', () => {
+  it('recomputes showdowns on engine ticks, throttled to 100ms', async () => {
+    vi.useFakeTimers();
     const nowSpy = vi.spyOn(performance, 'now');
     nowSpy.mockReturnValue(1000);
     try {
@@ -1234,18 +1235,22 @@ describe('WikiGraphView', () => {
       page2.x = 3;
       page2.y = 0;
       tickCb();
+      await vi.runOnlyPendingTimersAsync();
       expect(draws('Page2')).toBe(false);
       page2.x = 0;
       page2.y = 200;
       tickCb();
+      await vi.runOnlyPendingTimersAsync();
       expect(draws('Page2')).toBe(false);
 
       // After the throttle window, a tick recomputes with fresh positions.
       nowSpy.mockReturnValue(1000 + SHOWDOWN_RECOMPUTE_MS + 1);
       tickCb();
+      await vi.runOnlyPendingTimersAsync();
       expect(draws('Page2')).toBe(true);
     } finally {
       nowSpy.mockRestore();
+      vi.useRealTimers();
     }
   });
 });
