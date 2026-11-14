@@ -1,6 +1,7 @@
 packages:
   - drone-agent
   - drone-core
+  - drone-common
   - drone-beacon
   - drone-coordinator
   - drone-coordinator-ui
