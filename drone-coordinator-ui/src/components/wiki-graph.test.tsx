@@ -933,6 +933,52 @@ describe('WikiGraphView', () => {
     );
   });
 
+  it('truncates page titles before showdown so long labels can still win space', () => {
+    const title = 'A'.repeat(80);
+    const overlapped = [
+      ...nodes,
+      { ...pageNode({ id: 'page', title }), _val: 9, x: 0, y: 0 },
+      {
+        ...pageNode({ id: 'page2', title: 'Shorter' }),
+        _val: 2,
+        x: 3,
+        y: 0,
+      },
+    ];
+    render(
+      <WikiGraphView
+        nodes={overlapped}
+        edges={edges}
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    const frameFn = accessorFrom('onRenderFramePost') as (
+      ctx: CanvasRenderingContext2D,
+      globalScale: number
+    ) => void;
+    const mkCtx = () =>
+      ({
+        beginPath: vi.fn(),
+        arc: vi.fn(),
+        stroke: vi.fn(),
+        fillRect: vi.fn(),
+        fillText: vi.fn(),
+        measureText: vi.fn(() => ({ width: 10 })),
+        save: vi.fn(),
+        restore: vi.fn(),
+      }) as unknown as CanvasRenderingContext2D;
+
+    const ctx = mkCtx();
+    frameFn(ctx, 1);
+    const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock
+      .calls as unknown as Array<[string]>;
+    expect(calls.some(c => c[0] === `${title.slice(0, 50)}`)).toBe(true);
+    expect(calls.some(c => c[0] === title)).toBe(false);
+  });
+
   it('showdown gates labels: overlapping low-score page label hides, tag and page showdowns are independent', () => {
     // Two pages overlapping labels; high score wins the page showdown.
     // Two tags overlapping; tag showdown is independent of pages.

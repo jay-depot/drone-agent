@@ -159,6 +159,20 @@ function toEngineLinks(edges: AugmentedGraphEdge[]): AugmentedGraphEdge[] {
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
+const MAX_GRAPH_PAGE_TITLE_LENGTH = 50;
+
+function truncateGraphPageTitle(title: string): string {
+  return title.length > MAX_GRAPH_PAGE_TITLE_LENGTH
+    ? title.slice(0, MAX_GRAPH_PAGE_TITLE_LENGTH)
+    : title;
+}
+
+function graphNodeLabel(node: AugmentedGraphNode): string {
+  if (node.kind === 'tag') return `#${node.title}`;
+  if (!node.exists) return `Missing page: ${node.id}`;
+  return truncateGraphPageTitle(node.title);
+}
+
 /**
  * Zoom scale fitting a bbox of the given graph-space size into a container
  * of the given pixel size, leaving `padding` px of margin.
@@ -337,7 +351,7 @@ export default function WikiGraphView({
         // candidate, ranked by score (importance), culled by overlap.
 
         const fontSize = Math.max(11 / k, 4);
-        const label = isTag ? `#${node.title}` : node.title;
+        const label = graphNodeLabel(node);
         const halfW = measure(label, fontSize) / 2 + 2 / k;
         const radius = Math.sqrt(node._val ?? 1) * nodeRelSizeRef.current;
         const rect = isTag
@@ -521,7 +535,7 @@ export default function WikiGraphView({
       if (node.kind === 'tag') {
         return isTagNodeVisible(node) ? `#${node.title}` : '';
       }
-      return node.exists ? node.title : `Missing page: ${node.id}`;
+      return node.exists ? truncateGraphPageTitle(node.title) : `Missing page: ${node.id}`;
     };
 
     const nodeCanvasObjectAccessor = (
@@ -603,8 +617,8 @@ export default function WikiGraphView({
         ctx.font = `${fontSize}px Inter, system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        const label = node.kind === 'tag' ? `#${node.title}` : node.title;
         const isTag = node.kind === 'tag';
+        const label = isTag ? `#${node.title}` : graphNodeLabel(node);
         const textWidth = ctx.measureText(label).width;
         // Page labels sit below the node; tag labels center inside it, so the
         // big translucent tag discs read as labeled chips.
