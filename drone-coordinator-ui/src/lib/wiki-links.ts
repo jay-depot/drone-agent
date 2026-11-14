@@ -9,6 +9,8 @@
  * link text matches the source exactly.
  */
 
+import { transformOutsideCodeRegions } from 'drone-common';
+
 const WIKILINK_RE = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
 
 function escapeLabel(text: string): string {
@@ -16,12 +18,11 @@ function escapeLabel(text: string): string {
 }
 
 export function preprocessWikiLinks(content: string): string {
-  return content.replace(
-    WIKILINK_RE,
-    (_match, target: string, alias?: string) => {
+  return transformOutsideCodeRegions(content, text =>
+    text.replace(WIKILINK_RE, (_match, target: string, alias?: string) => {
       const href = `/wiki/${encodeURIComponent(target.trim())}`;
       const label = escapeLabel((alias ?? target).trim());
       return `[${label}](${href})`;
-    }
+    })
   );
 }

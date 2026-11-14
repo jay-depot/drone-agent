@@ -576,4 +576,80 @@ describe('Wiki Storage', () => {
       expect(node!.wordCount).toBe(4);
     });
   });
+
+  describe('code regions are not links', () => {
+    it('lint: a missing target inside a fenced block is not a broken link', async () => {
+      const { writePage, lintPages } = await import('../src/wiki-storage.js');
+      await writePage(
+        'page-1',
+        'Page 1',
+        'beacon',
+        'Example:\n```\nSee [[missing-page]]\n```'
+      );
+      const result = await lintPages();
+      expect(result.issues.some(i => i.type === 'broken-link')).toBe(false);
+    });
+
+    it('lint: a real missing target outside code is a broken link', async () => {
+      const { writePage, lintPages } = await import('../src/wiki-storage.js');
+      await writePage(
+        'page-1',
+        'Page 1',
+        'beacon',
+        'See [[missing-page]] for details'
+      );
+      const result = await lintPages();
+      expect(result.issues.some(i => i.type === 'broken-link')).toBe(true);
+    });
+
+    it('linkCount counts only links outside code regions', async () => {
+      const { writePage, readPage } = await import('../src/wiki-storage.js');
+      await writePage(
+        'page-1',
+        'Page 1',
+        'beacon',
+        'See [[real-link]]\n```\nSee [[code-link]]\n```'
+      );
+      const read = await readPage('page-1');
+      expect(read!.linkCount).toBe(1);
+    });
+
+    it('buildGraph: a link inside a code block produces no edge and no placeholder node', async () => {
+      const { writePage, buildGraph } = await import('../src/wiki-storage.js');
+      await writePage(
+        'page-a',
+        'Page A',
+        'coordinator',
+        'Example:\n```\nSee [[missing-page]]\n```'
+      );
+      const graph = await buildGraph();
+      expect(graph.edges).toHaveLength(0);
+      expect(graph.nodes.find(n => n.id === 'missing-page')).toBeUndefined();
+    });
+
+    it('writePage: a coordinator page whose only downward link is in a code block is accepted', async () => {
+      const { writePage } = await import('../src/wiki-storage.js');
+      await writePage('beacon-page', 'Beacon Page', 'beacon', 'beacon content');
+      const page = await writePage(
+        'coord-page',
+        'Coord Page',
+        'coordinator',
+        'Example:\n```\nSee [[beacon-page]]\n```'
+      );
+      expect(page.id).toBe('coord-page');
+    });
+
+    it('writePage: a real downward link outside code is rejected', async () => {
+      const { writePage } = await import('../src/wiki-storage.js');
+      await writePage('beacon-page', 'Beacon Page', 'beacon', 'beacon content');
+      await expect(
+        writePage(
+          'coord-page',
+          'Coord Page',
+          'coordinator',
+          'See [[beacon-page]]'
+        )
+      ).rejects.toThrow('Cannot link');
+    });
+  });
 });

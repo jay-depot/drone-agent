@@ -15,6 +15,7 @@ export default defineConfig({
       // Tests import the workspace package by name. Resolve to source so we
       // don't need a pre-build step before running tests.
       'drone-core': path.join(rootDir, 'drone-core/src/index.ts'),
+      'drone-common': path.join(rootDir, 'drone-common/src/index.ts'),
       'drone-swarm-common': path.join(
         rootDir,
         'drone-swarm-common/src/index.ts'
@@ -36,6 +37,7 @@ export default defineConfig({
   test: {
     include: [
       'drone-core/test/**/*.test.ts',
+      'drone-common/test/**/*.test.ts',
       'drone-agent/test/**/*.test.ts',
       'drone-agent/test/**/*.test.tsx',
       'drone-beacon/test/**/*.test.ts',
@@ -68,6 +70,7 @@ export default defineConfig({
       reporter: ['text', 'json-summary'],
       include: [
         'drone-core/src/**/*.ts',
+        'drone-common/src/**/*.ts',
         'drone-agent/src/**/*.ts',
         'drone-beacon/src/**/*.ts',
         'drone-coordinator/src/**/*.ts',

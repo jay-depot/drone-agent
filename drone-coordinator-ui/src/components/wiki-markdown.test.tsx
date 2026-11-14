@@ -94,4 +94,11 @@ describe('WikiMarkdown', () => {
     expect(screen.queryByText('Metadata (YAML frontmatter)')).toBeNull();
     expect(screen.getByText('Just body text.')).toBeTruthy();
   });
+
+  it('does not render a wikilink inside an inline code span as a link', () => {
+    renderMarkdown('See `[[deployment]]` for details');
+
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.getByText('[[deployment]]')).toBeTruthy();
+  });
 });

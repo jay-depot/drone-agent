@@ -1528,5 +1528,17 @@
     "timestamp": "2026-11-11T19:39:27.429Z",
     "insight": "file__apply_diff defect observed 2026-11-11 (drone-swarm-project bundle styling): a patch containing MULTIPLE @@ hunk headers is parsed as ONE contiguous hunk (the tool's docs say hunks are applied top-to-bottom, but the parser merged them). Two consequences: (1) when the merged old-code zone spans non-adjacent lines, matching fails with \"old code not found\"; (2) a mixed patch that DID apply produced a DUPLICATE block (the new header group was added while the old ProjectSelect was left in place), requiring a follow-up removal. Workaround that worked reliably: issue ONE @@ hunk per apply_diff call. Also: a pure-insertion hunk (only + lines) anchored on the file's `---` frontmatter delimiter is ambiguous (matches both the frontmatter close and the same delimiter elsewhere) — include the preceding frontmatter lines (tags/related) as context to disambiguate. Recommend fixing the multi-hunk parser in file__apply_diff (it is a core dev tool; the project principle says fix the tool, don't route around it).",
     "lastExamined": "2026-11-13T19:48:31.442Z"
+  },
+  {
+    "timestamp": "2026-11-13T23:44:27.034Z",
+    "insight": "Found while planning `plan-wikilinks-in-code-regions` (2026-11-13): `docker/drone-agent.Dockerfile` copies `drone-core` into its RUNTIME stage but NOT `drone-swarm-common`, even though `drone-agent/package.json` declares `drone-swarm-common` as a dependency and its source imports it. The build stage copies both, so `pnpm build` succeeds and the image builds; only the runtime stage is short. The runtime copy list is `/app/drone-agent`, `/app/drone-beacon`, `/app/drone-coordinator`, `/app/drone-core`, `/app/node_modules`. If pnpm's hoisted `node_modules` resolves the workspace link, the gap is masked; if it does not, `drone-agent` cannot start in that image. Not fixed in the plan (out of scope). Verify by running the agent image and importing drone-swarm-common, or by inspecting whether `/app/drone-swarm-common` exists at runtime. Compare `docker/drone-beacon.Dockerfile` and `docker/drone-coordinator.Dockerfile`, which DO copy drone-swarm-common to their runtime stages."
+  },
+  {
+    "timestamp": "2026-11-14T00:17:49.428Z",
+    "insight": "docker/drone-agent.Dockerfile is a pre-existing gap: its runtime stage copies drone-core but NOT drone-swarm-common, although drone-agent imports drone-swarm-common. It also omits drone-common after the wikilinks-in-code change (ADR 279). A runtime container for drone-agent would fail to resolve drone-swarm-common/dist and drone-common/dist at runtime. Found while executing plan-wikilinks-in-code-regions (Step 10). Not fixed there (out of scope by plan decision). The Docker smoke test does not exercise the drone-agent runtime image directly, which is why it passes despite the missing copies."
+  },
+  {
+    "timestamp": "2026-11-14T00:17:49.431Z",
+    "insight": "drone-coordinator-ui tests run via `npx vitest` directly FAIL with \"React.act is not a function\" because the package script `test` sets NODE_ENV=test (`\"test\": \"NODE_ENV=test vitest run\"`). Without NODE_ENV=test, react-dom resolves its production build, which has no act. When verifying UI tests outside the package script, always prefix NODE_ENV=test, else you will chase phantom failures. Discovered during plan-wikilinks-in-code-regions validation item 8 (revert proof)."
   }
 ]

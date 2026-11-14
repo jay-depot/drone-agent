@@ -20,6 +20,7 @@ If classification is ambiguous, ask for clarification before editing that specif
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `drone-agent/`              | CLI + TUI coding agent (Ink-based). Entry point, plugins, runtime, TUI components.                                                          |
 | `drone-core/`               | Shared types, contracts, config defaults, token estimation.                                                                                 |
+| `drone-common/`             | Dependency-free shared code that runs in a browser and in node (e.g. `transformOutsideCodeRegions`).                                        |
 | `drone-beacon/`             | Local hub for drone swarm (Fastify + SQLite + WebSocket).                                                                                   |
 | `drone-coordinator/`        | Global hub for swarm coordination (Fastify + SQLite).                                                                                       |
 | `drone-coordinator-ui/`     | Web UI for the coordinator (React + Vite + Tailwind).                                                                                       |

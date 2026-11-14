@@ -42,4 +42,26 @@ describe('preprocessWikiLinks', () => {
     const md = '# Heading\n\nSome **bold** and [a link](https://example.com).';
     expect(preprocessWikiLinks(md)).toBe(md);
   });
+
+  it('leaves a wikilink inside an inline code span unchanged', () => {
+    expect(preprocessWikiLinks('Use `[[x]]` here')).toBe('Use `[[x]]` here');
+  });
+
+  it('leaves a wikilink inside a fenced block unchanged', () => {
+    const md = 'Example:\\n```\\n[[x]]\\n```';
+    expect(preprocessWikiLinks(md)).toBe(md);
+  });
+
+  it('still rewrites a real wikilink outside a code region', () => {
+    expect(preprocessWikiLinks('See [[deployment]] for details')).toBe(
+      'See [deployment](/wiki/deployment) for details'
+    );
+  });
+
+  it('rewrites only the wikilink outside code when both are present', () => {
+    const md = 'See [[real]]\\n```\\n[[fake]]\\n```';
+    expect(preprocessWikiLinks(md)).toBe(
+      'See [real](/wiki/real)\\n```\\n[[fake]]\\n```'
+    );
+  });
 });

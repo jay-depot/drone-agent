@@ -106,7 +106,7 @@ pitch: One-sentence summary of what this page is about
 
 **SCOPE RULE — read this first:** the swarm memory wiki lives at the coordinator. When ingesting sessions, ALWAYS pass \`scope: "coordinator"\` to swarm__wiki_write. The beacon scope is a separate local store: pages written there are invisible to the web UI and the memory read side will not index them. Only use beacon scope for a deliberate local-only page (rare).
 
-Pages support [[wiki links]] for cross-references. The wiki enforces a "no downward links" rule: coordinator pages cannot link to beacon pages.
+Pages support [[wiki links]] for cross-references. The wiki enforces a "no downward links" rule: coordinator pages cannot link to beacon pages. A link inside a code block or an inline code span is not a link.
 
 ## Exploration
 
