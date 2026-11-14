@@ -50,18 +50,18 @@ One rule must serve both surfaces. Two copies of one rule drift apart in silence
 
 ## 2. Decisions (locked with the user)
 
-- **D1 — Scope is "everywhere".** The rule applies to `lintPages` (broken links, downward links, orphans), `buildGraph` edges, `readPage`/`listPages` `linkCount`, **and** `writePage`'s downward-link rejection. All four agree. A coordinator page whose *only* downward link is inside a code block is no longer rejected on write — correct, because it was never a link.
+- **D1 — Scope is "everywhere".** The rule applies to `lintPages` (broken links, downward links, orphans), `buildGraph` edges, `readPage`/`listPages` `linkCount`, **and** `writePage`'s downward-link rejection. All four agree. A coordinator page whose _only_ downward link is inside a code block is no longer rejected on write — correct, because it was never a link.
 - **D2 — "Code" means fenced blocks AND inline spans.** A reader treats `` `x` `` and a fenced `x` the same way: literal text. If one were a link and the other not, the lint would disagree with the reader's eye.
-- **D3 — Fences: backtick and tilde.** ```` ``` ```` and `~~~` are identical in CommonMark, and both appear in wiki pages.
+- **D3 — Fences: backtick and tilde.** ` ``` ` and `~~~` are identical in CommonMark, and both appear in wiki pages.
 - **D4 — CommonMark fence rules.** A closing fence must be at least as long as its opening fence. An unterminated fence runs to the end of the document.
 - **D5 — Indented (4-space) code blocks are OUT OF SCOPE.** They are rare in these pages, ambiguous with list indentation, and getting them wrong risks swallowing real prose.
 - **D6 — An unmatched backtick run stays literal text.** CommonMark behaviour, and it avoids swallowing real links after a stray backtick.
 - **D7 — Agent-side page lookup by name is unchanged.** The beacon's keyword/vector index and `swarm__wiki_read` resolve by page id, not by parsing links. A `[[foo]]` in a code block stays findable by name. The user explicitly approved this.
 - **D8 — One new package, `drone-common`.** Zero dependencies, isomorphic (browser-safe). Not `drone-ui-common`: the **node** lint would then import a package named "ui", which is the same dishonest naming this plan exists to fix.
 - **D9 — One public function.** `transformOutsideCodeRegions(markdown, fn)`. See §3.
-- **D10 — No raw-range export now.** Do not also export `findCodeRegions()`. The user's words: *"expanding into C is fine if there's ever an actual use."* Record that sentence in the code comment.
+- **D10 — No raw-range export now.** Do not also export `findCodeRegions()`. The user's words: _"expanding into C is fine if there's ever an actual use."_ Record that sentence in the code comment.
 - **D11 — `drone-core` keeps its name.** 516 import sites; the name is accurate. `drone-common` and `drone-core` are near-synonyms, and that is an **accepted wart**. The naming rule (§4) is documented so it is not re-litigated.
-- **D12 — `drone-extension-ui-types` keeps its name.** "Extension" is load-bearing — it is the *extension bundle* contract, not general UI types.
+- **D12 — `drone-extension-ui-types` keeps its name.** "Extension" is load-bearing — it is the _extension bundle_ contract, not general UI types.
 - **D13 — `drone-common` does NOT absorb the two existing UI-boundary duplications now.** `splitFrontmatter` (`wiki-frontmatter.ts` duplicates `wiki-storage.ts`) and the three fragment constants (`fragments.ts` duplicates `drone-swarm-common`). Unrelated to this fix; a separate follow-up plan.
 
 ---
@@ -70,7 +70,7 @@ One rule must serve both surfaces. Two copies of one rule drift apart in silence
 
 A **code region** is:
 
-- A fenced block, opened by three or more backticks (```` ``` ````) or tildes (`~~~`).
+- A fenced block, opened by three or more backticks (` ``` `) or tildes (`~~~`).
 - An inline code span (one or more backticks, closed by a run of the **same** length).
 
 The package exports exactly one function:
@@ -83,10 +83,10 @@ It splits the document into code and non-code runs, applies `fn` to the non-code
 
 Both consumers pass a different `fn`:
 
-| Consumer | `fn` |
-|---|---|
+| Consumer       | `fn`                                                             |
+| -------------- | ---------------------------------------------------------------- |
 | Lint / storage | collects `[[targets]]` into an array, returns the text unchanged |
-| Web view | the existing wikilink → markdown-link rewriter |
+| Web view       | the existing wikilink → markdown-link rewriter                   |
 
 `segmentCodeRegions` (the splitter) stays **module-private**. There is no consumer for raw ranges today.
 
@@ -94,12 +94,12 @@ Both consumers pass a different `fn`:
 
 ## 4. Package inventory after this plan
 
-| Package | Runtime deps | Runs in browser? | Role |
-|---|---|---|---|
-| `drone-core` | `@sinclair/typebox` | No (`node:fs`, `process.platform`) | Shared base contracts |
-| **`drone-common`** | **none** | **Yes** | Shared dependency-free logic |
-| `drone-swarm-common` | drone-core, better-sqlite3, ws, @huggingface/transformers | No | Swarm infrastructure |
-| `drone-extension-ui-types` | none (types only) | Yes | Extension-bundle contract |
+| Package                    | Runtime deps                                              | Runs in browser?                   | Role                         |
+| -------------------------- | --------------------------------------------------------- | ---------------------------------- | ---------------------------- |
+| `drone-core`               | `@sinclair/typebox`                                       | No (`node:fs`, `process.platform`) | Shared base contracts        |
+| **`drone-common`**         | **none**                                                  | **Yes**                            | Shared dependency-free logic |
+| `drone-swarm-common`       | drone-core, better-sqlite3, ws, @huggingface/transformers | No                                 | Swarm infrastructure         |
+| `drone-extension-ui-types` | none (types only)                                         | Yes                                | Extension-bundle contract    |
 
 **Naming rule (document this; do not re-litigate).** `drone-common` has **no dependencies** and runs **anywhere**. `drone-core` is **node-only** and holds shared contracts. They are not versions of each other.
 
@@ -299,7 +299,11 @@ function segmentCodeRegions(markdown: string): CodeSegment[] {
     if (open) {
       code += raw + eol;
       const close = FENCE_CLOSE.exec(raw);
-      if (close && close[1][0] === open.char && close[1].length >= open.length) {
+      if (
+        close &&
+        close[1][0] === open.char &&
+        close[1].length >= open.length
+      ) {
         flushCode();
         open = null;
       }
@@ -365,7 +369,7 @@ Cover **every** case:
 5. A closing fence **shorter** than the opening fence does **not** close the block; the fence runs to the end.
 6. An unterminated fence runs to the end.
 7. An inline span (`` `x` ``) is not marked; the text around it is.
-8. A double-backtick span (`` ``x`` ``) is not marked.
+8. A double-backtick span (` `x` `) is not marked.
 9. An unmatched backtick run stays literal **and is marked as text**.
 10. Mixed: a real link outside a code block is marked; the code block is not.
 11. A fence marker inside an inline span is not a fence.
@@ -434,7 +438,7 @@ function extractWikiLinks(content: string): string[] {
 Add these cases to `drone-swarm-common/test/wiki-storage.test.ts`:
 
 1. **Lint:** a page with `See [[missing-page]]` **inside a fenced block** produces **no** `broken-link` issue.
-2. **Lint:** a page with a real `[[missing-page]]` **outside** code produces a `broken-link` issue. *This case proves case 1 is not passing for the wrong reason.*
+2. **Lint:** a page with a real `[[missing-page]]` **outside** code produces a `broken-link` issue. _This case proves case 1 is not passing for the wrong reason._
 3. **`linkCount`:** a body with one real link and one link in a code block reports `linkCount === 1`.
 4. **`buildGraph`:** a page with a link in a code block produces **no** edge and **no** `exists:false` placeholder node.
 5. **`writePage`:** a coordinator page whose **only** downward link is inside a code block is written successfully.
@@ -448,7 +452,7 @@ Add these cases to `drone-swarm-common/test/wiki-storage.test.ts`:
 2. `drone-coordinator-ui/vite.config.ts`: add to `resolve.alias`:
    `'drone-common': path.resolve(__dirname, '../drone-common/src/index.ts')`
 3. `drone-coordinator-ui/vitest.config.ts`: add the same alias.
-   *Both are needed. Vite can also resolve `drone-common` through the workspace symlink to `dist/`, but that needs a prior build; the alias makes the dev server and the build work without one.*
+   _Both are needed. Vite can also resolve `drone-common` through the workspace symlink to `dist/`, but that needs a prior build; the alias makes the dev server and the build work without one._
 4. `drone-coordinator-ui/src/lib/wiki-links.ts`: keep `WIKILINK_RE` and `escapeLabel`; replace `preprocessWikiLinks`:
 
 ```ts
@@ -473,14 +477,14 @@ export function preprocessWikiLinks(content: string): string {
 
 Add to `drone-coordinator-ui/src/lib/wiki-links.test.ts`:
 
-- `` 'Use `[[x]]` here' `` is unchanged.
+- ``'Use `[[x]]` here'`` is unchanged.
 - A fenced block containing `[[x]]` is unchanged.
 - A real link outside a code block is still rewritten.
 - One document with a link outside **and** a link inside: only the outside one is rewritten.
 
 Add to `drone-coordinator-ui/src/components/wiki-markdown.test.tsx`:
 
-- Render `` 'See `[[deployment]]` for details' ``. Assert `screen.queryByRole('link')` is null, and the text `[[deployment]]` is present.
+- Render ``'See `[[deployment]]` for details'``. Assert `screen.queryByRole('link')` is null, and the text `[[deployment]]` is present.
 
 ---
 
@@ -508,7 +512,7 @@ Add `COPY drone-common ./drone-common` to the **build stage** of all four:
 
 Add `COPY --from=builder /app/drone-common ./drone-common` to the **runtime stage** of `drone-beacon.Dockerfile` and `drone-coordinator.Dockerfile`, next to the existing `drone-core` and `drone-swarm-common` lines.
 
-*The build-stage copy is mandatory for all four. `pnpm-workspace.yaml` names a directory the build context must contain, or `pnpm install --frozen-lockfile` fails.*
+_The build-stage copy is mandatory for all four. `pnpm-workspace.yaml` names a directory the build context must contain, or `pnpm install --frozen-lockfile` fails._
 
 **Note for the reviewer:** `docker/drone-agent.Dockerfile` copies `drone-core` to its runtime stage but **not** `drone-swarm-common`, although `drone-agent` imports `drone-swarm-common`. That is a pre-existing gap. **Do not fix it in this plan.** Log it as an insight.
 
@@ -527,10 +531,10 @@ All of these must pass.
 1. **LSP** — no errors and no warnings on every touched file.
 2. **Build** — `pnpm -r run build` exits 0.
 3. **Typecheck** — `pnpm typecheck` exits 0.
-4. **Lint** — `pnpm lint` exits 0. *(Prettier reformats files, so re-read every file before a later edit.)*
+4. **Lint** — `pnpm lint` exits 0. _(Prettier reformats files, so re-read every file before a later edit.)_
 5. **Fast test suite** — `pnpm test` exits 0.
 6. **UI tests** — `pnpm --filter drone-coordinator-ui test` exits 0.
-7. **The lint gate bites** — revert the `extractWikiLinks` change. The new `wiki-storage.test.ts` cases **fail**. Restore it. They pass. *(Use file backups in `/tmp`. Do NOT use `git stash` — on this host a `git stash push` with a non-matching pathspec exits 0 and stashes nothing, and a chained `stash pop` then grabs the wrong stash.)*
+7. **The lint gate bites** — revert the `extractWikiLinks` change. The new `wiki-storage.test.ts` cases **fail**. Restore it. They pass. _(Use file backups in `/tmp`. Do NOT use `git stash` — on this host a `git stash push` with a non-matching pathspec exits 0 and stashes nothing, and a chained `stash pop` then grabs the wrong stash.)_
 8. **The web gate bites** — revert the `preprocessWikiLinks` change. The new `wiki-links.test.ts` cases **fail**. Restore it. They pass.
 9. **Graph** — the Step 6 `buildGraph` case passes. A link in a code block produces no edge and no placeholder node.
 10. **Browser safety** — `drone-common` compiles with `"types": []`. Add a `node:` import to `code-regions.ts` and confirm the build **fails**. Remove it.
@@ -545,12 +549,12 @@ All of these must pass.
 
 The graph gets the fix for free. The chain has one source of edges, and it is the function this plan changes:
 
-| Layer | File | Role |
-|---|---|---|
-| Data | `drone-swarm-common/src/wiki-storage.ts` → `buildGraph()` | calls `extractWikiLinks(page.content)` per page |
-| Route | `drone-coordinator/src/routes/wiki.ts` → `GET /wiki/graph` | returns `buildGraph()` |
-| Hook | `drone-coordinator-ui/src/hooks/use-wiki-graph.ts` | fetches `/api/wiki/graph` |
-| View | `drone-coordinator-ui/src/components/wiki-graph.tsx` + `lib/wiki-graph-utils.ts` | consumes the edges |
+| Layer | File                                                                             | Role                                            |
+| ----- | -------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Data  | `drone-swarm-common/src/wiki-storage.ts` → `buildGraph()`                        | calls `extractWikiLinks(page.content)` per page |
+| Route | `drone-coordinator/src/routes/wiki.ts` → `GET /wiki/graph`                       | returns `buildGraph()`                          |
+| Hook  | `drone-coordinator-ui/src/hooks/use-wiki-graph.ts`                               | fetches `/api/wiki/graph`                       |
+| View  | `drone-coordinator-ui/src/components/wiki-graph.tsx` + `lib/wiki-graph-utils.ts` | consumes the edges                              |
 
 `wiki-graph.tsx` was searched for `[[`, `wikilink`, and `Markdown`: **zero matches**. It does not parse markdown at all — it only draws edges it is handed.
 
@@ -587,3 +591,58 @@ The graph gets the fix for free. The chain has one source of edges, and it is th
 3. **`pnpm-lock.yaml` is regenerated by `pnpm install`.** Never hand-edit it.
 4. **Prettier reformats after lint.** Re-read files before a later edit.
 5. **Verify each edit landed.** A tool can report success and write nothing. After each change, search the file for the new text.
+
+---
+
+## 12. Completion summary (2026-11-13)
+
+**Status**: COMPLETED on branch `fix/no-wiki-links-in-codeblocks`. All 11 steps done; all 14 validation criteria pass.
+
+### What landed
+
+- New zero-dependency, isomorphic package **`drone-common`** with one export:
+  `transformOutsideCodeRegions(markdown, fn)`. `segmentCodeRegions` stays module-private.
+  `"types": []` in its tsconfig makes any `node:` import a compile error (browser safety is
+  compiler-enforced).
+- **Lint path**: `drone-swarm-common/src/wiki-storage.ts` `extractWikiLinks` now runs its
+  regex through `transformOutsideCodeRegions`. The length guard stayed; the regex stayed
+  inside `fn`. All four consumers (`writePage`, `readPage`, `lintPages`, `buildGraph`) fixed at once.
+- **Web view**: `drone-coordinator-ui/src/lib/wiki-links.ts` `preprocessWikiLinks` rewired the
+  same way. `WIKILINK_RE` and `escapeLabel` unchanged; `wiki-markdown.tsx` untouched.
+- **Registration**: `pnpm-workspace.yaml`, `vitest.config.ts` (alias + include + coverage),
+  `tsconfig.test.json`, `pnpm-lock.yaml` (regenerated by `pnpm install`).
+- **Docker**: `COPY drone-common` added to the build stage of all four Dockerfiles; runtime
+  stage copies added to beacon + coordinator (next to `drone-core`/`drone-swarm-common`).
+- **Docs**: new `docs/adr/279-wikilinks-not-links-in-code.md` + index row; `AGENTS.md`,
+  `README.md`, `CONTEXT-MAP.md` package inventories; `drone-coordinator/src/default-assets.ts`
+  `MEMORY_WIKI_SKILL_BODY` cross-reference sentence extended.
+
+### Validation results
+
+1. LSP — clean. 2. build — exit 0. 3. typecheck — exit 0. 4. lint — exit 0.
+5. `pnpm test` — 4730 passed. 6. `pnpm --filter drone-coordinator-ui test` — 379 passed.
+7. Lint gate BITES — reverting `extractWikiLinks` fails 4 new storage tests; restored, pass.
+8. Web gate BITES — reverting `preprocessWikiLinks` fails 4 new UI tests; restored, pass.
+9. Graph — `buildGraph` case passes (no edge, no placeholder node for a code-block link).
+10. Browser safety BITES — adding `import ... from "node:os"` to `code-regions.ts` fails the
+    build (`TS2307`); removed, build passes.
+11. `pnpm docker:build` — exit 0. 12. No regression — all pre-existing storage/UI tests pass.
+13. Docs — ADR 279 exists and `docs/adr/index.md` links to it. 14. Memory — committed on the
+    feature branch.
+
+### Deviations from the plan
+
+- **Step 3 case 11** (fence marker inside inline span): the plan's suggested expectation was
+  wrong — a backtick run around ` ``` ` is a valid inline span under the plan's own D2/D6 rules.
+  The implementation was correct; the test was rewritten to prose-wrapped text, which genuinely
+  exercises the rule. No implementation change.
+- **UI revert proof** requires `NODE_ENV=test` (the package `test` script sets it); running
+  `npx vitest` bare makes react-dom resolve its production build and every render test fails
+  with `React.act is not a function`. The proof was redone with `NODE_ENV=test`.
+
+### Followups logged (not fixed here, per plan §10)
+
+- `docker/drone-agent.Dockerfile` runtime stage copies `drone-core` but not
+  `drone-swarm-common` (and now not `drone-common`) although `drone-agent` imports them. Logged
+  as an insight.
+- Pre-existing `docs/adr/index.md` duplicate/missing rows; ADR 279 row added only.
