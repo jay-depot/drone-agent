@@ -1177,6 +1177,64 @@ describe('WikiGraphView', () => {
     // key assertion is Page2 overriding its earlier culling when focused.
   });
 
+  it('preserves label survivors while nodes are waiting for physics positions', () => {
+    const positioned = [
+      { ...pageNode({ id: 'page', title: 'Page' }), _val: 9, x: 0, y: 0 },
+      {
+        ...pageNode({ id: 'page2', title: 'Page2' }),
+        _val: 2,
+        x: 0,
+        y: 200,
+      },
+    ];
+    const graphProps = {
+      edges,
+      tagsVisible: true,
+      onNodeFocus: vi.fn(),
+      onClearFocus: vi.fn(),
+      forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+    };
+    const { rerender } = render(
+      <WikiGraphView {...graphProps} nodes={positioned} />
+    );
+    const frameFn = accessorFrom('onRenderFramePost') as (
+      ctx: CanvasRenderingContext2D,
+      globalScale: number
+    ) => void;
+    const stopCb = accessorFrom('onEngineStop') as () => void;
+    const mkCtx = () =>
+      ({
+        beginPath: vi.fn(),
+        arc: vi.fn(),
+        stroke: vi.fn(),
+        fillRect: vi.fn(),
+        fillText: vi.fn(),
+        measureText: vi.fn(() => ({ width: 10 })),
+        save: vi.fn(),
+        restore: vi.fn(),
+      }) as unknown as CanvasRenderingContext2D;
+
+    const preLayout: Array<
+      AugmentedGraphNode & { x?: number; y?: number }
+    > = [
+      { ...pageNode({ id: 'page', title: 'Page' }), _val: 9 },
+      { ...pageNode({ id: 'page2', title: 'Page2' }), _val: 2 },
+    ];
+    rerender(<WikiGraphView {...graphProps} nodes={preLayout} />);
+    stopCb();
+
+    preLayout[0].x = 0;
+    preLayout[0].y = 0;
+    preLayout[1].x = 0;
+    preLayout[1].y = 200;
+    const ctx = mkCtx();
+    frameFn(ctx, 1);
+    const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock
+      .calls as unknown as Array<[string]>;
+    expect(calls.some(c => c[0] === 'Page')).toBe(true);
+    expect(calls.some(c => c[0] === 'Page2')).toBe(true);
+  });
+
   it('recomputes showdowns on engine ticks, throttled to 100ms', async () => {
     vi.useFakeTimers();
     const nowSpy = vi.spyOn(performance, 'now');

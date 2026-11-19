@@ -392,6 +392,7 @@ export default function WikiGraphView({
     const tagCells = new Map<string, ShowdownCandidate>();
     let focusedCandidate: ShowdownCandidate | null = null;
     let focusedIsTag = false;
+    let hasPositionedNode = false;
     if (isFiniteNumber(k) && k > 0) {
       const { x: tx, y: ty } = zoomRef.current;
       const { width, height } = containerSizeRef.current;
@@ -406,6 +407,7 @@ export default function WikiGraphView({
       for (const node of nodesRef.current) {
         const positioned = node as PositionedNode;
         if (positioned.x === undefined || positioned.y === undefined) continue;
+        hasPositionedNode = true;
         const isTag = node.kind === 'tag';
         if (isTag && !isTagNodeVisible(node)) continue;
         const score = node._val ?? (isTag ? 0 : 1);
@@ -492,6 +494,7 @@ export default function WikiGraphView({
         }
       }
     }
+    if (!hasPositionedNode) return;
     const pageCandidates = [...pageCells.values()];
     const tagCandidates = [...tagCells.values()];
     if (focusedCandidate) {
@@ -509,7 +512,19 @@ export default function WikiGraphView({
       showdownScheduledRef.current = null;
       computeShowdownsRef.current();
     };
+    const cancelScheduled = () => {
+      const scheduled = showdownScheduledRef.current;
+      if (!scheduled) return;
+      if (scheduled.kind === 'idle') {
+        window.cancelIdleCallback(scheduled.id);
+      } else {
+        window.clearTimeout(scheduled.id);
+      }
+      showdownScheduledRef.current = null;
+      showdownPendingRef.current = false;
+    };
     if (sync) {
+      cancelScheduled();
       run();
       return;
     }
