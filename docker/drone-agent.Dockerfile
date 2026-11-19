@@ -14,6 +14,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 
 # Copy all package sources
 COPY drone-core ./drone-core
+COPY drone-common ./drone-common
 COPY drone-swarm-common ./drone-swarm-common
 COPY drone-extension-ui-types ./drone-extension-ui-types
 COPY drone-coordinator-ui ./drone-coordinator-ui

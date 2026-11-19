@@ -171,6 +171,8 @@ importers:
         specifier: ^8.18.1
         version: 8.18.1
 
+  drone-common: {}
+
   drone-coordinator:
     dependencies:
       '@fastify/cors':
@@ -225,6 +227,9 @@ importers:
       clsx:
         specifier: ^2.1.0
         version: 2.1.1
+      drone-common:
+        specifier: workspace:*
+        version: link:../drone-common
       drone-extension-ui-types:
         specifier: workspace:*
         version: link:../drone-extension-ui-types
@@ -363,6 +368,9 @@ importers:
       better-sqlite3:
         specifier: ^11.8.1
         version: 11.10.0
+      drone-common:
+        specifier: workspace:*
+        version: link:../drone-common
       drone-core:
         specifier: workspace:*
         version: link:../drone-core

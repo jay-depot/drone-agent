@@ -1,0 +1,17 @@
+{
+  "name": "drone-common",
+  "version": "1.0.0",
+  "description": "Shared dependency-free code that runs in a browser and in node.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "private": true,
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+  }
+}
