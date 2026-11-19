@@ -12,6 +12,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json tsconfig
 # Copy workspace packages and integration-test assets.
 COPY drone-agent ./drone-agent
 COPY drone-core ./drone-core
+COPY drone-common ./drone-common
 COPY drone-beacon ./drone-beacon
 COPY drone-coordinator ./drone-coordinator
 COPY drone-coordinator-ui ./drone-coordinator-ui

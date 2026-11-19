@@ -8,6 +8,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      'drone-common': path.resolve(__dirname, '../drone-common/src/index.ts'),
     },
   },
   test: {

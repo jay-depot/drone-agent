@@ -6,6 +6,7 @@ import type {
   DroneWikiSearchResult,
   DroneWikiTagCount,
 } from 'drone-core';
+import { transformOutsideCodeRegions } from 'drone-common';
 
 /**
  * Default directory for the swarm knowledge base on the beacon host.
@@ -131,11 +132,14 @@ function extractWikiLinks(content: string): string[] {
   }
 
   const links: string[] = [];
-  const regex = /\[\[([^\]]+)\]\]/g;
-  let match;
-  while ((match = regex.exec(content)) !== null) {
-    links.push(match[1].trim());
-  }
+  transformOutsideCodeRegions(content, text => {
+    const regex = /\[\[([^\]]+)\]\]/g;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      links.push(match[1].trim());
+    }
+    return text;
+  });
   return links;
 }
 

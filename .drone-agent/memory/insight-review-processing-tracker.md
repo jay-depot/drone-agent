@@ -31,20 +31,16 @@ completely" after the 2026-07-19/20 fuzz rewrite is FALSE. Complaints continued 
 class persists: hunk lands in the wrong place, applies twice, merges with a neighbour, or reports
 success while writing nothing. Principle 1's text was corrected in the principle file.
 
-Themes reviewed -> PROMOTED (5 new principles, all under project target drone-agent):
- 2. Verify the write; the build is truth, the LSP is not -> PROMOTED.
- 3. A test that a mock satisfies proves nothing -> PROMOTED.
- 4. One rule, one implementation (sibling paths drift) -> PROMOTED.
- 5. A gate that covers nothing still reports green -> PROMOTED.
- 6. Dead seams + stale docs claim behaviour the code lacks -> PROMOTED (merged themes 5 and 6).
+Themes reviewed -> PROMOTED (5 new principles, all under project target drone-agent): 2. Verify the write; the build is truth, the LSP is not -> PROMOTED. 3. A test that a mock satisfies proves nothing -> PROMOTED. 4. One rule, one implementation (sibling paths drift) -> PROMOTED. 5. A gate that covers nothing still reports green -> PROMOTED. 6. Dead seams + stale docs claim behaviour the code lacks -> PROMOTED (merged themes 5 and 6).
 
 NOT promoted (with reasons):
- 1. apply_diff misbehaviour -> no new principle; the existing principle 1 already covers it as
+
+1.  apply_diff misbehaviour -> no new principle; the existing principle 1 already covers it as
     a "fix the tool" case. Only its stale evidence note needed correcting (done).
- 7. Trust decisions from a message field instead of the transport -> NOT promoted (no new
+2.  Trust decisions from a message field instead of the transport -> NOT promoted (no new
     principle needed; covered by the existing "sweep every consumer" principle plus review).
- Weaker themes, left as insights: put the invariant at one chokepoint; do not call an aggregate
- inside a per-item loop; the insight/record tool breaks on this host (needs a bug, not a principle).
+    Weaker themes, left as insights: put the invariant at one chokepoint; do not call an aggregate
+    inside a per-item loop; the insight/record tool breaks on this host (needs a bug, not a principle).
 
 Methodology notes for the next pass: the 306-entry drone-agent bucket plus the thematic buckets
 together are the corpus; several themes are only visible ACROSS buckets (e.g. the mock-test theme
