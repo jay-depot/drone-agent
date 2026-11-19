@@ -142,6 +142,9 @@ const LABEL_WIDTH_CACHE_MAX = 12000;
 const LOD_FULL_DETAIL_ZOOM = 0.75;
 const LOD_FAR_ZOOM = 0.05;
 const LOD_FAR_MIN_SCREEN_RADIUS_PX = 6;
+const LOD_PAGE_COUNT_SCALE_START = 3000;
+const LOD_PAGE_COUNT_SCALE_MAX = 10000;
+const LOD_MAX_DENSITY_FACTOR = 2.5;
 
 /**
  * Engine-mutation isolation: force-graph's link parsing replaces string
@@ -324,12 +327,25 @@ export default function WikiGraphView({
   const lodMinimumScreenRadius = (): number => {
     const k = zoomRef.current.k;
     if (!isFiniteNumber(k) || k >= LOD_FULL_DETAIL_ZOOM) return 0;
+    const pageCount = nodesRef.current.filter(
+      node => node.kind === 'page'
+    ).length;
+    const densityT = clamp(
+      (pageCount - LOD_PAGE_COUNT_SCALE_START) /
+        (LOD_PAGE_COUNT_SCALE_MAX - LOD_PAGE_COUNT_SCALE_START),
+      0,
+      1
+    );
+    const densityFactor =
+      1 + (LOD_MAX_DENSITY_FACTOR - 1) * densityT * densityT;
     const t = clamp(
       (k - LOD_FAR_ZOOM) / (LOD_FULL_DETAIL_ZOOM - LOD_FAR_ZOOM),
       0,
       1
     );
-    return 1.5 + (LOD_FAR_MIN_SCREEN_RADIUS_PX - 1.5) * (1 - t);
+    const baseRadius =
+      1.5 + (LOD_FAR_MIN_SCREEN_RADIUS_PX - 1.5) * (1 - t);
+    return baseRadius * densityFactor;
   };
   const isNodeLodVisible = (node: AugmentedGraphNode): boolean => {
     if (node.kind === 'tag') return isTagNodeVisible(node);

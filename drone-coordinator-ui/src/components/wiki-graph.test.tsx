@@ -933,6 +933,46 @@ describe('WikiGraphView', () => {
     );
   });
 
+  it('scales LOD radius with page count and keeps it unchanged below 3000 pages', () => {
+    const target = pageNode({ id: 'target', title: 'Target', _val: 1 });
+    const smallGraph = [
+      target,
+      ...Array.from({ length: 2999 }, (_, i) =>
+        pageNode({ id: `page-${i}`, title: `Page ${i}` })
+      ),
+    ];
+    const largeGraph = [
+      target,
+      ...Array.from({ length: 9999 }, (_, i) =>
+        pageNode({ id: `page-${i}`, title: `Page ${i}` })
+      ),
+    ];
+    const graphProps = {
+      edges: [],
+      tagsVisible: true,
+      onNodeFocus: vi.fn(),
+      onClearFocus: vi.fn(),
+      forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+    };
+    const { rerender } = render(
+      <WikiGraphView {...graphProps} nodes={smallGraph} />
+    );
+    const zoomCb = accessorFrom('onZoom') as (t: {
+      k: number;
+      x: number;
+      y: number;
+    }) => void;
+    const colorAccessor = accessorFrom('nodeColor') as (
+      node: AugmentedGraphNode
+    ) => string;
+    zoomCb({ k: 0.1, x: 0, y: 0 });
+    expect(colorAccessor(target)).toBe('#2563eb');
+
+    rerender(<WikiGraphView {...graphProps} nodes={largeGraph} />);
+    zoomCb({ k: 0.1, x: 0, y: 0 });
+    expect(colorAccessor(target)).toBe('rgba(0, 0, 0, 0)');
+  });
+
   it('applies screen-space LOD thresholds and preserves focus neighborhood', () => {
     const lodNodes = [
       { ...pageNode({ id: 'huge', title: 'Huge' }), _val: 9, x: 0, y: 0 },
