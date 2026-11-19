@@ -933,6 +933,58 @@ describe('WikiGraphView', () => {
     );
   });
 
+  it('keeps normal page labels visible when zoomed out', async () => {
+    vi.useFakeTimers();
+    const zoomedOut = [
+      ...nodes,
+      { ...pageNode({ id: 'page', title: 'Page' }), _val: 9, x: 0, y: 0 },
+      {
+        ...pageNode({ id: 'page2', title: 'Page2' }),
+        _val: 2,
+        x: 0,
+        y: 300,
+      },
+    ];
+    render(
+      <WikiGraphView
+        nodes={zoomedOut}
+        edges={edges}
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    const zoomCb = accessorFrom('onZoom') as (t: {
+      k: number;
+      x: number;
+      y: number;
+    }) => void;
+    zoomCb({ k: 0.5, x: 0, y: 0 });
+    const frameFn = accessorFrom('onRenderFramePost') as (
+      ctx: CanvasRenderingContext2D,
+      globalScale: number
+    ) => void;
+    const ctx = {
+      beginPath: vi.fn(),
+      arc: vi.fn(),
+      stroke: vi.fn(),
+      fillRect: vi.fn(),
+      fillText: vi.fn(),
+      measureText: vi.fn(() => ({ width: 10 })),
+      save: vi.fn(),
+      restore: vi.fn(),
+    } as unknown as CanvasRenderingContext2D;
+    frameFn(ctx, 0.5);
+    await vi.runOnlyPendingTimersAsync();
+    frameFn(ctx, 0.5);
+    const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock
+      .calls as unknown as Array<[string]>;
+    expect(calls.some(c => c[0] === 'Page')).toBe(true);
+    expect(calls.some(c => c[0] === 'Page2')).toBe(true);
+    vi.useRealTimers();
+  });
+
   it('truncates page titles before showdown so long labels can still win space', () => {
     const title = 'A'.repeat(80);
     const overlapped = [

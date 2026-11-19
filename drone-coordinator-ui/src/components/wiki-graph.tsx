@@ -150,8 +150,6 @@ const LABEL_RECT_CACHE_MAX = 20000;
 const SHOWDOWN_GRID_CELL_PX = 48;
 const SHOWDOWN_VIEWPORT_MARGIN_PX = 96;
 const SHOWDOWN_MIN_SCREEN_RADIUS_PX = 2.5;
-const SHOWDOWN_MIN_SCORE_WHEN_ZOOMED_OUT = 2;
-const SHOWDOWN_LOW_DETAIL_ZOOM_CUTOFF = 0.85;
 const SHOWDOWN_ASYNC_TIMEOUT_MS = 32;
 const RECT_KEY_ROUNDING_FACTOR = 10;
 
@@ -412,13 +410,6 @@ export default function WikiGraphView({
         if (isTag && !isTagNodeVisible(node)) continue;
         const score = node._val ?? (isTag ? 0 : 1);
         const isFocused = focusedIdRef.current === node.id;
-        if (
-          !isFocused &&
-          k < SHOWDOWN_LOW_DETAIL_ZOOM_CUTOFF &&
-          score < SHOWDOWN_MIN_SCORE_WHEN_ZOOMED_OUT
-        ) {
-          continue;
-        }
         // Showdown is the sole label selector: every positioned node is a
         // candidate, ranked by score (importance), culled by overlap.
 
