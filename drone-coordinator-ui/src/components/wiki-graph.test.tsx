@@ -970,7 +970,42 @@ describe('WikiGraphView', () => {
 
     rerender(<WikiGraphView {...graphProps} nodes={largeGraph} />);
     zoomCb({ k: 0.1, x: 0, y: 0 });
-    expect(colorAccessor(target)).toBe('rgba(0, 0, 0, 0)');
+    expect(colorAccessor(target)).toBe('#2563eb');
+  });
+
+  it('always keeps top page nodes visible at full zoom out', () => {
+    const huge = {
+      ...pageNode({ id: 'huge', title: 'Huge' }),
+      _val: 9,
+      x: 0,
+      y: 0,
+    };
+    const graphNodes = [
+      huge,
+      ...Array.from({ length: 9999 }, (_, i) =>
+        pageNode({ id: `page-${i}`, title: `Page ${i}`, _val: 0.111 })
+      ),
+    ];
+    render(
+      <WikiGraphView
+        nodes={graphNodes}
+        edges={[]}
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    const zoomCb = accessorFrom('onZoom') as (t: {
+      k: number;
+      x: number;
+      y: number;
+    }) => void;
+    zoomCb({ k: 0.05, x: 0, y: 0 });
+    const colorAccessor = accessorFrom('nodeColor') as (
+      node: AugmentedGraphNode
+    ) => string;
+    expect(colorAccessor(huge)).toBe('#2563eb');
   });
 
   it('applies screen-space LOD thresholds and preserves focus neighborhood', () => {
@@ -1005,7 +1040,7 @@ describe('WikiGraphView', () => {
     zoomCb({ k: 0.1, x: 0, y: 0 });
     expect(colorAccessor(lodNodes[0])).toBe('#2563eb');
     expect(colorAccessor(lodNodes[1])).toBe('#2563eb');
-    expect(colorAccessor(lodNodes[2])).toBe('rgba(0, 0, 0, 0)');
+    expect(colorAccessor(lodNodes[2])).toBe('#2563eb');
 
     rerender(
       <WikiGraphView

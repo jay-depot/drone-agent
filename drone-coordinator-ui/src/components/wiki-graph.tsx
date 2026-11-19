@@ -145,6 +145,8 @@ const LOD_FAR_MIN_SCREEN_RADIUS_PX = 6;
 const LOD_PAGE_COUNT_SCALE_START = 1000;
 const LOD_PAGE_COUNT_SCALE_MAX = 10000;
 const LOD_MAX_DENSITY_FACTOR = 2.5;
+const LOD_MIN_TOP_PAGE_COUNT = 24;
+const LOD_MAX_TOP_PAGE_COUNT = 128;
 
 /**
  * Engine-mutation isolation: force-graph's link parsing replaces string
@@ -275,6 +277,7 @@ export default function WikiGraphView({
   const focusedIdRef = useRef<string | null>(focusedNodeId ?? null);
   const focusSetsRef = useRef<ReturnType<typeof buildFocusSets> | null>(null);
   const nodesRef = useRef<PositionedNode[]>([]);
+  const lodTopPageIdsRef = useRef<Set<string>>(new Set());
   const nodesByIdRef = useRef(new Map<string, AugmentedGraphNode>());
   const prevNodeCountRef = useRef<number | null>(null);
   /**
@@ -324,6 +327,32 @@ export default function WikiGraphView({
     if (!focusedIdRef.current) return true;
     return focusSetsRef.current?.neighborIds.has(node.id) ?? false;
   };
+  const refreshLodTopPages = () => {
+    const pageCount = nodesRef.current.filter(
+      node => node.kind === 'page'
+    ).length;
+    const densityT = clamp(
+      (pageCount - LOD_PAGE_COUNT_SCALE_START) /
+        (LOD_PAGE_COUNT_SCALE_MAX - LOD_PAGE_COUNT_SCALE_START),
+      0,
+      1
+    );
+    const topCount = Math.round(
+      LOD_MIN_TOP_PAGE_COUNT +
+        (LOD_MAX_TOP_PAGE_COUNT - LOD_MIN_TOP_PAGE_COUNT) * densityT
+    );
+    lodTopPageIdsRef.current = new Set(
+      nodesRef.current
+        .filter(node => node.kind === 'page')
+        .sort(
+          (a, b) =>
+            (b._val ?? 0) - (a._val ?? 0) ||
+            a.id.localeCompare(b.id)
+        )
+        .slice(0, topCount)
+        .map(node => node.id)
+    );
+  };
   const lodMinimumScreenRadius = (): number => {
     const k = zoomRef.current.k;
     if (!isFiniteNumber(k) || k >= LOD_FULL_DETAIL_ZOOM) return 0;
@@ -356,6 +385,7 @@ export default function WikiGraphView({
     ) {
       return true;
     }
+    if (lodTopPageIdsRef.current.has(node.id)) return true;
     const minimumRadius = lodMinimumScreenRadius();
     if (minimumRadius === 0) return true;
     const screenRadius =
@@ -974,6 +1004,7 @@ export default function WikiGraphView({
     if (!fg) return;
     const previousIds = new Set(nodesRef.current.map(n => n.id));
     nodesRef.current = nodes;
+    refreshLodTopPages();
     nodesByIdRef.current = new Map(nodes.map(n => [n.id, n]));
     tagMemberCountsRef.current = new Map();
     deadLinksBySourceRef.current = new Map();
