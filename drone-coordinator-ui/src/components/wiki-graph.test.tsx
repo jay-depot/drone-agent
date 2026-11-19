@@ -933,11 +933,11 @@ describe('WikiGraphView', () => {
     );
   });
 
-  it('scales LOD radius with page count and keeps it unchanged below 3000 pages', () => {
+  it('scales LOD radius with page count and keeps it unchanged below 1000 pages', () => {
     const target = pageNode({ id: 'target', title: 'Target', _val: 1 });
     const smallGraph = [
       target,
-      ...Array.from({ length: 2999 }, (_, i) =>
+      ...Array.from({ length: 999 }, (_, i) =>
         pageNode({ id: `page-${i}`, title: `Page ${i}` })
       ),
     ];
