@@ -90,13 +90,6 @@ type PositionedNode = AugmentedGraphNode & {
   vy?: number;
 };
 
-type LabelRect = ShowdownCandidate['rect'];
-
-type IdleScheduleHandle = {
-  kind: 'idle' | 'timeout';
-  id: number;
-};
-
 function defaultFactory(el: HTMLElement): ForceGraphHandle {
   // force-graph's default export is a class with the imperative API above.
   // The instance type is structurally compatible with ForceGraphHandle.
@@ -146,12 +139,6 @@ const ZOOM_STEP = 1.3;
 const FIT_MS = 600;
 const FIT_PADDING = 40;
 const LABEL_WIDTH_CACHE_MAX = 12000;
-const LABEL_RECT_CACHE_MAX = 20000;
-const SHOWDOWN_GRID_CELL_PX = 48;
-const SHOWDOWN_VIEWPORT_MARGIN_PX = 96;
-const SHOWDOWN_MIN_SCREEN_RADIUS_PX = 2.5;
-const SHOWDOWN_ASYNC_TIMEOUT_MS = 32;
-const RECT_KEY_ROUNDING_FACTOR = 10;
 
 /**
  * Engine-mutation isolation: force-graph's link parsing replaces string
@@ -210,16 +197,6 @@ function isDarkMode(): boolean {
 const isFiniteNumber = (value: number | undefined): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
-const keyForCell = (x: number, y: number): string => `${x}:${y}`;
-
-function isRectVisible(rect: LabelRect, viewport: LabelRect): boolean {
-  return !(
-    rect.x2 < viewport.x1 ||
-    rect.x1 > viewport.x2 ||
-    rect.y2 < viewport.y1 ||
-    rect.y1 > viewport.y2
-  );
-}
 
 /** Fallback destination set for pages with no wiki links. */
 const NO_LINK_TARGETS: ReadonlySet<string> = new Set();
@@ -316,14 +293,6 @@ export default function WikiGraphView({
   const measureCtxRef = useRef<CanvasRenderingContext2D | null>(null);
   /** Text-width cache key: "fontSize|label". */
   const labelWidthCacheRef = useRef(new Map<string, number>());
-  /** Label-rect cache key: rounded node pose + zoom + label. */
-  const labelRectCacheRef = useRef(new Map<string, LabelRect>());
-  /**
-   * One queued showdown recompute at a time; coalesces bursts from engine
-   * ticks/zoom into a single low-priority decoration update.
-   */
-  const showdownPendingRef = useRef(false);
-  const showdownScheduledRef = useRef<IdleScheduleHandle | null>(null);
   /**
    * Nodes (ids) currently animating into place, with their drift start time.
    * Landing spots are assigned in the data push; physics influence ramps
@@ -360,7 +329,6 @@ export default function WikiGraphView({
   const repaintRef = useRef<(fg: ForceGraphHandle) => void>(() => {});
   /** Re-filters the tag-repulsion force against current ghost ids. */
   const syncGhostExclusionRef = useRef<() => void>(() => {});
-  const scheduleShowdownRef = useRef<(sync?: boolean) => void>(() => {});
 
   const measureLabelWidth = (label: string, fontSize: number): number => {
     const roundedSize = Math.round(fontSize * 10) / 10;
@@ -386,22 +354,10 @@ export default function WikiGraphView({
   const computeShowdownsRef = useRef(() => {});
   computeShowdownsRef.current = () => {
     const k = zoomRef.current.k;
-    const pageCells = new Map<string, ShowdownCandidate>();
-    const tagCells = new Map<string, ShowdownCandidate>();
-    let focusedCandidate: ShowdownCandidate | null = null;
-    let focusedIsTag = false;
+    const pageCandidates: ShowdownCandidate[] = [];
+    const tagCandidates: ShowdownCandidate[] = [];
     let hasPositionedNode = false;
     if (isFiniteNumber(k) && k > 0) {
-      const { x: tx, y: ty } = zoomRef.current;
-      const { width, height } = containerSizeRef.current;
-      const hasViewportBounds = width > 0 && height > 0;
-      const viewportMargin = SHOWDOWN_VIEWPORT_MARGIN_PX / k;
-      const viewport = {
-        x1: (0 - tx) / k - viewportMargin,
-        y1: (0 - ty) / k - viewportMargin,
-        x2: (Math.max(width, 1) - tx) / k + viewportMargin,
-        y2: (Math.max(height, 1) - ty) / k + viewportMargin,
-      };
       for (const node of nodesRef.current) {
         const positioned = node as PositionedNode;
         if (positioned.x === undefined || positioned.y === undefined) continue;
@@ -409,131 +365,35 @@ export default function WikiGraphView({
         const isTag = node.kind === 'tag';
         if (isTag && !isTagNodeVisible(node)) continue;
         const score = node._val ?? (isTag ? 0 : 1);
-        const isFocused = focusedIdRef.current === node.id;
-        // Showdown is the sole label selector: every positioned node is a
-        // candidate, ranked by score (importance), culled by overlap.
 
         const fontSize = Math.max(11 / k, 4);
         const label = graphNodeLabel(node);
         const measuredWidth = measureLabelWidth(label, fontSize);
         const halfW = measuredWidth / 2 + 2 / k;
         const radius = Math.sqrt(node._val ?? 1) * nodeRelSizeRef.current;
-        if (!isFocused && radius * k < SHOWDOWN_MIN_SCREEN_RADIUS_PX) {
-          continue;
-        }
-        const roundedX =
-          Math.round(positioned.x * RECT_KEY_ROUNDING_FACTOR) /
-          RECT_KEY_ROUNDING_FACTOR;
-        const roundedY =
-          Math.round(positioned.y * RECT_KEY_ROUNDING_FACTOR) /
-          RECT_KEY_ROUNDING_FACTOR;
-        const roundedRadius =
-          Math.round(radius * RECT_KEY_ROUNDING_FACTOR) /
-          RECT_KEY_ROUNDING_FACTOR;
-        const rectCacheKey = `${node.id}|${isTag ? 't' : 'p'}|${label}|${fontSize.toFixed(2)}|${k.toFixed(3)}|${roundedX}|${roundedY}|${roundedRadius}`;
-        let rect = labelRectCacheRef.current.get(rectCacheKey);
-        if (!rect) {
-          rect = isTag
-            ? {
-                // Tag labels center inside the disc; no scrim band.
-                x1: positioned.x - halfW,
-                y1: positioned.y - fontSize / 2,
-                x2: positioned.x + halfW,
-                y2: positioned.y + fontSize / 2,
-              }
-            : {
-                // Page labels sit below the node; rect covers text + scrim.
-                x1: positioned.x - halfW,
-                y1: positioned.y + radius + 2 / k,
-                x2: positioned.x + halfW,
-                y2: positioned.y + radius + 2 / k + fontSize + 3 / k,
-              };
-          if (labelRectCacheRef.current.size > LABEL_RECT_CACHE_MAX) {
-            labelRectCacheRef.current.clear();
-          }
-          labelRectCacheRef.current.set(rectCacheKey, rect);
-        }
-        if (
-          hasViewportBounds &&
-          !isFocused &&
-          !isRectVisible(rect, viewport)
-        ) {
-          continue;
-        }
-        const candidate: ShowdownCandidate = {
+        const rect = isTag
+          ? {
+              x1: positioned.x - halfW,
+              y1: positioned.y - fontSize / 2,
+              x2: positioned.x + halfW,
+              y2: positioned.y + fontSize / 2,
+            }
+          : {
+              x1: positioned.x - halfW,
+              y1: positioned.y + radius + 2 / k,
+              x2: positioned.x + halfW,
+              y2: positioned.y + radius + 2 / k + fontSize + 3 / k,
+            };
+        (isTag ? tagCandidates : pageCandidates).push({
           id: node.id,
           score,
           rect,
-        };
-        const screenX = positioned.x * k + tx;
-        const screenY = ((rect.y1 + rect.y2) / 2) * k + ty;
-        const cellX = Math.floor(screenX / SHOWDOWN_GRID_CELL_PX);
-        const cellY = Math.floor(screenY / SHOWDOWN_GRID_CELL_PX);
-        const cellKey = keyForCell(cellX, cellY);
-        const targetCells = isTag ? tagCells : pageCells;
-        const existing = targetCells.get(cellKey);
-        if (
-          !existing ||
-          candidate.score > existing.score ||
-          (candidate.score === existing.score && candidate.id < existing.id)
-        ) {
-          targetCells.set(cellKey, candidate);
-        }
-        if (isFocused) {
-          focusedCandidate = candidate;
-          focusedIsTag = isTag;
-        }
+        });
       }
     }
     if (!hasPositionedNode) return;
-    const pageCandidates = [...pageCells.values()];
-    const tagCandidates = [...tagCells.values()];
-    if (focusedCandidate) {
-      const list = focusedIsTag ? tagCandidates : pageCandidates;
-      if (!list.some(candidate => candidate.id === focusedCandidate.id)) {
-        list.push(focusedCandidate);
-      }
-    }
     pageSurvivorsRef.current = selectShowdownSurvivors(pageCandidates);
     tagSurvivorsRef.current = selectShowdownSurvivors(tagCandidates);
-  };
-  scheduleShowdownRef.current = (sync = false) => {
-    const run = () => {
-      showdownPendingRef.current = false;
-      showdownScheduledRef.current = null;
-      computeShowdownsRef.current();
-    };
-    const cancelScheduled = () => {
-      const scheduled = showdownScheduledRef.current;
-      if (!scheduled) return;
-      if (scheduled.kind === 'idle') {
-        window.cancelIdleCallback(scheduled.id);
-      } else {
-        window.clearTimeout(scheduled.id);
-      }
-      showdownScheduledRef.current = null;
-      showdownPendingRef.current = false;
-    };
-    if (sync) {
-      cancelScheduled();
-      run();
-      return;
-    }
-    if (showdownPendingRef.current) return;
-    showdownPendingRef.current = true;
-    const hasIdleScheduler =
-      typeof window !== 'undefined' &&
-      'requestIdleCallback' in window &&
-      'cancelIdleCallback' in window;
-    if (hasIdleScheduler) {
-      const id = window.requestIdleCallback(run, {
-        timeout: SHOWDOWN_ASYNC_TIMEOUT_MS,
-      });
-      showdownScheduledRef.current = { kind: 'idle', id };
-      return;
-    }
-    const id = window.setTimeout(run, 0);
-    showdownScheduledRef.current = { kind: 'timeout', id };
   };
 
   useEffect(() => {
@@ -542,7 +402,6 @@ export default function WikiGraphView({
     return () => {
       measureCtxRef.current = null;
       labelWidthCacheRef.current.clear();
-      labelRectCacheRef.current.clear();
     };
   }, []);
 
@@ -934,7 +793,7 @@ export default function WikiGraphView({
           return;
         zoomRef.current = transform;
         applyZoomStyles(fg, transform.k);
-        scheduleShowdownRef.current();
+        computeShowdownsRef.current();
       })
       .onRenderFramePost(paintLabels)
       .onEngineTick(() => {
@@ -970,11 +829,11 @@ export default function WikiGraphView({
         }
         if (now >= nextTickComputeAtRef.current) {
           nextTickComputeAtRef.current = now + SHOWDOWN_RECOMPUTE_MS;
-          scheduleShowdownRef.current();
+          computeShowdownsRef.current();
         }
       })
       .onEngineStop(() => {
-        scheduleShowdownRef.current(true);
+        computeShowdownsRef.current();
         if (settlingRef.current) return;
         if (zoomToFitOnRef.current && !focusedIdRef.current) {
           if (
@@ -1026,16 +885,6 @@ export default function WikiGraphView({
       rootRef.current?.removeEventListener('wheel', disarmOnWheel, {
         capture: true,
       });
-      const scheduled = showdownScheduledRef.current;
-      if (scheduled) {
-        if (scheduled.kind === 'idle') {
-          window.cancelIdleCallback(scheduled.id);
-        } else {
-          window.clearTimeout(scheduled.id);
-        }
-      }
-      showdownScheduledRef.current = null;
-      showdownPendingRef.current = false;
       (fg as unknown as { _destructor?: () => void })._destructor?.();
       handleRef.current = null;
       repaintRef.current = () => {};
@@ -1136,7 +985,7 @@ export default function WikiGraphView({
     );
     fg.graphData({ nodes: orderedNodes, links: toEngineLinks(edges) });
     syncGhostExclusionRef.current();
-    scheduleShowdownRef.current(true);
+    computeShowdownsRef.current();
     zoomStylesRef.current(fg, zoomRef.current.k);
     prevNodeCountRef.current = nodes.length;
   }, [nodes, edges]);
@@ -1153,7 +1002,7 @@ export default function WikiGraphView({
     // The showdown candidate pool changes with focus (dimmed nodes drop
     // out), so survivors must be recomputed for the new focus state — the
     // pre-focus set can keep highlighted labels culled.
-    scheduleShowdownRef.current(true);
+    computeShowdownsRef.current();
     repaintRef.current(fg);
 
     if (focusedNodeId) {
