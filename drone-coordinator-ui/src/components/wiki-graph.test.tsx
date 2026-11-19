@@ -933,6 +933,55 @@ describe('WikiGraphView', () => {
     );
   });
 
+  it('applies screen-space LOD thresholds and preserves focus neighborhood', () => {
+    const lodNodes = [
+      { ...pageNode({ id: 'huge', title: 'Huge' }), _val: 9, x: 0, y: 0 },
+      { ...pageNode({ id: 'small', title: 'Small' }), _val: 1, x: 100, y: 100 },
+      { ...pageNode({ id: 'tiny', title: 'Tiny' }), _val: 0.231, x: 200, y: 200 },
+    ];
+    const { rerender } = render(
+      <WikiGraphView
+        nodes={lodNodes}
+        edges={[]}
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    const zoomCb = accessorFrom('onZoom') as (t: {
+      k: number;
+      x: number;
+      y: number;
+    }) => void;
+    const colorAccessor = accessorFrom('nodeColor') as (
+      node: AugmentedGraphNode
+    ) => string;
+
+    zoomCb({ k: 0.5, x: 0, y: 0 });
+    expect(colorAccessor(lodNodes[0])).toBe('#2563eb');
+    expect(colorAccessor(lodNodes[1])).toBe('#2563eb');
+
+    zoomCb({ k: 0.1, x: 0, y: 0 });
+    expect(colorAccessor(lodNodes[0])).toBe('#2563eb');
+    expect(colorAccessor(lodNodes[1])).toBe('#2563eb');
+    expect(colorAccessor(lodNodes[2])).toBe('rgba(0, 0, 0, 0)');
+
+    rerender(
+      <WikiGraphView
+        nodes={lodNodes}
+        edges={[]}
+        tagsVisible={true}
+        focusedNodeId="small"
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    zoomCb({ k: 0.1, x: 0, y: 0 });
+    expect(colorAccessor(lodNodes[1])).toBe('#2563eb');
+  });
+
   it('keeps normal page labels visible when zoomed out', async () => {
     vi.useFakeTimers();
     const zoomedOut = [

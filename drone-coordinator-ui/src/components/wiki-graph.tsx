@@ -139,6 +139,9 @@ const ZOOM_STEP = 1.3;
 const FIT_MS = 600;
 const FIT_PADDING = 40;
 const LABEL_WIDTH_CACHE_MAX = 12000;
+const LOD_FULL_DETAIL_ZOOM = 0.75;
+const LOD_FAR_ZOOM = 0.05;
+const LOD_FAR_MIN_SCREEN_RADIUS_PX = 6;
 
 /**
  * Engine-mutation isolation: force-graph's link parsing replaces string
@@ -318,6 +321,31 @@ export default function WikiGraphView({
     if (!focusedIdRef.current) return true;
     return focusSetsRef.current?.neighborIds.has(node.id) ?? false;
   };
+  const lodMinimumScreenRadius = (): number => {
+    const k = zoomRef.current.k;
+    if (!isFiniteNumber(k) || k >= LOD_FULL_DETAIL_ZOOM) return 0;
+    const t = clamp(
+      (k - LOD_FAR_ZOOM) / (LOD_FULL_DETAIL_ZOOM - LOD_FAR_ZOOM),
+      0,
+      1
+    );
+    return 1.5 + (LOD_FAR_MIN_SCREEN_RADIUS_PX - 1.5) * (1 - t);
+  };
+  const isNodeLodVisible = (node: AugmentedGraphNode): boolean => {
+    if (node.kind === 'tag') return isTagNodeVisible(node);
+    if (focusedIdRef.current === node.id) return true;
+    if (
+      focusSetsRef.current &&
+      focusSetsRef.current.neighborIds.has(node.id)
+    ) {
+      return true;
+    }
+    const minimumRadius = lodMinimumScreenRadius();
+    if (minimumRadius === 0) return true;
+    const screenRadius =
+      Math.sqrt(node._val ?? 1) * nodeRelSizeRef.current * zoomRef.current.k;
+    return screenRadius >= minimumRadius;
+  };
   const zoomStylesRef = useRef<(fg: ForceGraphHandle, k: number) => void>(
     () => {}
   );
@@ -364,6 +392,7 @@ export default function WikiGraphView({
         hasPositionedNode = true;
         const isTag = node.kind === 'tag';
         if (isTag && !isTagNodeVisible(node)) continue;
+        if (!isNodeLodVisible(node)) continue;
         const score = node._val ?? (isTag ? 0 : 1);
 
         const fontSize = Math.max(11 / k, 4);
@@ -478,6 +507,7 @@ export default function WikiGraphView({
       const dimmed =
         (focus !== null && !focus.neighborIds.has(node.id)) ||
         !nodePassesFilter(node.id);
+      if (!isNodeLodVisible(node)) return TRANSPARENT;
       if (node.kind === 'tag') {
         if (!isTagNodeVisible(node)) return TRANSPARENT;
         return dimmed ? TAG_DIM : theme.tagFill;
@@ -494,8 +524,21 @@ export default function WikiGraphView({
       if (link.kind === 'tag') {
         const tagNode = nodesByIdRef.current.get(edgeEndpointId(link.target));
         if (!tagNode || !isTagNodeVisible(tagNode)) return 0;
+        if (!isNodeLodVisible(tagNode)) return 0;
         if (!nodePassesFilter(tagNode.id)) return 0.05;
         return 0.5;
+      }
+      const sourceNode = nodesByIdRef.current.get(
+        edgeEndpointId(link.source)
+      );
+      const targetNode = nodesByIdRef.current.get(
+        edgeEndpointId(link.target)
+      );
+      if (
+        (sourceNode && !isNodeLodVisible(sourceNode)) ||
+        (targetNode && !isNodeLodVisible(targetNode))
+      ) {
+        return 0.05;
       }
       const filterDim =
         !nodePassesFilter(edgeEndpointId(link.source)) ||
@@ -512,11 +555,24 @@ export default function WikiGraphView({
       if (link.kind === 'tag') {
         const tagNode = nodesByIdRef.current.get(edgeEndpointId(link.target));
         if (!tagNode || !isTagNodeVisible(tagNode)) return TRANSPARENT;
+        if (!isNodeLodVisible(tagNode)) return TRANSPARENT;
         if (!nodePassesFilter(tagNode.id)) return theme.dimLink;
         const focus = focusSetsRef.current;
         if (focus && focus.touchingEdgeKeys.has(edgeKey(link)))
           return TAG_EDGE_LIT;
         return TAG_EDGE;
+      }
+      const sourceNode = nodesByIdRef.current.get(
+        edgeEndpointId(link.source)
+      );
+      const targetNode = nodesByIdRef.current.get(
+        edgeEndpointId(link.target)
+      );
+      if (
+        (sourceNode && !isNodeLodVisible(sourceNode)) ||
+        (targetNode && !isNodeLodVisible(targetNode))
+      ) {
+        return TRANSPARENT;
       }
       const filterDim =
         !nodePassesFilter(edgeEndpointId(link.source)) ||
@@ -539,6 +595,7 @@ export default function WikiGraphView({
     const nodeValAccessor = (node: AugmentedGraphNode): number => {
       const base = node._val ?? 1;
       if (node.kind === 'tag' && !isTagNodeVisible(node)) return base * 0.05;
+      if (!isNodeLodVisible(node)) return 0.01;
       const now = performance.now();
       // Removed nodes shrink away; new nodes grow in from their landing.
       const fade = fadeFractionRef.current(node.id, now);
@@ -549,6 +606,7 @@ export default function WikiGraphView({
     };
 
     const nodeLabelAccessor = (node: AugmentedGraphNode): string => {
+      if (!isNodeLodVisible(node)) return '';
       if (node.kind === 'tag') {
         return isTagNodeVisible(node) ? `#${node.title}` : '';
       }
@@ -562,6 +620,7 @@ export default function WikiGraphView({
     ) => {
       const positioned = node as PositionedNode;
       if (positioned.x === undefined || positioned.y === undefined) return;
+      if (!isNodeLodVisible(node)) return;
       const focus = focusSetsRef.current;
       const dimmed =
         (focus !== null && !focus.neighborIds.has(node.id)) ||
@@ -610,6 +669,7 @@ export default function WikiGraphView({
       for (const node of nodesRef.current) {
         const positioned = node as PositionedNode;
         if (positioned.x === undefined || positioned.y === undefined) continue;
+        if (!isNodeLodVisible(node)) continue;
         const focus = focusSetsRef.current;
         const dimmed =
           (focus !== null && !focus.neighborIds.has(node.id)) ||
