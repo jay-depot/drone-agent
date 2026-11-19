@@ -191,6 +191,53 @@ describe('WikiGraphView', () => {
     expect(ctx.strokeStyle).not.toBe('rgba(100, 116, 139, 0.8)');
   });
 
+  it('applies top-tag LOD culling while preserving focused tags', () => {
+    const tagNodes = [
+      {
+        ...pageNode({
+          id: 'tag:small',
+          title: 'small',
+          tags: ['small'],
+          kind: 'tag',
+        }),
+        _val: 1,
+        x: 0,
+        y: 0,
+      },
+      {
+        ...pageNode({
+          id: 'tag:big',
+          title: 'big',
+          tags: ['big'],
+          kind: 'tag',
+        }),
+        _val: 5,
+        x: 100,
+        y: 100,
+      },
+    ];
+    render(
+      <WikiGraphView
+        nodes={[...nodes, ...tagNodes]}
+        edges={edges}
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    const zoomCb = accessorFrom('onZoom') as (t: {
+      k: number;
+      x: number;
+      y: number;
+    }) => void;
+    zoomCb({ k: 0.05, x: 0, y: 0 });
+    const colorAccessor = accessorFrom('nodeColor') as (
+      node: AugmentedGraphNode
+    ) => string;
+    expect(colorAccessor(tagNodes[1])).not.toBe('rgba(0, 0, 0, 0)');
+  });
+
   it('fades tag labels out on zoom-out by member count and styles them green', () => {
     const sizedTags = [
       ...nodes,

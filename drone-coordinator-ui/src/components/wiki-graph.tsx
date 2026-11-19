@@ -147,6 +147,8 @@ const LOD_PAGE_COUNT_SCALE_MAX = 10000;
 const LOD_MAX_DENSITY_FACTOR = 2.5;
 const LOD_MIN_TOP_PAGE_COUNT = 24;
 const LOD_MAX_TOP_PAGE_COUNT = 128;
+const LOD_MIN_TOP_TAG_COUNT = 8;
+const LOD_MAX_TOP_TAG_COUNT = 32;
 
 /**
  * Engine-mutation isolation: force-graph's link parsing replaces string
@@ -278,6 +280,7 @@ export default function WikiGraphView({
   const focusSetsRef = useRef<ReturnType<typeof buildFocusSets> | null>(null);
   const nodesRef = useRef<PositionedNode[]>([]);
   const lodTopPageIdsRef = useRef<Set<string>>(new Set());
+  const lodTopTagIdsRef = useRef<Set<string>>(new Set());
   const nodesByIdRef = useRef(new Map<string, AugmentedGraphNode>());
   const prevNodeCountRef = useRef<number | null>(null);
   /**
@@ -352,6 +355,21 @@ export default function WikiGraphView({
         .slice(0, topCount)
         .map(node => node.id)
     );
+    const topTagCount = Math.round(
+      LOD_MIN_TOP_TAG_COUNT +
+        (LOD_MAX_TOP_TAG_COUNT - LOD_MIN_TOP_TAG_COUNT) * densityT
+    );
+    lodTopTagIdsRef.current = new Set(
+      nodesRef.current
+        .filter(node => node.kind === 'tag')
+        .sort(
+          (a, b) =>
+            (b._val ?? 0) - (a._val ?? 0) ||
+            a.id.localeCompare(b.id)
+        )
+        .slice(0, topTagCount)
+        .map(node => node.id)
+    );
   };
   const lodMinimumScreenRadius = (): number => {
     const k = zoomRef.current.k;
@@ -377,7 +395,11 @@ export default function WikiGraphView({
     return baseRadius * densityFactor;
   };
   const isNodeLodVisible = (node: AugmentedGraphNode): boolean => {
-    if (node.kind === 'tag') return isTagNodeVisible(node);
+    if (node.kind === 'tag') {
+      if (!isTagNodeVisible(node)) return false;
+      if (focusedIdRef.current === node.id) return true;
+      if (lodTopTagIdsRef.current.has(node.id)) return true;
+    }
     if (focusedIdRef.current === node.id) return true;
     if (
       focusSetsRef.current &&
