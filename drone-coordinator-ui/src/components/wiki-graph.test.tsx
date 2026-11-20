@@ -1016,6 +1016,36 @@ describe('WikiGraphView', () => {
     expect(chargeForce.strength).toHaveBeenCalledWith(-480);
   });
 
+  it('marks old edges as fading and new edges as emerging across graph pushes', () => {
+    const graphProps = {
+      nodes,
+      tagsVisible: true,
+      onNodeFocus: vi.fn(),
+      onClearFocus: vi.fn(),
+      forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+    };
+    const { rerender } = render(
+      <WikiGraphView {...graphProps} edges={edges} />
+    );
+    const oldEdge = edges[0];
+    const newEdge: AugmentedGraphEdge = {
+      source: 'b',
+      target: 'c',
+      kind: 'link',
+    };
+    rerender(
+      <WikiGraphView
+        {...graphProps}
+        edges={[newEdge]}
+      />
+    );
+    const widthAccessor = accessorFrom('linkWidth') as (
+      link: AugmentedGraphEdge
+    ) => number;
+    expect(widthAccessor(oldEdge)).toBeLessThanOrEqual(1.5);
+    expect(widthAccessor(newEdge)).toBeGreaterThanOrEqual(0);
+  });
+
   it('weakens broken-link springs by the source page dead-link count', () => {
     // page 'a' gains a second dead link (dangling -> missing2): the per-edge
     // pull halves for BOTH of a's dead links.

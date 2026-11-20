@@ -228,6 +228,19 @@ function isDarkMode(): boolean {
   return document.documentElement.classList.contains('dark');
 }
 
+const edgeLifecycleColor = (
+  color: string,
+  fraction: number
+): string => {
+  const rgba = color.match(
+    /^rgba?\((\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)(?:\s*,\s*(\d+(?:\.\d+)?))?\)$/
+  );
+  if (!rgba) return fraction <= 0 ? TRANSPARENT : color;
+  const alpha =
+    rgba[4] === undefined ? fraction : Number(rgba[4]) * fraction;
+  return `rgba(${rgba[1]}, ${rgba[2]}, ${rgba[3]}, ${alpha})`;
+};
+
 const isFiniteNumber = (value: number | undefined): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
@@ -304,6 +317,7 @@ export default function WikiGraphView({
   const focusSetsRef = useRef<ReturnType<typeof buildFocusSets> | null>(null);
   const nodesRef = useRef<PositionedNode[]>([]);
   const nodesByIdRef = useRef(new Map<string, AugmentedGraphNode>());
+  const edgesRef = useRef<AugmentedGraphEdge[]>([]);
   const prevNodeCountRef = useRef<number | null>(null);
   /**
    * Reactive zoom-to-fit: when on, the camera refits on engine stop and data
@@ -344,6 +358,8 @@ export default function WikiGraphView({
   const pendingInsertionDurationRef = useRef(0);
   const focusTransitionActiveRef = useRef(false);
   const autoFitTimerRef = useRef<number | null>(null);
+  const fadingEdgesRef = useRef(new Map<string, number>());
+  const emergingEdgesRef = useRef(new Map<string, number>());
 
   // Set by the mount effect so later effects can restyle without re-running
   // the graph setup. Accessors live inside the mount effect: they close over
@@ -364,6 +380,26 @@ export default function WikiGraphView({
   // the animation refs above. Accessors call these per frame.
   const fadeFractionRef = useRef<(id: string, now: number) => number>(() => 1);
   const driftFractionRef = useRef<(id: string, now: number) => number>(() => 1);
+  const edgeFadeOutFraction = (key: string, now: number): number => {
+    const startedAt = fadingEdgesRef.current.get(key);
+    if (startedAt === undefined) return 1;
+    const fraction = 1 - (now - startedAt) / FADE_MS;
+    if (fraction <= 0) {
+      fadingEdgesRef.current.delete(key);
+      return 0;
+    }
+    return fraction;
+  };
+  const edgeFadeInFraction = (key: string, now: number): number => {
+    const startedAt = emergingEdgesRef.current.get(key);
+    if (startedAt === undefined) return 1;
+    const fraction = (now - startedAt) / FADE_MS;
+    if (fraction >= 1) {
+      emergingEdgesRef.current.delete(key);
+      return 1;
+    }
+    return clamp(fraction, 0, 1);
+  };
   const repaintRef = useRef<(fg: ForceGraphHandle) => void>(() => {});
   /** Re-filters the tag-repulsion force against current ghost ids. */
   const syncGhostExclusionRef = useRef<() => void>(() => {});
@@ -532,32 +568,38 @@ export default function WikiGraphView({
     };
 
     const linkWidthAccessor = (link: AugmentedGraphEdge): number => {
+      const edgeLifecycleFraction =
+        edgeFadeOutFraction(edgeKey(link), performance.now()) *
+        edgeFadeInFraction(edgeKey(link), performance.now());
       if (link.kind === 'tag') {
         const tagNode = nodesByIdRef.current.get(edgeEndpointId(link.target));
         if (!tagNode || !isTagNodeVisible(tagNode)) return 0;
         if (!nodePassesFilter(tagNode.id)) return 0.05;
-        return 0.5;
+        return 0.5 * edgeLifecycleFraction;
       }
       const filterDim =
         !nodePassesFilter(edgeEndpointId(link.source)) ||
         !nodePassesFilter(edgeEndpointId(link.target));
       if (filterDim) return 0.05;
       const focus = focusSetsRef.current;
-      if (!focus) return baseLinkWidthRef.current;
+      if (!focus) return baseLinkWidthRef.current * edgeLifecycleFraction;
       if (focus.touchingEdgeKeys.has(edgeKey(link)))
-        return baseLinkWidthRef.current * 2;
-      return 0.05;
+        return baseLinkWidthRef.current * 2 * edgeLifecycleFraction;
+      return 0.05 * edgeLifecycleFraction;
     };
 
     const linkColorAccessor = (link: AugmentedGraphEdge): string => {
+      const edgeLifecycleFraction =
+        edgeFadeOutFraction(edgeKey(link), performance.now()) *
+        edgeFadeInFraction(edgeKey(link), performance.now());
       if (link.kind === 'tag') {
         const tagNode = nodesByIdRef.current.get(edgeEndpointId(link.target));
         if (!tagNode || !isTagNodeVisible(tagNode)) return TRANSPARENT;
         if (!nodePassesFilter(tagNode.id)) return theme.dimLink;
         const focus = focusSetsRef.current;
         if (focus && focus.touchingEdgeKeys.has(edgeKey(link)))
-          return TAG_EDGE_LIT;
-        return TAG_EDGE;
+          return edgeLifecycleColor(TAG_EDGE_LIT, edgeLifecycleFraction);
+        return edgeLifecycleColor(TAG_EDGE, edgeLifecycleFraction);
       }
       const filterDim =
         !nodePassesFilter(edgeEndpointId(link.source)) ||
@@ -867,6 +909,16 @@ export default function WikiGraphView({
         for (const [ghostId, startedAt] of fadingRef.current) {
           if (now - startedAt > FADE_MS) fadingRef.current.delete(ghostId);
         }
+        for (const [edgeKey, startedAt] of fadingEdgesRef.current) {
+          if (now - startedAt > FADE_MS) {
+            fadingEdgesRef.current.delete(edgeKey);
+          }
+        }
+        for (const [edgeKey, startedAt] of emergingEdgesRef.current) {
+          if (now - startedAt > FADE_MS) {
+            emergingEdgesRef.current.delete(edgeKey);
+          }
+        }
         if (settlingRef.current) {
           syncGhostExclusionRef.current();
           if (driftingRef.current.size === 0 && fadingRef.current.size === 0) {
@@ -972,6 +1024,25 @@ export default function WikiGraphView({
         node as PositionedNode,
       ])
     );
+    const previousEdges = edgesRef.current;
+    const nextEdgeKeys = new Set(edges.map(edge => edgeKey(edge)));
+    const now = performance.now();
+    for (const edge of previousEdges) {
+      const key = edgeKey(edge);
+      if (!nextEdgeKeys.has(key)) {
+        fadingEdgesRef.current.set(key, now);
+      }
+    }
+    for (const edge of edges) {
+      const key = edgeKey(edge);
+      if (
+        previousEdges.length > 0 &&
+        !previousEdges.some(previous => edgeKey(previous) === key)
+      ) {
+        emergingEdgesRef.current.set(key, now);
+      }
+    }
+    edgesRef.current = edges;
     for (const node of nodes) {
       const previous = previousNodesById.get(node.id);
       if (!previous) continue;
@@ -1031,7 +1102,6 @@ export default function WikiGraphView({
       }
     }
     // Prune faded-out ghosts.
-    const now = performance.now();
     for (const [ghostId, startedAt] of fadingRef.current) {
       if (now - startedAt > FADE_MS) fadingRef.current.delete(ghostId);
     }
