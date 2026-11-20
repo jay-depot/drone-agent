@@ -220,7 +220,43 @@ describe('WikiGraphView', () => {
     expect(ctx.strokeStyle).not.toBe('rgba(100, 116, 139, 0.8)');
   });
 
-  it('applies top-tag LOD culling while preserving focused tags', () => {
+  it('shows all retained tag nodes while one tag is focused', () => {
+    const focusedTag = {
+      ...pageNode({
+        id: 'tag:focused',
+        title: 'focused',
+        tags: ['focused'],
+        kind: 'tag',
+      }),
+      _val: 5,
+      x: 0,
+      y: 0,
+    };
+    const secondaryTag = {
+      ...pageNode({
+        id: 'tag:secondary',
+        title: 'secondary',
+        tags: ['secondary'],
+        kind: 'tag',
+      }),
+      _val: 3,
+      x: 100,
+      y: 100,
+    };
+    renderView({
+      nodes: [focusedTag, secondaryTag],
+      edges: [],
+      tagsVisible: true,
+      focusedNodeId: 'tag:focused',
+    });
+    const colorAccessor = accessorFrom('nodeColor') as (
+      node: AugmentedGraphNode
+    ) => string;
+    expect(colorAccessor(focusedTag)).not.toBe('rgba(0, 0, 0, 0)');
+    expect(colorAccessor(secondaryTag)).not.toBe('rgba(0, 0, 0, 0)');
+  });
+
+  it('applies top-tag culling while preserving focused tags', () => {
     const tagNodes = [
       {
         ...pageNode({

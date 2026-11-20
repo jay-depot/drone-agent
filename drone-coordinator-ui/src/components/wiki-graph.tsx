@@ -341,13 +341,11 @@ export default function WikiGraphView({
   // refs only, so they never need reactive dependencies.
   /**
    * Tag-node visibility: the global Tags toggle wins; otherwise focus mode
-   * filters — a focused page keeps only its connected tags, a focused tag
-   * hides all other tags.
+   * filtering is already applied by the safety-cull result.
    */
   const isTagNodeVisible = (node: AugmentedGraphNode): boolean => {
     if (!tagsVisibleRef.current) return false;
-    if (!focusedIdRef.current) return true;
-    return focusSetsRef.current?.neighborIds.has(node.id) ?? false;
+    return true;
   };
   const zoomStylesRef = useRef<(fg: ForceGraphHandle, k: number) => void>(
     () => {}
