@@ -68,8 +68,6 @@ export interface ForceGraphHandle {
   d3VelocityDecay(decay: number): ForceGraphHandle;
   d3ReheatSimulation(): ForceGraphHandle;
   warmupTicks(ticks: number): ForceGraphHandle;
-  pauseAnimation(): ForceGraphHandle;
-  resumeAnimation(): ForceGraphHandle;
   width(px: number): ForceGraphHandle;
   height(px: number): ForceGraphHandle;
   zoom(scale: number, durationMs?: number): ForceGraphHandle;
@@ -154,6 +152,7 @@ const INITIAL_ALPHA_DECAY = 0.008;
 const INITIAL_VELOCITY_DECAY = 0.35;
 const INITIAL_WARMUP_TICKS = 120;
 const FOCUS_HEAT_MS = 900;
+const NODE_INSERTION_MS = 2000;
 
 /**
  * Engine-mutation isolation: force-graph's link parsing replaces string
@@ -337,6 +336,9 @@ export default function WikiGraphView({
   const fadingRef = useRef(new Map<string, number>());
   /** True while any node is drifting or fading — suppresses reactive fits. */
   const settlingRef = useRef(false);
+  const insertionRevealRef = useRef<Set<string>>(new Set());
+  const insertionTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const graphRevisionRef = useRef(0);
 
   // Set by the mount effect so later effects can restyle without re-running
   // the graph setup. Accessors live inside the mount effect: they close over
@@ -393,6 +395,7 @@ export default function WikiGraphView({
       for (const node of nodesRef.current) {
         const positioned = node as PositionedNode;
         if (positioned.x === undefined || positioned.y === undefined) continue;
+        if (!insertionRevealRef.current.has(node.id)) continue;
         hasPositionedNode = true;
         const isTag = node.kind === 'tag';
         if (isTag && !isTagNodeVisible(node)) continue;
@@ -506,6 +509,7 @@ export default function WikiGraphView({
     };
 
     const nodeColorAccessor = (node: AugmentedGraphNode): string => {
+      if (!insertionRevealRef.current.has(node.id)) return TRANSPARENT;
       const focus = focusSetsRef.current;
       const dimmed =
         (focus !== null && !focus.neighborIds.has(node.id)) ||
@@ -569,6 +573,7 @@ export default function WikiGraphView({
       isBrokenLink(link) ? [4, 3] : null;
 
     const nodeValAccessor = (node: AugmentedGraphNode): number => {
+      if (!insertionRevealRef.current.has(node.id)) return 0.01;
       const base = node._val ?? 1;
       if (node.kind === 'tag' && !isTagNodeVisible(node)) return base * 0.05;
       const now = performance.now();
@@ -592,6 +597,7 @@ export default function WikiGraphView({
       ctx: CanvasRenderingContext2D,
       globalScale: number
     ) => {
+      if (!insertionRevealRef.current.has(node.id)) return;
       const positioned = node as PositionedNode;
       if (positioned.x === undefined || positioned.y === undefined) return;
       const focus = focusSetsRef.current;
@@ -923,6 +929,10 @@ export default function WikiGraphView({
       rootRef.current?.removeEventListener('wheel', disarmOnWheel, {
         capture: true,
       });
+      for (const timer of insertionTimersRef.current) {
+        window.clearTimeout(timer);
+      }
+      insertionTimersRef.current = [];
       (fg as unknown as { _destructor?: () => void })._destructor?.();
       handleRef.current = null;
       repaintRef.current = () => {};
@@ -935,6 +945,12 @@ export default function WikiGraphView({
   useEffect(() => {
     const fg = handleRef.current;
     if (!fg) return;
+    graphRevisionRef.current += 1;
+    const revision = graphRevisionRef.current;
+    for (const timer of insertionTimersRef.current) {
+      window.clearTimeout(timer);
+    }
+    insertionTimersRef.current = [];
     const previousIds = new Set(nodesRef.current.map(n => n.id));
     const previousNodesById = new Map(
       nodesRef.current.map(node => [
@@ -1097,15 +1113,38 @@ export default function WikiGraphView({
     const orderedNodes = [...nodes].sort(
       (a, b) => (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
     );
-    fg.pauseAnimation();
     fg.graphData({ nodes: orderedNodes, links: toEngineLinks(edges) });
     syncGhostExclusionRef.current();
     computeShowdownsRef.current();
     zoomStylesRef.current(fg, zoomRef.current.k);
-    window.requestAnimationFrame(() => {
-      fg.resumeAnimation();
-      fg.d3ReheatSimulation();
+
+    const existingIds = new Set(previousIds);
+    const newIds = orderedNodes.filter(node => !existingIds.has(node.id));
+    insertionRevealRef.current =
+      prevNodeCountRef.current === null
+        ? new Set(orderedNodes.map(node => node.id))
+        : new Set(
+            orderedNodes
+              .filter(node => existingIds.has(node.id))
+              .map(node => node.id)
+          );
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const interval =
+      newIds.length > 0 ? NODE_INSERTION_MS / newIds.length : NODE_INSERTION_MS;
+    newIds.forEach((node, index) => {
+      const timer = window.setTimeout(() => {
+        if (graphRevisionRef.current !== revision) return;
+        insertionRevealRef.current.add(node.id);
+        repaintRef.current(fg);
+        syncGhostExclusionRef.current();
+        computeShowdownsRef.current();
+        if (index === newIds.length - 1) {
+          fg.d3ReheatSimulation();
+        }
+      }, Math.round(interval * (index + 1)));
+      timers.push(timer);
     });
+    insertionTimersRef.current = timers;
     prevNodeCountRef.current = nodes.length;
   }, [nodes, edges, focusedNodeId]);
 
