@@ -251,10 +251,20 @@ export function buildAugmentedWikiGraph(graph: WikiGraph): AugmentedWikiGraph {
   }));
   const edges: AugmentedGraphEdge[] = graph.edges.map(edge => ({ ...edge }));
 
+  const tagPageIds = new Map<string, Set<string>>();
+  for (const node of graph.nodes) {
+    for (const tag of new Set(node.tags)) {
+      const id = `tag:${tag}`;
+      if (!tagPageIds.has(id)) tagPageIds.set(id, new Set());
+      tagPageIds.get(id)!.add(node.id);
+    }
+  }
+
   const tagNodes = new Map<string, AugmentedGraphNode>();
   for (const node of graph.nodes) {
-    for (const tag of node.tags) {
+    for (const tag of new Set(node.tags)) {
       const id = `tag:${tag}`;
+      if ((tagPageIds.get(id)?.size ?? 0) <= 1) continue;
       if (!tagNodes.has(id)) {
         tagNodes.set(id, {
           id,

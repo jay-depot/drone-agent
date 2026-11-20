@@ -355,8 +355,8 @@ describe('buildAugmentedWikiGraph', () => {
   it('creates one tag node per unique tag with namespaced ids', () => {
     const aug = buildAugmentedWikiGraph(graph);
     const tagNodes = aug.nodes.filter(n => n.kind === 'tag');
-    expect(tagNodes.map(n => n.id).sort()).toEqual(['tag:x', 'tag:y']);
-    expect(tagNodes.map(n => n.title).sort()).toEqual(['x', 'y']);
+    expect(tagNodes.map(n => n.id).sort()).toEqual(['tag:x']);
+    expect(tagNodes.map(n => n.title).sort()).toEqual(['x']);
     const tagX = tagNodes.find(n => n.id === 'tag:x')!;
     expect(tagX.exists).toBe(true);
     expect(tagX.wordCount).toBe(0);
@@ -368,9 +368,14 @@ describe('buildAugmentedWikiGraph', () => {
     const tagEdges = aug.edges.filter(e => e.kind === 'tag');
     expect(tagEdges).toEqual([
       { source: 'a', target: 'tag:x', kind: 'tag' },
-      { source: 'a', target: 'tag:y', kind: 'tag' },
       { source: 'b', target: 'tag:x', kind: 'tag' },
     ]);
+  });
+
+  it('drops tags that point to only one page', () => {
+    const aug = buildAugmentedWikiGraph(graph);
+    expect(aug.nodes.some(node => node.id === 'tag:y')).toBe(false);
+    expect(aug.edges.some(edge => edge.target === 'tag:y')).toBe(false);
   });
 
   it('does not mutate the input graph', () => {
