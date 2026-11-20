@@ -315,9 +315,8 @@ export function applyNodeSizing(
 
   return nodes.map(node => {
     if (node.kind === 'tag') {
-      // Tag size encodes absolute member count (area-proportional in the
-      // engine: radius = sqrt(val) * relSize), not a normalized share.
-      return { ...node, _val: tagMemberCounts.get(node.id) ?? 0 };
+      const memberCount = tagMemberCounts.get(node.id) ?? 0;
+      return { ...node, _val: memberCount * 0.25 };
     }
     const normDegree =
       maxPageDegree > 0 ? (linkDegrees.get(node.id) ?? 0) / maxPageDegree : 0;

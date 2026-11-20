@@ -523,9 +523,9 @@ describe('applyNodeSizing', () => {
     ];
     const sized = applyNodeSizing(nodes, edges);
     const byId = new Map(sized.map(n => [n.id, n._val ?? 0]));
-    // Tag area encodes absolute member count (engine radius = sqrt(val)).
-    expect(byId.get('tag:x')).toBe(2);
-    expect(byId.get('tag:y')).toBe(1);
+    // Tag radius is half of the former absolute-member-count rendering.
+    expect(byId.get('tag:x')).toBe(0.5);
+    expect(byId.get('tag:y')).toBe(0.25);
   });
 
   it('scales tag size independently of the page degree distribution', () => {
@@ -544,7 +544,7 @@ describe('applyNodeSizing', () => {
     ];
     const sized = applyNodeSizing(nodes, edges);
     const byId = new Map(sized.map(n => [n.id, n._val ?? 0]));
-    expect(byId.get('tag:x')).toBe(2);
+    expect(byId.get('tag:x')).toBe(0.5);
     expect(byId.get('tag:x')).toBeLessThan(byId.get('hub') ?? 0);
   });
 });

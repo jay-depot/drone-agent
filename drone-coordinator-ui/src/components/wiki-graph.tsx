@@ -1025,6 +1025,25 @@ export default function WikiGraphView({
     const fg = handleRef.current;
     if (!fg) return;
     const previousIds = new Set(nodesRef.current.map(n => n.id));
+    const previousNodesById = new Map(
+      nodesRef.current.map(node => [
+        node.id,
+        node as PositionedNode,
+      ])
+    );
+    for (const node of nodes) {
+      const previous = previousNodesById.get(node.id);
+      if (!previous) continue;
+      const positioned = node as PositionedNode;
+      if (isFiniteNumber(previous.x) && isFiniteNumber(previous.y)) {
+        positioned.x = previous.x;
+        positioned.y = previous.y;
+      }
+      if (isFiniteNumber(previous.vx) && isFiniteNumber(previous.vy)) {
+        positioned.vx = previous.vx;
+        positioned.vy = previous.vy;
+      }
+    }
     nodesRef.current = nodes;
     refreshLodTopPages();
     nodesByIdRef.current = new Map(nodes.map(n => [n.id, n]));
@@ -1066,9 +1085,11 @@ export default function WikiGraphView({
     // across the canvas.
     const nextIds = new Set(nodes.map(n => n.id));
     const addedIds = nodes.filter(n => !previousIds.has(n.id));
-    for (const removedId of previousIds) {
-      if (!nextIds.has(removedId)) {
-        fadingRef.current.set(removedId, performance.now());
+    if (!focusedNodeId) {
+      for (const removedId of previousIds) {
+        if (!nextIds.has(removedId)) {
+          fadingRef.current.set(removedId, performance.now());
+        }
       }
     }
     // Prune faded-out ghosts.
@@ -1090,18 +1111,37 @@ export default function WikiGraphView({
       const cy = (height / 2 - ty) / k;
       const halfW = width / 2 / k;
       const halfH = height / 2 / k;
+      const focusPoint =
+        focusedNodeId
+          ? (previousNodesById.get(focusedNodeId) as PositionedNode | undefined)
+          : undefined;
+      const focusX =
+        focusPoint && isFiniteNumber(focusPoint.x)
+          ? focusPoint.x
+          : cx;
+      const focusY =
+        focusPoint && isFiniteNumber(focusPoint.y)
+          ? focusPoint.y
+          : cy;
       for (const node of addedIds) {
         const positioned = node as PositionedNode;
-        // Jitter inside ~the central 60% of the viewport.
-        positioned.x = cx + (Math.random() - 0.5) * halfW * 1.2;
-        positioned.y = cy + (Math.random() - 0.5) * halfH * 1.2;
+        if (focusedNodeId) {
+          positioned.x = focusX + (Math.random() - 0.5) * 80;
+          positioned.y = focusY + (Math.random() - 0.5) * 80;
+        } else {
+          positioned.x = cx + (Math.random() - 0.5) * halfW * 1.2;
+          positioned.y = cy + (Math.random() - 0.5) * halfH * 1.2;
+        }
         positioned.vx = 0;
         positioned.vy = 0;
-        driftingRef.current.set(node.id, performance.now());
+        if (!focusedNodeId) {
+          driftingRef.current.set(node.id, performance.now());
+        }
       }
     };
     assignLandingSpots();
     settlingRef.current =
+      !focusedNodeId &&
       prevNodeCountRef.current !== null &&
       (addedIds.length > 0 || fadingRef.current.size > 0);
 
@@ -1117,7 +1157,7 @@ export default function WikiGraphView({
     computeShowdownsRef.current();
     zoomStylesRef.current(fg, zoomRef.current.k);
     prevNodeCountRef.current = nodes.length;
-  }, [nodes, edges]);
+  }, [nodes, edges, focusedNodeId]);
 
   // Focus changes restyle via refs and move the camera; the data itself is
   // untouched so the layout does not reheat.

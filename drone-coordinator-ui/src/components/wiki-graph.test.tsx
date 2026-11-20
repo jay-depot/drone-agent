@@ -1269,6 +1269,36 @@ describe('WikiGraphView', () => {
     expect(draws('#u')).toBe(false);
   });
 
+  it('preserves existing positions across focus-subset graph pushes', () => {
+    const initial = [
+      { ...pageNode({ id: 'a', title: 'A' }), x: 25, y: 35, vx: 1, vy: -1 },
+      { ...pageNode({ id: 'b', title: 'B' }), x: 125, y: 135, vx: 2, vy: -2 },
+    ];
+    const graphProps = {
+      edges: [],
+      tagsVisible: true,
+      onNodeFocus: vi.fn(),
+      onClearFocus: vi.fn(),
+      forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+    };
+    const { rerender } = render(
+      <WikiGraphView {...graphProps} nodes={initial} />
+    );
+    rerender(
+      <WikiGraphView
+        {...graphProps}
+        nodes={[initial[1]]}
+        focusedNodeId="b"
+      />
+    );
+    const pushed = (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.at(
+      -1
+    )![0] as { nodes: Array<{ id: string; x?: number; y?: number }> };
+    const b = pushed.nodes.find(node => node.id === 'b');
+    expect(b?.x).toBe(125);
+    expect(b?.y).toBe(135);
+  });
+
   it('assigns landing spots to added nodes instead of origin blink-in', () => {
     // Landing spots derive from the container rect; give it a size.
     const originalRect = Element.prototype.getBoundingClientRect;
