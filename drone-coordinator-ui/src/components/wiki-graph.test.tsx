@@ -138,7 +138,7 @@ describe('WikiGraphView', () => {
     expect(simulated[1].vy).toBe(0);
   });
 
-  it('trickles newly inserted nodes over two seconds and aborts on focus change', async () => {
+  it('trickles newly inserted nodes every 200ms and aborts on focus change', async () => {
     vi.useFakeTimers();
     const initial = [
       pageNode({ id: 'a', title: 'A', x: 0, y: 0 }),
@@ -837,7 +837,7 @@ describe('WikiGraphView', () => {
     );
     const reheatCallsBeforeClear =
       (handle.d3ReheatSimulation as ReturnType<typeof vi.fn>).mock.calls.length;
-    expect(handle.centerAt).not.toHaveBeenCalled();
+    expect(handle.centerAt).toHaveBeenCalledWith(10, 20, 350);
     expect(handle.zoomToFit).toHaveBeenCalledWith(600, 40);
 
     rerender(

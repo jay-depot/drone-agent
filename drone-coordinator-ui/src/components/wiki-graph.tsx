@@ -152,7 +152,9 @@ const INITIAL_ALPHA_DECAY = 0.008;
 const INITIAL_VELOCITY_DECAY = 0.35;
 const INITIAL_WARMUP_TICKS = 120;
 const FOCUS_HEAT_MS = 900;
-const NODE_INSERTION_MS = 2000;
+const NODE_INSERTION_MS = 200;
+const FOCUS_CENTER_MS = 350;
+const FOCUS_SETTLE_MS = 600;
 
 /**
  * Engine-mutation isolation: force-graph's link parsing replaces string
@@ -339,6 +341,9 @@ export default function WikiGraphView({
   const insertionRevealRef = useRef<Set<string>>(new Set());
   const insertionTimersRef = useRef<number[]>([]);
   const graphRevisionRef = useRef(0);
+  const pendingInsertionDurationRef = useRef(0);
+  const focusTransitionActiveRef = useRef(false);
+  const autoFitTimerRef = useRef<number | null>(null);
 
   // Set by the mount effect so later effects can restyle without re-running
   // the graph setup. Accessors live inside the mount effect: they close over
@@ -879,6 +884,7 @@ export default function WikiGraphView({
       .onEngineStop(() => {
         computeShowdownsRef.current();
         if (settlingRef.current) return;
+        if (focusTransitionActiveRef.current) return;
         if (zoomToFitOnRef.current) {
           if (
             nodesRef.current.some(
@@ -933,6 +939,14 @@ export default function WikiGraphView({
         window.clearTimeout(timer);
       }
       insertionTimersRef.current = [];
+      if (autoFitTimerRef.current !== null) {
+        window.clearTimeout(autoFitTimerRef.current);
+        autoFitTimerRef.current = null;
+      }
+      if (autoFitTimerRef.current !== null) {
+        window.clearTimeout(autoFitTimerRef.current);
+        autoFitTimerRef.current = null;
+      }
       (fg as unknown as { _destructor?: () => void })._destructor?.();
       handleRef.current = null;
       repaintRef.current = () => {};
@@ -1011,11 +1025,9 @@ export default function WikiGraphView({
     // across the canvas.
     const nextIds = new Set(nodes.map(n => n.id));
     const addedIds = nodes.filter(n => !previousIds.has(n.id));
-    if (!focusedNodeId) {
-      for (const removedId of previousIds) {
-        if (!nextIds.has(removedId)) {
-          fadingRef.current.set(removedId, performance.now());
-        }
+    for (const removedId of previousIds) {
+      if (!nextIds.has(removedId)) {
+        fadingRef.current.set(removedId, performance.now());
       }
     }
     // Prune faded-out ghosts.
@@ -1113,7 +1125,21 @@ export default function WikiGraphView({
     const orderedNodes = [...nodes].sort(
       (a, b) => (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
     );
-    fg.graphData({ nodes: orderedNodes, links: toEngineLinks(edges) });
+    const ghostNodes = [...fadingRef.current.keys()]
+      .map(id => previousNodesById.get(id))
+      .filter(
+        (node): node is PositionedNode =>
+          node !== undefined &&
+          isFiniteNumber(node.x) &&
+          isFiniteNumber(node.y)
+      )
+      .filter(node => !orderedNodes.some(current => current.id === node.id));
+    fg.graphData({
+      nodes: [...orderedNodes, ...ghostNodes].sort(
+        (a, b) => (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
+      ),
+      links: toEngineLinks(edges),
+    });
     syncGhostExclusionRef.current();
     computeShowdownsRef.current();
     zoomStylesRef.current(fg, zoomRef.current.k);
@@ -1129,8 +1155,9 @@ export default function WikiGraphView({
               .map(node => node.id)
           );
     const timers: number[] = [];
-    const interval =
-      newIds.length > 0 ? NODE_INSERTION_MS / newIds.length : NODE_INSERTION_MS;
+    const interval = NODE_INSERTION_MS;
+    pendingInsertionDurationRef.current =
+      newIds.length > 0 ? newIds.length * interval : 0;
     newIds.forEach((node, index) => {
       const timer = window.setTimeout(() => {
         if (graphRevisionRef.current !== revision) return;
@@ -1162,8 +1189,53 @@ export default function WikiGraphView({
     // pre-focus set can keep highlighted labels culled.
     computeShowdownsRef.current();
     repaintRef.current(fg);
+
+    if (previousFocusedId !== focusedNodeId) {
+      if (autoFitTimerRef.current !== null) {
+        window.clearTimeout(autoFitTimerRef.current);
+        autoFitTimerRef.current = null;
+      }
+    }
+
+    if (focusedNodeId && previousFocusedId !== focusedNodeId) {
+      focusTransitionActiveRef.current = true;
+      const focusedNode = nodesRef.current.find(
+        node => node.id === focusedNodeId
+      ) as PositionedNode | undefined;
+      if (
+        focusedNode &&
+        isFiniteNumber(focusedNode.x) &&
+        isFiniteNumber(focusedNode.y)
+      ) {
+        fg.centerAt(focusedNode.x, focusedNode.y, FOCUS_CENTER_MS);
+      }
+
+      fg.d3ReheatSimulation();
+      const revealDelay =
+        pendingInsertionDurationRef.current +
+        FADE_MS +
+        FOCUS_SETTLE_MS;
+      const firstFit = window.setTimeout(() => {
+        if (zoomToFitOnRef.current) {
+          fg.zoomToFit(FIT_MS, FIT_PADDING);
+        }
+        const secondFit = window.setTimeout(() => {
+          if (zoomToFitOnRef.current) {
+            fg.zoomToFit(FIT_MS, FIT_PADDING);
+          }
+          focusTransitionActiveRef.current = false;
+          autoFitTimerRef.current = null;
+        }, FOCUS_SETTLE_MS);
+        insertionTimersRef.current.push(secondFit);
+        autoFitTimerRef.current = secondFit;
+      }, revealDelay);
+      insertionTimersRef.current.push(firstFit);
+      autoFitTimerRef.current = firstFit;
+    }
+
     if (previousFocusedId && !focusedNodeId) {
       fg.d3ReheatSimulation();
+      focusTransitionActiveRef.current = false;
     }
     if (zoomToFitOnRef.current) {
       // Before the simulation positions nodes the bbox is NaN and a fit
