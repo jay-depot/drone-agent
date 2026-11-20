@@ -19,6 +19,7 @@ import { applyWikiFilters, filtersAreDefault } from '@/lib/wiki-filters';
 import { sortWikiPages } from '@/lib/wiki-sort';
 import {
   applyNodeSizing,
+  applySafetyCulledWikiGraph,
   buildAugmentedWikiGraph,
 } from '@/lib/wiki-graph-utils';
 import WikiPageTable from '@/components/wiki-page-table';
@@ -147,7 +148,7 @@ export default function WikiPage() {
     return ids;
   }, [pages, filters]);
 
-  const augmented = useMemo(() => {
+  const sized = useMemo(() => {
     if (!graph) return null;
     const base = buildAugmentedWikiGraph(graph);
     return {
@@ -155,6 +156,14 @@ export default function WikiPage() {
       edges: base.edges,
     };
   }, [graph]);
+  const augmented = useMemo(() => {
+    if (!sized) return null;
+    return applySafetyCulledWikiGraph(
+      sized.nodes,
+      sized.edges,
+      focusedNodeId
+    );
+  }, [sized, focusedNodeId]);
   const visible = augmented;
   const focusedNode =
     visible && focusedNodeId

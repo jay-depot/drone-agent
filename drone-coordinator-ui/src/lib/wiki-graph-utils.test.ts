@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applySafetyCulledWikiGraph,
   applyNodeSizing,
   buildAugmentedWikiGraph,
   buildFocusSets,
@@ -382,6 +383,81 @@ describe('buildAugmentedWikiGraph', () => {
     const before = JSON.stringify(graph);
     buildAugmentedWikiGraph(graph);
     expect(JSON.stringify(graph)).toBe(before);
+  });
+});
+
+describe('applySafetyCulledWikiGraph', () => {
+  it('caches repeated results for the same graph and focus', () => {
+    const nodes = Array.from({ length: 600 }, (_, i) => ({
+      ...pageNode({ id: `p${i}`, title: `Page ${i}` }),
+      kind: 'page' as const,
+      _val: i,
+    }));
+    const edges: AugmentedGraphEdge[] = [];
+    const first = applySafetyCulledWikiGraph(nodes, edges, null);
+    const second = applySafetyCulledWikiGraph(nodes, edges, null);
+    expect(second).toBe(first);
+  });
+
+  it('never returns more than 500 page nodes', () => {
+    const graph = {
+      nodes: Array.from({ length: 600 }, (_, i) => ({
+        ...pageNode({ id: `p${i}`, title: `Page ${i}` }),
+        kind: 'page' as const,
+        _val: i,
+      })),
+      edges: [],
+    };
+    const result = applySafetyCulledWikiGraph(
+      graph.nodes,
+      graph.edges,
+      null
+    );
+    expect(result.nodes.filter(node => node.kind === 'page')).toHaveLength(500);
+  });
+
+  it('runs top-k after focus refinement and prunes orphan tags', () => {
+    const graph = {
+      nodes: [
+        ...Array.from({ length: 600 }, (_, i) => ({
+          ...pageNode({ id: `p${i}`, title: `Page ${i}` }),
+          kind: 'page' as const,
+          _val: i,
+        })),
+        {
+          ...pageNode({
+            id: 'tag:focused',
+            title: 'focused',
+            kind: 'tag',
+            tags: ['focused'],
+          }),
+          _val: 500,
+        },
+      ],
+      edges: [
+        ...Array.from({ length: 600 }, (_, i) => ({
+          source: `p${i}`,
+          target: i < 300 ? 'tag:focused' : 'tag:other',
+          kind: 'tag' as const,
+        })),
+      ],
+    };
+    graph.nodes.push({
+      ...pageNode({
+        id: 'tag:other',
+        title: 'other',
+        kind: 'tag',
+        tags: ['other'],
+      }),
+      _val: 300,
+    });
+    const result = applySafetyCulledWikiGraph(
+      graph.nodes,
+      graph.edges,
+      'tag:focused'
+    );
+    expect(result.nodes.filter(node => node.kind === 'page')).toHaveLength(300);
+    expect(result.nodes.some(node => node.id === 'tag:other')).toBe(false);
   });
 });
 

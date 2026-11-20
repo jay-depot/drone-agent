@@ -331,6 +331,102 @@ export function applyNodeSizing(
   });
 }
 
+export const MAX_VISIBLE_PAGE_NODES = 500;
+
+const safetyCullCache = new WeakMap<
+  AugmentedGraphNode[],
+  WeakMap<AugmentedGraphEdge[], Map<string, {
+    nodes: AugmentedGraphNode[];
+    edges: AugmentedGraphEdge[];
+  }>>
+>();
+
+export function applySafetyCulledWikiGraph(
+  nodes: AugmentedGraphNode[],
+  edges: AugmentedGraphEdge[],
+  focusedId: string | null
+): { nodes: AugmentedGraphNode[]; edges: AugmentedGraphEdge[] } {
+  if (nodes.filter(node => node.kind === 'page').length <= MAX_VISIBLE_PAGE_NODES) {
+    return { nodes, edges };
+  }
+
+  let edgesCache = safetyCullCache.get(nodes);
+  if (!edgesCache) {
+    edgesCache = new WeakMap();
+    safetyCullCache.set(nodes, edgesCache);
+  }
+  let focusCache = edgesCache.get(edges);
+  if (!focusCache) {
+    focusCache = new Map();
+    edgesCache.set(edges, focusCache);
+  }
+  const cacheKey = focusedId ?? '';
+  const cached = focusCache.get(cacheKey);
+  if (cached) return cached;
+
+  const focusSets = focusedId ? buildFocusSets(edges, focusedId) : null;
+  const pageCandidates = nodes
+    .filter(
+      node =>
+        node.kind === 'page' &&
+        (!focusSets || focusSets.neighborIds.has(node.id))
+    )
+    .sort(
+      (a, b) =>
+        (b._val ?? 0) - (a._val ?? 0) ||
+        a.id.localeCompare(b.id)
+    );
+
+  const retainedIds = new Set<string>();
+  if (focusedId) {
+    const focusedPage = nodes.find(
+      node => node.id === focusedId && node.kind === 'page'
+    );
+    if (focusedPage) retainedIds.add(focusedPage.id);
+  }
+  for (const page of pageCandidates) {
+    if (retainedIds.size >= MAX_VISIBLE_PAGE_NODES) break;
+    retainedIds.add(page.id);
+  }
+  if (retainedIds.size === 0) {
+    for (const page of pageCandidates.slice(0, MAX_VISIBLE_PAGE_NODES)) {
+      retainedIds.add(page.id);
+    }
+  }
+
+  const retainedNodes = nodes.filter(
+    node => node.kind === 'page'
+      ? retainedIds.has(node.id)
+      : node.kind === 'tag'
+  );
+  const retainedTagIds = new Set(
+    retainedNodes.filter(node => node.kind === 'tag').map(node => node.id)
+  );
+  const retainedEdges = edges.filter(edge => {
+    if (edge.kind === 'link') {
+      return retainedIds.has(edge.source) && retainedIds.has(edge.target);
+    }
+    return retainedIds.has(edge.source) &&
+      retainedTagIds.has(edge.target);
+  });
+  const connectedTagIds = new Set(
+    retainedEdges
+      .filter(edge => edge.kind === 'tag')
+      .map(edge => edge.target)
+  );
+  const result = {
+    nodes: retainedNodes.filter(
+      node => node.kind !== 'tag' || connectedTagIds.has(node.id)
+    ),
+    edges: retainedEdges.filter(
+      edge => edge.kind !== 'tag' || connectedTagIds.has(edge.target)
+    ),
+  };
+
+  focusCache.set(cacheKey, result);
+  return result;
+}
+
 export interface FocusSets {
   /** The focused node id plus every neighbor reachable by one edge. */
   neighborIds: Set<string>;

@@ -255,7 +255,7 @@ describe('WikiPage graph view', () => {
         title: 'Page B',
         exists: true,
         wordCount: 3,
-        tags: [],
+        tags: ['ops'],
         scope: 'coordinator',
       },
     ],
@@ -357,7 +357,7 @@ describe('WikiPage graph view', () => {
     renderWiki(['/wiki?view=graph&tagnodes=1&node=tag:ops']);
 
     await waitFor(() => {
-      expect(screen.getByText('Tag · 1 page(s)')).toBeTruthy();
+      expect(screen.getByText('Tag · 2 page(s)')).toBeTruthy();
     });
     expect(screen.queryByRole('button', { name: 'Open full page' })).toBeNull();
     expect(screen.queryByText('Page A')).toBeNull();
