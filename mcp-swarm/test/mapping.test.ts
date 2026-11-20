@@ -92,6 +92,30 @@ describe('executeCapability', () => {
     expect(result.status).toBe(404);
   });
 
+  it('passes the coordinator session list body through unchanged', async () => {
+    const body = {
+      sessions: [{ id: 'ss1', status: 'ended', statusChangedAt: 1700 }],
+      count: 1,
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => body,
+    });
+    const result = await executeCapability(
+      'swarm.session.list',
+      {},
+      fetchMock as unknown as typeof fetch,
+      'https://coordinator:3456'
+    );
+    expect(result.ok).toBe(true);
+    expect(result.body).toEqual(body);
+    expect(
+      (result.body as { sessions: Array<{ statusChangedAt: number }> })
+        .sessions[0].statusChangedAt
+    ).toBe(1700);
+  });
+
   it('surfaces a transport failure as ok:false status:0', async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
     const result = await executeCapability(

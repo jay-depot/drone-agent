@@ -9,6 +9,7 @@ const session: SwarmSession = {
   createdAt: 1000,
   updatedAt: 2000,
   endedAt: null,
+  statusChangedAt: null,
   status: 'ended',
   interactive: false,
   sessionSnapshot: null,
