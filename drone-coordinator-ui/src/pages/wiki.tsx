@@ -27,8 +27,15 @@ import WikiFilterBar from '@/components/wiki-filter-bar';
 import WikiGraphView from '@/components/wiki-graph';
 
 const PAGE_SIZE = 25;
+const FOCUS_PREVIEW_TITLE_LIMIT = 50;
 // How long typing must settle before a search request fires.
 const SEARCH_DEBOUNCE_MS = 350;
+
+function truncateFocusPreviewTitle(title: string): string {
+  return title.length > FOCUS_PREVIEW_TITLE_LIMIT
+    ? title.slice(0, FOCUS_PREVIEW_TITLE_LIMIT)
+    : title;
+}
 
 export default function WikiPage() {
   const navigate = useNavigate();
@@ -264,7 +271,9 @@ export default function WikiPage() {
             <aside className="absolute left-4 top-4 z-20 w-80 rounded-md border p-4 bg-card shadow-lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold">{focusedNode.title}</h2>
+                  <h2 className="text-lg font-semibold">
+                    {truncateFocusPreviewTitle(focusedNode.title)}
+                  </h2>
                   {focusedNode.kind === 'page' ? (
                     <p className="text-xs text-muted-foreground font-mono">
                       {focusedNode.id}

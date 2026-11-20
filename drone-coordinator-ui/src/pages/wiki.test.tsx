@@ -351,6 +351,33 @@ describe('WikiPage graph view', () => {
     expect(afterClear.has('tag:ops')).toBe(true);
   });
 
+  it('truncates focus preview titles to 50 characters', async () => {
+    const longTitle = `A${'b'.repeat(79)}`;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url === '/api/wiki/graph') {
+          return ok({
+            nodes: [{ ...graph.nodes[0], title: longTitle }],
+            edges: [],
+          });
+        }
+        if (url === '/api/wiki') {
+          return ok([metaPage({ id: 'a', title: longTitle, tags: ['ops'] })]);
+        }
+        return notFound;
+      })
+    );
+
+    renderWiki(['/wiki?view=graph&node=a']);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(
+        longTitle.slice(0, 50)
+      );
+    });
+  });
+
   it('shows a tag-aware preview panel without an open-page button for tag focus', async () => {
     vi.stubGlobal('fetch', graphFetch());
 
