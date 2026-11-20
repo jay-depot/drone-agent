@@ -337,7 +337,7 @@ export default function WikiGraphView({
   /** True while any node is drifting or fading — suppresses reactive fits. */
   const settlingRef = useRef(false);
   const insertionRevealRef = useRef<Set<string>>(new Set());
-  const insertionTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const insertionTimersRef = useRef<number[]>([]);
   const graphRevisionRef = useRef(0);
 
   // Set by the mount effect so later effects can restyle without re-running
@@ -1128,7 +1128,7 @@ export default function WikiGraphView({
               .filter(node => existingIds.has(node.id))
               .map(node => node.id)
           );
-    const timers: ReturnType<typeof setTimeout>[] = [];
+    const timers: number[] = [];
     const interval =
       newIds.length > 0 ? NODE_INSERTION_MS / newIds.length : NODE_INSERTION_MS;
     newIds.forEach((node, index) => {
