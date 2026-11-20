@@ -88,6 +88,7 @@ explicitly in its `UPDATE` statement. This keeps the ADR 269 invariant: every ro
 `UPDATE` sets the new column.
 
 **D8 — Surface sweep.** Add the field to these surfaces:
+
 - The full-row REST endpoints `GET /sessions` and `GET /sessions/:id`. The field flows through
   automatically. Add tests only.
 - The hand-picked session subsets in `GET /sessions/:id/log` and `GET /sessions/:id/transcript`.
@@ -99,6 +100,7 @@ explicitly in its `UPDATE` statement. This keeps the ADR 269 invariant: every ro
   flows through automatically. Add a test only.
 
 **D9 — Leave these surfaces unchanged:**
+
 - The `drone-gateway` console output (`swarm.session.list`, `swarm.session.get`). The console
   human table is hand-picked. But the console `--json` output already carries the field. The
   operator chose to leave the console unchanged.
@@ -144,9 +146,9 @@ Add this function. Put it next to `makeBeaconPortOptional`:
  * column is probed before it is added, so the backfill runs one time only.
  */
 export function migrateSwarmSessionColumns(db: Database.Database): void {
-  const cols = db
-    .prepare('PRAGMA table_info(swarm_sessions)')
-    .all() as Array<{ name: string }>;
+  const cols = db.prepare('PRAGMA table_info(swarm_sessions)').all() as Array<{
+    name: string;
+  }>;
 
   if (!cols.some(c => c.name === 'interactive')) {
     db.exec(
@@ -180,7 +182,7 @@ In `initDatabase`, replace the three inline blocks (the `swarmSessionCols` probe
 `if (!swarmSessionCols...)` blocks) with one call:
 
 ```ts
-  migrateSwarmSessionColumns(db);
+migrateSwarmSessionColumns(db);
 ```
 
 Keep the call in the same position. The position is after `makeBeaconPortOptional(db)` and before
@@ -214,7 +216,7 @@ export interface SwarmSession {
 Add the field to `SwarmSessionRow`:
 
 ```ts
-  status_changed_at: number | null;
+status_changed_at: number | null;
 ```
 
 Add the field to `rowToSwarmSession`:
@@ -257,79 +259,85 @@ that you have not updated yet. Continue to the next steps. The errors are the ex
 return value:
 
 ```ts
-  const statusChangedAt = nextStatusChangedAt(
-    existing.status,
-    status,
-    existing.statusChangedAt,
-    now
-  );
-  const stmt = getDatabase().prepare(`
+const statusChangedAt = nextStatusChangedAt(
+  existing.status,
+  status,
+  existing.statusChangedAt,
+  now
+);
+const stmt = getDatabase().prepare(`
     UPDATE swarm_sessions
     SET status = @status, updatedAt = @updatedAt, ended_at = @endedAt,
         status_changed_at = @statusChangedAt
     WHERE id = @id
   `);
-  stmt.run({ id, status, updatedAt: now, endedAt, statusChangedAt });
+stmt.run({ id, status, updatedAt: now, endedAt, statusChangedAt });
 
-  return { ...existing, status, updatedAt: now, endedAt, statusChangedAt };
+return { ...existing, status, updatedAt: now, endedAt, statusChangedAt };
 ```
 
 **`transitionSessionStatus`** — the same shape. Use the `from`-status as the previous value:
 
 ```ts
-  const statusChangedAt = nextStatusChangedAt(
-    session.status,
-    toStatus,
-    session.statusChangedAt,
-    now
-  );
-  const stmt = getDatabase().prepare(
-    'UPDATE swarm_sessions SET status = @status, updatedAt = @updatedAt, ended_at = @endedAt, status_changed_at = @statusChangedAt WHERE id = @id'
-  );
-  stmt.run({ id, status: toStatus, updatedAt: now, endedAt, statusChangedAt });
+const statusChangedAt = nextStatusChangedAt(
+  session.status,
+  toStatus,
+  session.statusChangedAt,
+  now
+);
+const stmt = getDatabase().prepare(
+  'UPDATE swarm_sessions SET status = @status, updatedAt = @updatedAt, ended_at = @endedAt, status_changed_at = @statusChangedAt WHERE id = @id'
+);
+stmt.run({ id, status: toStatus, updatedAt: now, endedAt, statusChangedAt });
 
-  return { ...session, status: toStatus, updatedAt: now, endedAt, statusChangedAt };
+return {
+  ...session,
+  status: toStatus,
+  updatedAt: now,
+  endedAt,
+  statusChangedAt,
+};
 ```
 
 **`markStaleSessions`** — the query returns only `active` rows. The target value `stale` always
 differs. Use the helper for clarity. Add the `SET` clause, the parameter, and the return value:
 
 ```ts
-    const statusChangedAt = nextStatusChangedAt(
-      session.status,
-      'stale',
-      session.statusChangedAt,
-      now
-    );
-    const stmt = getDatabase().prepare(
-      'UPDATE swarm_sessions SET status = @status, updatedAt = @updatedAt, ended_at = @endedAt, status_changed_at = @statusChangedAt WHERE id = @id'
-    );
-    stmt.run({
-      id: session.id,
-      status: 'stale',
-      updatedAt: now,
-      endedAt: session.endedAt,
-      statusChangedAt,
-    });
-    updated.push({ ...session, status: 'stale', updatedAt: now, statusChangedAt });
+const statusChangedAt = nextStatusChangedAt(
+  session.status,
+  'stale',
+  session.statusChangedAt,
+  now
+);
+const stmt = getDatabase().prepare(
+  'UPDATE swarm_sessions SET status = @status, updatedAt = @updatedAt, ended_at = @endedAt, status_changed_at = @statusChangedAt WHERE id = @id'
+);
+stmt.run({
+  id: session.id,
+  status: 'stale',
+  updatedAt: now,
+  endedAt: session.endedAt,
+  statusChangedAt,
+});
+updated.push({ ...session, status: 'stale', updatedAt: now, statusChangedAt });
 ```
 
 **`updateSwarmSessionPersona`** — carry the value forward. Change the `SET` clause, the parameter,
 and the return value:
 
 ```ts
-  const stmt = getDatabase().prepare(`
+const stmt = getDatabase().prepare(`
     UPDATE swarm_sessions SET persona_id = @personaId, updatedAt = @updatedAt, ended_at = @endedAt, status_changed_at = @statusChangedAt WHERE id = @id
   `);
-  stmt.run({
-    id,
-    personaId,
-    updatedAt: now,
-    endedAt: existing.endedAt,
-    statusChangedAt: existing.statusChangedAt,
-  });
+stmt.run({
+  id,
+  personaId,
+  updatedAt: now,
+  endedAt: existing.endedAt,
+  statusChangedAt: existing.statusChangedAt,
+});
 
-  return { ...existing, personaId, updatedAt: now };
+return { ...existing, personaId, updatedAt: now };
 ```
 
 `archiveSwarmSession` and `restoreSwarmSession` delegate to `transitionSessionStatus`. No change is
@@ -371,28 +379,28 @@ object by hand. Find each `session: { id: session.id, ... }` block. Add `statusC
 Add the field to the inline response type in `handleList`:
 
 ```ts
-      sessions: Array<{
-        id: string;
-        personaId: string | null;
-        status: string;
-        createdAt: number;
-        updatedAt: number;
-        statusChangedAt: number | null;
-      }>;
+sessions: Array<{
+  id: string;
+  personaId: string | null;
+  status: string;
+  createdAt: number;
+  updatedAt: number;
+  statusChangedAt: number | null;
+}>;
 ```
 
 Add the value to the mapped line. Show it as an ISO string. Show `-` when the value is null:
 
 ```ts
-    const lines = sessions.map(s => {
-      const created = new Date(s.createdAt).toISOString();
-      const updated = new Date(s.updatedAt).toISOString();
-      const changed =
-        s.statusChangedAt === null
-          ? '-'
-          : new Date(s.statusChangedAt).toISOString();
-      return `${s.id.padEnd(24)} ${(s.personaId ?? 'none').padEnd(16)} ${s.status.padEnd(10)} ${created} ${updated} ${changed}`;
-    });
+const lines = sessions.map(s => {
+  const created = new Date(s.createdAt).toISOString();
+  const updated = new Date(s.updatedAt).toISOString();
+  const changed =
+    s.statusChangedAt === null
+      ? '-'
+      : new Date(s.statusChangedAt).toISOString();
+  return `${s.id.padEnd(24)} ${(s.personaId ?? 'none').padEnd(16)} ${s.status.padEnd(10)} ${created} ${updated} ${changed}`;
+});
 ```
 
 **Check:** search the file for `statusChangedAt`. Expect two hits.
@@ -408,12 +416,14 @@ new required field. Add `statusChangedAt: null` to the literal.
 
 **`test/db.test.ts`** — add a `describe('migrateSwarmSessionColumns', ...)` block. Follow the
 `makeBeaconPortOptional` test pattern in the same file. Test these cases:
+
 1. A legacy `:memory:` database with `swarm_sessions` rows and no `status_changed_at` column gets
    the column added. The backfill sets `status_changed_at` equal to `updatedAt` for every row.
 2. The function is idempotent. A second call does not throw and does not change the values.
 3. A fresh database (the column exists) runs no backfill.
 
 Add session-stamp cases in the `describe('Swarm Session & Events', ...)` block:
+
 1. A new session has `statusChangedAt` equal to `createdAt`.
 2. `updateSwarmSessionStatus` moves `statusChangedAt` when the status changes.
 3. `updateSwarmSessionStatus` does NOT move `statusChangedAt` when the status is unchanged. (Call
@@ -423,6 +433,7 @@ Add session-stamp cases in the `describe('Swarm Session & Events', ...)` block:
 6. `updateSwarmSessionPersona` preserves `statusChangedAt`.
 
 **`test/routes/swarm.test.ts`** — add these cases:
+
 1. `GET /api/sessions` returns a session with a number `statusChangedAt`.
 2. `statusChangedAt` survives the round trip through `POST /api/sync/sessions/register` and
    `GET /api/sessions`.
@@ -455,6 +466,7 @@ coordinator body through unchanged. The body must carry `statusChangedAt`.
 
 Create the ADR. Use the format of `docs/adr/269-session-ended-at-duration.md`. Record these
 decisions:
+
 - D1: the column name and type.
 - D2: the field is required and nullable. Explain why (the typecheck sweep).
 - D3: the migration pattern.
@@ -521,3 +533,44 @@ The work is complete when every item below passes.
 - The `drone-gateway` console output. The operator chose to leave it unchanged.
 - The WebSocket initial-state dump. It stays `beacon_sessions`-shaped.
 - A bulk re-stamp of existing rows beyond the one-time backfill.
+
+---
+
+## 6. Execution summary (completed 2026-11-19, branch `feat/session-status-changed-at`)
+
+All 9 steps are done. Commit `13e1b954` (`feat(coordinator): add status_changed_at to swarm sessions (ADR 280)`).
+
+**What changed**
+
+- `drone-coordinator/src/db/init.ts` — the three existing swarm-session migrations plus the new
+  `status_changed_at` migration moved into an exported `migrateSwarmSessionColumns(db)` (next to
+  `makeBeaconPortOptional`). The backfill `UPDATE swarm_sessions SET status_changed_at = updatedAt
+  WHERE status_changed_at IS NULL` runs inside the add-column guard, so it runs one time only.
+- `drone-coordinator/src/db/swarm-sessions.ts` — `SwarmSession.statusChangedAt: number | null`
+  (required, nullable), `SwarmSessionRow.status_changed_at`, mapped in `rowToSwarmSession`. A shared
+  pure `nextStatusChangedAt` helper moves the stamp only on a real change. `createSwarmSession`
+  stamps `now`; `updateSwarmSessionStatus`, `transitionSessionStatus`, and `markStaleSessions` stamp
+  on change; `updateSwarmSessionPersona` carries the value forward (still sets the column).
+- `drone-coordinator/src/db/index.ts` — re-exports `migrateSwarmSessionColumns` (needed by the test).
+- `drone-coordinator/src/routes/swarm.ts` — `statusChangedAt` added to the hand-picked session
+  objects in `GET /sessions/:id/log` and `GET /sessions/:id/transcript`.
+- `drone-agent/src/plugins/swarm/session-command.ts` — `/swarm-session list` gains a
+  `statusChangedAt` column (ISO string, `-` when null).
+- `docs/adr/280-swarm-session-status-changed-at.md` (new) + an index row at the top of
+  `docs/adr/index.md`.
+
+**Tests added** — `db.test.ts` (3 migration cases + 6 stamp cases), `routes/swarm.test.ts` (3),
+`transcript.test.ts` literal, `drone-swarm/test/cli.test.ts`, `drone-agent/test/session-command.test.ts`,
+`mcp-swarm/test/mapping.test.ts`.
+
+**Validation** — LSP clean; `pnpm -r run build`, `pnpm typecheck`, `pnpm run lint` all pass; the fast
+suite is green (4743 passed). All 11 criteria in section 4 hold.
+
+**Note on a deviation** — the plan did not list `drone-coordinator/src/db/index.ts`, but the test
+imports `migrateSwarmSessionColumns` from `../src/db/index.js`, so the export was added there.
+
+**Pre-existing, unrelated failure** — `drone-coordinator/test/wiki-routes.test.ts > GET /api/wiki/graph`
+fails on the clean tree too (wiki graph / pitch pages). Not caused by this work.
+
+**Unchanged surfaces (verified)** — no file under `drone-coordinator-ui/`, no change to the WS
+initial-state dump in `drone-coordinator/src/index.ts`, no change to `drone-gateway`.
