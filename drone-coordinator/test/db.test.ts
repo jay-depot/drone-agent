@@ -5,6 +5,7 @@ import {
   createPersona,
   getDatabase,
   makeBeaconPortOptional,
+  migrateSwarmSessionColumns,
   backfillPersonaMetadata,
   getPersona,
   listPersonas,
@@ -798,6 +799,67 @@ describe('Swarm Session & Events', () => {
     expect(session.status).toBe('active');
   });
 
+  it('a new swarm session stamps statusChangedAt with createdAt', () => {
+    const session = createSwarmSession('ss1', null, 'b1');
+    expect(session.statusChangedAt).toBe(session.createdAt);
+    expect(getSwarmSession('ss1')!.statusChangedAt).toBe(session.createdAt);
+  });
+
+  it('updateSwarmSessionStatus moves statusChangedAt on a real change', () => {
+    createSwarmSession('ss1', null, 'b1');
+    getDatabase()
+      .prepare('UPDATE swarm_sessions SET status_changed_at = ? WHERE id = ?')
+      .run(1, 'ss1');
+    const updated = updateSwarmSessionStatus('ss1', 'ended')!;
+    expect(updated.statusChangedAt).toBeGreaterThan(1);
+    expect(getSwarmSession('ss1')!.statusChangedAt).toBe(
+      updated.statusChangedAt
+    );
+  });
+
+  it('updateSwarmSessionStatus does NOT move statusChangedAt when the status is unchanged', () => {
+    createSwarmSession('ss1', null, 'b1');
+    const first = updateSwarmSessionStatus('ss1', 'active')!;
+    const stamp = first.statusChangedAt;
+    const second = updateSwarmSessionStatus('ss1', 'active')!;
+    expect(second.statusChangedAt).toBe(stamp);
+    expect(getSwarmSession('ss1')!.statusChangedAt).toBe(stamp);
+  });
+
+  it('transitionSessionStatus moves statusChangedAt on a real change', () => {
+    createSwarmSession('ss1', null, 'b1');
+    getDatabase()
+      .prepare('UPDATE swarm_sessions SET status_changed_at = ? WHERE id = ?')
+      .run(1, 'ss1');
+    const result = transitionSessionStatus('ss1', 'active', 'processing') as {
+      statusChangedAt: number | null;
+    };
+    expect(result.statusChangedAt).toBeGreaterThan(1);
+  });
+
+  it('markStaleSessions stamps statusChangedAt on a stale sweep', () => {
+    createSwarmSession('ss1', null, 'b1');
+    getDatabase()
+      .prepare(
+        'UPDATE swarm_sessions SET updatedAt = ?, status_changed_at = ? WHERE id = ?'
+      )
+      .run(Date.now() - 10_000, 1, 'ss1');
+    const stale = markStaleSessions(1_000);
+    expect(stale).toHaveLength(1);
+    expect(stale[0].statusChangedAt).toBeGreaterThan(1);
+    expect(getSwarmSession('ss1')!.statusChangedAt).toBe(
+      stale[0].statusChangedAt
+    );
+  });
+
+  it('updateSwarmSessionPersona preserves statusChangedAt', () => {
+    createSwarmSession('ss1', null, 'b1');
+    const before = getSwarmSession('ss1')!.statusChangedAt;
+    const updated = updateSwarmSessionPersona('ss1', 'persona-2')!;
+    expect(updated.statusChangedAt).toBe(before);
+    expect(getSwarmSession('ss1')!.statusChangedAt).toBe(before);
+  });
+
   it('should get a swarm session by id', () => {
     createSwarmSession('ss1', null, 'b1');
     const s = getSwarmSession('ss1');
@@ -1448,5 +1510,80 @@ describe('makeBeaconPortOptional migration', () => {
       notnull: number;
     }>;
     expect(cols.find(c => c.name === 'port')?.notnull).toBe(0);
+  });
+});
+
+describe('migrateSwarmSessionColumns migration', () => {
+  beforeEach(async () => {
+    await setupDb();
+  });
+
+  afterEach(async () => {
+    await teardownDb();
+  });
+
+  function legacyDb(): Database.Database {
+    const legacy = new Database(':memory:');
+    legacy.exec(`
+      CREATE TABLE swarm_sessions (
+        id TEXT PRIMARY KEY,
+        persona_id TEXT,
+        beacon_id TEXT NOT NULL,
+        createdAt INTEGER NOT NULL,
+        updatedAt INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active'
+      );
+      INSERT INTO swarm_sessions VALUES ('ss1', NULL, 'b1', 100, 200, 'active');
+      INSERT INTO swarm_sessions VALUES ('ss2', 'p1', 'b1', 300, 400, 'ended');
+    `);
+    return legacy;
+  }
+
+  it('adds status_changed_at and backfills it from updatedAt', () => {
+    const legacy = legacyDb();
+    migrateSwarmSessionColumns(legacy);
+
+    const rows = legacy
+      .prepare('SELECT id, updatedAt, status_changed_at FROM swarm_sessions')
+      .all() as Array<{
+      id: string;
+      updatedAt: number;
+      status_changed_at: number;
+    }>;
+    const ss1 = rows.find(r => r.id === 'ss1')!;
+    const ss2 = rows.find(r => r.id === 'ss2')!;
+    expect(ss1.status_changed_at).toBe(ss1.updatedAt);
+    expect(ss2.status_changed_at).toBe(ss2.updatedAt);
+    legacy.close();
+  });
+
+  it('is idempotent and does not change values on a second call', () => {
+    const legacy = legacyDb();
+    migrateSwarmSessionColumns(legacy);
+    const before = legacy
+      .prepare('SELECT id, status_changed_at FROM swarm_sessions ORDER BY id')
+      .all();
+    expect(() => migrateSwarmSessionColumns(legacy)).not.toThrow();
+    const after = legacy
+      .prepare('SELECT id, status_changed_at FROM swarm_sessions ORDER BY id')
+      .all();
+    expect(after).toEqual(before);
+    legacy.close();
+  });
+
+  it('runs no backfill on a fresh database where the column already exists', () => {
+    const db = getDatabase();
+    db.prepare(
+      "INSERT INTO swarm_sessions (id, persona_id, beacon_id, createdAt, updatedAt, status) VALUES ('fresh', NULL, 'b1', 1, 2, 'active')"
+    ).run();
+    // status_changed_at stays NULL because the migration does not run on an
+    // existing column; only createSwarmSession stamps new rows.
+    migrateSwarmSessionColumns(db);
+    const row = db
+      .prepare(
+        "SELECT status_changed_at FROM swarm_sessions WHERE id = 'fresh'"
+      )
+      .get() as { status_changed_at: number | null };
+    expect(row.status_changed_at).toBeNull();
   });
 });

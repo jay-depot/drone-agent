@@ -3,6 +3,7 @@ export {
   getDatabase,
   closeDatabase,
   makeBeaconPortOptional,
+  migrateSwarmSessionColumns,
 } from './init.js';
 export type { ToolDefinition } from './init.js';
 export {
