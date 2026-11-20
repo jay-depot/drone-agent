@@ -231,22 +231,6 @@ export function createSelectiveHeatForce(): D3SelectiveHeatForce {
   return force;
 }
 
-/**
- * Zoom scale fitting a bbox of the given graph-space size into a container
- * of the given pixel size, leaving `padding` px of margin.
- */
-function fitScale(
-  bboxW: number,
-  bboxH: number,
-  containerW: number,
-  containerH: number,
-  padding: number
-): number {
-  const availW = Math.max(containerW - padding * 2, 1);
-  const availH = Math.max(containerH - padding * 2, 1);
-  return Math.min(availW / Math.max(bboxW, 1), availH / Math.max(bboxH, 1));
-}
-
 function isDarkMode(): boolean {
   return document.documentElement.classList.contains('dark');
 }
@@ -1222,8 +1206,7 @@ export default function WikiGraphView({
     prevNodeCountRef.current = nodes.length;
   }, [nodes, edges, focusedNodeId]);
 
-  // Focus changes restyle via refs and move the camera; the data itself is
-  // untouched so the layout does not reheat.
+  // Focus changes restyle via refs; the shared zoom-to-fit rule owns the camera.
   useEffect(() => {
     const fg = handleRef.current;
     if (!fg) return;
@@ -1236,42 +1219,7 @@ export default function WikiGraphView({
     // pre-focus set can keep highlighted labels culled.
     computeShowdownsRef.current();
     repaintRef.current(fg);
-
-    if (focusedNodeId) {
-      // Fit the highlighted neighborhood (focus + 1-hop neighbors) into the
-      // viewport: not the whole graph, not an extreme close-up of one node.
-      const highlight = focusSetsRef.current;
-      if (highlight) {
-        const points = nodesRef.current
-          .filter(n => highlight.neighborIds.has(n.id))
-          .map(n => ({
-            x: (n as PositionedNode).x,
-            y: (n as PositionedNode).y,
-          }))
-          .filter(
-            (p): p is { x: number; y: number } =>
-              isFiniteNumber(p.x) && isFiniteNumber(p.y)
-          );
-        if (points.length > 0) {
-          const xs = points.map(p => p.x);
-          const ys = points.map(p => p.y);
-          const { width: cw, height: ch } = containerSizeRef.current;
-          const k = fitScale(
-            Math.max(...xs) - Math.min(...xs),
-            Math.max(...ys) - Math.min(...ys),
-            cw,
-            ch,
-            FIT_PADDING
-          );
-          fg.centerAt(
-            (Math.max(...xs) + Math.min(...xs)) / 2,
-            (Math.max(...ys) + Math.min(...ys)) / 2,
-            FIT_MS
-          );
-          fg.zoom(clamp(k, MIN_ZOOM_K, MAX_ZOOM_K), FIT_MS);
-        }
-      }
-    } else if (zoomToFitOnRef.current) {
+    if (!focusedNodeId && zoomToFitOnRef.current) {
       // Clear-focus refit only while zoom-to-fit is armed. Before the
       // simulation positions nodes the bbox is NaN and a fit would poison
       // the camera transform; skip until positions exist.

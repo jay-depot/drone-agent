@@ -737,7 +737,7 @@ describe('WikiGraphView', () => {
     expect(fitCalls()).toBe(1);
   });
 
-  it('moves the camera to the focused node and refits on clear', async () => {
+  it('does not apply a separate focus camera and only zooms to fit on clear', async () => {
     const user = userEvent.setup();
     const { rerender } = render(
       <WikiGraphView
@@ -749,6 +749,8 @@ describe('WikiGraphView', () => {
         forceGraphFactory={() => handle as unknown as ForceGraphHandle}
       />
     );
+    const fitCallsBeforeFocus =
+      (handle.zoomToFit as ReturnType<typeof vi.fn>).mock.calls.length;
 
     rerender(
       <WikiGraphView
@@ -761,18 +763,10 @@ describe('WikiGraphView', () => {
         forceGraphFactory={() => handle as unknown as ForceGraphHandle}
       />
     );
-    // Focus camera fits the highlighted NEIGHBORHOOD (focus + 1-hop), not a
-    // single-node close-up: centered on the neighbor bbox, zoomed to fit it.
-    expect(handle.centerAt).toHaveBeenCalledWith(
-      expect.any(Number),
-      expect.any(Number),
-      600
-    );
-    const zoomArg = (handle.zoom as ReturnType<typeof vi.fn>).mock.calls.at(
-      -1
-    )?.[0] as number;
-    expect(zoomArg).toBeGreaterThan(0);
-    expect(zoomArg).toBeLessThan(13.68);
+    expect(handle.centerAt).not.toHaveBeenCalled();
+    expect(
+      (handle.zoomToFit as ReturnType<typeof vi.fn>).mock.calls.length
+    ).toBe(fitCallsBeforeFocus);
 
     rerender(
       <WikiGraphView
