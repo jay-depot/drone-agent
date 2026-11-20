@@ -796,6 +796,8 @@ describe('WikiGraphView', () => {
         forceGraphFactory={() => handle as unknown as ForceGraphHandle}
       />
     );
+    const reheatCallsBeforeClear =
+      (handle.d3ReheatSimulation as ReturnType<typeof vi.fn>).mock.calls.length;
     expect(handle.centerAt).not.toHaveBeenCalled();
     expect(handle.zoomToFit).toHaveBeenCalledWith(600, 40);
 
@@ -808,6 +810,9 @@ describe('WikiGraphView', () => {
         onClearFocus={vi.fn()}
         forceGraphFactory={() => handle as unknown as ForceGraphHandle}
       />
+    );
+    expect(handle.d3ReheatSimulation).toHaveBeenCalledTimes(
+      reheatCallsBeforeClear + 1
     );
     expect(handle.zoomToFit).toHaveBeenCalledWith(600, 40);
 

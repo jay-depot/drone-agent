@@ -1079,6 +1079,7 @@ export default function WikiGraphView({
   useEffect(() => {
     const fg = handleRef.current;
     if (!fg) return;
+    const previousFocusedId = focusedIdRef.current;
     focusedIdRef.current = focusedNodeId ?? null;
     focusSetsRef.current = focusedNodeId
       ? buildFocusSets(edges, focusedNodeId)
@@ -1088,6 +1089,9 @@ export default function WikiGraphView({
     // pre-focus set can keep highlighted labels culled.
     computeShowdownsRef.current();
     repaintRef.current(fg);
+    if (previousFocusedId && !focusedNodeId) {
+      fg.d3ReheatSimulation();
+    }
     if (zoomToFitOnRef.current) {
       // Before the simulation positions nodes the bbox is NaN and a fit
       // would poison the camera transform; skip until positions exist.
