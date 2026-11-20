@@ -387,6 +387,53 @@ describe('buildAugmentedWikiGraph', () => {
 });
 
 describe('applySafetyCulledWikiGraph', () => {
+  it('shows direct and secondary link neighborhoods with tags for page focus', () => {
+    const graph = {
+      nodes: [
+        ...[
+          pageNode({ id: 'focus', title: 'Focus', tags: ['focus-tag'] }),
+          pageNode({ id: 'primary', title: 'Primary', tags: ['primary-tag'] }),
+          pageNode({ id: 'secondary', title: 'Secondary', tags: ['secondary-tag'] }),
+          pageNode({ id: 'outside', title: 'Outside', tags: ['outside-tag'] }),
+        ].map(node => ({ ...node, kind: 'page' as const, _val: 1 })),
+        ...[
+          pageNode({ id: 'tag:focus-tag', title: 'focus-tag', kind: 'tag' }),
+          pageNode({ id: 'tag:primary-tag', title: 'primary-tag', kind: 'tag' }),
+          pageNode({ id: 'tag:secondary-tag', title: 'secondary-tag', kind: 'tag' }),
+          pageNode({ id: 'tag:outside-tag', title: 'outside-tag', kind: 'tag' }),
+        ].map(node => ({ ...node, _val: 1 })),
+      ],
+      edges: [
+        { source: 'focus', target: 'primary', kind: 'link' as const },
+        { source: 'primary', target: 'secondary', kind: 'link' as const },
+        { source: 'outside', target: 'other', kind: 'link' as const },
+        { source: 'focus', target: 'tag:focus-tag', kind: 'tag' as const },
+        { source: 'primary', target: 'tag:primary-tag', kind: 'tag' as const },
+        { source: 'secondary', target: 'tag:secondary-tag', kind: 'tag' as const },
+        { source: 'outside', target: 'tag:outside-tag', kind: 'tag' as const },
+      ],
+    };
+    const result = applySafetyCulledWikiGraph(
+      graph.nodes,
+      graph.edges,
+      'focus'
+    );
+    const pages = result.nodes
+      .filter(node => node.kind === 'page')
+      .map(node => node.id);
+    expect(pages).toEqual(
+      expect.arrayContaining(['focus', 'primary', 'secondary'])
+    );
+    expect(pages).not.toContain('outside');
+    expect(result.nodes.map(node => node.id)).toEqual(
+      expect.arrayContaining([
+        'tag:focus-tag',
+        'tag:primary-tag',
+        'tag:secondary-tag',
+      ])
+    );
+  });
+
   it('caches repeated results for the same graph and focus', () => {
     const nodes = Array.from({ length: 600 }, (_, i) => ({
       ...pageNode({ id: `p${i}`, title: `Page ${i}` }),
