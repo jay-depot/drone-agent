@@ -8,7 +8,10 @@ import {
   WIKI_TAG_SPRING_STRENGTH,
 } from '@/lib/wiki-graph-utils';
 import { SHOWDOWN_RECOMPUTE_MS } from './wiki-graph';
-import WikiGraphView, { type ForceGraphHandle } from './wiki-graph';
+import WikiGraphView, {
+  createSelectiveHeatForce,
+  type ForceGraphHandle,
+} from './wiki-graph';
 
 function makeFakeHandle() {
   const handle = {} as ForceGraphHandle &
@@ -40,6 +43,10 @@ function makeFakeHandle() {
     'centerAt',
     'zoomToFit',
     'd3Force',
+    'd3AlphaDecay',
+    'd3VelocityDecay',
+    'd3ReheatSimulation',
+    'warmupTicks',
   ]) {
     handle[method] = vi.fn(chain);
   }
@@ -108,6 +115,28 @@ describe('WikiGraphView', () => {
     const calls = (handle[method] as ReturnType<typeof vi.fn>).mock.calls;
     return calls[callIndex]?.[0] as (...args: unknown[]) => unknown;
   };
+
+  it('configures a hot initial simulation and exposes focus-node selective heat', () => {
+    renderView();
+    expect(handle.d3AlphaDecay).toHaveBeenCalledWith(0.008);
+    expect(handle.d3VelocityDecay).toHaveBeenCalledWith(0.35);
+    expect(handle.warmupTicks).toHaveBeenCalledWith(120);
+    expect(handle.d3ReheatSimulation).toHaveBeenCalled();
+
+    const force = createSelectiveHeatForce();
+    const active = pageNode({ id: 'active', title: 'Active' });
+    const inactive = pageNode({ id: 'inactive', title: 'Inactive' });
+    const simulated = [
+      { ...active, x: 10, y: 10, vx: 0, vy: 0 },
+      { ...inactive, x: 20, y: 20, vx: 0, vy: 0 },
+    ];
+    force.initialize(simulated);
+    force.setActive(new Set(['active']), performance.now());
+    force(0.5);
+    expect(Math.hypot(simulated[0].vx, simulated[0].vy)).toBeGreaterThan(0);
+    expect(simulated[1].vx).toBe(0);
+    expect(simulated[1].vy).toBe(0);
+  });
 
   it('instantiates the graph and pushes data with the expected shape', () => {
     renderView();

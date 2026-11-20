@@ -64,6 +64,10 @@ export interface ForceGraphHandle {
   ): ForceGraphHandle;
   d3Force(forceName: string): unknown;
   d3Force(forceName: string, forceFn: unknown): ForceGraphHandle;
+  d3AlphaDecay(decay: number): ForceGraphHandle;
+  d3VelocityDecay(decay: number): ForceGraphHandle;
+  d3ReheatSimulation(): ForceGraphHandle;
+  warmupTicks(ticks: number): ForceGraphHandle;
   width(px: number): ForceGraphHandle;
   height(px: number): ForceGraphHandle;
   zoom(scale: number, durationMs?: number): ForceGraphHandle;
@@ -81,6 +85,11 @@ type D3ChargeForce = {
   strength(
     strength: number | ((node: AugmentedGraphNode) => number)
   ): D3ChargeForce;
+};
+type D3SelectiveHeatForce = {
+  (alpha: number): void;
+  initialize(nodes: SimNode[]): void;
+  setActive(ids: ReadonlySet<string>, now: number): void;
 };
 
 type PositionedNode = AugmentedGraphNode & {
@@ -149,6 +158,10 @@ const LOD_MIN_TOP_PAGE_COUNT = 24;
 const LOD_MAX_TOP_PAGE_COUNT = 128;
 const LOD_MIN_TOP_TAG_COUNT = 8;
 const LOD_MAX_TOP_TAG_COUNT = 32;
+const INITIAL_ALPHA_DECAY = 0.008;
+const INITIAL_VELOCITY_DECAY = 0.35;
+const INITIAL_WARMUP_TICKS = 120;
+const FOCUS_HEAT_MS = 900;
 
 /**
  * Engine-mutation isolation: force-graph's link parsing replaces string
@@ -182,6 +195,40 @@ function graphNodeLabel(node: AugmentedGraphNode): string {
   if (node.kind === 'tag') return `#${node.title}`;
   if (!node.exists) return `Missing page: ${node.id}`;
   return truncateGraphPageTitle(node.title);
+}
+
+export function createSelectiveHeatForce(): D3SelectiveHeatForce {
+  let nodes: SimNode[] = [];
+  let activeIds = new Set<string>();
+  let startedAt = 0;
+  const force = (alpha: number) => {
+    if (activeIds.size === 0) return;
+    if (performance.now() - startedAt >= FOCUS_HEAT_MS) {
+      activeIds = new Set();
+      return;
+    }
+    for (const node of nodes) {
+      if (!activeIds.has(node.id)) continue;
+      const hash = [...String(node.id)].reduce(
+        (value, char) => (value * 31 + char.charCodeAt(0)) >>> 0,
+        0
+      );
+      const angle =
+        (hash % 360) * (Math.PI / 180) +
+        ((node.x ?? 0) % 6.283185307179586);
+      const strength = alpha * 1.8;
+      node.vx = (node.vx ?? 0) + Math.cos(angle) * strength;
+      node.vy = (node.vy ?? 0) + Math.sin(angle) * strength;
+    }
+  };
+  force.initialize = (nextNodes: SimNode[]) => {
+    nodes = nextNodes;
+  };
+  force.setActive = (ids: ReadonlySet<string>, now: number) => {
+    activeIds = new Set(ids);
+    startedAt = now;
+  };
+  return force;
 }
 
 /**
@@ -425,6 +472,7 @@ export default function WikiGraphView({
   const repaintRef = useRef<(fg: ForceGraphHandle) => void>(() => {});
   /** Re-filters the tag-repulsion force against current ghost ids. */
   const syncGhostExclusionRef = useRef<() => void>(() => {});
+  const selectiveHeatRef = useRef<D3SelectiveHeatForce | null>(null);
 
   const measureLabelWidth = (label: string, fontSize: number): number => {
     const roundedSize = Math.round(fontSize * 10) / 10;
@@ -855,6 +903,12 @@ export default function WikiGraphView({
     if (chargeForce) {
       chargeForce.strength(WIKI_CHARGE_STRENGTH);
     }
+    fg.d3AlphaDecay(INITIAL_ALPHA_DECAY);
+    fg.d3VelocityDecay(INITIAL_VELOCITY_DECAY);
+    fg.warmupTicks(INITIAL_WARMUP_TICKS);
+    const selectiveHeatForce = createSelectiveHeatForce();
+    selectiveHeatRef.current = selectiveHeatForce;
+    fg.d3Force('selectiveHeat', selectiveHeatForce);
 
     // Cluster separation is tag↔tag-only (see createTagRepulsionForce); the
     // stock charge force repels tags from their own members, which expelled
@@ -1017,6 +1071,7 @@ export default function WikiGraphView({
       handleRef.current = null;
       repaintRef.current = () => {};
       zoomStylesRef.current = () => {};
+      selectiveHeatRef.current = null;
     };
   }, [forceGraphFactory]);
 
@@ -1140,6 +1195,14 @@ export default function WikiGraphView({
       }
     };
     assignLandingSpots();
+    if (focusedNodeId && addedIds.length > 0) {
+      selectiveHeatRef.current?.setActive(
+        new Set(addedIds.map(node => node.id)),
+        performance.now()
+      );
+    } else if (!focusedNodeId && prevNodeCountRef.current === null) {
+      fg.d3ReheatSimulation();
+    }
     settlingRef.current =
       !focusedNodeId &&
       prevNodeCountRef.current !== null &&
