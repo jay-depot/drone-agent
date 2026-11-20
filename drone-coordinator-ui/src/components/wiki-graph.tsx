@@ -148,16 +148,6 @@ const ZOOM_STEP = 1.3;
 const FIT_MS = 600;
 const FIT_PADDING = 40;
 const LABEL_WIDTH_CACHE_MAX = 12000;
-const LOD_FULL_DETAIL_ZOOM = 0.75;
-const LOD_FAR_ZOOM = 0.05;
-const LOD_FAR_MIN_SCREEN_RADIUS_PX = 6;
-const LOD_PAGE_COUNT_SCALE_START = 1000;
-const LOD_PAGE_COUNT_SCALE_MAX = 10000;
-const LOD_MAX_DENSITY_FACTOR = 2.5;
-const LOD_MIN_TOP_PAGE_COUNT = 24;
-const LOD_MAX_TOP_PAGE_COUNT = 128;
-const LOD_MIN_TOP_TAG_COUNT = 8;
-const LOD_MAX_TOP_TAG_COUNT = 32;
 const INITIAL_ALPHA_DECAY = 0.008;
 const INITIAL_VELOCITY_DECAY = 0.35;
 const INITIAL_WARMUP_TICKS = 120;
@@ -310,8 +300,6 @@ export default function WikiGraphView({
   const focusedIdRef = useRef<string | null>(focusedNodeId ?? null);
   const focusSetsRef = useRef<ReturnType<typeof buildFocusSets> | null>(null);
   const nodesRef = useRef<PositionedNode[]>([]);
-  const lodTopPageIdsRef = useRef<Set<string>>(new Set());
-  const lodTopTagIdsRef = useRef<Set<string>>(new Set());
   const nodesByIdRef = useRef(new Map<string, AugmentedGraphNode>());
   const prevNodeCountRef = useRef<number | null>(null);
   /**
@@ -361,90 +349,6 @@ export default function WikiGraphView({
     if (!focusedIdRef.current) return true;
     return focusSetsRef.current?.neighborIds.has(node.id) ?? false;
   };
-  const refreshLodTopPages = () => {
-    const pageCount = nodesRef.current.filter(
-      node => node.kind === 'page'
-    ).length;
-    const densityT = clamp(
-      (pageCount - LOD_PAGE_COUNT_SCALE_START) /
-        (LOD_PAGE_COUNT_SCALE_MAX - LOD_PAGE_COUNT_SCALE_START),
-      0,
-      1
-    );
-    const topCount = Math.round(
-      LOD_MIN_TOP_PAGE_COUNT +
-        (LOD_MAX_TOP_PAGE_COUNT - LOD_MIN_TOP_PAGE_COUNT) * densityT
-    );
-    lodTopPageIdsRef.current = new Set(
-      nodesRef.current
-        .filter(node => node.kind === 'page')
-        .sort(
-          (a, b) =>
-            (b._val ?? 0) - (a._val ?? 0) ||
-            a.id.localeCompare(b.id)
-        )
-        .slice(0, topCount)
-        .map(node => node.id)
-    );
-    const topTagCount = Math.round(
-      LOD_MIN_TOP_TAG_COUNT +
-        (LOD_MAX_TOP_TAG_COUNT - LOD_MIN_TOP_TAG_COUNT) * densityT
-    );
-    lodTopTagIdsRef.current = new Set(
-      nodesRef.current
-        .filter(node => node.kind === 'tag')
-        .sort(
-          (a, b) =>
-            (b._val ?? 0) - (a._val ?? 0) ||
-            a.id.localeCompare(b.id)
-        )
-        .slice(0, topTagCount)
-        .map(node => node.id)
-    );
-  };
-  const lodMinimumScreenRadius = (): number => {
-    const k = zoomRef.current.k;
-    if (!isFiniteNumber(k) || k >= LOD_FULL_DETAIL_ZOOM) return 0;
-    const pageCount = nodesRef.current.filter(
-      node => node.kind === 'page'
-    ).length;
-    const densityT = clamp(
-      (pageCount - LOD_PAGE_COUNT_SCALE_START) /
-        (LOD_PAGE_COUNT_SCALE_MAX - LOD_PAGE_COUNT_SCALE_START),
-      0,
-      1
-    );
-    const densityFactor =
-      1 + (LOD_MAX_DENSITY_FACTOR - 1) * densityT * densityT;
-    const t = clamp(
-      (k - LOD_FAR_ZOOM) / (LOD_FULL_DETAIL_ZOOM - LOD_FAR_ZOOM),
-      0,
-      1
-    );
-    const baseRadius =
-      1.5 + (LOD_FAR_MIN_SCREEN_RADIUS_PX - 1.5) * (1 - t);
-    return baseRadius * densityFactor;
-  };
-  const isNodeLodVisible = (node: AugmentedGraphNode): boolean => {
-    if (node.kind === 'tag') {
-      if (!isTagNodeVisible(node)) return false;
-      if (focusedIdRef.current === node.id) return true;
-      if (lodTopTagIdsRef.current.has(node.id)) return true;
-    }
-    if (focusedIdRef.current === node.id) return true;
-    if (
-      focusSetsRef.current &&
-      focusSetsRef.current.neighborIds.has(node.id)
-    ) {
-      return true;
-    }
-    if (lodTopPageIdsRef.current.has(node.id)) return true;
-    const minimumRadius = lodMinimumScreenRadius();
-    if (minimumRadius === 0) return true;
-    const screenRadius =
-      Math.sqrt(node._val ?? 1) * nodeRelSizeRef.current * zoomRef.current.k;
-    return screenRadius >= minimumRadius;
-  };
   const zoomStylesRef = useRef<(fg: ForceGraphHandle, k: number) => void>(
     () => {}
   );
@@ -492,7 +396,6 @@ export default function WikiGraphView({
         hasPositionedNode = true;
         const isTag = node.kind === 'tag';
         if (isTag && !isTagNodeVisible(node)) continue;
-        if (!isNodeLodVisible(node)) continue;
         const score = node._val ?? (isTag ? 0 : 1);
 
         const fontSize = Math.max(11 / k, 4);
@@ -607,7 +510,6 @@ export default function WikiGraphView({
       const dimmed =
         (focus !== null && !focus.neighborIds.has(node.id)) ||
         !nodePassesFilter(node.id);
-      if (!isNodeLodVisible(node)) return TRANSPARENT;
       if (node.kind === 'tag') {
         if (!isTagNodeVisible(node)) return TRANSPARENT;
         return dimmed ? TAG_DIM : theme.tagFill;
@@ -624,21 +526,8 @@ export default function WikiGraphView({
       if (link.kind === 'tag') {
         const tagNode = nodesByIdRef.current.get(edgeEndpointId(link.target));
         if (!tagNode || !isTagNodeVisible(tagNode)) return 0;
-        if (!isNodeLodVisible(tagNode)) return 0;
         if (!nodePassesFilter(tagNode.id)) return 0.05;
         return 0.5;
-      }
-      const sourceNode = nodesByIdRef.current.get(
-        edgeEndpointId(link.source)
-      );
-      const targetNode = nodesByIdRef.current.get(
-        edgeEndpointId(link.target)
-      );
-      if (
-        (sourceNode && !isNodeLodVisible(sourceNode)) ||
-        (targetNode && !isNodeLodVisible(targetNode))
-      ) {
-        return 0.05;
       }
       const filterDim =
         !nodePassesFilter(edgeEndpointId(link.source)) ||
@@ -655,24 +544,11 @@ export default function WikiGraphView({
       if (link.kind === 'tag') {
         const tagNode = nodesByIdRef.current.get(edgeEndpointId(link.target));
         if (!tagNode || !isTagNodeVisible(tagNode)) return TRANSPARENT;
-        if (!isNodeLodVisible(tagNode)) return TRANSPARENT;
         if (!nodePassesFilter(tagNode.id)) return theme.dimLink;
         const focus = focusSetsRef.current;
         if (focus && focus.touchingEdgeKeys.has(edgeKey(link)))
           return TAG_EDGE_LIT;
         return TAG_EDGE;
-      }
-      const sourceNode = nodesByIdRef.current.get(
-        edgeEndpointId(link.source)
-      );
-      const targetNode = nodesByIdRef.current.get(
-        edgeEndpointId(link.target)
-      );
-      if (
-        (sourceNode && !isNodeLodVisible(sourceNode)) ||
-        (targetNode && !isNodeLodVisible(targetNode))
-      ) {
-        return TRANSPARENT;
       }
       const filterDim =
         !nodePassesFilter(edgeEndpointId(link.source)) ||
@@ -695,7 +571,6 @@ export default function WikiGraphView({
     const nodeValAccessor = (node: AugmentedGraphNode): number => {
       const base = node._val ?? 1;
       if (node.kind === 'tag' && !isTagNodeVisible(node)) return base * 0.05;
-      if (!isNodeLodVisible(node)) return 0.01;
       const now = performance.now();
       // Removed nodes shrink away; new nodes grow in from their landing.
       const fade = fadeFractionRef.current(node.id, now);
@@ -706,7 +581,6 @@ export default function WikiGraphView({
     };
 
     const nodeLabelAccessor = (node: AugmentedGraphNode): string => {
-      if (!isNodeLodVisible(node)) return '';
       if (node.kind === 'tag') {
         return isTagNodeVisible(node) ? `#${node.title}` : '';
       }
@@ -720,7 +594,6 @@ export default function WikiGraphView({
     ) => {
       const positioned = node as PositionedNode;
       if (positioned.x === undefined || positioned.y === undefined) return;
-      if (!isNodeLodVisible(node)) return;
       const focus = focusSetsRef.current;
       const dimmed =
         (focus !== null && !focus.neighborIds.has(node.id)) ||
@@ -769,7 +642,6 @@ export default function WikiGraphView({
       for (const node of nodesRef.current) {
         const positioned = node as PositionedNode;
         if (positioned.x === undefined || positioned.y === undefined) continue;
-        if (!isNodeLodVisible(node)) continue;
         const focus = focusSetsRef.current;
         const dimmed =
           (focus !== null && !focus.neighborIds.has(node.id)) ||
@@ -1084,7 +956,6 @@ export default function WikiGraphView({
       }
     }
     nodesRef.current = nodes;
-    refreshLodTopPages();
     nodesByIdRef.current = new Map(nodes.map(n => [n.id, n]));
     tagMemberCountsRef.current = new Map();
     deadLinksBySourceRef.current = new Map();
