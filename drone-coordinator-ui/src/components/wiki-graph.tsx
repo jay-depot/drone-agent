@@ -1226,21 +1226,32 @@ export default function WikiGraphView({
           );
     const timers: number[] = [];
     const interval = NODE_INSERTION_MS;
+    const pageQueue = newIds.filter(node => node.kind === 'page');
+    const tagQueue = newIds.filter(node => node.kind === 'tag');
+    const cycleCount = Math.max(pageQueue.length, tagQueue.length);
     pendingInsertionDurationRef.current =
-      newIds.length > 0 ? newIds.length * interval : 0;
-    newIds.forEach((node, index) => {
+      cycleCount > 0 ? cycleCount * interval : 0;
+    for (let cycle = 0; cycle < cycleCount; cycle++) {
+      const batch = [
+        pageQueue[cycle],
+        tagQueue[cycle],
+      ].filter(
+        (node): node is AugmentedGraphNode => node !== undefined
+      );
       const timer = window.setTimeout(() => {
         if (graphRevisionRef.current !== revision) return;
-        insertionRevealRef.current.add(node.id);
+        for (const node of batch) {
+          insertionRevealRef.current.add(node.id);
+        }
         repaintRef.current(fg);
         syncGhostExclusionRef.current();
         computeShowdownsRef.current();
-        if (index === newIds.length - 1) {
+        if (cycle === cycleCount - 1) {
           fg.d3ReheatSimulation();
         }
-      }, Math.round(interval * (index + 1)));
+      }, interval * (cycle + 1));
       timers.push(timer);
-    });
+    }
     insertionTimersRef.current = timers;
     prevNodeCountRef.current = nodes.length;
   }, [nodes, edges, focusedNodeId]);

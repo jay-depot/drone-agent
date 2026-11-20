@@ -138,7 +138,7 @@ describe('WikiGraphView', () => {
     expect(simulated[1].vy).toBe(0);
   });
 
-  it('trickles newly inserted nodes every 200ms and aborts on focus change', async () => {
+  it('trickles a page and tag together every 200ms and aborts on focus change', async () => {
     vi.useFakeTimers();
     const initial = [
       pageNode({ id: 'a', title: 'A', x: 0, y: 0 }),
@@ -147,6 +147,18 @@ describe('WikiGraphView', () => {
       ...initial,
       pageNode({ id: 'b', title: 'B' }),
       pageNode({ id: 'c', title: 'C' }),
+      pageNode({
+        id: 'tag:x',
+        title: 'x',
+        kind: 'tag',
+        tags: ['x'],
+      }),
+      pageNode({
+        id: 'tag:y',
+        title: 'y',
+        kind: 'tag',
+        tags: ['y'],
+      }),
     ];
     const graphProps = {
       edges: [],
@@ -160,7 +172,20 @@ describe('WikiGraphView', () => {
     );
     rerender(<WikiGraphView {...graphProps} nodes={grown} />);
 
-    await vi.advanceTimersByTimeAsync(900);
+    const colorAccessor = accessorFrom('nodeColor') as (
+      node: AugmentedGraphNode
+    ) => string;
+    expect(colorAccessor(grown[1])).toBe('rgba(0, 0, 0, 0)');
+    expect(colorAccessor(grown[3])).toBe('rgba(0, 0, 0, 0)');
+
+    await vi.advanceTimersByTimeAsync(200);
+    expect(colorAccessor(grown[1])).toBe('#2563eb');
+    expect(colorAccessor(grown[3])).not.toBe('rgba(0, 0, 0, 0)');
+
+    await vi.advanceTimersByTimeAsync(200);
+    expect(colorAccessor(grown[2])).toBe('#2563eb');
+    expect(colorAccessor(grown[4])).not.toBe('rgba(0, 0, 0, 0)');
+
     rerender(
       <WikiGraphView
         {...graphProps}
