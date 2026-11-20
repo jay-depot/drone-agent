@@ -68,6 +68,8 @@ export interface ForceGraphHandle {
   d3VelocityDecay(decay: number): ForceGraphHandle;
   d3ReheatSimulation(): ForceGraphHandle;
   warmupTicks(ticks: number): ForceGraphHandle;
+  pauseAnimation(): ForceGraphHandle;
+  resumeAnimation(): ForceGraphHandle;
   width(px: number): ForceGraphHandle;
   height(px: number): ForceGraphHandle;
   zoom(scale: number, durationMs?: number): ForceGraphHandle;
@@ -1037,8 +1039,35 @@ export default function WikiGraphView({
           positioned.x = focusX + (Math.random() - 0.5) * 80;
           positioned.y = focusY + (Math.random() - 0.5) * 80;
         } else {
-          positioned.x = cx + (Math.random() - 0.5) * halfW * 1.2;
-          positioned.y = cy + (Math.random() - 0.5) * halfH * 1.2;
+          const connectedIds = new Set<string>();
+          for (const edge of edges) {
+            if (edge.kind === 'link' || edge.kind === 'tag') {
+              if (edge.source === node.id) connectedIds.add(edge.target);
+              if (edge.target === node.id) connectedIds.add(edge.source);
+            }
+          }
+          const neighbor = [...connectedIds]
+            .map(id => previousNodesById.get(id))
+            .find(
+              candidate =>
+                candidate &&
+                isFiniteNumber(candidate.x) &&
+                isFiniteNumber(candidate.y)
+            );
+          if (neighbor) {
+            const hash = [...node.id].reduce(
+              (value, char) => (value * 31 + char.charCodeAt(0)) >>> 0,
+              0
+            );
+            const angle =
+              (hash % 360) * (Math.PI / 180);
+            const radius = 35 + (hash % 40);
+            positioned.x = neighbor.x! + Math.cos(angle) * radius;
+            positioned.y = neighbor.y! + Math.sin(angle) * radius;
+          } else {
+            positioned.x = cx + (Math.random() - 0.5) * halfW * 1.2;
+            positioned.y = cy + (Math.random() - 0.5) * halfH * 1.2;
+          }
         }
         positioned.vx = 0;
         positioned.vy = 0;
@@ -1068,10 +1097,15 @@ export default function WikiGraphView({
     const orderedNodes = [...nodes].sort(
       (a, b) => (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
     );
+    fg.pauseAnimation();
     fg.graphData({ nodes: orderedNodes, links: toEngineLinks(edges) });
     syncGhostExclusionRef.current();
     computeShowdownsRef.current();
     zoomStylesRef.current(fg, zoomRef.current.k);
+    window.requestAnimationFrame(() => {
+      fg.resumeAnimation();
+      fg.d3ReheatSimulation();
+    });
     prevNodeCountRef.current = nodes.length;
   }, [nodes, edges, focusedNodeId]);
 

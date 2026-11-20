@@ -48,7 +48,11 @@ export default function WikiPage() {
   const { pages, setPages, loading, error } = useWikiPages();
   const { filters, sort, setFilters, setSort, clearFilters } =
     useWikiFilterState();
-  const { graph, error: graphError } = useWikiGraph(graphView);
+  const {
+    graph,
+    loading: graphLoading,
+    error: graphError,
+  } = useWikiGraph(graphView);
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<WikiPageMeta[] | null>(
     null
@@ -267,6 +271,17 @@ export default function WikiPage() {
 
       {graphView ? (
         <div className="relative flex flex-1 min-h-0">
+          {graphLoading && (
+            <div
+              className="absolute inset-0 z-30 flex items-center justify-center bg-background/50"
+              data-testid="wiki-graph-loading"
+            >
+              <div className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm text-muted-foreground shadow-sm">
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                Loading graph…
+              </div>
+            </div>
+          )}
           {focusedNode && (
             <aside className="absolute left-4 top-4 z-20 w-80 rounded-md border p-4 bg-card shadow-lg">
               <div className="flex items-center justify-between">

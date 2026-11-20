@@ -281,6 +281,34 @@ describe('WikiPage graph view', () => {
       return notFound;
     });
 
+  it('shows a loading indicator while the graph fetch is pending', async () => {
+    let resolveGraph!: (value: Response) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/wiki/graph') {
+          return new Promise<Response>(resolve => {
+            resolveGraph = resolve;
+          });
+        }
+        if (url === '/api/wiki') return Promise.resolve(ok([metaPage({ id: 'a' })]));
+        return Promise.resolve(notFound);
+      })
+    );
+
+    renderWiki(['/wiki?view=graph']);
+    expect(await screen.findByTestId('wiki-graph-loading')).toBeTruthy();
+
+    await act(async () => {
+      resolveGraph(
+        new Response(JSON.stringify(graph), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+    });
+  });
+
   it('renders the graph in ?view=graph and toggles back to the list', async () => {
     vi.stubGlobal('fetch', graphFetch());
 

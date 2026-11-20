@@ -47,6 +47,8 @@ function makeFakeHandle() {
     'd3VelocityDecay',
     'd3ReheatSimulation',
     'warmupTicks',
+    'pauseAnimation',
+    'resumeAnimation',
   ]) {
     handle[method] = vi.fn(chain);
   }
@@ -136,6 +138,12 @@ describe('WikiGraphView', () => {
     expect(Math.hypot(simulated[0].vx, simulated[0].vy)).toBeGreaterThan(0);
     expect(simulated[1].vx).toBe(0);
     expect(simulated[1].vy).toBe(0);
+  });
+
+  it('pauses and resumes the engine around graph data pushes', () => {
+    renderView();
+    expect(handle.pauseAnimation).toHaveBeenCalled();
+    expect(handle.graphData).toHaveBeenCalled();
   });
 
   it('instantiates the graph and pushes data with the expected shape', () => {
