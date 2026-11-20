@@ -737,7 +737,7 @@ describe('WikiGraphView', () => {
     expect(fitCalls()).toBe(1);
   });
 
-  it('does not apply a separate focus camera and only zooms to fit on clear', async () => {
+  it('uses the shared auto-fit camera for focus and clear', async () => {
     const user = userEvent.setup();
     const { rerender } = render(
       <WikiGraphView
@@ -749,9 +749,6 @@ describe('WikiGraphView', () => {
         forceGraphFactory={() => handle as unknown as ForceGraphHandle}
       />
     );
-    const fitCallsBeforeFocus =
-      (handle.zoomToFit as ReturnType<typeof vi.fn>).mock.calls.length;
-
     rerender(
       <WikiGraphView
         nodes={nodes}
@@ -764,9 +761,7 @@ describe('WikiGraphView', () => {
       />
     );
     expect(handle.centerAt).not.toHaveBeenCalled();
-    expect(
-      (handle.zoomToFit as ReturnType<typeof vi.fn>).mock.calls.length
-    ).toBe(fitCallsBeforeFocus);
+    expect(handle.zoomToFit).toHaveBeenCalledWith(600, 40);
 
     rerender(
       <WikiGraphView

@@ -860,7 +860,7 @@ export default function WikiGraphView({
           syncGhostExclusionRef.current();
           if (driftingRef.current.size === 0 && fadingRef.current.size === 0) {
             settlingRef.current = false;
-            if (zoomToFitOnRef.current && !focusedIdRef.current) {
+            if (zoomToFitOnRef.current) {
               fg.zoomToFit(FIT_MS, FIT_PADDING);
             }
           }
@@ -873,7 +873,7 @@ export default function WikiGraphView({
       .onEngineStop(() => {
         computeShowdownsRef.current();
         if (settlingRef.current) return;
-        if (zoomToFitOnRef.current && !focusedIdRef.current) {
+        if (zoomToFitOnRef.current) {
           if (
             nodesRef.current.some(
               n => isFiniteNumber(n.x) && isFiniteNumber(n.y)
@@ -1090,10 +1090,9 @@ export default function WikiGraphView({
     // pre-focus set can keep highlighted labels culled.
     computeShowdownsRef.current();
     repaintRef.current(fg);
-    if (!focusedNodeId && zoomToFitOnRef.current) {
-      // Clear-focus refit only while zoom-to-fit is armed. Before the
-      // simulation positions nodes the bbox is NaN and a fit would poison
-      // the camera transform; skip until positions exist.
+    if (zoomToFitOnRef.current) {
+      // Before the simulation positions nodes the bbox is NaN and a fit
+      // would poison the camera transform; skip until positions exist.
       const positioned = nodesRef.current.some(
         n => isFiniteNumber(n.x) && isFiniteNumber(n.y)
       );
