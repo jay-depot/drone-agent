@@ -154,7 +154,7 @@ const INITIAL_ALPHA_DECAY = 0.008;
 const INITIAL_VELOCITY_DECAY = 0.35;
 const INITIAL_WARMUP_TICKS = 120;
 const FOCUS_HEAT_MS = 900;
-const NODE_INSERTION_MS = 50;
+const NODE_INSERTION_MS = 100;
 const FOCUS_CENTER_MS = 350;
 const FOCUS_SETTLE_MS = 600;
 
@@ -1329,13 +1329,16 @@ export default function WikiGraphView({
     const interval = NODE_INSERTION_MS;
     const pageQueue = newIds.filter(node => node.kind === 'page');
     const tagQueue = newIds.filter(node => node.kind === 'tag');
-    const cycleCount = Math.max(pageQueue.length, tagQueue.length);
+    const cycleCount = Math.max(
+      pageQueue.length,
+      Math.ceil(tagQueue.length / 3)
+    );
     pendingInsertionDurationRef.current =
       cycleCount > 0 ? cycleCount * interval : 0;
     for (let cycle = 0; cycle < cycleCount; cycle++) {
       const batch = [
         pageQueue[cycle],
-        tagQueue[cycle],
+        ...tagQueue.slice(cycle * 3, cycle * 3 + 3),
       ].filter(
         (node): node is AugmentedGraphNode => node !== undefined
       );

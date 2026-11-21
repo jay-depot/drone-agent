@@ -190,7 +190,7 @@ describe('WikiGraphView', () => {
     expect(strengthAccessor(removedNode)).toBe(0);
   });
 
-  it('trickles a page and tag together every 50ms and aborts on focus change', async () => {
+  it('trickles one page and up to three tags every 100ms and aborts on focus change', async () => {
     vi.useFakeTimers();
     try {
       const initial = [
@@ -211,6 +211,12 @@ describe('WikiGraphView', () => {
           title: 'y',
           kind: 'tag',
           tags: ['y'],
+        }),
+        pageNode({
+          id: 'tag:z',
+          title: 'z',
+          kind: 'tag',
+          tags: ['z'],
         }),
       ];
       const graphProps = {
@@ -235,7 +241,7 @@ describe('WikiGraphView', () => {
       ).mock.calls.at(-1)?.[0] as { nodes: AugmentedGraphNode[] };
       expect(pushedBeforeInsert.nodes.map(node => node.id).sort()).toEqual(['a']);
 
-      await vi.advanceTimersByTimeAsync(50);
+      await vi.advanceTimersByTimeAsync(100);
       expect(colorAccessor(grown[1])).toBe('#2563eb');
       expect(colorAccessor(grown[3])).not.toBe('rgba(0, 0, 0, 0)');
       const pushedAfterFirstInsert = (
@@ -245,11 +251,13 @@ describe('WikiGraphView', () => {
         'a',
         'b',
         'tag:x',
+        'tag:y',
+        'tag:z',
       ]);
 
-      await vi.advanceTimersByTimeAsync(50);
+      await vi.advanceTimersByTimeAsync(100);
       expect(colorAccessor(grown[2])).toBe('#2563eb');
-      expect(colorAccessor(grown[4])).not.toBe('rgba(0, 0, 0, 0)');
+      expect(colorAccessor(grown[5])).not.toBe('rgba(0, 0, 0, 0)');
       const pushedAfterSecondInsert = (
         handle.graphData as ReturnType<typeof vi.fn>
       ).mock.calls.at(-1)?.[0] as { nodes: AugmentedGraphNode[] };
@@ -259,6 +267,7 @@ describe('WikiGraphView', () => {
         'c',
         'tag:x',
         'tag:y',
+        'tag:z',
       ]);
 
       rerender(
@@ -1493,7 +1502,7 @@ describe('WikiGraphView', () => {
           forceGraphFactory={() => handle as unknown as ForceGraphHandle}
         />
       );
-      vi.advanceTimersByTime(50);
+      vi.advanceTimersByTime(100);
       const pushed = (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.at(
         -1
       )![0] as { nodes: Array<{ id: string; x?: number; y?: number }> };
