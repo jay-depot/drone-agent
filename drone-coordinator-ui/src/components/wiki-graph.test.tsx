@@ -47,6 +47,8 @@ function makeFakeHandle() {
     'd3AlphaDecay',
     'd3VelocityDecay',
     'd3ReheatSimulation',
+    'pauseAnimation',
+    'resumeAnimation',
     'warmupTicks',
   ]) {
     handle[method] = vi.fn(chain);
@@ -275,6 +277,35 @@ describe('WikiGraphView', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('pauses and resumes animation around working-graph mutations', () => {
+    const initial = [pageNode({ id: 'a', title: 'A', x: 0, y: 0 })];
+    const grown = [
+      ...initial,
+      pageNode({ id: 'b', title: 'B' }),
+      pageNode({ id: 'tag:x', title: 'x', kind: 'tag', tags: ['x'] }),
+    ];
+    const graphProps = {
+      edges: [],
+      tagsVisible: true,
+      onNodeFocus: vi.fn(),
+      onClearFocus: vi.fn(),
+      forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+    };
+    const { rerender } = render(<WikiGraphView {...graphProps} nodes={initial} />);
+
+    rerender(<WikiGraphView {...graphProps} nodes={grown} />);
+
+    expect(handle.pauseAnimation).toHaveBeenCalled();
+    expect(handle.resumeAnimation).toHaveBeenCalled();
+    const pauseOrder = (
+      handle.pauseAnimation as ReturnType<typeof vi.fn>
+    ).mock.invocationCallOrder.at(-1)!;
+    const resumeOrder = (
+      handle.resumeAnimation as ReturnType<typeof vi.fn>
+    ).mock.invocationCallOrder.at(-1)!;
+    expect(pauseOrder).toBeLessThan(resumeOrder);
   });
 
   it('instantiates the graph and pushes data with the expected shape', () => {

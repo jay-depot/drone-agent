@@ -67,6 +67,8 @@ export interface ForceGraphHandle {
   d3AlphaDecay(decay: number): ForceGraphHandle;
   d3VelocityDecay(decay: number): ForceGraphHandle;
   d3ReheatSimulation(): ForceGraphHandle;
+  pauseAnimation(): ForceGraphHandle;
+  resumeAnimation(): ForceGraphHandle;
   warmupTicks(ticks: number): ForceGraphHandle;
   width(px: number): ForceGraphHandle;
   height(px: number): ForceGraphHandle;
@@ -861,6 +863,7 @@ export default function WikiGraphView({
     };
     repaintRef.current = repaint;
     const syncGraphData = (handle: ForceGraphHandle) => {
+      handle.pauseAnimation();
       const activeIds = insertionRevealRef.current;
       const orderedNodes = nodesRef.current
         .filter(node => activeIds.has(node.id))
@@ -895,6 +898,7 @@ export default function WikiGraphView({
         ),
         links,
       });
+      handle.resumeAnimation();
     };
     syncGraphDataRef.current = syncGraphData;
     const applySize = () => {
