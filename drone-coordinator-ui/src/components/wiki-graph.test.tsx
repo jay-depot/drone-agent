@@ -188,7 +188,7 @@ describe('WikiGraphView', () => {
     expect(strengthAccessor(removedNode)).toBe(0);
   });
 
-  it('trickles a page and tag together every 200ms and aborts on focus change', async () => {
+  it('trickles a page and tag together every 50ms and aborts on focus change', async () => {
     vi.useFakeTimers();
     try {
       const initial = [
@@ -233,7 +233,7 @@ describe('WikiGraphView', () => {
       ).mock.calls.at(-1)?.[0] as { nodes: AugmentedGraphNode[] };
       expect(pushedBeforeInsert.nodes.map(node => node.id).sort()).toEqual(['a']);
 
-      await vi.advanceTimersByTimeAsync(200);
+      await vi.advanceTimersByTimeAsync(50);
       expect(colorAccessor(grown[1])).toBe('#2563eb');
       expect(colorAccessor(grown[3])).not.toBe('rgba(0, 0, 0, 0)');
       const pushedAfterFirstInsert = (
@@ -245,7 +245,7 @@ describe('WikiGraphView', () => {
         'tag:x',
       ]);
 
-      await vi.advanceTimersByTimeAsync(200);
+      await vi.advanceTimersByTimeAsync(50);
       expect(colorAccessor(grown[2])).toBe('#2563eb');
       expect(colorAccessor(grown[4])).not.toBe('rgba(0, 0, 0, 0)');
       const pushedAfterSecondInsert = (
@@ -1460,7 +1460,7 @@ describe('WikiGraphView', () => {
           forceGraphFactory={() => handle as unknown as ForceGraphHandle}
         />
       );
-      vi.advanceTimersByTime(200);
+      vi.advanceTimersByTime(50);
       const pushed = (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.at(
         -1
       )![0] as { nodes: Array<{ id: string; x?: number; y?: number }> };

@@ -152,7 +152,7 @@ const INITIAL_ALPHA_DECAY = 0.008;
 const INITIAL_VELOCITY_DECAY = 0.35;
 const INITIAL_WARMUP_TICKS = 120;
 const FOCUS_HEAT_MS = 900;
-const NODE_INSERTION_MS = 200;
+const NODE_INSERTION_MS = 50;
 const FOCUS_CENTER_MS = 350;
 const FOCUS_SETTLE_MS = 600;
 
@@ -254,7 +254,7 @@ export const SHOWDOWN_RECOMPUTE_MS = 100;
 const DRIFT_MS = 2000;
 const DRIFT_START_FRACTION = 0.03;
 /** Removed-node fade-out duration. */
-const FADE_MS = 600;
+const FADE_MS = 300;
 /** Approximate per-character width when no 2D context exists (tests/jsdom). */
 const FALLBACK_CHAR_WIDTH = 0.6;
 /**
