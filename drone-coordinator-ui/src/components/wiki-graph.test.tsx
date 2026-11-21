@@ -299,6 +299,8 @@ describe('WikiGraphView', () => {
 
     expect(handle.pauseAnimation).toHaveBeenCalled();
     expect(handle.resumeAnimation).toHaveBeenCalled();
+    expect(handle.warmupTicks).toHaveBeenCalledWith(0);
+    expect(handle.warmupTicks).toHaveBeenCalledWith(120);
     const pauseOrder = (
       handle.pauseAnimation as ReturnType<typeof vi.fn>
     ).mock.invocationCallOrder.at(-1)!;

@@ -890,7 +890,10 @@ export default function WikiGraphView({
           renderedNodeIds.has(edgeEndpointId(edge.source)) &&
           renderedNodeIds.has(edgeEndpointId(edge.target))
         ) {
-          workingEdges.set(edgeKey(edge), edge);
+          const key = edgeKey(edge);
+          fadingEdgesRef.current.delete(key);
+          fadingEdgeRecordsRef.current.delete(key);
+          workingEdges.set(key, edge);
         }
       }
       for (const [key, edge] of fadingEdgeRecordsRef.current) {
@@ -922,12 +925,16 @@ export default function WikiGraphView({
         return clone;
         });
       handle.pauseAnimation();
-      handle.graphData({
-        nodes: [...orderedNodes, ...ghostNodes].sort(
-          (a, b) => (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
-        ),
-        links,
-      });
+        handle.warmupTicks(0);
+        handle
+          .graphData({
+            nodes: [...orderedNodes, ...ghostNodes].sort(
+              (a, b) =>
+                (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
+            ),
+            links,
+          });
+        handle.warmupTicks(INITIAL_WARMUP_TICKS);
       handle.resumeAnimation();
       workingGraphSignatureRef.current = signature;
     };
@@ -1130,6 +1137,11 @@ export default function WikiGraphView({
     const now = performance.now();
     for (const edge of previousEdges) {
       const key = edgeKey(edge);
+      if (nextEdgeKeys.has(key)) {
+        fadingEdgesRef.current.delete(key);
+        fadingEdgeRecordsRef.current.delete(key);
+        continue;
+      }
       if (!nextEdgeKeys.has(key)) {
         fadingEdgesRef.current.set(key, now);
         fadingEdgeRecordsRef.current.set(key, edge);
