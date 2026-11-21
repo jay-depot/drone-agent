@@ -350,6 +350,7 @@ export default function WikiGraphView({
   const driftingRef = useRef(new Map<string, number>());
   /** Removed node ids fading out: id -> removal timestamp. */
   const fadingRef = useRef(new Map<string, number>());
+  const ghostNodesRef = useRef(new Map<string, PositionedNode>());
   /** True while any node is drifting or fading — suppresses reactive fits. */
   const settlingRef = useRef(false);
   const insertionRevealRef = useRef<Set<string>>(new Set());
@@ -359,6 +360,7 @@ export default function WikiGraphView({
   const focusTransitionActiveRef = useRef(false);
   const autoFitTimerRef = useRef<number | null>(null);
   const fadingEdgesRef = useRef(new Map<string, number>());
+  const fadingEdgeRecordsRef = useRef(new Map<string, AugmentedGraphEdge>());
   const emergingEdgesRef = useRef(new Map<string, number>());
 
   // Set by the mount effect so later effects can restyle without re-running
@@ -401,6 +403,7 @@ export default function WikiGraphView({
     return clamp(fraction, 0, 1);
   };
   const repaintRef = useRef<(fg: ForceGraphHandle) => void>(() => {});
+  const syncGraphDataRef = useRef<(fg: ForceGraphHandle) => void>(() => {});
   /** Re-filters the tag-repulsion force against current ghost ids. */
   const syncGhostExclusionRef = useRef<() => void>(() => {});
   const selectiveHeatRef = useRef<D3SelectiveHeatForce | null>(null);
@@ -810,7 +813,14 @@ export default function WikiGraphView({
     }
     const chargeForce = fg.d3Force('charge') as D3ChargeForce | undefined;
     if (chargeForce) {
-      chargeForce.strength(WIKI_CHARGE_STRENGTH);
+      // Transition ghosts and not-yet-revealed inserts are still present in
+      // graphData for visual continuity, but must not repel active nodes.
+      chargeForce.strength(node => {
+        if (!insertionRevealRef.current.has(node.id)) return 0;
+        if (fadingRef.current.has(node.id)) return 0;
+        if (node.kind === 'tag' && !isTagNodeVisible(node)) return 0;
+        return WIKI_CHARGE_STRENGTH;
+      });
     }
     fg.d3AlphaDecay(INITIAL_ALPHA_DECAY);
     fg.d3VelocityDecay(INITIAL_VELOCITY_DECAY);
@@ -831,7 +841,16 @@ export default function WikiGraphView({
       tagRepulsionForce.setExcluded(new Set(fadingRef.current.keys()));
       // initialize() re-runs on the next graphData push; force a re-filter
       // now so exclusions apply to the current node set immediately.
-      tagRepulsionForce.initialize(nodesRef.current as SimNode[]);
+      const activeIds = insertionRevealRef.current;
+      const activeNodes = nodesRef.current.filter(node =>
+        activeIds.has(node.id)
+      );
+      const ghostNodes = [...fadingRef.current.keys()]
+        .map(id => ghostNodesRef.current.get(id))
+        .filter((node): node is PositionedNode => node !== undefined);
+      tagRepulsionForce.initialize(
+        [...activeNodes, ...ghostNodes] as SimNode[]
+      );
     };
     syncGhostExclusionRef.current = syncGhostExclusion;
 
@@ -841,7 +860,43 @@ export default function WikiGraphView({
       fg.nodeRelSize(nodeRelSizeRef.current);
     };
     repaintRef.current = repaint;
-
+    const syncGraphData = (handle: ForceGraphHandle) => {
+      const activeIds = insertionRevealRef.current;
+      const orderedNodes = nodesRef.current
+        .filter(node => activeIds.has(node.id))
+        .sort(
+          (a, b) => (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
+        );
+      const ghostNodes = [...fadingRef.current.keys()]
+        .map(id => ghostNodesRef.current.get(id))
+        .filter(
+          (node): node is PositionedNode =>
+            node !== undefined &&
+            isFiniteNumber(node.x) &&
+            isFiniteNumber(node.y) &&
+            !activeIds.has(node.id)
+        );
+      const renderedNodeIds = new Set<string>([
+        ...orderedNodes.map(node => node.id),
+        ...ghostNodes.map(node => node.id),
+      ]);
+      const currentEdges = edgesRef.current.filter(
+        edge =>
+          renderedNodeIds.has(edgeEndpointId(edge.source)) &&
+          renderedNodeIds.has(edgeEndpointId(edge.target))
+      );
+      const fadingEdges = [...fadingEdgeRecordsRef.current.entries()]
+        .filter(([key]) => fadingEdgesRef.current.has(key))
+        .map(([, edge]) => edge);
+      const links = toEngineLinks([...currentEdges, ...fadingEdges]);
+      handle.graphData({
+        nodes: [...orderedNodes, ...ghostNodes].sort(
+          (a, b) => (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
+        ),
+        links,
+      });
+    };
+    syncGraphDataRef.current = syncGraphData;
     const applySize = () => {
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
@@ -906,12 +961,19 @@ export default function WikiGraphView({
         // Settle bookkeeping: ghosts fade on a clock; drift ends via the
         // fraction helpers. When nothing is animating, clear the flag and
         // do the deferred fit once.
+        let fadedGhostPruned = false;
         for (const [ghostId, startedAt] of fadingRef.current) {
-          if (now - startedAt > FADE_MS) fadingRef.current.delete(ghostId);
+          if (now - startedAt > FADE_MS) {
+            fadingRef.current.delete(ghostId);
+            ghostNodesRef.current.delete(ghostId);
+            fadedGhostPruned = true;
+          }
         }
         for (const [edgeKey, startedAt] of fadingEdgesRef.current) {
           if (now - startedAt > FADE_MS) {
             fadingEdgesRef.current.delete(edgeKey);
+            fadingEdgeRecordsRef.current.delete(edgeKey);
+            fadedGhostPruned = true;
           }
         }
         for (const [edgeKey, startedAt] of emergingEdgesRef.current) {
@@ -927,6 +989,10 @@ export default function WikiGraphView({
               fg.zoomToFit(FIT_MS, FIT_PADDING);
             }
           }
+        }
+        if (fadedGhostPruned) {
+          syncGhostExclusionRef.current();
+          syncGraphDataRef.current(fg);
         }
         if (now >= nextTickComputeAtRef.current) {
           nextTickComputeAtRef.current = now + SHOWDOWN_RECOMPUTE_MS;
@@ -1031,6 +1097,7 @@ export default function WikiGraphView({
       const key = edgeKey(edge);
       if (!nextEdgeKeys.has(key)) {
         fadingEdgesRef.current.set(key, now);
+        fadingEdgeRecordsRef.current.set(key, edge);
       }
     }
     for (const edge of edges) {
@@ -1099,11 +1166,18 @@ export default function WikiGraphView({
     for (const removedId of previousIds) {
       if (!nextIds.has(removedId)) {
         fadingRef.current.set(removedId, performance.now());
+        const removedNode = previousNodesById.get(removedId);
+        if (removedNode) {
+          ghostNodesRef.current.set(removedId, removedNode);
+        }
       }
     }
     // Prune faded-out ghosts.
     for (const [ghostId, startedAt] of fadingRef.current) {
-      if (now - startedAt > FADE_MS) fadingRef.current.delete(ghostId);
+      if (now - startedAt > FADE_MS) {
+        fadingRef.current.delete(ghostId);
+        ghostNodesRef.current.delete(ghostId);
+      }
     }
 
     // Landing spot: a random point in the currently visible graph-space
@@ -1175,12 +1249,7 @@ export default function WikiGraphView({
       }
     };
     assignLandingSpots();
-    if (focusedNodeId && addedIds.length > 0) {
-      selectiveHeatRef.current?.setActive(
-        new Set(addedIds.map(node => node.id)),
-        performance.now()
-      );
-    } else if (!focusedNodeId && prevNodeCountRef.current === null) {
+    if (!focusedNodeId && prevNodeCountRef.current === null) {
       fg.d3ReheatSimulation();
     }
     settlingRef.current =
@@ -1195,25 +1264,6 @@ export default function WikiGraphView({
     const orderedNodes = [...nodes].sort(
       (a, b) => (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
     );
-    const ghostNodes = [...fadingRef.current.keys()]
-      .map(id => previousNodesById.get(id))
-      .filter(
-        (node): node is PositionedNode =>
-          node !== undefined &&
-          isFiniteNumber(node.x) &&
-          isFiniteNumber(node.y)
-      )
-      .filter(node => !orderedNodes.some(current => current.id === node.id));
-    fg.graphData({
-      nodes: [...orderedNodes, ...ghostNodes].sort(
-        (a, b) => (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
-      ),
-      links: toEngineLinks(edges),
-    });
-    syncGhostExclusionRef.current();
-    computeShowdownsRef.current();
-    zoomStylesRef.current(fg, zoomRef.current.k);
-
     const existingIds = new Set(previousIds);
     const newIds = orderedNodes.filter(node => !existingIds.has(node.id));
     insertionRevealRef.current =
@@ -1224,6 +1274,10 @@ export default function WikiGraphView({
               .filter(node => existingIds.has(node.id))
               .map(node => node.id)
           );
+    syncGhostExclusionRef.current();
+    syncGraphDataRef.current(fg);
+    computeShowdownsRef.current();
+    zoomStylesRef.current(fg, zoomRef.current.k);
     const timers: number[] = [];
     const interval = NODE_INSERTION_MS;
     const pageQueue = newIds.filter(node => node.kind === 'page');
@@ -1243,6 +1297,13 @@ export default function WikiGraphView({
         for (const node of batch) {
           insertionRevealRef.current.add(node.id);
         }
+        if (focusedNodeId && batch.length > 0) {
+          selectiveHeatRef.current?.setActive(
+            new Set(batch.map(node => node.id)),
+            performance.now()
+          );
+        }
+        syncGraphDataRef.current(fg);
         repaintRef.current(fg);
         syncGhostExclusionRef.current();
         computeShowdownsRef.current();
