@@ -64,6 +64,12 @@ export interface ForceGraphHandle {
   ): ForceGraphHandle;
   d3Force(forceName: string): unknown;
   d3Force(forceName: string, forceFn: unknown): ForceGraphHandle;
+  d3AlphaDecay(decay: number): ForceGraphHandle;
+  d3VelocityDecay(decay: number): ForceGraphHandle;
+  d3ReheatSimulation(): ForceGraphHandle;
+  pauseAnimation(): ForceGraphHandle;
+  resumeAnimation(): ForceGraphHandle;
+  warmupTicks(ticks: number): ForceGraphHandle;
   width(px: number): ForceGraphHandle;
   height(px: number): ForceGraphHandle;
   zoom(scale: number, durationMs?: number): ForceGraphHandle;
@@ -81,6 +87,11 @@ type D3ChargeForce = {
   strength(
     strength: number | ((node: AugmentedGraphNode) => number)
   ): D3ChargeForce;
+};
+type D3SelectiveHeatForce = {
+  (alpha: number): void;
+  initialize(nodes: SimNode[]): void;
+  setActive(ids: ReadonlySet<string>, now: number): void;
 };
 
 type PositionedNode = AugmentedGraphNode & {
@@ -138,6 +149,15 @@ const MAX_ZOOM_K = 10;
 const ZOOM_STEP = 1.3;
 const FIT_MS = 600;
 const FIT_PADDING = 40;
+const LABEL_WIDTH_CACHE_MAX = 12000;
+const INITIAL_ALPHA_DECAY = 0.008;
+const INITIAL_VELOCITY_DECAY = 0.35;
+const INITIAL_WARMUP_TICKS = 120;
+const FOCUS_HEAT_MS = 900;
+const NODE_INSERTION_MS = 100;
+const EDGE_INSERTION_SLOTS = 100;
+const FOCUS_CENTER_MS = 350;
+const FOCUS_SETTLE_MS = 600;
 
 /**
  * Engine-mutation isolation: force-graph's link parsing replaces string
@@ -159,28 +179,74 @@ function toEngineLinks(edges: AugmentedGraphEdge[]): AugmentedGraphEdge[] {
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
-/**
- * Zoom scale fitting a bbox of the given graph-space size into a container
- * of the given pixel size, leaving `padding` px of margin.
- */
-function fitScale(
-  bboxW: number,
-  bboxH: number,
-  containerW: number,
-  containerH: number,
-  padding: number
-): number {
-  const availW = Math.max(containerW - padding * 2, 1);
-  const availH = Math.max(containerH - padding * 2, 1);
-  return Math.min(availW / Math.max(bboxW, 1), availH / Math.max(bboxH, 1));
+const MAX_GRAPH_PAGE_TITLE_LENGTH = 50;
+
+function truncateGraphPageTitle(title: string): string {
+  return title.length > MAX_GRAPH_PAGE_TITLE_LENGTH
+    ? title.slice(0, MAX_GRAPH_PAGE_TITLE_LENGTH)
+    : title;
+}
+
+function graphNodeLabel(node: AugmentedGraphNode): string {
+  if (node.kind === 'tag') return `#${node.title}`;
+  if (!node.exists) return `Missing page: ${node.id}`;
+  return truncateGraphPageTitle(node.title);
+}
+
+export function createSelectiveHeatForce(): D3SelectiveHeatForce {
+  let nodes: SimNode[] = [];
+  let activeIds = new Set<string>();
+  let startedAt = 0;
+  const force = (alpha: number) => {
+    if (activeIds.size === 0) return;
+    if (performance.now() - startedAt >= FOCUS_HEAT_MS) {
+      activeIds = new Set();
+      return;
+    }
+    for (const node of nodes) {
+      if (!activeIds.has(node.id)) continue;
+      const hash = [...String(node.id)].reduce(
+        (value, char) => (value * 31 + char.charCodeAt(0)) >>> 0,
+        0
+      );
+      const angle =
+        (hash % 360) * (Math.PI / 180) +
+        ((node.x ?? 0) % 6.283185307179586);
+      const strength = alpha * 1.8;
+      node.vx = (node.vx ?? 0) + Math.cos(angle) * strength;
+      node.vy = (node.vy ?? 0) + Math.sin(angle) * strength;
+    }
+  };
+  force.initialize = (nextNodes: SimNode[]) => {
+    nodes = nextNodes;
+  };
+  force.setActive = (ids: ReadonlySet<string>, now: number) => {
+    activeIds = new Set(ids);
+    startedAt = now;
+  };
+  return force;
 }
 
 function isDarkMode(): boolean {
   return document.documentElement.classList.contains('dark');
 }
 
+const edgeLifecycleColor = (
+  color: string,
+  fraction: number
+): string => {
+  const rgba = color.match(
+    /^rgba?\((\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)(?:\s*,\s*(\d+(?:\.\d+)?))?\)$/
+  );
+  if (!rgba) return fraction <= 0 ? TRANSPARENT : color;
+  const alpha =
+    rgba[4] === undefined ? fraction : Number(rgba[4]) * fraction;
+  return `rgba(${rgba[1]}, ${rgba[2]}, ${rgba[3]}, ${alpha})`;
+};
+
 const isFiniteNumber = (value: number | undefined): value is number =>
   typeof value === 'number' && Number.isFinite(value);
+
 
 /** Fallback destination set for pages with no wiki links. */
 const NO_LINK_TARGETS: ReadonlySet<string> = new Set();
@@ -191,7 +257,7 @@ export const SHOWDOWN_RECOMPUTE_MS = 100;
 const DRIFT_MS = 2000;
 const DRIFT_START_FRACTION = 0.03;
 /** Removed-node fade-out duration. */
-const FADE_MS = 600;
+const FADE_MS = 300;
 /** Approximate per-character width when no 2D context exists (tests/jsdom). */
 const FALLBACK_CHAR_WIDTH = 0.6;
 /**
@@ -254,6 +320,7 @@ export default function WikiGraphView({
   const focusSetsRef = useRef<ReturnType<typeof buildFocusSets> | null>(null);
   const nodesRef = useRef<PositionedNode[]>([]);
   const nodesByIdRef = useRef(new Map<string, AugmentedGraphNode>());
+  const edgesRef = useRef<AugmentedGraphEdge[]>([]);
   const prevNodeCountRef = useRef<number | null>(null);
   /**
    * Reactive zoom-to-fit: when on, the camera refits on engine stop and data
@@ -275,6 +342,8 @@ export default function WikiGraphView({
   const nextTickComputeAtRef = useRef(0);
   /** Offscreen 2D context for label measurement; null where unsupported. */
   const measureCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+  /** Text-width cache key: "fontSize|label". */
+  const labelWidthCacheRef = useRef(new Map<string, number>());
   /**
    * Nodes (ids) currently animating into place, with their drift start time.
    * Landing spots are assigned in the data push; physics influence ramps
@@ -284,21 +353,34 @@ export default function WikiGraphView({
   const driftingRef = useRef(new Map<string, number>());
   /** Removed node ids fading out: id -> removal timestamp. */
   const fadingRef = useRef(new Map<string, number>());
+  const ghostNodesRef = useRef(new Map<string, PositionedNode>());
   /** True while any node is drifting or fading — suppresses reactive fits. */
   const settlingRef = useRef(false);
+  const insertionRevealRef = useRef<Set<string>>(new Set());
+  const edgeRevealRef = useRef<Set<string>>(new Set());
+  const insertionTimersRef = useRef<number[]>([]);
+  const graphRevisionRef = useRef(0);
+  const pendingInsertionDurationRef = useRef(0);
+  const focusTransitionActiveRef = useRef(false);
+  const autoFitTimerRef = useRef<number | null>(null);
+  const fadingEdgesRef = useRef(new Map<string, number>());
+  const fadingEdgeRecordsRef = useRef(new Map<string, AugmentedGraphEdge>());
+  const emergingEdgesRef = useRef(new Map<string, number>());
+  const workingEdgeCacheRef = useRef(new Map<string, AugmentedGraphEdge>());
+  const workingGraphSignatureRef = useRef('');
+  const edgeKeyCacheRef = useRef(new WeakMap<object, string>());
+  const initialGraphWarmupRef = useRef(false);
 
   // Set by the mount effect so later effects can restyle without re-running
   // the graph setup. Accessors live inside the mount effect: they close over
   // refs only, so they never need reactive dependencies.
   /**
    * Tag-node visibility: the global Tags toggle wins; otherwise focus mode
-   * filters — a focused page keeps only its connected tags, a focused tag
-   * hides all other tags.
+   * filtering is already applied by the safety-cull result.
    */
   const isTagNodeVisible = (node: AugmentedGraphNode): boolean => {
     if (!tagsVisibleRef.current) return false;
-    if (!focusedIdRef.current) return true;
-    return focusSetsRef.current?.neighborIds.has(node.id) ?? false;
+    return true;
   };
   const zoomStylesRef = useRef<(fg: ForceGraphHandle, k: number) => void>(
     () => {}
@@ -308,9 +390,58 @@ export default function WikiGraphView({
   // the animation refs above. Accessors call these per frame.
   const fadeFractionRef = useRef<(id: string, now: number) => number>(() => 1);
   const driftFractionRef = useRef<(id: string, now: number) => number>(() => 1);
+  const edgeFadeOutFraction = (key: string, now: number): number => {
+    const startedAt = fadingEdgesRef.current.get(key);
+    if (startedAt === undefined) return 1;
+    const fraction = 1 - (now - startedAt) / FADE_MS;
+    if (fraction <= 0) {
+      fadingEdgesRef.current.delete(key);
+      return 0;
+    }
+    return fraction;
+  };
+  const edgeFadeInFraction = (key: string, now: number): number => {
+    const startedAt = emergingEdgesRef.current.get(key);
+    if (startedAt === undefined) return 1;
+    const fraction = (now - startedAt) / FADE_MS;
+    if (fraction >= 1) {
+      emergingEdgesRef.current.delete(key);
+      return 1;
+    }
+    return clamp(fraction, 0, 1);
+  };
   const repaintRef = useRef<(fg: ForceGraphHandle) => void>(() => {});
+  const syncGraphDataRef = useRef<(fg: ForceGraphHandle) => void>(() => {});
   /** Re-filters the tag-repulsion force against current ghost ids. */
   const syncGhostExclusionRef = useRef<() => void>(() => {});
+  const selectiveHeatRef = useRef<D3SelectiveHeatForce | null>(null);
+  const stableEdgeKey = (edge: AugmentedGraphEdge): string => {
+    let key = edgeKeyCacheRef.current.get(edge);
+    if (!key) {
+      key = edgeKey(edge);
+      edgeKeyCacheRef.current.set(edge, key);
+    }
+    return key;
+  };
+
+  const measureLabelWidth = (label: string, fontSize: number): number => {
+    const roundedSize = Math.round(fontSize * 10) / 10;
+    const key = `${roundedSize}|${label}`;
+    const cached = labelWidthCacheRef.current.get(key);
+    if (cached !== undefined) return cached;
+    const measureCtx = measureCtxRef.current;
+    const measured = measureCtx
+      ? (() => {
+          measureCtx.font = `${roundedSize}px Inter, system-ui, sans-serif`;
+          return measureCtx.measureText(label).width;
+        })()
+      : label.length * roundedSize * FALLBACK_CHAR_WIDTH;
+    if (labelWidthCacheRef.current.size > LABEL_WIDTH_CACHE_MAX) {
+      labelWidthCacheRef.current.clear();
+    }
+    labelWidthCacheRef.current.set(key, measured);
+    return measured;
+  };
 
   // Showdown recompute reads only refs, so every effect/callback can call the
   // latest instance through this ref without stale-closure hazards.
@@ -319,37 +450,41 @@ export default function WikiGraphView({
     const k = zoomRef.current.k;
     const pageCandidates: ShowdownCandidate[] = [];
     const tagCandidates: ShowdownCandidate[] = [];
+    let hasPositionedNode = false;
     if (isFiniteNumber(k) && k > 0) {
-      const measureCtx = measureCtxRef.current;
-      const measure = (label: string, fontSize: number) => {
-        if (measureCtx) {
-          measureCtx.font = `${fontSize}px Inter, system-ui, sans-serif`;
-          return measureCtx.measureText(label).width;
-        }
-        return label.length * fontSize * FALLBACK_CHAR_WIDTH;
-      };
       for (const node of nodesRef.current) {
         const positioned = node as PositionedNode;
         if (positioned.x === undefined || positioned.y === undefined) continue;
+        if (!insertionRevealRef.current.has(node.id)) continue;
+        hasPositionedNode = true;
         const isTag = node.kind === 'tag';
         if (isTag && !isTagNodeVisible(node)) continue;
-        // Showdown is the sole label selector: every positioned node is a
-        // candidate, ranked by score (importance), culled by overlap.
+        const score = node._val ?? (isTag ? 0 : 1);
+        const focus = focusSetsRef.current;
+        const rankedScore =
+          focus === null
+            ? score
+            : focusedIdRef.current === node.id
+              ? score + 1000
+              : focus.neighborIds.has(node.id)
+                ? score + 500
+                : focus.secondaryIds.has(node.id)
+                  ? score * 0.25
+                  : score - 1000;
 
         const fontSize = Math.max(11 / k, 4);
-        const label = isTag ? `#${node.title}` : node.title;
-        const halfW = measure(label, fontSize) / 2 + 2 / k;
+        const label = graphNodeLabel(node);
+        const measuredWidth = measureLabelWidth(label, fontSize);
+        const halfW = measuredWidth / 2 + 2 / k;
         const radius = Math.sqrt(node._val ?? 1) * nodeRelSizeRef.current;
         const rect = isTag
           ? {
-              // Tag labels center inside the disc; no scrim band.
               x1: positioned.x - halfW,
               y1: positioned.y - fontSize / 2,
               x2: positioned.x + halfW,
               y2: positioned.y + fontSize / 2,
             }
           : {
-              // Page labels sit below the node; rect covers text + scrim.
               x1: positioned.x - halfW,
               y1: positioned.y + radius + 2 / k,
               x2: positioned.x + halfW,
@@ -357,11 +492,12 @@ export default function WikiGraphView({
             };
         (isTag ? tagCandidates : pageCandidates).push({
           id: node.id,
-          score: node._val ?? (isTag ? 0 : 1),
+          score: rankedScore,
           rect,
         });
       }
     }
+    if (!hasPositionedNode) return;
     pageSurvivorsRef.current = selectShowdownSurvivors(pageCandidates);
     tagSurvivorsRef.current = selectShowdownSurvivors(tagCandidates);
   };
@@ -371,6 +507,7 @@ export default function WikiGraphView({
     measureCtxRef.current = canvas.getContext('2d');
     return () => {
       measureCtxRef.current = null;
+      labelWidthCacheRef.current.clear();
     };
   }, []);
 
@@ -443,6 +580,7 @@ export default function WikiGraphView({
     };
 
     const nodeColorAccessor = (node: AugmentedGraphNode): string => {
+      if (!insertionRevealRef.current.has(node.id)) return TRANSPARENT;
       const focus = focusSetsRef.current;
       const dimmed =
         (focus !== null && !focus.neighborIds.has(node.id)) ||
@@ -460,32 +598,42 @@ export default function WikiGraphView({
     };
 
     const linkWidthAccessor = (link: AugmentedGraphEdge): number => {
+      const key = stableEdgeKey(link);
+      const now = performance.now();
+      const edgeLifecycleFraction =
+        edgeFadeOutFraction(key, now) *
+        edgeFadeInFraction(key, now);
       if (link.kind === 'tag') {
         const tagNode = nodesByIdRef.current.get(edgeEndpointId(link.target));
         if (!tagNode || !isTagNodeVisible(tagNode)) return 0;
         if (!nodePassesFilter(tagNode.id)) return 0.05;
-        return 0.5;
+        return 0.5 * edgeLifecycleFraction;
       }
       const filterDim =
         !nodePassesFilter(edgeEndpointId(link.source)) ||
         !nodePassesFilter(edgeEndpointId(link.target));
       if (filterDim) return 0.05;
       const focus = focusSetsRef.current;
-      if (!focus) return baseLinkWidthRef.current;
-      if (focus.touchingEdgeKeys.has(edgeKey(link)))
-        return baseLinkWidthRef.current * 2;
-      return 0.05;
+      if (!focus) return baseLinkWidthRef.current * edgeLifecycleFraction;
+      if (focus.touchingEdgeKeys.has(key))
+        return baseLinkWidthRef.current * 2 * edgeLifecycleFraction;
+      return 0.05 * edgeLifecycleFraction;
     };
 
     const linkColorAccessor = (link: AugmentedGraphEdge): string => {
+      const key = stableEdgeKey(link);
+      const now = performance.now();
+      const edgeLifecycleFraction =
+        edgeFadeOutFraction(key, now) *
+        edgeFadeInFraction(key, now);
       if (link.kind === 'tag') {
         const tagNode = nodesByIdRef.current.get(edgeEndpointId(link.target));
         if (!tagNode || !isTagNodeVisible(tagNode)) return TRANSPARENT;
         if (!nodePassesFilter(tagNode.id)) return theme.dimLink;
         const focus = focusSetsRef.current;
-        if (focus && focus.touchingEdgeKeys.has(edgeKey(link)))
-          return TAG_EDGE_LIT;
-        return TAG_EDGE;
+        if (focus && focus.touchingEdgeKeys.has(key))
+          return edgeLifecycleColor(TAG_EDGE_LIT, edgeLifecycleFraction);
+        return edgeLifecycleColor(TAG_EDGE, edgeLifecycleFraction);
       }
       const filterDim =
         !nodePassesFilter(edgeEndpointId(link.source)) ||
@@ -493,7 +641,7 @@ export default function WikiGraphView({
       if (filterDim) return theme.dimLink;
       const focus = focusSetsRef.current;
       if (focus) {
-        return focus.touchingEdgeKeys.has(edgeKey(link))
+        return focus.touchingEdgeKeys.has(key)
           ? isBrokenLink(link)
             ? theme.brokenLink
             : theme.litLink
@@ -506,6 +654,7 @@ export default function WikiGraphView({
       isBrokenLink(link) ? [4, 3] : null;
 
     const nodeValAccessor = (node: AugmentedGraphNode): number => {
+      if (!insertionRevealRef.current.has(node.id)) return 0.01;
       const base = node._val ?? 1;
       if (node.kind === 'tag' && !isTagNodeVisible(node)) return base * 0.05;
       const now = performance.now();
@@ -521,7 +670,7 @@ export default function WikiGraphView({
       if (node.kind === 'tag') {
         return isTagNodeVisible(node) ? `#${node.title}` : '';
       }
-      return node.exists ? node.title : `Missing page: ${node.id}`;
+      return node.exists ? truncateGraphPageTitle(node.title) : `Missing page: ${node.id}`;
     };
 
     const nodeCanvasObjectAccessor = (
@@ -529,6 +678,7 @@ export default function WikiGraphView({
       ctx: CanvasRenderingContext2D,
       globalScale: number
     ) => {
+      if (!insertionRevealRef.current.has(node.id)) return;
       const positioned = node as PositionedNode;
       if (positioned.x === undefined || positioned.y === undefined) return;
       const focus = focusSetsRef.current;
@@ -580,10 +730,11 @@ export default function WikiGraphView({
         const positioned = node as PositionedNode;
         if (positioned.x === undefined || positioned.y === undefined) continue;
         const focus = focusSetsRef.current;
-        const dimmed =
-          (focus !== null && !focus.neighborIds.has(node.id)) ||
-          !nodePassesFilter(node.id);
-        if (dimmed) continue;
+        const outsideFocus =
+          focus !== null &&
+          !focus.neighborIds.has(node.id) &&
+          !focus.secondaryIds.has(node.id);
+        if (outsideFocus || !nodePassesFilter(node.id)) continue;
         if (fadingRef.current.has(node.id)) continue;
         if (node.kind === 'tag' && !tagsVisibleRef.current) continue;
         // Showdown survivor sets (recomputed on push/zoom/throttled ticks)
@@ -603,9 +754,9 @@ export default function WikiGraphView({
         ctx.font = `${fontSize}px Inter, system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        const label = node.kind === 'tag' ? `#${node.title}` : node.title;
         const isTag = node.kind === 'tag';
-        const textWidth = ctx.measureText(label).width;
+        const label = isTag ? `#${node.title}` : graphNodeLabel(node);
+        const textWidth = measureLabelWidth(label, fontSize);
         // Page labels sit below the node; tag labels center inside it, so the
         // big translucent tag discs read as labeled chips.
         const textY = isTag
@@ -641,6 +792,12 @@ export default function WikiGraphView({
         ctx.save();
         ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
         ctx.shadowBlur = 2 / globalScale;
+        if (
+          focus !== null &&
+          focus.secondaryIds.has(node.id)
+        ) {
+          ctx.globalAlpha = 0.55;
+        }
         ctx.fillStyle = isTag ? theme.tagLabel : 'rgba(255, 255, 255, 0.92)';
         ctx.fillText(label, positioned.x, textY);
         ctx.restore();
@@ -694,8 +851,21 @@ export default function WikiGraphView({
     }
     const chargeForce = fg.d3Force('charge') as D3ChargeForce | undefined;
     if (chargeForce) {
-      chargeForce.strength(WIKI_CHARGE_STRENGTH);
+      // Transition ghosts and not-yet-revealed inserts are still present in
+      // graphData for visual continuity, but must not repel active nodes.
+      chargeForce.strength(node => {
+        if (!insertionRevealRef.current.has(node.id)) return 0;
+        if (fadingRef.current.has(node.id)) return 0;
+        if (node.kind === 'tag' && !isTagNodeVisible(node)) return 0;
+        return WIKI_CHARGE_STRENGTH;
+      });
     }
+    fg.d3AlphaDecay(INITIAL_ALPHA_DECAY);
+    fg.d3VelocityDecay(INITIAL_VELOCITY_DECAY);
+    fg.warmupTicks(INITIAL_WARMUP_TICKS);
+    const selectiveHeatForce = createSelectiveHeatForce();
+    selectiveHeatRef.current = selectiveHeatForce;
+    fg.d3Force('selectiveHeat', selectiveHeatForce);
 
     // Cluster separation is tag↔tag-only (see createTagRepulsionForce); the
     // stock charge force repels tags from their own members, which expelled
@@ -709,7 +879,16 @@ export default function WikiGraphView({
       tagRepulsionForce.setExcluded(new Set(fadingRef.current.keys()));
       // initialize() re-runs on the next graphData push; force a re-filter
       // now so exclusions apply to the current node set immediately.
-      tagRepulsionForce.initialize(nodesRef.current as SimNode[]);
+      const activeIds = insertionRevealRef.current;
+      const activeNodes = nodesRef.current.filter(node =>
+        activeIds.has(node.id)
+      );
+      const ghostNodes = [...fadingRef.current.keys()]
+        .map(id => ghostNodesRef.current.get(id))
+        .filter((node): node is PositionedNode => node !== undefined);
+      tagRepulsionForce.initialize(
+        [...activeNodes, ...ghostNodes] as SimNode[]
+      );
     };
     syncGhostExclusionRef.current = syncGhostExclusion;
 
@@ -719,7 +898,80 @@ export default function WikiGraphView({
       fg.nodeRelSize(nodeRelSizeRef.current);
     };
     repaintRef.current = repaint;
+    const syncGraphData = (handle: ForceGraphHandle) => {
+      const activeIds = insertionRevealRef.current;
+      const orderedNodes = nodesRef.current
+        .filter(node => activeIds.has(node.id))
+        .sort(
+          (a, b) => (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
+        );
+      const ghostNodes = [...fadingRef.current.keys()]
+        .map(id => ghostNodesRef.current.get(id))
+        .filter(
+          (node): node is PositionedNode =>
+            node !== undefined &&
+            isFiniteNumber(node.x) &&
+            isFiniteNumber(node.y) &&
+            !activeIds.has(node.id)
+        );
+      const renderedNodeIds = new Set<string>([
+        ...orderedNodes.map(node => node.id),
+        ...ghostNodes.map(node => node.id),
+      ]);
+      const workingEdges = new Map<string, AugmentedGraphEdge>();
+      for (const edge of edgesRef.current) {
+        if (
+          renderedNodeIds.has(edgeEndpointId(edge.source)) &&
+          renderedNodeIds.has(edgeEndpointId(edge.target))
+        ) {
+          const key = edgeKey(edge);
+          if (!edgeRevealRef.current.has(key)) continue;
+          fadingEdgesRef.current.delete(key);
+          fadingEdgeRecordsRef.current.delete(key);
+          workingEdges.set(key, edge);
+        }
+      }
+      for (const [key, edge] of fadingEdgeRecordsRef.current) {
+        if (fadingEdgesRef.current.has(key) && !workingEdges.has(key)) {
+          workingEdges.set(key, edge);
+        }
+      }
 
+      const nodeSignature = [
+        ...orderedNodes.map(node => node.id),
+        ...ghostNodes.map(node => node.id),
+      ].sort().join('\u0000');
+      const edgeSignature = [...workingEdges.keys()].sort().join('\u0000');
+      const signature = `${nodeSignature}\u0001${edgeSignature}`;
+      if (signature === workingGraphSignatureRef.current) return;
+
+      const links = [...workingEdges.entries()]
+        .sort(([, a], [, b]) => (a.kind === 'tag' ? 0 : 1) - (b.kind === 'tag' ? 0 : 1))
+        .map(([key, edge]) => {
+        let clone = workingEdgeCacheRef.current.get(key);
+        if (!clone) {
+          clone = { ...edge };
+          workingEdgeCacheRef.current.set(key, clone);
+        }
+        return clone;
+        });
+      handle.pauseAnimation();
+        handle
+          .graphData({
+            nodes: [...orderedNodes, ...ghostNodes].sort(
+              (a, b) =>
+                (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
+            ),
+            links,
+          });
+      handle.resumeAnimation();
+      workingGraphSignatureRef.current = signature;
+        if (!initialGraphWarmupRef.current) {
+          initialGraphWarmupRef.current = true;
+          handle.warmupTicks(0);
+        }
+    };
+    syncGraphDataRef.current = syncGraphData;
     const applySize = () => {
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
@@ -784,17 +1036,38 @@ export default function WikiGraphView({
         // Settle bookkeeping: ghosts fade on a clock; drift ends via the
         // fraction helpers. When nothing is animating, clear the flag and
         // do the deferred fit once.
+        let fadedGhostPruned = false;
         for (const [ghostId, startedAt] of fadingRef.current) {
-          if (now - startedAt > FADE_MS) fadingRef.current.delete(ghostId);
+          if (now - startedAt > FADE_MS) {
+            fadingRef.current.delete(ghostId);
+            ghostNodesRef.current.delete(ghostId);
+            fadedGhostPruned = true;
+          }
+        }
+        for (const [edgeKey, startedAt] of fadingEdgesRef.current) {
+          if (now - startedAt > FADE_MS) {
+            fadingEdgesRef.current.delete(edgeKey);
+            fadingEdgeRecordsRef.current.delete(edgeKey);
+            fadedGhostPruned = true;
+          }
+        }
+        for (const [edgeKey, startedAt] of emergingEdgesRef.current) {
+          if (now - startedAt > FADE_MS) {
+            emergingEdgesRef.current.delete(edgeKey);
+          }
         }
         if (settlingRef.current) {
           syncGhostExclusionRef.current();
           if (driftingRef.current.size === 0 && fadingRef.current.size === 0) {
             settlingRef.current = false;
-            if (zoomToFitOnRef.current && !focusedIdRef.current) {
+            if (zoomToFitOnRef.current) {
               fg.zoomToFit(FIT_MS, FIT_PADDING);
             }
           }
+        }
+        if (fadedGhostPruned) {
+          syncGhostExclusionRef.current();
+          syncGraphDataRef.current(fg);
         }
         if (now >= nextTickComputeAtRef.current) {
           nextTickComputeAtRef.current = now + SHOWDOWN_RECOMPUTE_MS;
@@ -804,7 +1077,8 @@ export default function WikiGraphView({
       .onEngineStop(() => {
         computeShowdownsRef.current();
         if (settlingRef.current) return;
-        if (zoomToFitOnRef.current && !focusedIdRef.current) {
+        if (focusTransitionActiveRef.current) return;
+        if (zoomToFitOnRef.current) {
           if (
             nodesRef.current.some(
               n => isFiniteNumber(n.x) && isFiniteNumber(n.y)
@@ -854,10 +1128,23 @@ export default function WikiGraphView({
       rootRef.current?.removeEventListener('wheel', disarmOnWheel, {
         capture: true,
       });
+      for (const timer of insertionTimersRef.current) {
+        window.clearTimeout(timer);
+      }
+      insertionTimersRef.current = [];
+      if (autoFitTimerRef.current !== null) {
+        window.clearTimeout(autoFitTimerRef.current);
+        autoFitTimerRef.current = null;
+      }
+      if (autoFitTimerRef.current !== null) {
+        window.clearTimeout(autoFitTimerRef.current);
+        autoFitTimerRef.current = null;
+      }
       (fg as unknown as { _destructor?: () => void })._destructor?.();
       handleRef.current = null;
       repaintRef.current = () => {};
       zoomStylesRef.current = () => {};
+      selectiveHeatRef.current = null;
     };
   }, [forceGraphFactory]);
 
@@ -865,7 +1152,57 @@ export default function WikiGraphView({
   useEffect(() => {
     const fg = handleRef.current;
     if (!fg) return;
+    graphRevisionRef.current += 1;
+    const revision = graphRevisionRef.current;
+    for (const timer of insertionTimersRef.current) {
+      window.clearTimeout(timer);
+    }
+    insertionTimersRef.current = [];
     const previousIds = new Set(nodesRef.current.map(n => n.id));
+    const previousNodesById = new Map(
+      nodesRef.current.map(node => [
+        node.id,
+        node as PositionedNode,
+      ])
+    );
+    const previousEdges = edgesRef.current;
+    const nextEdgeKeys = new Set(edges.map(edge => edgeKey(edge)));
+    const now = performance.now();
+    for (const edge of previousEdges) {
+      const key = edgeKey(edge);
+      if (nextEdgeKeys.has(key)) {
+        fadingEdgesRef.current.delete(key);
+        fadingEdgeRecordsRef.current.delete(key);
+        continue;
+      }
+      if (!nextEdgeKeys.has(key)) {
+        fadingEdgesRef.current.set(key, now);
+        fadingEdgeRecordsRef.current.set(key, edge);
+      }
+    }
+    for (const edge of edges) {
+      const key = edgeKey(edge);
+      if (
+        previousEdges.length > 0 &&
+        !previousEdges.some(previous => edgeKey(previous) === key)
+      ) {
+        emergingEdgesRef.current.set(key, now);
+      }
+    }
+    edgesRef.current = edges;
+    for (const node of nodes) {
+      const previous = previousNodesById.get(node.id);
+      if (!previous) continue;
+      const positioned = node as PositionedNode;
+      if (isFiniteNumber(previous.x) && isFiniteNumber(previous.y)) {
+        positioned.x = previous.x;
+        positioned.y = previous.y;
+      }
+      if (isFiniteNumber(previous.vx) && isFiniteNumber(previous.vy)) {
+        positioned.vx = previous.vx;
+        positioned.vy = previous.vy;
+      }
+    }
     nodesRef.current = nodes;
     nodesByIdRef.current = new Map(nodes.map(n => [n.id, n]));
     tagMemberCountsRef.current = new Map();
@@ -909,12 +1246,18 @@ export default function WikiGraphView({
     for (const removedId of previousIds) {
       if (!nextIds.has(removedId)) {
         fadingRef.current.set(removedId, performance.now());
+        const removedNode = previousNodesById.get(removedId);
+        if (removedNode) {
+          ghostNodesRef.current.set(removedId, removedNode);
+        }
       }
     }
     // Prune faded-out ghosts.
-    const now = performance.now();
     for (const [ghostId, startedAt] of fadingRef.current) {
-      if (now - startedAt > FADE_MS) fadingRef.current.delete(ghostId);
+      if (now - startedAt > FADE_MS) {
+        fadingRef.current.delete(ghostId);
+        ghostNodesRef.current.delete(ghostId);
+      }
     }
 
     // Landing spot: a random point in the currently visible graph-space
@@ -930,18 +1273,67 @@ export default function WikiGraphView({
       const cy = (height / 2 - ty) / k;
       const halfW = width / 2 / k;
       const halfH = height / 2 / k;
+      const focusPoint =
+        focusedNodeId
+          ? (previousNodesById.get(focusedNodeId) as PositionedNode | undefined)
+          : undefined;
+      const focusX =
+        focusPoint && isFiniteNumber(focusPoint.x)
+          ? focusPoint.x
+          : cx;
+      const focusY =
+        focusPoint && isFiniteNumber(focusPoint.y)
+          ? focusPoint.y
+          : cy;
       for (const node of addedIds) {
         const positioned = node as PositionedNode;
-        // Jitter inside ~the central 60% of the viewport.
-        positioned.x = cx + (Math.random() - 0.5) * halfW * 1.2;
-        positioned.y = cy + (Math.random() - 0.5) * halfH * 1.2;
+        if (focusedNodeId) {
+          positioned.x = focusX + (Math.random() - 0.5) * 80;
+          positioned.y = focusY + (Math.random() - 0.5) * 80;
+        } else {
+          const connectedIds = new Set<string>();
+          for (const edge of edges) {
+            if (edge.kind === 'link' || edge.kind === 'tag') {
+              if (edge.source === node.id) connectedIds.add(edge.target);
+              if (edge.target === node.id) connectedIds.add(edge.source);
+            }
+          }
+          const neighbor = [...connectedIds]
+            .map(id => previousNodesById.get(id))
+            .find(
+              candidate =>
+                candidate &&
+                isFiniteNumber(candidate.x) &&
+                isFiniteNumber(candidate.y)
+            );
+          if (neighbor) {
+            const hash = [...node.id].reduce(
+              (value, char) => (value * 31 + char.charCodeAt(0)) >>> 0,
+              0
+            );
+            const angle =
+              (hash % 360) * (Math.PI / 180);
+            const radius = 35 + (hash % 40);
+            positioned.x = neighbor.x! + Math.cos(angle) * radius;
+            positioned.y = neighbor.y! + Math.sin(angle) * radius;
+          } else {
+            positioned.x = cx + (Math.random() - 0.5) * halfW * 1.2;
+            positioned.y = cy + (Math.random() - 0.5) * halfH * 1.2;
+          }
+        }
         positioned.vx = 0;
         positioned.vy = 0;
-        driftingRef.current.set(node.id, performance.now());
+        if (!focusedNodeId) {
+          driftingRef.current.set(node.id, performance.now());
+        }
       }
     };
     assignLandingSpots();
+    if (!focusedNodeId && prevNodeCountRef.current === null) {
+      fg.d3ReheatSimulation();
+    }
     settlingRef.current =
+      !focusedNodeId &&
       prevNodeCountRef.current !== null &&
       (addedIds.length > 0 || fadingRef.current.size > 0);
 
@@ -952,18 +1344,162 @@ export default function WikiGraphView({
     const orderedNodes = [...nodes].sort(
       (a, b) => (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
     );
-    fg.graphData({ nodes: orderedNodes, links: toEngineLinks(edges) });
+    const existingIds = new Set(previousIds);
+    const newIds = orderedNodes.filter(node => !existingIds.has(node.id));
+    insertionRevealRef.current =
+      prevNodeCountRef.current === null
+        ? new Set(orderedNodes.map(node => node.id))
+        : new Set(
+            orderedNodes
+              .filter(node => existingIds.has(node.id))
+              .map(node => node.id)
+          );
+    edgeRevealRef.current =
+      prevNodeCountRef.current === null
+        ? new Set(edges.map(edge => edgeKey(edge)))
+        : new Set(
+            edges
+              .filter(edge => {
+                const key = edgeKey(edge);
+                return previousEdges.some(
+                  previous => edgeKey(previous) === key
+                );
+              })
+              .map(edge => edgeKey(edge))
+          );
     syncGhostExclusionRef.current();
+    syncGraphDataRef.current(fg);
     computeShowdownsRef.current();
     zoomStylesRef.current(fg, zoomRef.current.k);
+    const timers: number[] = [];
+    const interval = NODE_INSERTION_MS;
+    const pageQueue = newIds.filter(node => node.kind === 'page');
+    const tagQueue = newIds.filter(node => node.kind === 'tag');
+    const cycleCount = Math.max(
+      pageQueue.length,
+      Math.ceil(tagQueue.length / 3)
+    );
+    pendingInsertionDurationRef.current =
+      cycleCount > 0 ? cycleCount * interval : 0;
+    const newEdgeQueue = edges
+      .filter(edge => !previousEdges.some(previous => edgeKey(previous) === edgeKey(edge)))
+      .map(edge => edgeKey(edge));
+    const edgeCycleCount = Math.ceil(newEdgeQueue.length / EDGE_INSERTION_SLOTS);
+    pendingInsertionDurationRef.current =
+      Math.max(pendingInsertionDurationRef.current, edgeCycleCount * interval);
+    const totalCycles = Math.max(cycleCount, edgeCycleCount);
+    for (let cycle = 0; cycle < totalCycles; cycle++) {
+      const batch = [
+        pageQueue[cycle],
+        ...tagQueue.slice(cycle * 3, cycle * 3 + 3),
+      ].filter(
+        (node): node is AugmentedGraphNode => node !== undefined
+      );
+      const edgeBatch = newEdgeQueue.slice(
+        cycle * EDGE_INSERTION_SLOTS,
+        (cycle + 1) * EDGE_INSERTION_SLOTS
+      );
+      const timer = window.setTimeout(() => {
+        if (graphRevisionRef.current !== revision) return;
+        let nodesChanged = false;
+        let edgesChanged = false;
+        for (const node of batch) {
+          const positioned = node as PositionedNode;
+          if (focusedNodeId) {
+            const liveFocusedNode = nodesRef.current.find(
+              candidate => candidate.id === focusedNodeId
+            ) as PositionedNode | undefined;
+            if (
+              liveFocusedNode &&
+              isFiniteNumber(liveFocusedNode.x) &&
+              isFiniteNumber(liveFocusedNode.y)
+            ) {
+              const hash = [...node.id].reduce(
+                (value, char) =>
+                  (value * 31 + char.charCodeAt(0)) >>> 0,
+                0
+              );
+              const angle = (hash % 360) * (Math.PI / 180);
+              const radius = 25 + (hash % 35);
+              positioned.x =
+                liveFocusedNode.x + Math.cos(angle) * radius;
+              positioned.y =
+                liveFocusedNode.y + Math.sin(angle) * radius;
+              positioned.vx = 0;
+              positioned.vy = 0;
+            }
+          } else {
+            const connectedIds = new Set<string>();
+            for (const edge of edges) {
+              if (edge.kind !== 'link' && edge.kind !== 'tag') continue;
+              if (edgeEndpointId(edge.source) === node.id) {
+                connectedIds.add(edgeEndpointId(edge.target));
+              }
+              if (edgeEndpointId(edge.target) === node.id) {
+                connectedIds.add(edgeEndpointId(edge.source));
+              }
+            }
+            const liveNeighbor = [...connectedIds]
+              .map(id =>
+                nodesRef.current.find(candidate => candidate.id === id)
+              )
+              .find(
+                candidate =>
+                  candidate &&
+                  isFiniteNumber((candidate as PositionedNode).x) &&
+                  isFiniteNumber((candidate as PositionedNode).y)
+              ) as PositionedNode | undefined;
+            if (liveNeighbor) {
+              const hash = [...node.id].reduce(
+                (value, char) =>
+                  (value * 31 + char.charCodeAt(0)) >>> 0,
+                0
+              );
+              const angle = (hash % 360) * (Math.PI / 180);
+              const radius = 35 + (hash % 40);
+              positioned.x =
+                liveNeighbor.x! + Math.cos(angle) * radius;
+              positioned.y =
+                liveNeighbor.y! + Math.sin(angle) * radius;
+              positioned.vx = 0;
+              positioned.vy = 0;
+            }
+          }
+          insertionRevealRef.current.add(node.id);
+          nodesChanged = true;
+        }
+        for (const key of edgeBatch) {
+          edgeRevealRef.current.add(key);
+          edgesChanged = true;
+        }
+        if (!nodesChanged && !edgesChanged) return;
+        if (focusedNodeId && nodesChanged) {
+          selectiveHeatRef.current?.setActive(
+            new Set(batch.map(node => node.id)),
+            performance.now()
+          );
+        }
+        syncGraphDataRef.current(fg);
+        repaintRef.current(fg);
+        if (nodesChanged) {
+          syncGhostExclusionRef.current();
+          computeShowdownsRef.current();
+        }
+        if (nodesChanged && cycle === cycleCount - 1) {
+          fg.d3ReheatSimulation();
+        }
+      }, interval * (cycle + 1));
+      timers.push(timer);
+    }
+    insertionTimersRef.current = timers;
     prevNodeCountRef.current = nodes.length;
-  }, [nodes, edges]);
+  }, [nodes, edges, focusedNodeId]);
 
-  // Focus changes restyle via refs and move the camera; the data itself is
-  // untouched so the layout does not reheat.
+  // Focus changes restyle via refs; the shared zoom-to-fit rule owns the camera.
   useEffect(() => {
     const fg = handleRef.current;
     if (!fg) return;
+    const previousFocusedId = focusedIdRef.current;
     focusedIdRef.current = focusedNodeId ?? null;
     focusSetsRef.current = focusedNodeId
       ? buildFocusSets(edges, focusedNodeId)
@@ -974,44 +1510,56 @@ export default function WikiGraphView({
     computeShowdownsRef.current();
     repaintRef.current(fg);
 
-    if (focusedNodeId) {
-      // Fit the highlighted neighborhood (focus + 1-hop neighbors) into the
-      // viewport: not the whole graph, not an extreme close-up of one node.
-      const highlight = focusSetsRef.current;
-      if (highlight) {
-        const points = nodesRef.current
-          .filter(n => highlight.neighborIds.has(n.id))
-          .map(n => ({
-            x: (n as PositionedNode).x,
-            y: (n as PositionedNode).y,
-          }))
-          .filter(
-            (p): p is { x: number; y: number } =>
-              isFiniteNumber(p.x) && isFiniteNumber(p.y)
-          );
-        if (points.length > 0) {
-          const xs = points.map(p => p.x);
-          const ys = points.map(p => p.y);
-          const { width: cw, height: ch } = containerSizeRef.current;
-          const k = fitScale(
-            Math.max(...xs) - Math.min(...xs),
-            Math.max(...ys) - Math.min(...ys),
-            cw,
-            ch,
-            FIT_PADDING
-          );
-          fg.centerAt(
-            (Math.max(...xs) + Math.min(...xs)) / 2,
-            (Math.max(...ys) + Math.min(...ys)) / 2,
-            FIT_MS
-          );
-          fg.zoom(clamp(k, MIN_ZOOM_K, MAX_ZOOM_K), FIT_MS);
-        }
+    if (previousFocusedId !== focusedNodeId) {
+      if (autoFitTimerRef.current !== null) {
+        window.clearTimeout(autoFitTimerRef.current);
+        autoFitTimerRef.current = null;
       }
-    } else if (zoomToFitOnRef.current) {
-      // Clear-focus refit only while zoom-to-fit is armed. Before the
-      // simulation positions nodes the bbox is NaN and a fit would poison
-      // the camera transform; skip until positions exist.
+    }
+
+    if (focusedNodeId && previousFocusedId !== focusedNodeId) {
+      focusTransitionActiveRef.current = true;
+      const focusedNode = nodesRef.current.find(
+        node => node.id === focusedNodeId
+      ) as PositionedNode | undefined;
+      if (
+        focusedNode &&
+        isFiniteNumber(focusedNode.x) &&
+        isFiniteNumber(focusedNode.y)
+      ) {
+        fg.centerAt(focusedNode.x, focusedNode.y, FOCUS_CENTER_MS);
+      }
+
+      fg.d3ReheatSimulation();
+      const revealDelay =
+        pendingInsertionDurationRef.current +
+        FADE_MS +
+        FOCUS_SETTLE_MS;
+      const firstFit = window.setTimeout(() => {
+        if (zoomToFitOnRef.current) {
+          fg.zoomToFit(FIT_MS, FIT_PADDING);
+        }
+        const secondFit = window.setTimeout(() => {
+          if (zoomToFitOnRef.current) {
+            fg.zoomToFit(FIT_MS, FIT_PADDING);
+          }
+          focusTransitionActiveRef.current = false;
+          autoFitTimerRef.current = null;
+        }, FOCUS_SETTLE_MS);
+        insertionTimersRef.current.push(secondFit);
+        autoFitTimerRef.current = secondFit;
+      }, revealDelay);
+      insertionTimersRef.current.push(firstFit);
+      autoFitTimerRef.current = firstFit;
+    }
+
+    if (previousFocusedId && !focusedNodeId) {
+      fg.d3ReheatSimulation();
+      focusTransitionActiveRef.current = false;
+    }
+    if (zoomToFitOnRef.current) {
+      // Before the simulation positions nodes the bbox is NaN and a fit
+      // would poison the camera transform; skip until positions exist.
       const positioned = nodesRef.current.some(
         n => isFiniteNumber(n.x) && isFiniteNumber(n.y)
       );

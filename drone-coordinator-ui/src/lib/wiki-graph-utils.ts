@@ -251,10 +251,20 @@ export function buildAugmentedWikiGraph(graph: WikiGraph): AugmentedWikiGraph {
   }));
   const edges: AugmentedGraphEdge[] = graph.edges.map(edge => ({ ...edge }));
 
+  const tagPageIds = new Map<string, Set<string>>();
+  for (const node of graph.nodes) {
+    for (const tag of new Set(node.tags)) {
+      const id = `tag:${tag}`;
+      if (!tagPageIds.has(id)) tagPageIds.set(id, new Set());
+      tagPageIds.get(id)!.add(node.id);
+    }
+  }
+
   const tagNodes = new Map<string, AugmentedGraphNode>();
   for (const node of graph.nodes) {
-    for (const tag of node.tags) {
+    for (const tag of new Set(node.tags)) {
       const id = `tag:${tag}`;
+      if ((tagPageIds.get(id)?.size ?? 0) <= 1) continue;
       if (!tagNodes.has(id)) {
         tagNodes.set(id, {
           id,
@@ -305,9 +315,8 @@ export function applyNodeSizing(
 
   return nodes.map(node => {
     if (node.kind === 'tag') {
-      // Tag size encodes absolute member count (area-proportional in the
-      // engine: radius = sqrt(val) * relSize), not a normalized share.
-      return { ...node, _val: tagMemberCounts.get(node.id) ?? 0 };
+      const memberCount = tagMemberCounts.get(node.id) ?? 0;
+      return { ...node, _val: memberCount * 0.25 };
     }
     const normDegree =
       maxPageDegree > 0 ? (linkDegrees.get(node.id) ?? 0) / maxPageDegree : 0;
@@ -321,9 +330,179 @@ export function applyNodeSizing(
   });
 }
 
+export const MAX_VISIBLE_PAGE_NODES = 500;
+export const MAX_VISIBLE_TAG_NODES = 1500;
+
+const safetyCullCache = new WeakMap<
+  AugmentedGraphNode[],
+  WeakMap<AugmentedGraphEdge[], Map<string, {
+    nodes: AugmentedGraphNode[];
+    edges: AugmentedGraphEdge[];
+  }>>
+>();
+
+export function applySafetyCulledWikiGraph(
+  nodes: AugmentedGraphNode[],
+  edges: AugmentedGraphEdge[],
+  focusedId: string | null
+): { nodes: AugmentedGraphNode[]; edges: AugmentedGraphEdge[] } {
+  if (
+    !focusedId &&
+    nodes.filter(node => node.kind === 'page').length <= MAX_VISIBLE_PAGE_NODES &&
+    nodes.filter(node => node.kind === 'tag').length <= MAX_VISIBLE_TAG_NODES
+  ) {
+    return { nodes, edges };
+  }
+
+  let edgesCache = safetyCullCache.get(nodes);
+  if (!edgesCache) {
+    edgesCache = new WeakMap();
+    safetyCullCache.set(nodes, edgesCache);
+  }
+  let focusCache = edgesCache.get(edges);
+  if (!focusCache) {
+    focusCache = new Map();
+    edgesCache.set(edges, focusCache);
+  }
+  const cacheKey = focusedId ?? '';
+  const cached = focusCache.get(cacheKey);
+  if (cached) return cached;
+
+  const focusedNode = focusedId
+    ? nodes.find(node => node.id === focusedId)
+    : null;
+  let candidatePageIds: Set<string> | null = null;
+  let candidateTagIds: Set<string> | null = null;
+
+  if (focusedNode?.kind === 'page') {
+    const primaryPageIds = new Set([focusedNode.id]);
+    for (const edge of edges) {
+      if (edge.kind !== 'link') continue;
+      if (edge.source === focusedNode.id) primaryPageIds.add(edge.target);
+      if (edge.target === focusedNode.id) primaryPageIds.add(edge.source);
+    }
+    const secondaryPageIds = new Set(primaryPageIds);
+    for (const primaryId of primaryPageIds) {
+      for (const edge of edges) {
+        if (edge.kind !== 'link') continue;
+        if (edge.source === primaryId) secondaryPageIds.add(edge.target);
+        if (edge.target === primaryId) secondaryPageIds.add(edge.source);
+      }
+    }
+    candidatePageIds = secondaryPageIds;
+    candidateTagIds = new Set();
+    for (const edge of edges) {
+      if (
+        edge.kind === 'tag' &&
+        candidatePageIds.has(edge.source)
+      ) {
+        candidateTagIds.add(edge.target);
+      }
+    }
+  } else if (focusedNode?.kind === 'tag') {
+    candidatePageIds = new Set();
+    candidateTagIds = new Set([focusedNode.id]);
+    for (const edge of edges) {
+      if (edge.kind === 'tag' && edge.target === focusedNode.id) {
+        candidatePageIds.add(edge.source);
+      }
+    }
+    for (const edge of edges) {
+      if (
+        edge.kind === 'tag' &&
+        candidatePageIds.has(edge.source)
+      ) {
+        candidateTagIds.add(edge.target);
+      }
+    }
+  }
+
+  const pageCandidates = nodes
+    .filter(node =>
+      node.kind === 'page' &&
+      (!candidatePageIds || candidatePageIds.has(node.id))
+    )
+    .sort(
+      (a, b) =>
+        (b._val ?? 0) - (a._val ?? 0) ||
+        a.id.localeCompare(b.id)
+    );
+
+  const retainedIds = new Set<string>();
+  if (focusedId) {
+    const focusedPage = nodes.find(
+      node => node.id === focusedId && node.kind === 'page'
+    );
+    if (focusedPage) retainedIds.add(focusedPage.id);
+  }
+  for (const page of pageCandidates) {
+    if (retainedIds.size >= MAX_VISIBLE_PAGE_NODES) break;
+    retainedIds.add(page.id);
+  }
+  if (retainedIds.size === 0) {
+    for (const page of pageCandidates.slice(0, MAX_VISIBLE_PAGE_NODES)) {
+      retainedIds.add(page.id);
+    }
+  }
+
+  const tagCandidates = nodes
+    .filter(
+      node =>
+        node.kind === 'tag' &&
+        (!candidateTagIds || candidateTagIds.has(node.id))
+    )
+    .sort(
+      (a, b) =>
+        (b._val ?? 0) - (a._val ?? 0) ||
+        a.id.localeCompare(b.id)
+    );
+  const retainedTagIds = new Set<string>();
+  if (focusedId) {
+    const focusedTag = nodes.find(
+      node => node.id === focusedId && node.kind === 'tag'
+    );
+    if (focusedTag) retainedTagIds.add(focusedTag.id);
+  }
+  for (const tag of tagCandidates) {
+    if (retainedTagIds.size >= MAX_VISIBLE_TAG_NODES) break;
+    retainedTagIds.add(tag.id);
+  }
+
+  const retainedNodes = nodes.filter(node =>
+    node.kind === 'page'
+      ? retainedIds.has(node.id)
+      : retainedTagIds.has(node.id)
+  );
+  const retainedEdges = edges.filter(edge => {
+    if (edge.kind === 'link') {
+      return retainedIds.has(edge.source) && retainedIds.has(edge.target);
+    }
+    return retainedIds.has(edge.source) &&
+      retainedTagIds.has(edge.target);
+  });
+  const connectedTagIds = new Set(
+    retainedEdges
+      .filter(edge => edge.kind === 'tag')
+      .map(edge => edge.target)
+  );
+  const result = {
+    nodes: retainedNodes.filter(
+      node => node.kind !== 'tag' || connectedTagIds.has(node.id)
+    ),
+    edges: retainedEdges.filter(
+      edge => edge.kind !== 'tag' || connectedTagIds.has(edge.target)
+    ),
+  };
+
+  focusCache.set(cacheKey, result);
+  return result;
+}
+
 export interface FocusSets {
   /** The focused node id plus every neighbor reachable by one edge. */
   neighborIds: Set<string>;
+  /** Nodes reachable by exactly two edges from the focused node. */
+  secondaryIds: Set<string>;
   /**
    * `source\\u0000target` keys of edges touching the focused node. Keys (not
    * object identity) because the graph engine hands accessors its own
@@ -342,6 +521,7 @@ export function buildFocusSets(
   focusedId: string
 ): FocusSets {
   const neighborIds = new Set<string>([focusedId]);
+  const secondaryIds = new Set<string>();
   const touchingEdgeKeys = new Set<string>();
   for (const edge of edges) {
     if (edge.source === focusedId || edge.target === focusedId) {
@@ -350,5 +530,16 @@ export function buildFocusSets(
       touchingEdgeKeys.add(edgeKey(edge));
     }
   }
-  return { neighborIds, touchingEdgeKeys };
+  for (const edge of edges) {
+    if (
+      neighborIds.has(edge.source) ||
+      neighborIds.has(edge.target)
+    ) {
+      const otherSource = edge.source;
+      const otherTarget = edge.target;
+      if (!neighborIds.has(otherSource)) secondaryIds.add(otherSource);
+      if (!neighborIds.has(otherTarget)) secondaryIds.add(otherTarget);
+    }
+  }
+  return { neighborIds, secondaryIds, touchingEdgeKeys };
 }

@@ -19,6 +19,7 @@ import { applyWikiFilters, filtersAreDefault } from '@/lib/wiki-filters';
 import { sortWikiPages } from '@/lib/wiki-sort';
 import {
   applyNodeSizing,
+  applySafetyCulledWikiGraph,
   buildAugmentedWikiGraph,
 } from '@/lib/wiki-graph-utils';
 import WikiPageTable from '@/components/wiki-page-table';
@@ -26,8 +27,15 @@ import WikiFilterBar from '@/components/wiki-filter-bar';
 import WikiGraphView from '@/components/wiki-graph';
 
 const PAGE_SIZE = 25;
+const FOCUS_PREVIEW_TITLE_LIMIT = 50;
 // How long typing must settle before a search request fires.
 const SEARCH_DEBOUNCE_MS = 350;
+
+function truncateFocusPreviewTitle(title: string): string {
+  return title.length > FOCUS_PREVIEW_TITLE_LIMIT
+    ? title.slice(0, FOCUS_PREVIEW_TITLE_LIMIT)
+    : title;
+}
 
 export default function WikiPage() {
   const navigate = useNavigate();
@@ -40,7 +48,11 @@ export default function WikiPage() {
   const { pages, setPages, loading, error } = useWikiPages();
   const { filters, sort, setFilters, setSort, clearFilters } =
     useWikiFilterState();
-  const { graph, error: graphError } = useWikiGraph(graphView);
+  const {
+    graph,
+    loading: graphLoading,
+    error: graphError,
+  } = useWikiGraph(graphView);
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<WikiPageMeta[] | null>(
     null
@@ -147,7 +159,7 @@ export default function WikiPage() {
     return ids;
   }, [pages, filters]);
 
-  const augmented = useMemo(() => {
+  const sized = useMemo(() => {
     if (!graph) return null;
     const base = buildAugmentedWikiGraph(graph);
     return {
@@ -155,6 +167,51 @@ export default function WikiPage() {
       edges: base.edges,
     };
   }, [graph]);
+  const graphSeed = useMemo(() => {
+    if (!sized) return null;
+    const hasSearch = searchResults !== null;
+    const hasActiveFilters = !filtersAreDefault(filters);
+    if (!hasSearch && !hasActiveFilters) return sized;
+
+    const retainedPageIds = new Set(filtered.map(page => page.id));
+    if (focusedNodeId && !focusedNodeId.startsWith('tag:')) {
+      retainedPageIds.add(focusedNodeId);
+    }
+
+    const retainedTagIds = new Set<string>();
+    if (focusedNodeId?.startsWith('tag:')) {
+      retainedTagIds.add(focusedNodeId);
+    }
+
+    const retainedEdges = sized.edges.filter(edge => {
+      if (edge.kind === 'link') {
+        return (
+          retainedPageIds.has(edge.source) &&
+          retainedPageIds.has(edge.target)
+        );
+      }
+      if (!retainedPageIds.has(edge.source)) return false;
+      retainedTagIds.add(edge.target);
+      return true;
+    });
+    const retainedNodes = sized.nodes.filter(node =>
+      node.kind === 'page'
+        ? retainedPageIds.has(node.id)
+        : retainedTagIds.has(node.id)
+    );
+    return {
+      nodes: retainedNodes,
+      edges: retainedEdges,
+    };
+  }, [sized, filtered, focusedNodeId, searchResults, filters]);
+  const augmented = useMemo(() => {
+    if (!graphSeed) return null;
+    return applySafetyCulledWikiGraph(
+      graphSeed.nodes,
+      graphSeed.edges,
+      focusedNodeId
+    );
+  }, [graphSeed, focusedNodeId]);
   const visible = augmented;
   const focusedNode =
     visible && focusedNodeId
@@ -251,11 +308,24 @@ export default function WikiPage() {
 
       {graphView ? (
         <div className="relative flex flex-1 min-h-0">
+          {graphLoading && (
+            <div
+              className="absolute inset-0 z-30 flex items-center justify-center bg-background/50"
+              data-testid="wiki-graph-loading"
+            >
+              <div className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm text-muted-foreground shadow-sm">
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                Loading graph…
+              </div>
+            </div>
+          )}
           {focusedNode && (
             <aside className="absolute left-4 top-4 z-20 w-80 rounded-md border p-4 bg-card shadow-lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold">{focusedNode.title}</h2>
+                  <h2 className="text-lg font-semibold">
+                    {truncateFocusPreviewTitle(focusedNode.title)}
+                  </h2>
                   {focusedNode.kind === 'page' ? (
                     <p className="text-xs text-muted-foreground font-mono">
                       {focusedNode.id}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applySafetyCulledWikiGraph,
   applyNodeSizing,
   buildAugmentedWikiGraph,
   buildFocusSets,
@@ -17,6 +18,7 @@ import {
   tagSpringStrength,
   WIKI_TAG_SPRING_STRENGTH,
   WIKI_TAG_REPULSION_DISTANCE_MAX,
+  MAX_VISIBLE_TAG_NODES,
 } from './wiki-graph-utils';
 import type {
   AugmentedGraphEdge,
@@ -355,8 +357,8 @@ describe('buildAugmentedWikiGraph', () => {
   it('creates one tag node per unique tag with namespaced ids', () => {
     const aug = buildAugmentedWikiGraph(graph);
     const tagNodes = aug.nodes.filter(n => n.kind === 'tag');
-    expect(tagNodes.map(n => n.id).sort()).toEqual(['tag:x', 'tag:y']);
-    expect(tagNodes.map(n => n.title).sort()).toEqual(['x', 'y']);
+    expect(tagNodes.map(n => n.id).sort()).toEqual(['tag:x']);
+    expect(tagNodes.map(n => n.title).sort()).toEqual(['x']);
     const tagX = tagNodes.find(n => n.id === 'tag:x')!;
     expect(tagX.exists).toBe(true);
     expect(tagX.wordCount).toBe(0);
@@ -368,15 +370,204 @@ describe('buildAugmentedWikiGraph', () => {
     const tagEdges = aug.edges.filter(e => e.kind === 'tag');
     expect(tagEdges).toEqual([
       { source: 'a', target: 'tag:x', kind: 'tag' },
-      { source: 'a', target: 'tag:y', kind: 'tag' },
       { source: 'b', target: 'tag:x', kind: 'tag' },
     ]);
+  });
+
+  it('drops tags that point to only one page', () => {
+    const aug = buildAugmentedWikiGraph(graph);
+    expect(aug.nodes.some(node => node.id === 'tag:y')).toBe(false);
+    expect(aug.edges.some(edge => edge.target === 'tag:y')).toBe(false);
   });
 
   it('does not mutate the input graph', () => {
     const before = JSON.stringify(graph);
     buildAugmentedWikiGraph(graph);
     expect(JSON.stringify(graph)).toBe(before);
+  });
+});
+
+describe('applySafetyCulledWikiGraph', () => {
+  it('shows direct and secondary link neighborhoods with tags for page focus', () => {
+    const graph = {
+      nodes: [
+        ...[
+          pageNode({ id: 'focus', title: 'Focus', tags: ['focus-tag'] }),
+          pageNode({ id: 'primary', title: 'Primary', tags: ['primary-tag'] }),
+          pageNode({ id: 'secondary', title: 'Secondary', tags: ['secondary-tag'] }),
+          pageNode({ id: 'outside', title: 'Outside', tags: ['outside-tag'] }),
+        ].map(node => ({ ...node, kind: 'page' as const, _val: 1 })),
+        ...[
+          pageNode({ id: 'tag:focus-tag', title: 'focus-tag', kind: 'tag' }),
+          pageNode({ id: 'tag:primary-tag', title: 'primary-tag', kind: 'tag' }),
+          pageNode({ id: 'tag:secondary-tag', title: 'secondary-tag', kind: 'tag' }),
+          pageNode({ id: 'tag:outside-tag', title: 'outside-tag', kind: 'tag' }),
+        ].map(node => ({ ...node, _val: 1 })),
+      ],
+      edges: [
+        { source: 'focus', target: 'primary', kind: 'link' as const },
+        { source: 'primary', target: 'secondary', kind: 'link' as const },
+        { source: 'outside', target: 'other', kind: 'link' as const },
+        { source: 'focus', target: 'tag:focus-tag', kind: 'tag' as const },
+        { source: 'primary', target: 'tag:primary-tag', kind: 'tag' as const },
+        { source: 'secondary', target: 'tag:secondary-tag', kind: 'tag' as const },
+        { source: 'outside', target: 'tag:outside-tag', kind: 'tag' as const },
+      ],
+    };
+    const result = applySafetyCulledWikiGraph(
+      graph.nodes,
+      graph.edges,
+      'focus'
+    );
+    const pages = result.nodes
+      .filter(node => node.kind === 'page')
+      .map(node => node.id);
+    expect(pages).toEqual(
+      expect.arrayContaining(['focus', 'primary', 'secondary'])
+    );
+    expect(pages).not.toContain('outside');
+    expect(result.nodes.map(node => node.id)).toEqual(
+      expect.arrayContaining([
+        'tag:focus-tag',
+        'tag:primary-tag',
+        'tag:secondary-tag',
+      ])
+    );
+  });
+
+  it('caches repeated results for the same graph and focus', () => {
+    const nodes = Array.from({ length: 600 }, (_, i) => ({
+      ...pageNode({ id: `p${i}`, title: `Page ${i}` }),
+      kind: 'page' as const,
+      _val: i,
+    }));
+    const edges: AugmentedGraphEdge[] = [];
+    const first = applySafetyCulledWikiGraph(nodes, edges, null);
+    const second = applySafetyCulledWikiGraph(nodes, edges, null);
+    expect(second).toBe(first);
+  });
+
+  it('never returns more than 500 page nodes', () => {
+    const graph = {
+      nodes: Array.from({ length: 600 }, (_, i) => ({
+        ...pageNode({ id: `p${i}`, title: `Page ${i}` }),
+        kind: 'page' as const,
+        _val: i,
+      })),
+      edges: [],
+    };
+    const result = applySafetyCulledWikiGraph(
+      graph.nodes,
+      graph.edges,
+      null
+    );
+    expect(result.nodes.filter(node => node.kind === 'page')).toHaveLength(500);
+  });
+
+  it('never returns more than 1500 tag nodes', () => {
+    const graph = {
+      nodes: [
+        pageNode({ id: 'p0', title: 'Page 0' }),
+        ...Array.from({ length: 1600 }, (_, i) => ({
+          ...pageNode({
+            id: `tag:${i}`,
+            title: `Tag ${i}`,
+            kind: 'tag',
+            tags: [`tag${i}`],
+          }),
+          _val: i,
+        })),
+      ],
+      edges: Array.from({ length: 1600 }, (_, i) => ({
+        source: 'p0',
+        target: `tag:${i}`,
+        kind: 'tag' as const,
+      })),
+    };
+    const result = applySafetyCulledWikiGraph(
+      graph.nodes,
+      graph.edges,
+      null
+    );
+    expect(result.nodes.filter(node => node.kind === 'tag')).toHaveLength(
+      MAX_VISIBLE_TAG_NODES
+    );
+  });
+
+  it('preserves a focused tag while applying the tag top-k', () => {
+    const tags = Array.from({ length: 1600 }, (_, i) => ({
+      ...pageNode({
+        id: i === 0 ? 'tag:focused' : `tag:${i}`,
+        title: i === 0 ? 'focused' : `Tag ${i}`,
+        kind: 'tag',
+        tags: [i === 0 ? 'focused' : `tag${i}`],
+      }),
+      _val: i,
+    }));
+    const graph = {
+      nodes: [
+        pageNode({ id: 'p0', title: 'Page 0' }),
+        ...tags,
+      ],
+      edges: tags.map(tag => ({
+        source: 'p0',
+        target: tag.id,
+        kind: 'tag' as const,
+      })),
+    };
+    const result = applySafetyCulledWikiGraph(
+      graph.nodes,
+      graph.edges,
+      'tag:focused'
+    );
+    expect(result.nodes.filter(node => node.kind === 'tag')).toHaveLength(
+      MAX_VISIBLE_TAG_NODES
+    );
+    expect(result.nodes.some(node => node.id === 'tag:focused')).toBe(true);
+  });
+
+  it('runs top-k after focus refinement and prunes orphan tags', () => {
+    const graph = {
+      nodes: [
+        ...Array.from({ length: 600 }, (_, i) => ({
+          ...pageNode({ id: `p${i}`, title: `Page ${i}` }),
+          kind: 'page' as const,
+          _val: i,
+        })),
+        {
+          ...pageNode({
+            id: 'tag:focused',
+            title: 'focused',
+            kind: 'tag',
+            tags: ['focused'],
+          }),
+          _val: 500,
+        },
+      ],
+      edges: [
+        ...Array.from({ length: 600 }, (_, i) => ({
+          source: `p${i}`,
+          target: i < 300 ? 'tag:focused' : 'tag:other',
+          kind: 'tag' as const,
+        })),
+      ],
+    };
+    graph.nodes.push({
+      ...pageNode({
+        id: 'tag:other',
+        title: 'other',
+        kind: 'tag',
+        tags: ['other'],
+      }),
+      _val: 300,
+    });
+    const result = applySafetyCulledWikiGraph(
+      graph.nodes,
+      graph.edges,
+      'tag:focused'
+    );
+    expect(result.nodes.filter(node => node.kind === 'page')).toHaveLength(300);
+    expect(result.nodes.some(node => node.id === 'tag:other')).toBe(false);
   });
 });
 
@@ -442,9 +633,9 @@ describe('applyNodeSizing', () => {
     ];
     const sized = applyNodeSizing(nodes, edges);
     const byId = new Map(sized.map(n => [n.id, n._val ?? 0]));
-    // Tag area encodes absolute member count (engine radius = sqrt(val)).
-    expect(byId.get('tag:x')).toBe(2);
-    expect(byId.get('tag:y')).toBe(1);
+    // Tag radius is half of the former absolute-member-count rendering.
+    expect(byId.get('tag:x')).toBe(0.5);
+    expect(byId.get('tag:y')).toBe(0.25);
   });
 
   it('scales tag size independently of the page degree distribution', () => {
@@ -463,7 +654,7 @@ describe('applyNodeSizing', () => {
     ];
     const sized = applyNodeSizing(nodes, edges);
     const byId = new Map(sized.map(n => [n.id, n._val ?? 0]));
-    expect(byId.get('tag:x')).toBe(2);
+    expect(byId.get('tag:x')).toBe(0.5);
     expect(byId.get('tag:x')).toBeLessThan(byId.get('hub') ?? 0);
   });
 });
@@ -479,6 +670,7 @@ describe('buildFocusSets', () => {
   it('collects the focus and its direct neighbors for a page focus', () => {
     const sets = buildFocusSets(edges, 'a');
     expect([...sets.neighborIds].sort()).toEqual(['a', 'b', 'c', 'tag:x']);
+    expect([...sets.secondaryIds].sort()).toEqual(['d']);
     expect(sets.touchingEdgeKeys.size).toBe(3);
   });
 

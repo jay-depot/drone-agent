@@ -255,7 +255,7 @@ describe('WikiPage graph view', () => {
         title: 'Page B',
         exists: true,
         wordCount: 3,
-        tags: [],
+        tags: ['ops'],
         scope: 'coordinator',
       },
     ],
@@ -280,6 +280,34 @@ describe('WikiPage graph view', () => {
       if (url === '/api/wiki') return ok(pages);
       return notFound;
     });
+
+  it('shows a loading indicator while the graph fetch is pending', async () => {
+    let resolveGraph!: (value: Response) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url === '/api/wiki/graph') {
+          return new Promise<Response>(resolve => {
+            resolveGraph = resolve;
+          });
+        }
+        if (url === '/api/wiki') return Promise.resolve(ok([metaPage({ id: 'a' })]));
+        return Promise.resolve(notFound);
+      })
+    );
+
+    renderWiki(['/wiki?view=graph']);
+    expect(await screen.findByTestId('wiki-graph-loading')).toBeTruthy();
+
+    await act(async () => {
+      resolveGraph(
+        new Response(JSON.stringify(graph), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+    });
+  });
 
   it('renders the graph in ?view=graph and toggles back to the list', async () => {
     vi.stubGlobal('fetch', graphFetch());
@@ -322,6 +350,25 @@ describe('WikiPage graph view', () => {
     expect(ids.has('tag:ops')).toBe(true);
   });
 
+  it('feeds filter-constrained graph data into the graph pipeline', async () => {
+    vi.stubGlobal('fetch', graphFetch([metaPage({ id: 'a', tags: ['ops'] })]));
+
+    renderWiki(['/wiki?view=graph&tags=ops']);
+    await waitFor(() => {
+      expect(wikiGraphStub.props).not.toBeNull();
+    });
+    const nodes = wikiGraphStub.props?.nodes as Array<{ id: string }>;
+    const edges = wikiGraphStub.props?.edges as Array<{
+      source: string;
+      target: string;
+      kind: string;
+    }>;
+    expect(nodes.some(node => node.id === 'a')).toBe(true);
+    expect(nodes.some(node => node.id === 'b')).toBe(false);
+    expect(nodes.some(node => node.id === 'tag:ops')).toBe(true);
+    expect(edges.some(edge => edge.kind === 'link')).toBe(false);
+  });
+
   it('preserves filter params across focus set and clear', async () => {
     vi.stubGlobal('fetch', graphFetch());
 
@@ -351,13 +398,40 @@ describe('WikiPage graph view', () => {
     expect(afterClear.has('tag:ops')).toBe(true);
   });
 
+  it('truncates focus preview titles to 50 characters', async () => {
+    const longTitle = `A${'b'.repeat(79)}`;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url === '/api/wiki/graph') {
+          return ok({
+            nodes: [{ ...graph.nodes[0], title: longTitle }],
+            edges: [],
+          });
+        }
+        if (url === '/api/wiki') {
+          return ok([metaPage({ id: 'a', title: longTitle, tags: ['ops'] })]);
+        }
+        return notFound;
+      })
+    );
+
+    renderWiki(['/wiki?view=graph&node=a']);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(
+        longTitle.slice(0, 50)
+      );
+    });
+  });
+
   it('shows a tag-aware preview panel without an open-page button for tag focus', async () => {
     vi.stubGlobal('fetch', graphFetch());
 
     renderWiki(['/wiki?view=graph&tagnodes=1&node=tag:ops']);
 
     await waitFor(() => {
-      expect(screen.getByText('Tag · 1 page(s)')).toBeTruthy();
+      expect(screen.getByText('Tag · 2 page(s)')).toBeTruthy();
     });
     expect(screen.queryByRole('button', { name: 'Open full page' })).toBeNull();
     expect(screen.queryByText('Page A')).toBeNull();
