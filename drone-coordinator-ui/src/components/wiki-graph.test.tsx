@@ -190,6 +190,60 @@ describe('WikiGraphView', () => {
     expect(strengthAccessor(removedNode)).toBe(0);
   });
 
+  it('lands inserted nodes near the focused node current position', async () => {
+    vi.useFakeTimers();
+    try {
+      const initial = [
+        pageNode({ id: 'focus', title: 'Focus', x: 10, y: 20 }),
+      ];
+      const grown = [
+        initial[0],
+        pageNode({ id: 'page-new', title: 'New page' }),
+        pageNode({
+          id: 'tag:new',
+          title: 'new',
+          kind: 'tag',
+          tags: ['new'],
+        }),
+      ];
+      const graphProps = {
+        edges: [],
+        tagsVisible: true,
+        onNodeFocus: vi.fn(),
+        onClearFocus: vi.fn(),
+        forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+      };
+      const { rerender } = render(
+        <WikiGraphView {...graphProps} nodes={initial} focusedNodeId="focus" />
+      );
+      rerender(
+        <WikiGraphView {...graphProps} nodes={grown} focusedNodeId="focus" />
+      );
+
+      const pushed = (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.at(
+        -1
+      )![0] as { nodes: Array<AugmentedGraphNode & { x?: number; y?: number }> };
+      const liveFocus = pushed.nodes.find(node => node.id === 'focus');
+      liveFocus!.x = 500;
+      liveFocus!.y = -200;
+
+      await vi.advanceTimersByTimeAsync(100);
+      const nextPushed = (
+        handle.graphData as ReturnType<typeof vi.fn>
+      ).mock.calls.at(-1)![0] as {
+        nodes: Array<AugmentedGraphNode & { x?: number; y?: number }>;
+      };
+      for (const id of ['page-new', 'tag:new']) {
+        const inserted = nextPushed.nodes.find(node => node.id === id);
+        expect(inserted).toBeDefined();
+        expect(Math.abs(inserted!.x! - 500)).toBeLessThan(100);
+        expect(Math.abs(inserted!.y! - -200)).toBeLessThan(100);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('trickles one page and up to three tags every 100ms and aborts on focus change', async () => {
     vi.useFakeTimers();
     try {

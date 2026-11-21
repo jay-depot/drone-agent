@@ -1357,6 +1357,67 @@ export default function WikiGraphView({
       const timer = window.setTimeout(() => {
         if (graphRevisionRef.current !== revision) return;
         for (const node of batch) {
+          const positioned = node as PositionedNode;
+          if (focusedNodeId) {
+            const liveFocusedNode = nodesRef.current.find(
+              candidate => candidate.id === focusedNodeId
+            ) as PositionedNode | undefined;
+            if (
+              liveFocusedNode &&
+              isFiniteNumber(liveFocusedNode.x) &&
+              isFiniteNumber(liveFocusedNode.y)
+            ) {
+              const hash = [...node.id].reduce(
+                (value, char) =>
+                  (value * 31 + char.charCodeAt(0)) >>> 0,
+                0
+              );
+              const angle = (hash % 360) * (Math.PI / 180);
+              const radius = 25 + (hash % 35);
+              positioned.x =
+                liveFocusedNode.x + Math.cos(angle) * radius;
+              positioned.y =
+                liveFocusedNode.y + Math.sin(angle) * radius;
+              positioned.vx = 0;
+              positioned.vy = 0;
+            }
+          } else {
+            const connectedIds = new Set<string>();
+            for (const edge of edges) {
+              if (edge.kind !== 'link' && edge.kind !== 'tag') continue;
+              if (edgeEndpointId(edge.source) === node.id) {
+                connectedIds.add(edgeEndpointId(edge.target));
+              }
+              if (edgeEndpointId(edge.target) === node.id) {
+                connectedIds.add(edgeEndpointId(edge.source));
+              }
+            }
+            const liveNeighbor = [...connectedIds]
+              .map(id =>
+                nodesRef.current.find(candidate => candidate.id === id)
+              )
+              .find(
+                candidate =>
+                  candidate &&
+                  isFiniteNumber((candidate as PositionedNode).x) &&
+                  isFiniteNumber((candidate as PositionedNode).y)
+              ) as PositionedNode | undefined;
+            if (liveNeighbor) {
+              const hash = [...node.id].reduce(
+                (value, char) =>
+                  (value * 31 + char.charCodeAt(0)) >>> 0,
+                0
+              );
+              const angle = (hash % 360) * (Math.PI / 180);
+              const radius = 35 + (hash % 40);
+              positioned.x =
+                liveNeighbor.x! + Math.cos(angle) * radius;
+              positioned.y =
+                liveNeighbor.y! + Math.sin(angle) * radius;
+              positioned.vx = 0;
+              positioned.vy = 0;
+            }
+          }
           insertionRevealRef.current.add(node.id);
         }
         if (focusedNodeId && batch.length > 0) {
