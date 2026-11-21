@@ -366,6 +366,8 @@ export default function WikiGraphView({
   const emergingEdgesRef = useRef(new Map<string, number>());
   const workingEdgeCacheRef = useRef(new Map<string, AugmentedGraphEdge>());
   const workingGraphSignatureRef = useRef('');
+  const edgeKeyCacheRef = useRef(new WeakMap<object, string>());
+  const initialGraphWarmupRef = useRef(false);
 
   // Set by the mount effect so later effects can restyle without re-running
   // the graph setup. Accessors live inside the mount effect: they close over
@@ -411,6 +413,14 @@ export default function WikiGraphView({
   /** Re-filters the tag-repulsion force against current ghost ids. */
   const syncGhostExclusionRef = useRef<() => void>(() => {});
   const selectiveHeatRef = useRef<D3SelectiveHeatForce | null>(null);
+  const stableEdgeKey = (edge: AugmentedGraphEdge): string => {
+    let key = edgeKeyCacheRef.current.get(edge);
+    if (!key) {
+      key = edgeKey(edge);
+      edgeKeyCacheRef.current.set(edge, key);
+    }
+    return key;
+  };
 
   const measureLabelWidth = (label: string, fontSize: number): number => {
     const roundedSize = Math.round(fontSize * 10) / 10;
@@ -575,9 +585,11 @@ export default function WikiGraphView({
     };
 
     const linkWidthAccessor = (link: AugmentedGraphEdge): number => {
+      const key = stableEdgeKey(link);
+      const now = performance.now();
       const edgeLifecycleFraction =
-        edgeFadeOutFraction(edgeKey(link), performance.now()) *
-        edgeFadeInFraction(edgeKey(link), performance.now());
+        edgeFadeOutFraction(key, now) *
+        edgeFadeInFraction(key, now);
       if (link.kind === 'tag') {
         const tagNode = nodesByIdRef.current.get(edgeEndpointId(link.target));
         if (!tagNode || !isTagNodeVisible(tagNode)) return 0;
@@ -590,21 +602,23 @@ export default function WikiGraphView({
       if (filterDim) return 0.05;
       const focus = focusSetsRef.current;
       if (!focus) return baseLinkWidthRef.current * edgeLifecycleFraction;
-      if (focus.touchingEdgeKeys.has(edgeKey(link)))
+      if (focus.touchingEdgeKeys.has(key))
         return baseLinkWidthRef.current * 2 * edgeLifecycleFraction;
       return 0.05 * edgeLifecycleFraction;
     };
 
     const linkColorAccessor = (link: AugmentedGraphEdge): string => {
+      const key = stableEdgeKey(link);
+      const now = performance.now();
       const edgeLifecycleFraction =
-        edgeFadeOutFraction(edgeKey(link), performance.now()) *
-        edgeFadeInFraction(edgeKey(link), performance.now());
+        edgeFadeOutFraction(key, now) *
+        edgeFadeInFraction(key, now);
       if (link.kind === 'tag') {
         const tagNode = nodesByIdRef.current.get(edgeEndpointId(link.target));
         if (!tagNode || !isTagNodeVisible(tagNode)) return TRANSPARENT;
         if (!nodePassesFilter(tagNode.id)) return theme.dimLink;
         const focus = focusSetsRef.current;
-        if (focus && focus.touchingEdgeKeys.has(edgeKey(link)))
+        if (focus && focus.touchingEdgeKeys.has(key))
           return edgeLifecycleColor(TAG_EDGE_LIT, edgeLifecycleFraction);
         return edgeLifecycleColor(TAG_EDGE, edgeLifecycleFraction);
       }
@@ -614,7 +628,7 @@ export default function WikiGraphView({
       if (filterDim) return theme.dimLink;
       const focus = focusSetsRef.current;
       if (focus) {
-        return focus.touchingEdgeKeys.has(edgeKey(link))
+        return focus.touchingEdgeKeys.has(key)
           ? isBrokenLink(link)
             ? theme.brokenLink
             : theme.litLink
@@ -917,15 +931,10 @@ export default function WikiGraphView({
         if (!clone) {
           clone = { ...edge };
           workingEdgeCacheRef.current.set(key, clone);
-        } else {
-          clone.source = edge.source;
-          clone.target = edge.target;
-          clone.kind = edge.kind;
         }
         return clone;
         });
       handle.pauseAnimation();
-        handle.warmupTicks(0);
         handle
           .graphData({
             nodes: [...orderedNodes, ...ghostNodes].sort(
@@ -934,9 +943,12 @@ export default function WikiGraphView({
             ),
             links,
           });
-        handle.warmupTicks(INITIAL_WARMUP_TICKS);
       handle.resumeAnimation();
       workingGraphSignatureRef.current = signature;
+        if (!initialGraphWarmupRef.current) {
+          initialGraphWarmupRef.current = true;
+          handle.warmupTicks(0);
+        }
     };
     syncGraphDataRef.current = syncGraphData;
     const applySize = () => {
