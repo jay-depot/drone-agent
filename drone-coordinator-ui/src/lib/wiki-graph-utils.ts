@@ -501,6 +501,8 @@ export function applySafetyCulledWikiGraph(
 export interface FocusSets {
   /** The focused node id plus every neighbor reachable by one edge. */
   neighborIds: Set<string>;
+  /** Nodes reachable by exactly two edges from the focused node. */
+  secondaryIds: Set<string>;
   /**
    * `source\\u0000target` keys of edges touching the focused node. Keys (not
    * object identity) because the graph engine hands accessors its own
@@ -519,6 +521,7 @@ export function buildFocusSets(
   focusedId: string
 ): FocusSets {
   const neighborIds = new Set<string>([focusedId]);
+  const secondaryIds = new Set<string>();
   const touchingEdgeKeys = new Set<string>();
   for (const edge of edges) {
     if (edge.source === focusedId || edge.target === focusedId) {
@@ -527,5 +530,16 @@ export function buildFocusSets(
       touchingEdgeKeys.add(edgeKey(edge));
     }
   }
-  return { neighborIds, touchingEdgeKeys };
+  for (const edge of edges) {
+    if (
+      neighborIds.has(edge.source) ||
+      neighborIds.has(edge.target)
+    ) {
+      const otherSource = edge.source;
+      const otherTarget = edge.target;
+      if (!neighborIds.has(otherSource)) secondaryIds.add(otherSource);
+      if (!neighborIds.has(otherTarget)) secondaryIds.add(otherTarget);
+    }
+  }
+  return { neighborIds, secondaryIds, touchingEdgeKeys };
 }

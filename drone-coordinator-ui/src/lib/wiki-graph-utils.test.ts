@@ -670,6 +670,7 @@ describe('buildFocusSets', () => {
   it('collects the focus and its direct neighbors for a page focus', () => {
     const sets = buildFocusSets(edges, 'a');
     expect([...sets.neighborIds].sort()).toEqual(['a', 'b', 'c', 'tag:x']);
+    expect([...sets.secondaryIds].sort()).toEqual(['d']);
     expect(sets.touchingEdgeKeys.size).toBe(3);
   });
 

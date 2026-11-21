@@ -460,6 +460,17 @@ export default function WikiGraphView({
         const isTag = node.kind === 'tag';
         if (isTag && !isTagNodeVisible(node)) continue;
         const score = node._val ?? (isTag ? 0 : 1);
+        const focus = focusSetsRef.current;
+        const rankedScore =
+          focus === null
+            ? score
+            : focusedIdRef.current === node.id
+              ? score + 1000
+              : focus.neighborIds.has(node.id)
+                ? score + 500
+                : focus.secondaryIds.has(node.id)
+                  ? score * 0.25
+                  : score - 1000;
 
         const fontSize = Math.max(11 / k, 4);
         const label = graphNodeLabel(node);
@@ -481,7 +492,7 @@ export default function WikiGraphView({
             };
         (isTag ? tagCandidates : pageCandidates).push({
           id: node.id,
-          score,
+          score: rankedScore,
           rect,
         });
       }
@@ -719,10 +730,11 @@ export default function WikiGraphView({
         const positioned = node as PositionedNode;
         if (positioned.x === undefined || positioned.y === undefined) continue;
         const focus = focusSetsRef.current;
-        const dimmed =
-          (focus !== null && !focus.neighborIds.has(node.id)) ||
-          !nodePassesFilter(node.id);
-        if (dimmed) continue;
+        const outsideFocus =
+          focus !== null &&
+          !focus.neighborIds.has(node.id) &&
+          !focus.secondaryIds.has(node.id);
+        if (outsideFocus || !nodePassesFilter(node.id)) continue;
         if (fadingRef.current.has(node.id)) continue;
         if (node.kind === 'tag' && !tagsVisibleRef.current) continue;
         // Showdown survivor sets (recomputed on push/zoom/throttled ticks)
@@ -780,6 +792,12 @@ export default function WikiGraphView({
         ctx.save();
         ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
         ctx.shadowBlur = 2 / globalScale;
+        if (
+          focus !== null &&
+          focus.secondaryIds.has(node.id)
+        ) {
+          ctx.globalAlpha = 0.55;
+        }
         ctx.fillStyle = isTag ? theme.tagLabel : 'rgba(255, 255, 255, 0.92)';
         ctx.fillText(label, positioned.x, textY);
         ctx.restore();

@@ -1527,6 +1527,56 @@ describe('WikiGraphView', () => {
     expect(draws('#u')).toBe(false);
   });
 
+  it('shows subdued labels for second-degree nodes in focus view', () => {
+    const focusNodes = [
+      ...nodes,
+      { ...pageNode({ id: 'd', title: 'Second Degree' }), _val: 8, x: 50, y: 50 },
+    ];
+    const focusEdges = [
+      ...edges,
+      { source: 'b', target: 'd', kind: 'link' as const },
+    ];
+    render(
+      <WikiGraphView
+        nodes={focusNodes}
+        edges={focusEdges}
+        focusedNodeId="a"
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    const frameFn = accessorFrom('onRenderFramePost') as (
+      ctx: CanvasRenderingContext2D,
+      globalScale: number
+    ) => void;
+    const ctx = {
+      beginPath: vi.fn(),
+      arc: vi.fn(),
+      stroke: vi.fn(),
+      fillRect: vi.fn(),
+      fillText: vi.fn(),
+      measureText: vi.fn(() => ({ width: 10 })),
+      save: vi.fn(),
+      restore: vi.fn(),
+      font: '',
+      textAlign: '',
+      textBaseline: '',
+      shadowColor: '',
+      shadowBlur: 0,
+      fillStyle: '',
+      filter: 'none',
+      globalAlpha: 1,
+    } as unknown as CanvasRenderingContext2D;
+
+    frameFn(ctx, 1);
+
+    const labels = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls
+      .map(call => call[0] as string);
+    expect(labels).toContain('Second Degree');
+  });
+
   it('preserves existing positions across focus-subset graph pushes', () => {
     const initial = [
       { ...pageNode({ id: 'a', title: 'A' }), x: 25, y: 35, vx: 1, vy: -1 },
