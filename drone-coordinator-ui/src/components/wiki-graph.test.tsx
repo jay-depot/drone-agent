@@ -190,6 +190,49 @@ describe('WikiGraphView', () => {
     expect(strengthAccessor(removedNode)).toBe(0);
   });
 
+  it('trickles new edges in batches of 10', async () => {
+    vi.useFakeTimers();
+    try {
+      const initial = [pageNode({ id: 'a', title: 'A', x: 0, y: 0 })];
+      const pages = Array.from({ length: 12 }, (_, i) =>
+        pageNode({ id: `p${i}`, title: `P${i}`, x: i * 10, y: i * 10 })
+      );
+      const grown = [...initial, ...pages];
+      const grownEdges = pages.map(page => ({
+        source: 'a',
+        target: page.id,
+        kind: 'link' as const,
+      }));
+      const graphProps = {
+        tagsVisible: true,
+        onNodeFocus: vi.fn(),
+        onClearFocus: vi.fn(),
+        forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+      };
+      const { rerender } = render(
+        <WikiGraphView {...graphProps} nodes={initial} edges={[]} />
+      );
+      rerender(
+        <WikiGraphView {...graphProps} nodes={grown} edges={grownEdges} />
+      );
+
+      await vi.advanceTimersByTimeAsync(100);
+      const firstPush = (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.at(
+        -1
+      )![0] as { links: AugmentedGraphEdge[] };
+      expect(firstPush.links.length).toBeGreaterThan(0);
+      expect(firstPush.links.length).toBeLessThanOrEqual(10);
+
+      await vi.advanceTimersByTimeAsync(100);
+      const secondPush = (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.at(
+        -1
+      )![0] as { links: AugmentedGraphEdge[] };
+      expect(secondPush.links.length).toBeLessThanOrEqual(12);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('lands inserted nodes near the focused node current position', async () => {
     vi.useFakeTimers();
     try {

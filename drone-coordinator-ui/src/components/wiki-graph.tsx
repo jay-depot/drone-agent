@@ -155,6 +155,7 @@ const INITIAL_VELOCITY_DECAY = 0.35;
 const INITIAL_WARMUP_TICKS = 120;
 const FOCUS_HEAT_MS = 900;
 const NODE_INSERTION_MS = 100;
+const EDGE_INSERTION_SLOTS = 10;
 const FOCUS_CENTER_MS = 350;
 const FOCUS_SETTLE_MS = 600;
 
@@ -356,6 +357,7 @@ export default function WikiGraphView({
   /** True while any node is drifting or fading — suppresses reactive fits. */
   const settlingRef = useRef(false);
   const insertionRevealRef = useRef<Set<string>>(new Set());
+  const edgeRevealRef = useRef<Set<string>>(new Set());
   const insertionTimersRef = useRef<number[]>([]);
   const graphRevisionRef = useRef(0);
   const pendingInsertionDurationRef = useRef(0);
@@ -905,6 +907,7 @@ export default function WikiGraphView({
           renderedNodeIds.has(edgeEndpointId(edge.target))
         ) {
           const key = edgeKey(edge);
+          if (!edgeRevealRef.current.has(key)) continue;
           fadingEdgesRef.current.delete(key);
           fadingEdgeRecordsRef.current.delete(key);
           workingEdges.set(key, edge);
@@ -1333,6 +1336,19 @@ export default function WikiGraphView({
               .filter(node => existingIds.has(node.id))
               .map(node => node.id)
           );
+    edgeRevealRef.current =
+      prevNodeCountRef.current === null
+        ? new Set(edges.map(edge => edgeKey(edge)))
+        : new Set(
+            edges
+              .filter(edge => {
+                const key = edgeKey(edge);
+                return previousEdges.some(
+                  previous => edgeKey(previous) === key
+                );
+              })
+              .map(edge => edgeKey(edge))
+          );
     syncGhostExclusionRef.current();
     syncGraphDataRef.current(fg);
     computeShowdownsRef.current();
@@ -1347,6 +1363,12 @@ export default function WikiGraphView({
     );
     pendingInsertionDurationRef.current =
       cycleCount > 0 ? cycleCount * interval : 0;
+    const newEdgeQueue = edges
+      .filter(edge => !previousEdges.some(previous => edgeKey(previous) === edgeKey(edge)))
+      .map(edge => edgeKey(edge));
+    const edgeCycleCount = Math.ceil(newEdgeQueue.length / EDGE_INSERTION_SLOTS);
+    pendingInsertionDurationRef.current =
+      Math.max(pendingInsertionDurationRef.current, edgeCycleCount * interval);
     for (let cycle = 0; cycle < cycleCount; cycle++) {
       const batch = [
         pageQueue[cycle],
@@ -1433,6 +1455,21 @@ export default function WikiGraphView({
         if (cycle === cycleCount - 1) {
           fg.d3ReheatSimulation();
         }
+      }, interval * (cycle + 1));
+      timers.push(timer);
+    }
+    for (let cycle = 0; cycle < edgeCycleCount; cycle++) {
+      const edgeBatch = newEdgeQueue.slice(
+        cycle * EDGE_INSERTION_SLOTS,
+        (cycle + 1) * EDGE_INSERTION_SLOTS
+      );
+      const timer = window.setTimeout(() => {
+        if (graphRevisionRef.current !== revision) return;
+        for (const key of edgeBatch) {
+          edgeRevealRef.current.add(key);
+        }
+        syncGraphDataRef.current(fg);
+        repaintRef.current(fg);
       }, interval * (cycle + 1));
       timers.push(timer);
     }
