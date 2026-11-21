@@ -1369,15 +1369,22 @@ export default function WikiGraphView({
     const edgeCycleCount = Math.ceil(newEdgeQueue.length / EDGE_INSERTION_SLOTS);
     pendingInsertionDurationRef.current =
       Math.max(pendingInsertionDurationRef.current, edgeCycleCount * interval);
-    for (let cycle = 0; cycle < cycleCount; cycle++) {
+    const totalCycles = Math.max(cycleCount, edgeCycleCount);
+    for (let cycle = 0; cycle < totalCycles; cycle++) {
       const batch = [
         pageQueue[cycle],
         ...tagQueue.slice(cycle * 3, cycle * 3 + 3),
       ].filter(
         (node): node is AugmentedGraphNode => node !== undefined
       );
+      const edgeBatch = newEdgeQueue.slice(
+        cycle * EDGE_INSERTION_SLOTS,
+        (cycle + 1) * EDGE_INSERTION_SLOTS
+      );
       const timer = window.setTimeout(() => {
         if (graphRevisionRef.current !== revision) return;
+        let nodesChanged = false;
+        let edgesChanged = false;
         for (const node of batch) {
           const positioned = node as PositionedNode;
           if (focusedNodeId) {
@@ -1441,8 +1448,14 @@ export default function WikiGraphView({
             }
           }
           insertionRevealRef.current.add(node.id);
+          nodesChanged = true;
         }
-        if (focusedNodeId && batch.length > 0) {
+        for (const key of edgeBatch) {
+          edgeRevealRef.current.add(key);
+          edgesChanged = true;
+        }
+        if (!nodesChanged && !edgesChanged) return;
+        if (focusedNodeId && nodesChanged) {
           selectiveHeatRef.current?.setActive(
             new Set(batch.map(node => node.id)),
             performance.now()
@@ -1450,26 +1463,13 @@ export default function WikiGraphView({
         }
         syncGraphDataRef.current(fg);
         repaintRef.current(fg);
-        syncGhostExclusionRef.current();
-        computeShowdownsRef.current();
-        if (cycle === cycleCount - 1) {
+        if (nodesChanged) {
+          syncGhostExclusionRef.current();
+          computeShowdownsRef.current();
+        }
+        if (nodesChanged && cycle === cycleCount - 1) {
           fg.d3ReheatSimulation();
         }
-      }, interval * (cycle + 1));
-      timers.push(timer);
-    }
-    for (let cycle = 0; cycle < edgeCycleCount; cycle++) {
-      const edgeBatch = newEdgeQueue.slice(
-        cycle * EDGE_INSERTION_SLOTS,
-        (cycle + 1) * EDGE_INSERTION_SLOTS
-      );
-      const timer = window.setTimeout(() => {
-        if (graphRevisionRef.current !== revision) return;
-        for (const key of edgeBatch) {
-          edgeRevealRef.current.add(key);
-        }
-        syncGraphDataRef.current(fg);
-        repaintRef.current(fg);
       }, interval * (cycle + 1));
       timers.push(timer);
     }
