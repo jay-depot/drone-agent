@@ -18,6 +18,7 @@ import {
   tagSpringStrength,
   WIKI_TAG_SPRING_STRENGTH,
   WIKI_TAG_REPULSION_DISTANCE_MAX,
+  MAX_VISIBLE_TAG_NODES,
 } from './wiki-graph-utils';
 import type {
   AugmentedGraphEdge,
@@ -461,6 +462,68 @@ describe('applySafetyCulledWikiGraph', () => {
       null
     );
     expect(result.nodes.filter(node => node.kind === 'page')).toHaveLength(500);
+  });
+
+  it('never returns more than 1500 tag nodes', () => {
+    const graph = {
+      nodes: [
+        pageNode({ id: 'p0', title: 'Page 0' }),
+        ...Array.from({ length: 1600 }, (_, i) => ({
+          ...pageNode({
+            id: `tag:${i}`,
+            title: `Tag ${i}`,
+            kind: 'tag',
+            tags: [`tag${i}`],
+          }),
+          _val: i,
+        })),
+      ],
+      edges: Array.from({ length: 1600 }, (_, i) => ({
+        source: 'p0',
+        target: `tag:${i}`,
+        kind: 'tag' as const,
+      })),
+    };
+    const result = applySafetyCulledWikiGraph(
+      graph.nodes,
+      graph.edges,
+      null
+    );
+    expect(result.nodes.filter(node => node.kind === 'tag')).toHaveLength(
+      MAX_VISIBLE_TAG_NODES
+    );
+  });
+
+  it('preserves a focused tag while applying the tag top-k', () => {
+    const tags = Array.from({ length: 1600 }, (_, i) => ({
+      ...pageNode({
+        id: i === 0 ? 'tag:focused' : `tag:${i}`,
+        title: i === 0 ? 'focused' : `Tag ${i}`,
+        kind: 'tag',
+        tags: [i === 0 ? 'focused' : `tag${i}`],
+      }),
+      _val: i,
+    }));
+    const graph = {
+      nodes: [
+        pageNode({ id: 'p0', title: 'Page 0' }),
+        ...tags,
+      ],
+      edges: tags.map(tag => ({
+        source: 'p0',
+        target: tag.id,
+        kind: 'tag' as const,
+      })),
+    };
+    const result = applySafetyCulledWikiGraph(
+      graph.nodes,
+      graph.edges,
+      'tag:focused'
+    );
+    expect(result.nodes.filter(node => node.kind === 'tag')).toHaveLength(
+      MAX_VISIBLE_TAG_NODES
+    );
+    expect(result.nodes.some(node => node.id === 'tag:focused')).toBe(true);
   });
 
   it('runs top-k after focus refinement and prunes orphan tags', () => {

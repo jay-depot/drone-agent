@@ -331,6 +331,7 @@ export function applyNodeSizing(
 }
 
 export const MAX_VISIBLE_PAGE_NODES = 500;
+export const MAX_VISIBLE_TAG_NODES = 1500;
 
 const safetyCullCache = new WeakMap<
   AugmentedGraphNode[],
@@ -347,7 +348,8 @@ export function applySafetyCulledWikiGraph(
 ): { nodes: AugmentedGraphNode[]; edges: AugmentedGraphEdge[] } {
   if (
     !focusedId &&
-    nodes.filter(node => node.kind === 'page').length <= MAX_VISIBLE_PAGE_NODES
+    nodes.filter(node => node.kind === 'page').length <= MAX_VISIBLE_PAGE_NODES &&
+    nodes.filter(node => node.kind === 'tag').length <= MAX_VISIBLE_TAG_NODES
   ) {
     return { nodes, edges };
   }
@@ -443,14 +445,33 @@ export function applySafetyCulledWikiGraph(
     }
   }
 
-  const retainedNodes = nodes.filter(
-    node => node.kind === 'page'
-      ? retainedIds.has(node.id)
-      : node.kind === 'tag' &&
+  const tagCandidates = nodes
+    .filter(
+      node =>
+        node.kind === 'tag' &&
         (!candidateTagIds || candidateTagIds.has(node.id))
-  );
-  const retainedTagIds = new Set(
-    retainedNodes.filter(node => node.kind === 'tag').map(node => node.id)
+    )
+    .sort(
+      (a, b) =>
+        (b._val ?? 0) - (a._val ?? 0) ||
+        a.id.localeCompare(b.id)
+    );
+  const retainedTagIds = new Set<string>();
+  if (focusedId) {
+    const focusedTag = nodes.find(
+      node => node.id === focusedId && node.kind === 'tag'
+    );
+    if (focusedTag) retainedTagIds.add(focusedTag.id);
+  }
+  for (const tag of tagCandidates) {
+    if (retainedTagIds.size >= MAX_VISIBLE_TAG_NODES) break;
+    retainedTagIds.add(tag.id);
+  }
+
+  const retainedNodes = nodes.filter(node =>
+    node.kind === 'page'
+      ? retainedIds.has(node.id)
+      : retainedTagIds.has(node.id)
   );
   const retainedEdges = edges.filter(edge => {
     if (edge.kind === 'link') {
