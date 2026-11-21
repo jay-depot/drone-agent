@@ -364,6 +364,8 @@ export default function WikiGraphView({
   const fadingEdgesRef = useRef(new Map<string, number>());
   const fadingEdgeRecordsRef = useRef(new Map<string, AugmentedGraphEdge>());
   const emergingEdgesRef = useRef(new Map<string, number>());
+  const workingEdgeCacheRef = useRef(new Map<string, AugmentedGraphEdge>());
+  const workingGraphSignatureRef = useRef('');
 
   // Set by the mount effect so later effects can restyle without re-running
   // the graph setup. Accessors live inside the mount effect: they close over
@@ -863,7 +865,6 @@ export default function WikiGraphView({
     };
     repaintRef.current = repaint;
     const syncGraphData = (handle: ForceGraphHandle) => {
-      handle.pauseAnimation();
       const activeIds = insertionRevealRef.current;
       const orderedNodes = nodesRef.current
         .filter(node => activeIds.has(node.id))
@@ -883,15 +884,44 @@ export default function WikiGraphView({
         ...orderedNodes.map(node => node.id),
         ...ghostNodes.map(node => node.id),
       ]);
-      const currentEdges = edgesRef.current.filter(
-        edge =>
+      const workingEdges = new Map<string, AugmentedGraphEdge>();
+      for (const edge of edgesRef.current) {
+        if (
           renderedNodeIds.has(edgeEndpointId(edge.source)) &&
           renderedNodeIds.has(edgeEndpointId(edge.target))
-      );
-      const fadingEdges = [...fadingEdgeRecordsRef.current.entries()]
-        .filter(([key]) => fadingEdgesRef.current.has(key))
-        .map(([, edge]) => edge);
-      const links = toEngineLinks([...currentEdges, ...fadingEdges]);
+        ) {
+          workingEdges.set(edgeKey(edge), edge);
+        }
+      }
+      for (const [key, edge] of fadingEdgeRecordsRef.current) {
+        if (fadingEdgesRef.current.has(key) && !workingEdges.has(key)) {
+          workingEdges.set(key, edge);
+        }
+      }
+
+      const nodeSignature = [
+        ...orderedNodes.map(node => node.id),
+        ...ghostNodes.map(node => node.id),
+      ].sort().join('\u0000');
+      const edgeSignature = [...workingEdges.keys()].sort().join('\u0000');
+      const signature = `${nodeSignature}\u0001${edgeSignature}`;
+      if (signature === workingGraphSignatureRef.current) return;
+
+      const links = [...workingEdges.entries()]
+        .sort(([, a], [, b]) => (a.kind === 'tag' ? 0 : 1) - (b.kind === 'tag' ? 0 : 1))
+        .map(([key, edge]) => {
+        let clone = workingEdgeCacheRef.current.get(key);
+        if (!clone) {
+          clone = { ...edge };
+          workingEdgeCacheRef.current.set(key, clone);
+        } else {
+          clone.source = edge.source;
+          clone.target = edge.target;
+          clone.kind = edge.kind;
+        }
+        return clone;
+        });
+      handle.pauseAnimation();
       handle.graphData({
         nodes: [...orderedNodes, ...ghostNodes].sort(
           (a, b) => (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
@@ -899,6 +929,7 @@ export default function WikiGraphView({
         links,
       });
       handle.resumeAnimation();
+      workingGraphSignatureRef.current = signature;
     };
     syncGraphDataRef.current = syncGraphData;
     const applySize = () => {
