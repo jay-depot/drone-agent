@@ -350,6 +350,25 @@ describe('WikiPage graph view', () => {
     expect(ids.has('tag:ops')).toBe(true);
   });
 
+  it('feeds filter-constrained graph data into the graph pipeline', async () => {
+    vi.stubGlobal('fetch', graphFetch([metaPage({ id: 'a', tags: ['ops'] })]));
+
+    renderWiki(['/wiki?view=graph&tags=ops']);
+    await waitFor(() => {
+      expect(wikiGraphStub.props).not.toBeNull();
+    });
+    const nodes = wikiGraphStub.props?.nodes as Array<{ id: string }>;
+    const edges = wikiGraphStub.props?.edges as Array<{
+      source: string;
+      target: string;
+      kind: string;
+    }>;
+    expect(nodes.some(node => node.id === 'a')).toBe(true);
+    expect(nodes.some(node => node.id === 'b')).toBe(false);
+    expect(nodes.some(node => node.id === 'tag:ops')).toBe(true);
+    expect(edges.some(edge => edge.kind === 'link')).toBe(false);
+  });
+
   it('preserves filter params across focus set and clear', async () => {
     vi.stubGlobal('fetch', graphFetch());
 

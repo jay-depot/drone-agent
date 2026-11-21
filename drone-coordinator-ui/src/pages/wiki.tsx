@@ -167,14 +167,51 @@ export default function WikiPage() {
       edges: base.edges,
     };
   }, [graph]);
-  const augmented = useMemo(() => {
+  const graphSeed = useMemo(() => {
     if (!sized) return null;
+    const hasSearch = searchResults !== null;
+    const hasActiveFilters = !filtersAreDefault(filters);
+    if (!hasSearch && !hasActiveFilters) return sized;
+
+    const retainedPageIds = new Set(filtered.map(page => page.id));
+    if (focusedNodeId && !focusedNodeId.startsWith('tag:')) {
+      retainedPageIds.add(focusedNodeId);
+    }
+
+    const retainedTagIds = new Set<string>();
+    if (focusedNodeId?.startsWith('tag:')) {
+      retainedTagIds.add(focusedNodeId);
+    }
+
+    const retainedEdges = sized.edges.filter(edge => {
+      if (edge.kind === 'link') {
+        return (
+          retainedPageIds.has(edge.source) &&
+          retainedPageIds.has(edge.target)
+        );
+      }
+      if (!retainedPageIds.has(edge.source)) return false;
+      retainedTagIds.add(edge.target);
+      return true;
+    });
+    const retainedNodes = sized.nodes.filter(node =>
+      node.kind === 'page'
+        ? retainedPageIds.has(node.id)
+        : retainedTagIds.has(node.id)
+    );
+    return {
+      nodes: retainedNodes,
+      edges: retainedEdges,
+    };
+  }, [sized, filtered, focusedNodeId, searchResults, filters]);
+  const augmented = useMemo(() => {
+    if (!graphSeed) return null;
     return applySafetyCulledWikiGraph(
-      sized.nodes,
-      sized.edges,
+      graphSeed.nodes,
+      graphSeed.edges,
       focusedNodeId
     );
-  }, [sized, focusedNodeId]);
+  }, [graphSeed, focusedNodeId]);
   const visible = augmented;
   const focusedNode =
     visible && focusedNodeId
