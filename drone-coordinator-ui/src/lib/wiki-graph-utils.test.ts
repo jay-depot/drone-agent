@@ -18,6 +18,7 @@ import {
   tagSpringStrength,
   WIKI_TAG_SPRING_STRENGTH,
   WIKI_TAG_REPULSION_DISTANCE_MAX,
+  MAX_VISIBLE_PAGE_NODES,
   MAX_VISIBLE_TAG_NODES,
 } from './wiki-graph-utils';
 import type {
@@ -447,7 +448,7 @@ describe('applySafetyCulledWikiGraph', () => {
     expect(second).toBe(first);
   });
 
-  it('never returns more than 500 page nodes', () => {
+  it('never returns more than 250 page nodes', () => {
     const graph = {
       nodes: Array.from({ length: 600 }, (_, i) => ({
         ...pageNode({ id: `p${i}`, title: `Page ${i}` }),
@@ -461,10 +462,10 @@ describe('applySafetyCulledWikiGraph', () => {
       graph.edges,
       null
     );
-    expect(result.nodes.filter(node => node.kind === 'page')).toHaveLength(500);
+    expect(result.nodes.filter(node => node.kind === 'page')).toHaveLength(250);
   });
 
-  it('never returns more than 1500 tag nodes', () => {
+  it('never returns more than 750 tag nodes', () => {
     const graph = {
       nodes: [
         pageNode({ id: 'p0', title: 'Page 0' }),
@@ -566,7 +567,9 @@ describe('applySafetyCulledWikiGraph', () => {
       graph.edges,
       'tag:focused'
     );
-    expect(result.nodes.filter(node => node.kind === 'page')).toHaveLength(300);
+    expect(result.nodes.filter(node => node.kind === 'page')).toHaveLength(
+      MAX_VISIBLE_PAGE_NODES
+    );
     expect(result.nodes.some(node => node.id === 'tag:other')).toBe(false);
   });
 });

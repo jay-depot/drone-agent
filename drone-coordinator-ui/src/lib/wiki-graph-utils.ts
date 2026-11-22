@@ -330,8 +330,8 @@ export function applyNodeSizing(
   });
 }
 
-export const MAX_VISIBLE_PAGE_NODES = 500;
-export const MAX_VISIBLE_TAG_NODES = 1500;
+export const MAX_VISIBLE_PAGE_NODES = 250;
+export const MAX_VISIBLE_TAG_NODES = 750;
 
 const safetyCullCache = new WeakMap<
   AugmentedGraphNode[],
