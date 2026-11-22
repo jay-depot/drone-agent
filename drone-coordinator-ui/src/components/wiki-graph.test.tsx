@@ -8,7 +8,7 @@ import {
   WIKI_PAGE_LINK_SPRING_STRENGTH,
   WIKI_TAG_SPRING_STRENGTH,
 } from '@/lib/wiki-graph-utils';
-import { SHOWDOWN_RECOMPUTE_MS } from './wiki-graph';
+import { AUTO_FIT_TICK_MS, SHOWDOWN_RECOMPUTE_MS } from './wiki-graph';
 import WikiGraphView, {
   createSelectiveHeatForce,
   type ForceGraphHandle,
@@ -1013,6 +1013,41 @@ describe('WikiGraphView', () => {
     expect(fitCalls()).toBe(armed + 1);
     stopCb();
     expect(fitCalls()).toBe(armed + 2);
+  });
+
+  it('focus changes re-arm auto-fit and ticks during the transition', async () => {
+    const setIntervalSpy = vi.spyOn(window, 'setInterval');
+    const { rerender } = renderView();
+    const toggle = screen.getByTestId('wiki-graph-zoom-reset');
+    await userEvent.setup().click(toggle);
+    await waitFor(() => {
+      expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    });
+
+    rerender(
+      <WikiGraphView
+        nodes={nodes}
+        edges={edges}
+        tagsVisible={true}
+        focusedNodeId="a"
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    const intervalCall = setIntervalSpy.mock.calls.find(
+      call => call[1] === AUTO_FIT_TICK_MS
+    );
+    expect(intervalCall).toBeDefined();
+    const armed = (handle.zoomToFit as ReturnType<typeof vi.fn>).mock.calls
+      .length;
+    (intervalCall![0] as () => void)();
+    expect(
+      (handle.zoomToFit as ReturnType<typeof vi.fn>).mock.calls.length
+    ).toBe(armed + 1);
+    setIntervalSpy.mockRestore();
   });
 
   it('wheel over the canvas disarms zoom-to-fit before the engine zooms', async () => {

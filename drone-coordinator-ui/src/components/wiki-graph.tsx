@@ -149,6 +149,7 @@ const MAX_ZOOM_K = 10;
 const ZOOM_STEP = 1.3;
 const FIT_MS = 600;
 const FIT_PADDING = 40;
+export const AUTO_FIT_TICK_MS = 250;
 const LABEL_WIDTH_CACHE_MAX = 12000;
 const INITIAL_ALPHA_DECAY = 0.008;
 const INITIAL_VELOCITY_DECAY = 0.35;
@@ -363,6 +364,7 @@ export default function WikiGraphView({
   const pendingInsertionDurationRef = useRef(0);
   const focusTransitionActiveRef = useRef(false);
   const autoFitTimerRef = useRef<number | null>(null);
+  const autoFitIntervalRef = useRef<number | null>(null);
   const fadingEdgesRef = useRef(new Map<string, number>());
   const fadingEdgeRecordsRef = useRef(new Map<string, AugmentedGraphEdge>());
   const emergingEdgesRef = useRef(new Map<string, number>());
@@ -1077,7 +1079,6 @@ export default function WikiGraphView({
       .onEngineStop(() => {
         computeShowdownsRef.current();
         if (settlingRef.current) return;
-        if (focusTransitionActiveRef.current) return;
         if (zoomToFitOnRef.current) {
           if (
             nodesRef.current.some(
@@ -1136,9 +1137,9 @@ export default function WikiGraphView({
         window.clearTimeout(autoFitTimerRef.current);
         autoFitTimerRef.current = null;
       }
-      if (autoFitTimerRef.current !== null) {
-        window.clearTimeout(autoFitTimerRef.current);
-        autoFitTimerRef.current = null;
+      if (autoFitIntervalRef.current !== null) {
+        window.clearInterval(autoFitIntervalRef.current);
+        autoFitIntervalRef.current = null;
       }
       (fg as unknown as { _destructor?: () => void })._destructor?.();
       handleRef.current = null;
@@ -1515,6 +1516,12 @@ export default function WikiGraphView({
         window.clearTimeout(autoFitTimerRef.current);
         autoFitTimerRef.current = null;
       }
+      if (autoFitIntervalRef.current !== null) {
+        window.clearInterval(autoFitIntervalRef.current);
+        autoFitIntervalRef.current = null;
+      }
+      zoomToFitOnRef.current = true;
+      setZoomToFitOn(true);
     }
 
     if (focusedNodeId && previousFocusedId !== focusedNodeId) {
@@ -1531,26 +1538,35 @@ export default function WikiGraphView({
       }
 
       fg.d3ReheatSimulation();
-      const revealDelay =
+      const transitionDuration =
         pendingInsertionDurationRef.current +
         FADE_MS +
         FOCUS_SETTLE_MS;
-      const firstFit = window.setTimeout(() => {
-        if (zoomToFitOnRef.current) {
+      const runFitTick = () => {
+        if (!zoomToFitOnRef.current) return;
+        const positioned = nodesRef.current.some(
+          node => isFiniteNumber(node.x) && isFiniteNumber(node.y)
+        );
+        if (positioned) {
           fg.zoomToFit(FIT_MS, FIT_PADDING);
         }
-        const secondFit = window.setTimeout(() => {
-          if (zoomToFitOnRef.current) {
-            fg.zoomToFit(FIT_MS, FIT_PADDING);
-          }
-          focusTransitionActiveRef.current = false;
-          autoFitTimerRef.current = null;
-        }, FOCUS_SETTLE_MS);
-        insertionTimersRef.current.push(secondFit);
-        autoFitTimerRef.current = secondFit;
-      }, revealDelay);
-      insertionTimersRef.current.push(firstFit);
-      autoFitTimerRef.current = firstFit;
+      };
+      runFitTick();
+      autoFitIntervalRef.current = window.setInterval(
+        runFitTick,
+        AUTO_FIT_TICK_MS
+      );
+      const transitionEnd = window.setTimeout(() => {
+        if (autoFitIntervalRef.current !== null) {
+          window.clearInterval(autoFitIntervalRef.current);
+          autoFitIntervalRef.current = null;
+        }
+        runFitTick();
+        focusTransitionActiveRef.current = false;
+        autoFitTimerRef.current = null;
+      }, transitionDuration);
+      insertionTimersRef.current.push(transitionEnd);
+      autoFitTimerRef.current = transitionEnd;
     }
 
     if (previousFocusedId && !focusedNodeId) {
