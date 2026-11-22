@@ -218,8 +218,8 @@ export default function WikiPage() {
       ? (visible.nodes.find(n => n.id === focusedNodeId) ?? null)
       : null;
   const focusedTagMemberEdges =
-    visible && focusedNode?.kind === 'tag'
-      ? visible.edges.filter(
+    sized && focusedNode?.kind === 'tag'
+      ? sized.edges.filter(
           e => e.kind === 'tag' && e.target === focusedNode.id
         )
       : [];

@@ -437,6 +437,36 @@ describe('WikiPage graph view', () => {
     expect(screen.queryByText('Page A')).toBeNull();
   });
 
+  it('uses uncapped tag membership for the focus summary', async () => {
+    const largeGraph = {
+      nodes: [
+        ...Array.from({ length: 300 }, (_, i) => ({
+          id: `page-${i}`,
+          title: `Page ${i}`,
+          exists: true,
+          wordCount: 10,
+          tags: ['ops'],
+          scope: 'coordinator',
+        })),
+      ],
+      edges: [],
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url === '/api/wiki/graph') return ok(largeGraph);
+        if (url === '/api/wiki') return ok([]);
+        return notFound;
+      })
+    );
+
+    renderWiki(['/wiki?view=graph&tagnodes=1&node=tag:ops']);
+
+    await waitFor(() => {
+      expect(screen.getByText('Tag · 300 page(s)')).toBeTruthy();
+    });
+  });
+
   it('does not fetch the graph in the default list view', async () => {
     const mockFetch = vi.fn(async (_url: string) => ok([]));
     vi.stubGlobal('fetch', mockFetch);
