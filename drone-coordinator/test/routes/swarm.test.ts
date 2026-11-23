@@ -543,6 +543,46 @@ describe('Swarm Routes', () => {
     expect(body.count).toBe(1);
   });
 
+  it('GET /sessions returns a session with a numeric statusChangedAt', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/sync/sessions/register',
+      payload: { id: 'ss1', beaconId: 'b1' },
+    });
+    const res = await app.inject({ method: 'GET', url: '/api/sessions' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    const row = body.sessions.find((s: { id: string }) => s.id === 'ss1');
+    expect(typeof row.statusChangedAt).toBe('number');
+  });
+
+  it('statusChangedAt survives the register/get round trip', async () => {
+    const register = await app.inject({
+      method: 'POST',
+      url: '/api/sync/sessions/register',
+      payload: { id: 'ss1', beaconId: 'b1' },
+    });
+    const registered = JSON.parse(register.body).statusChangedAt;
+    expect(typeof registered).toBe('number');
+    const res = await app.inject({ method: 'GET', url: '/api/sessions/ss1' });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).session.statusChangedAt).toBe(registered);
+  });
+
+  it('GET /sessions/:id/log includes statusChangedAt in the session object', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/sync/sessions/register',
+      payload: { id: 'ss1', beaconId: 'b1' },
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/sessions/ss1/log',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(typeof JSON.parse(res.body).session.statusChangedAt).toBe('number');
+  });
+
   it('GET /sessions/:id/log gets session log', async () => {
     await app.inject({
       method: 'POST',
