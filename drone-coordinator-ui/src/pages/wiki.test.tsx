@@ -369,6 +369,32 @@ describe('WikiPage graph view', () => {
     expect(edges.some(edge => edge.kind === 'link')).toBe(false);
   });
 
+  it('includes page link edges when a tag is focused', async () => {
+    vi.stubGlobal('fetch', graphFetch());
+
+    renderWiki(['/wiki?view=graph&tagnodes=1&node=tag:ops']);
+    await waitFor(() => {
+      expect(wikiGraphStub.props).not.toBeNull();
+    });
+    const nodes = wikiGraphStub.props?.nodes as Array<{ id: string }>;
+    const edges = wikiGraphStub.props?.edges as Array<{
+      source: string;
+      target: string;
+      kind: string;
+    }>;
+    expect(nodes.some(node => node.id === 'a')).toBe(true);
+    expect(nodes.some(node => node.id === 'b')).toBe(true);
+    expect(nodes.some(node => node.id === 'tag:ops')).toBe(true);
+    expect(
+      edges.some(
+        edge =>
+          edge.kind === 'link' &&
+          edge.source === 'a' &&
+          edge.target === 'b'
+      )
+    ).toBe(true);
+  });
+
   it('preserves filter params across focus set and clear', async () => {
     vi.stubGlobal('fetch', graphFetch());
 

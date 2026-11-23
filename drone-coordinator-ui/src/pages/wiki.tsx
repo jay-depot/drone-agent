@@ -181,6 +181,14 @@ export default function WikiPage() {
     const retainedTagIds = new Set<string>();
     if (focusedNodeId?.startsWith('tag:')) {
       retainedTagIds.add(focusedNodeId);
+      for (const edge of sized.edges) {
+        if (
+          edge.kind === 'tag' &&
+          edge.target === focusedNodeId
+        ) {
+          retainedPageIds.add(edge.source);
+        }
+      }
     }
 
     const retainedEdges = sized.edges.filter(edge => {
