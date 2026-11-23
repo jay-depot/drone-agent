@@ -530,6 +530,17 @@ export function buildFocusSets(
       touchingEdgeKeys.add(edgeKey(edge));
     }
   }
+  if (focusedId.startsWith('tag:')) {
+    for (const edge of edges) {
+      if (
+        edge.kind === 'link' &&
+        neighborIds.has(edge.source) &&
+        neighborIds.has(edge.target)
+      ) {
+        touchingEdgeKeys.add(edgeKey(edge));
+      }
+    }
+  }
   for (const edge of edges) {
     if (
       neighborIds.has(edge.source) ||

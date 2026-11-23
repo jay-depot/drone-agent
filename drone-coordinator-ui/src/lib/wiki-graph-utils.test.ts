@@ -683,6 +683,16 @@ describe('buildFocusSets', () => {
     expect(sets.touchingEdgeKeys.size).toBe(1);
   });
 
+  it('includes page links between members of a focused tag', () => {
+    const memberEdges: AugmentedGraphEdge[] = [
+      { source: 'a', target: 'tag:x', kind: 'tag' },
+      { source: 'b', target: 'tag:x', kind: 'tag' },
+      { source: 'a', target: 'b', kind: 'link' },
+    ];
+    const sets = buildFocusSets(memberEdges, 'tag:x');
+    expect(sets.touchingEdgeKeys.has(edgeKey(memberEdges[2]))).toBe(true);
+  });
+
   it('matches engine-resolved link objects by endpoint key', () => {
     const sets = buildFocusSets(edges, 'a');
     const engineForm = {
