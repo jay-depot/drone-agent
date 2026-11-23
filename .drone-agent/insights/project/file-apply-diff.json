@@ -23,5 +23,9 @@
     "timestamp": "2026-11-02T23:19:17.000Z",
     "insight": "file__apply_diff silently accepts a hunk whose change-zone is byte-identical old==new: it reports the hunk as applied with a `-0 +0` summary and `patched: true` but writes nothing. Bit twice in one session: a \"row type\" hunk reported success while leaving the old line (caught only later by `pnpm -r run build` TS2339), and a planning session notepad pre-claimed work that never existed. Protocol: after every apply, grep for the NEW content AND the OLD content (expect new present, old absent); treat a `-0 +0` summary as a red flag; never log a step done before tool-output verification. Also: two hunks separated only by bare `@@ label` headers can merge into one un-matchable hunk — use explicit numeric headers (`@@ -N,M +N,M @@`) to force separate hunks.",
     "lastExamined": "2026-11-13T19:48:31.442Z"
+  },
+  {
+    "timestamp": "2026-11-23T01:46:12.019Z",
+    "insight": "apply_diff recurrence (2026-11-23, wiki decisions/index.md ingest): a patch whose `-` line was a TRUNCATED copy of a real long line (I pasted only the first ~30 chars of the 1846-char `278-kanban-add-card-ui` row as the change-zone anchor) applied with `maxFuzz: 200` and reported `\"patched\": true`, but it REPLACED the whole real line with my short fragment — silently truncating an unrelated 1846-char row to 73 chars. The tool did not flag that the change zone was a prefix of the matched span. Cleanest fix for inserting a new row: do not use apply_diff with a shortened anchor at all — `git checkout --` the file, write the exact new row to a temp file, and use `sed -i '<N>r /tmp/row.txt'` to insert after line N. Lesson: after ANY apply_diff, verify by line LENGTH (awk 'NR==N{print length}') near the edit, not just by grepping for the new text — a grep for the new row passes while a neighbouring row is corrupted. Same family as the earlier \"report success while writing nothing\" class."
   }
 ]
