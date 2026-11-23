@@ -3,12 +3,16 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { AugmentedGraphEdge, AugmentedGraphNode } from '@/lib/types';
 import {
+  WIKI_CHARGE_STRENGTH,
   WIKI_BROKEN_LINK_SPRING_STRENGTH,
   WIKI_PAGE_LINK_SPRING_STRENGTH,
   WIKI_TAG_SPRING_STRENGTH,
 } from '@/lib/wiki-graph-utils';
-import { SHOWDOWN_RECOMPUTE_MS } from './wiki-graph';
-import WikiGraphView, { type ForceGraphHandle } from './wiki-graph';
+import { AUTO_FIT_TICK_MS, SHOWDOWN_RECOMPUTE_MS } from './wiki-graph';
+import WikiGraphView, {
+  createSelectiveHeatForce,
+  type ForceGraphHandle,
+} from './wiki-graph';
 
 function makeFakeHandle() {
   const handle = {} as ForceGraphHandle &
@@ -40,11 +44,21 @@ function makeFakeHandle() {
     'centerAt',
     'zoomToFit',
     'd3Force',
+    'd3AlphaDecay',
+    'd3VelocityDecay',
+    'd3ReheatSimulation',
+    'pauseAnimation',
+    'resumeAnimation',
+    'warmupTicks',
   ]) {
     handle[method] = vi.fn(chain);
   }
   const linkForce = { distance: vi.fn(), strength: vi.fn() };
   const chargeForce = { strength: vi.fn(), distanceMax: vi.fn() };
+  (handle as unknown as { __linkForce: typeof linkForce }).__linkForce =
+    linkForce;
+  (handle as unknown as { __chargeForce: typeof chargeForce }).__chargeForce =
+    chargeForce;
   handle.d3Force = vi.fn((name: string) =>
     name === 'link' ? linkForce : name === 'charge' ? chargeForce : undefined
   ) as unknown as typeof handle.d3Force;
@@ -109,6 +123,304 @@ describe('WikiGraphView', () => {
     return calls[callIndex]?.[0] as (...args: unknown[]) => unknown;
   };
 
+  it('configures a hot initial simulation and exposes focus-node selective heat', () => {
+    renderView();
+    expect(handle.d3AlphaDecay).toHaveBeenCalledWith(0.008);
+    expect(handle.d3VelocityDecay).toHaveBeenCalledWith(0.35);
+    expect(handle.warmupTicks).toHaveBeenCalledWith(120);
+    expect(handle.d3ReheatSimulation).toHaveBeenCalled();
+
+    const force = createSelectiveHeatForce();
+    const active = pageNode({ id: 'active', title: 'Active' });
+    const inactive = pageNode({ id: 'inactive', title: 'Inactive' });
+    const simulated = [
+      { ...active, x: 10, y: 10, vx: 0, vy: 0 },
+      { ...inactive, x: 20, y: 20, vx: 0, vy: 0 },
+    ];
+    force.initialize(simulated);
+    force.setActive(new Set(['active']), performance.now());
+    force(0.5);
+    expect(Math.hypot(simulated[0].vx, simulated[0].vy)).toBeGreaterThan(0);
+    expect(simulated[1].vx).toBe(0);
+    expect(simulated[1].vy).toBe(0);
+  });
+
+  it('excludes transitional nodes from charge repulsion', () => {
+    const { rerender } = renderView();
+    const chargeForce = (
+      handle as unknown as {
+        __chargeForce: { strength: ReturnType<typeof vi.fn> };
+      }
+    ).__chargeForce;
+    const strengthAccessor = chargeForce.strength.mock.calls[0]?.[0] as
+      | ((node: AugmentedGraphNode) => number)
+      | undefined;
+    expect(strengthAccessor).toBeTypeOf('function');
+    if (!strengthAccessor) return;
+
+    expect(strengthAccessor(nodes[0])).toBe(WIKI_CHARGE_STRENGTH);
+
+    const newNode = pageNode({ id: 'new', title: 'New' });
+    rerender(
+      <WikiGraphView
+        nodes={[...nodes, newNode]}
+        edges={edges}
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    expect(strengthAccessor(newNode)).toBe(0);
+
+    const removedNode = nodes.find(node => node.id === 'b')!;
+    rerender(
+      <WikiGraphView
+        nodes={nodes.filter(node => node.id !== removedNode.id)}
+        edges={edges.filter(
+          edge =>
+            edge.source !== removedNode.id && edge.target !== removedNode.id
+        )}
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    expect(strengthAccessor(removedNode)).toBe(0);
+  });
+
+  it('trickles new edges in batches of 10', async () => {
+    vi.useFakeTimers();
+    try {
+      const initial = [pageNode({ id: 'a', title: 'A', x: 0, y: 0 })];
+      const pages = Array.from({ length: 12 }, (_, i) =>
+        pageNode({ id: `p${i}`, title: `P${i}`, x: i * 10, y: i * 10 })
+      );
+      const grown = [...initial, ...pages];
+      const grownEdges = pages.map(page => ({
+        source: 'a',
+        target: page.id,
+        kind: 'link' as const,
+      }));
+      const graphProps = {
+        tagsVisible: true,
+        onNodeFocus: vi.fn(),
+        onClearFocus: vi.fn(),
+        forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+      };
+      const { rerender } = render(
+        <WikiGraphView {...graphProps} nodes={initial} edges={[]} />
+      );
+      rerender(
+        <WikiGraphView {...graphProps} nodes={grown} edges={grownEdges} />
+      );
+
+      await vi.advanceTimersByTimeAsync(100);
+      const firstPush = (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.at(
+        -1
+      )![0] as { links: AugmentedGraphEdge[] };
+      expect(firstPush.links.length).toBeGreaterThan(0);
+      expect(firstPush.links.length).toBeLessThanOrEqual(10);
+
+      await vi.advanceTimersByTimeAsync(100);
+      const secondPush = (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.at(
+        -1
+      )![0] as { links: AugmentedGraphEdge[] };
+      expect(secondPush.links.length).toBeLessThanOrEqual(12);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('lands inserted nodes near the focused node current position', async () => {
+    vi.useFakeTimers();
+    try {
+      const initial = [
+        pageNode({ id: 'focus', title: 'Focus', x: 10, y: 20 }),
+      ];
+      const grown = [
+        initial[0],
+        pageNode({ id: 'page-new', title: 'New page' }),
+        pageNode({
+          id: 'tag:new',
+          title: 'new',
+          kind: 'tag',
+          tags: ['new'],
+        }),
+      ];
+      const graphProps = {
+        edges: [],
+        tagsVisible: true,
+        onNodeFocus: vi.fn(),
+        onClearFocus: vi.fn(),
+        forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+      };
+      const { rerender } = render(
+        <WikiGraphView {...graphProps} nodes={initial} focusedNodeId="focus" />
+      );
+      rerender(
+        <WikiGraphView {...graphProps} nodes={grown} focusedNodeId="focus" />
+      );
+
+      const pushed = (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.at(
+        -1
+      )![0] as { nodes: Array<AugmentedGraphNode & { x?: number; y?: number }> };
+      const liveFocus = pushed.nodes.find(node => node.id === 'focus');
+      liveFocus!.x = 500;
+      liveFocus!.y = -200;
+
+      await vi.advanceTimersByTimeAsync(100);
+      const nextPushed = (
+        handle.graphData as ReturnType<typeof vi.fn>
+      ).mock.calls.at(-1)![0] as {
+        nodes: Array<AugmentedGraphNode & { x?: number; y?: number }>;
+      };
+      for (const id of ['page-new', 'tag:new']) {
+        const inserted = nextPushed.nodes.find(node => node.id === id);
+        expect(inserted).toBeDefined();
+        expect(Math.abs(inserted!.x! - 500)).toBeLessThan(100);
+        expect(Math.abs(inserted!.y! - -200)).toBeLessThan(100);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('trickles one page and up to three tags every 100ms and aborts on focus change', async () => {
+    vi.useFakeTimers();
+    try {
+      const initial = [
+        pageNode({ id: 'a', title: 'A', x: 0, y: 0 }),
+      ];
+      const grown = [
+        ...initial,
+        pageNode({ id: 'b', title: 'B' }),
+        pageNode({ id: 'c', title: 'C' }),
+        pageNode({
+          id: 'tag:x',
+          title: 'x',
+          kind: 'tag',
+          tags: ['x'],
+        }),
+        pageNode({
+          id: 'tag:y',
+          title: 'y',
+          kind: 'tag',
+          tags: ['y'],
+        }),
+        pageNode({
+          id: 'tag:z',
+          title: 'z',
+          kind: 'tag',
+          tags: ['z'],
+        }),
+      ];
+      const graphProps = {
+        edges: [],
+        tagsVisible: true,
+        onNodeFocus: vi.fn(),
+        onClearFocus: vi.fn(),
+        forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+      };
+      const { rerender } = render(
+        <WikiGraphView {...graphProps} nodes={initial} />
+      );
+      rerender(<WikiGraphView {...graphProps} nodes={grown} />);
+
+      const colorAccessor = accessorFrom('nodeColor') as (
+        node: AugmentedGraphNode
+      ) => string;
+      expect(colorAccessor(grown[1])).toBe('rgba(0, 0, 0, 0)');
+      expect(colorAccessor(grown[3])).toBe('rgba(0, 0, 0, 0)');
+      const pushedBeforeInsert = (
+        handle.graphData as ReturnType<typeof vi.fn>
+      ).mock.calls.at(-1)?.[0] as { nodes: AugmentedGraphNode[] };
+      expect(pushedBeforeInsert.nodes.map(node => node.id).sort()).toEqual(['a']);
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(colorAccessor(grown[1])).toBe('#2563eb');
+      expect(colorAccessor(grown[3])).not.toBe('rgba(0, 0, 0, 0)');
+      const pushedAfterFirstInsert = (
+        handle.graphData as ReturnType<typeof vi.fn>
+      ).mock.calls.at(-1)?.[0] as { nodes: AugmentedGraphNode[] };
+      expect(pushedAfterFirstInsert.nodes.map(node => node.id).sort()).toEqual([
+        'a',
+        'b',
+        'tag:x',
+        'tag:y',
+        'tag:z',
+      ]);
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(colorAccessor(grown[2])).toBe('#2563eb');
+      expect(colorAccessor(grown[5])).not.toBe('rgba(0, 0, 0, 0)');
+      const pushedAfterSecondInsert = (
+        handle.graphData as ReturnType<typeof vi.fn>
+      ).mock.calls.at(-1)?.[0] as { nodes: AugmentedGraphNode[] };
+      expect(pushedAfterSecondInsert.nodes.map(node => node.id).sort()).toEqual([
+        'a',
+        'b',
+        'c',
+        'tag:x',
+        'tag:y',
+        'tag:z',
+      ]);
+
+      rerender(
+        <WikiGraphView
+          {...graphProps}
+          nodes={[pageNode({ id: 'focus', title: 'Focus' })]}
+          focusedNodeId="focus"
+        />
+      );
+      const callsAfterFocusChange =
+        (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.length;
+      await vi.runAllTimersAsync();
+      expect(
+        (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.length
+      ).toBeLessThanOrEqual(callsAfterFocusChange + 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('pauses and resumes animation around working-graph mutations', () => {
+    const initial = [pageNode({ id: 'a', title: 'A', x: 0, y: 0 })];
+    const grown = [
+      ...initial,
+      pageNode({ id: 'b', title: 'B' }),
+      pageNode({ id: 'tag:x', title: 'x', kind: 'tag', tags: ['x'] }),
+    ];
+    const graphProps = {
+      edges: [],
+      tagsVisible: true,
+      onNodeFocus: vi.fn(),
+      onClearFocus: vi.fn(),
+      forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+    };
+    const { rerender } = render(<WikiGraphView {...graphProps} nodes={initial} />);
+
+    rerender(<WikiGraphView {...graphProps} nodes={grown} />);
+
+    expect(handle.pauseAnimation).toHaveBeenCalled();
+    expect(handle.resumeAnimation).toHaveBeenCalled();
+    expect(handle.warmupTicks).toHaveBeenCalledWith(0);
+    expect(handle.warmupTicks).toHaveBeenCalledWith(120);
+    expect(
+      (handle.warmupTicks as ReturnType<typeof vi.fn>).mock.calls.filter(
+        ([ticks]) => ticks === 0
+      )
+    ).toHaveLength(1);
+    const pauseOrder = (
+      handle.pauseAnimation as ReturnType<typeof vi.fn>
+    ).mock.invocationCallOrder.at(-1)!;
+    const resumeOrder = (
+      handle.resumeAnimation as ReturnType<typeof vi.fn>
+    ).mock.invocationCallOrder.at(-1)!;
+    expect(pauseOrder).toBeLessThan(resumeOrder);
+  });
+
   it('instantiates the graph and pushes data with the expected shape', () => {
     renderView();
     const pushed = (handle.graphData as ReturnType<typeof vi.fn>).mock
@@ -118,9 +430,15 @@ describe('WikiGraphView', () => {
     };
     // Nodes arrive kind-ordered (pages last); links arrive as canonical
     // clones, stable-sorted tag edges first for paint order.
-    const sortedCanonical = [...edges].sort(
+    const sortedCanonical = [...edges]
+      .filter(
+        edge =>
+          nodes.some(node => node.id === edge.source) &&
+          nodes.some(node => node.id === edge.target)
+      )
+      .sort(
       (a, b) => (a.kind === 'tag' ? 0 : 1) - (b.kind === 'tag' ? 0 : 1)
-    );
+      );
     expect(pushed.links).toEqual(sortedCanonical);
     expect([...pushed.nodes].sort((a, b) => a.id.localeCompare(b.id))).toEqual(
       [...nodes].sort((a, b) => a.id.localeCompare(b.id))
@@ -189,6 +507,89 @@ describe('WikiGraphView', () => {
     // Tag rings use the tag color, never the page outline color.
     canvasFn(positioned(nodes[4]), ctx, 1);
     expect(ctx.strokeStyle).not.toBe('rgba(100, 116, 139, 0.8)');
+  });
+
+  it('shows all retained tag nodes while one tag is focused', () => {
+    const focusedTag = {
+      ...pageNode({
+        id: 'tag:focused',
+        title: 'focused',
+        tags: ['focused'],
+        kind: 'tag',
+      }),
+      _val: 5,
+      x: 0,
+      y: 0,
+    };
+    const secondaryTag = {
+      ...pageNode({
+        id: 'tag:secondary',
+        title: 'secondary',
+        tags: ['secondary'],
+        kind: 'tag',
+      }),
+      _val: 3,
+      x: 100,
+      y: 100,
+    };
+    renderView({
+      nodes: [focusedTag, secondaryTag],
+      edges: [],
+      tagsVisible: true,
+      focusedNodeId: 'tag:focused',
+    });
+    const colorAccessor = accessorFrom('nodeColor') as (
+      node: AugmentedGraphNode
+    ) => string;
+    expect(colorAccessor(focusedTag)).not.toBe('rgba(0, 0, 0, 0)');
+    expect(colorAccessor(secondaryTag)).not.toBe('rgba(0, 0, 0, 0)');
+  });
+
+  it('applies top-tag culling while preserving focused tags', () => {
+    const tagNodes = [
+      {
+        ...pageNode({
+          id: 'tag:small',
+          title: 'small',
+          tags: ['small'],
+          kind: 'tag',
+        }),
+        _val: 1,
+        x: 0,
+        y: 0,
+      },
+      {
+        ...pageNode({
+          id: 'tag:big',
+          title: 'big',
+          tags: ['big'],
+          kind: 'tag',
+        }),
+        _val: 5,
+        x: 100,
+        y: 100,
+      },
+    ];
+    render(
+      <WikiGraphView
+        nodes={[...nodes, ...tagNodes]}
+        edges={edges}
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    const zoomCb = accessorFrom('onZoom') as (t: {
+      k: number;
+      x: number;
+      y: number;
+    }) => void;
+    zoomCb({ k: 0.05, x: 0, y: 0 });
+    const colorAccessor = accessorFrom('nodeColor') as (
+      node: AugmentedGraphNode
+    ) => string;
+    expect(colorAccessor(tagNodes[1])).not.toBe('rgba(0, 0, 0, 0)');
   });
 
   it('fades tag labels out on zoom-out by member count and styles them green', () => {
@@ -614,6 +1015,41 @@ describe('WikiGraphView', () => {
     expect(fitCalls()).toBe(armed + 2);
   });
 
+  it('focus changes re-arm auto-fit and ticks during the transition', async () => {
+    const setIntervalSpy = vi.spyOn(window, 'setInterval');
+    const { rerender } = renderView();
+    const toggle = screen.getByTestId('wiki-graph-zoom-reset');
+    await userEvent.setup().click(toggle);
+    await waitFor(() => {
+      expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    });
+
+    rerender(
+      <WikiGraphView
+        nodes={nodes}
+        edges={edges}
+        tagsVisible={true}
+        focusedNodeId="a"
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    const intervalCall = setIntervalSpy.mock.calls.find(
+      call => call[1] === AUTO_FIT_TICK_MS
+    );
+    expect(intervalCall).toBeDefined();
+    const armed = (handle.zoomToFit as ReturnType<typeof vi.fn>).mock.calls
+      .length;
+    (intervalCall![0] as () => void)();
+    expect(
+      (handle.zoomToFit as ReturnType<typeof vi.fn>).mock.calls.length
+    ).toBe(armed + 1);
+    setIntervalSpy.mockRestore();
+  });
+
   it('wheel over the canvas disarms zoom-to-fit before the engine zooms', async () => {
     renderView();
     const stopCb = accessorFrom('onEngineStop') as () => void;
@@ -661,7 +1097,7 @@ describe('WikiGraphView', () => {
     expect(fitCalls()).toBe(1);
   });
 
-  it('moves the camera to the focused node and refits on clear', async () => {
+  it('uses the shared auto-fit camera for focus and clear', async () => {
     const user = userEvent.setup();
     const { rerender } = render(
       <WikiGraphView
@@ -673,7 +1109,6 @@ describe('WikiGraphView', () => {
         forceGraphFactory={() => handle as unknown as ForceGraphHandle}
       />
     );
-
     rerender(
       <WikiGraphView
         nodes={nodes}
@@ -685,18 +1120,10 @@ describe('WikiGraphView', () => {
         forceGraphFactory={() => handle as unknown as ForceGraphHandle}
       />
     );
-    // Focus camera fits the highlighted NEIGHBORHOOD (focus + 1-hop), not a
-    // single-node close-up: centered on the neighbor bbox, zoomed to fit it.
-    expect(handle.centerAt).toHaveBeenCalledWith(
-      expect.any(Number),
-      expect.any(Number),
-      600
-    );
-    const zoomArg = (handle.zoom as ReturnType<typeof vi.fn>).mock.calls.at(
-      -1
-    )?.[0] as number;
-    expect(zoomArg).toBeGreaterThan(0);
-    expect(zoomArg).toBeLessThan(13.68);
+    const reheatCallsBeforeClear =
+      (handle.d3ReheatSimulation as ReturnType<typeof vi.fn>).mock.calls.length;
+    expect(handle.centerAt).toHaveBeenCalledWith(10, 20, 350);
+    expect(handle.zoomToFit).toHaveBeenCalledWith(600, 40);
 
     rerender(
       <WikiGraphView
@@ -707,6 +1134,9 @@ describe('WikiGraphView', () => {
         onClearFocus={vi.fn()}
         forceGraphFactory={() => handle as unknown as ForceGraphHandle}
       />
+    );
+    expect(handle.d3ReheatSimulation).toHaveBeenCalledTimes(
+      reheatCallsBeforeClear + 1
     );
     expect(handle.zoomToFit).toHaveBeenCalledWith(600, 40);
 
@@ -867,8 +1297,42 @@ describe('WikiGraphView', () => {
     // Tag pull scales inversely with member count (edges[3] -> 1-member tag:x).
     expect(strengthAccessor(edges[3])).toBeCloseTo(WIKI_TAG_SPRING_STRENGTH);
 
-    // Charge is uniform — cluster separation lives in tagRepulsion.
-    expect(chargeForce.strength).toHaveBeenCalledWith(-480);
+    // Charge excludes transitional nodes and uses the configured strength for
+    // active nodes.
+    const chargeStrengthAccessor = chargeForce.strength.mock.calls[0][0] as (
+      node: AugmentedGraphNode
+    ) => number;
+    expect(chargeStrengthAccessor(nodes[0])).toBe(WIKI_CHARGE_STRENGTH);
+  });
+
+  it('marks old edges as fading and new edges as emerging across graph pushes', () => {
+    const graphProps = {
+      nodes,
+      tagsVisible: true,
+      onNodeFocus: vi.fn(),
+      onClearFocus: vi.fn(),
+      forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+    };
+    const { rerender } = render(
+      <WikiGraphView {...graphProps} edges={edges} />
+    );
+    const oldEdge = edges[0];
+    const newEdge: AugmentedGraphEdge = {
+      source: 'b',
+      target: 'c',
+      kind: 'link',
+    };
+    rerender(
+      <WikiGraphView
+        {...graphProps}
+        edges={[newEdge]}
+      />
+    );
+    const widthAccessor = accessorFrom('linkWidth') as (
+      link: AugmentedGraphEdge
+    ) => number;
+    expect(widthAccessor(oldEdge)).toBeLessThanOrEqual(1.5);
+    expect(widthAccessor(newEdge)).toBeGreaterThanOrEqual(0);
   });
 
   it('weakens broken-link springs by the source page dead-link count', () => {
@@ -931,6 +1395,104 @@ describe('WikiGraphView', () => {
     expect(strengthAccessor(edges[3])).toBeCloseTo(
       WIKI_TAG_SPRING_STRENGTH / 2
     );
+  });
+
+  it('keeps normal page labels visible when zoomed out', async () => {
+    vi.useFakeTimers();
+    const zoomedOut = [
+      ...nodes,
+      { ...pageNode({ id: 'page', title: 'Page' }), _val: 9, x: 0, y: 0 },
+      {
+        ...pageNode({ id: 'page2', title: 'Page2' }),
+        _val: 2,
+        x: 0,
+        y: 300,
+      },
+    ];
+    render(
+      <WikiGraphView
+        nodes={zoomedOut}
+        edges={edges}
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    const zoomCb = accessorFrom('onZoom') as (t: {
+      k: number;
+      x: number;
+      y: number;
+    }) => void;
+    zoomCb({ k: 0.5, x: 0, y: 0 });
+    const frameFn = accessorFrom('onRenderFramePost') as (
+      ctx: CanvasRenderingContext2D,
+      globalScale: number
+    ) => void;
+    const ctx = {
+      beginPath: vi.fn(),
+      arc: vi.fn(),
+      stroke: vi.fn(),
+      fillRect: vi.fn(),
+      fillText: vi.fn(),
+      measureText: vi.fn(() => ({ width: 10 })),
+      save: vi.fn(),
+      restore: vi.fn(),
+    } as unknown as CanvasRenderingContext2D;
+    frameFn(ctx, 0.5);
+    await vi.runOnlyPendingTimersAsync();
+    frameFn(ctx, 0.5);
+    const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock
+      .calls as unknown as Array<[string]>;
+    expect(calls.some(c => c[0] === 'Page')).toBe(true);
+    expect(calls.some(c => c[0] === 'Page2')).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it('truncates page titles before showdown so long labels can still win space', () => {
+    const title = 'A'.repeat(80);
+    const overlapped = [
+      ...nodes,
+      { ...pageNode({ id: 'page', title }), _val: 9, x: 0, y: 0 },
+      {
+        ...pageNode({ id: 'page2', title: 'Shorter' }),
+        _val: 2,
+        x: 3,
+        y: 0,
+      },
+    ];
+    render(
+      <WikiGraphView
+        nodes={overlapped}
+        edges={edges}
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    const frameFn = accessorFrom('onRenderFramePost') as (
+      ctx: CanvasRenderingContext2D,
+      globalScale: number
+    ) => void;
+    const mkCtx = () =>
+      ({
+        beginPath: vi.fn(),
+        arc: vi.fn(),
+        stroke: vi.fn(),
+        fillRect: vi.fn(),
+        fillText: vi.fn(),
+        measureText: vi.fn(() => ({ width: 10 })),
+        save: vi.fn(),
+        restore: vi.fn(),
+      }) as unknown as CanvasRenderingContext2D;
+
+    const ctx = mkCtx();
+    frameFn(ctx, 1);
+    const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock
+      .calls as unknown as Array<[string]>;
+    expect(calls.some(c => c[0] === `${title.slice(0, 50)}`)).toBe(true);
+    expect(calls.some(c => c[0] === title)).toBe(false);
   });
 
   it('showdown gates labels: overlapping low-score page label hides, tag and page showdowns are independent', () => {
@@ -1000,7 +1562,88 @@ describe('WikiGraphView', () => {
     expect(draws('#u')).toBe(false);
   });
 
+  it('shows subdued labels for second-degree nodes in focus view', () => {
+    const focusNodes = [
+      ...nodes,
+      { ...pageNode({ id: 'd', title: 'Second Degree' }), _val: 8, x: 50, y: 50 },
+    ];
+    const focusEdges = [
+      ...edges,
+      { source: 'b', target: 'd', kind: 'link' as const },
+    ];
+    render(
+      <WikiGraphView
+        nodes={focusNodes}
+        edges={focusEdges}
+        focusedNodeId="a"
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    const frameFn = accessorFrom('onRenderFramePost') as (
+      ctx: CanvasRenderingContext2D,
+      globalScale: number
+    ) => void;
+    const ctx = {
+      beginPath: vi.fn(),
+      arc: vi.fn(),
+      stroke: vi.fn(),
+      fillRect: vi.fn(),
+      fillText: vi.fn(),
+      measureText: vi.fn(() => ({ width: 10 })),
+      save: vi.fn(),
+      restore: vi.fn(),
+      font: '',
+      textAlign: '',
+      textBaseline: '',
+      shadowColor: '',
+      shadowBlur: 0,
+      fillStyle: '',
+      filter: 'none',
+      globalAlpha: 1,
+    } as unknown as CanvasRenderingContext2D;
+
+    frameFn(ctx, 1);
+
+    const labels = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls
+      .map(call => call[0] as string);
+    expect(labels).toContain('Second Degree');
+  });
+
+  it('preserves existing positions across focus-subset graph pushes', () => {
+    const initial = [
+      { ...pageNode({ id: 'a', title: 'A' }), x: 25, y: 35, vx: 1, vy: -1 },
+      { ...pageNode({ id: 'b', title: 'B' }), x: 125, y: 135, vx: 2, vy: -2 },
+    ];
+    const graphProps = {
+      edges: [],
+      tagsVisible: true,
+      onNodeFocus: vi.fn(),
+      onClearFocus: vi.fn(),
+      forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+    };
+    const { rerender } = render(
+      <WikiGraphView {...graphProps} nodes={initial} />
+    );
+    rerender(
+      <WikiGraphView
+        {...graphProps}
+        nodes={[initial[1]]}
+        focusedNodeId="b"
+      />
+    );
+    const pushed = (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.at(
+      -1
+    )![0] as { nodes: Array<{ id: string; x?: number; y?: number }> };
+    const b = pushed.nodes.find(node => node.id === 'b');
+    expect(b?.x).toBe(125);
+    expect(b?.y).toBe(135);
+  });
+
   it('assigns landing spots to added nodes instead of origin blink-in', () => {
+    vi.useFakeTimers();
     // Landing spots derive from the container rect; give it a size.
     const originalRect = Element.prototype.getBoundingClientRect;
     Element.prototype.getBoundingClientRect = vi.fn(
@@ -1016,59 +1659,57 @@ describe('WikiGraphView', () => {
           y: 0,
         }) as DOMRect
     );
-    const graphProps = {
-      edges,
-      tagsVisible: true,
-      onNodeFocus: vi.fn(),
-      onClearFocus: vi.fn(),
-      forceGraphFactory: () => handle as unknown as ForceGraphHandle,
-    };
-    const { rerender } = render(
-      <WikiGraphView nodes={nodes} {...graphProps} />
-    );
-    // Push again with one extra node: the diff must assign it a landing
-    // position inside the viewport rect (from the zoom transform).
-    const zoomCb = accessorFrom('onZoom') as (t: {
-      k: number;
-      x: number;
-      y: number;
-    }) => void;
-    zoomCb({ k: 0.5, x: 0, y: 0 });
-    const grown = [...nodes, pageNode({ id: 'brand-new', title: 'New' })];
-    rerender(
-      <WikiGraphView
-        nodes={grown}
-        edges={edges}
-        tagsVisible={true}
-        onNodeFocus={vi.fn()}
-        onClearFocus={vi.fn()}
-        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
-      />
-    );
-    const pushed = (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.at(
-      -1
-    )![0] as { nodes: Array<{ id: string; x?: number; y?: number }> };
-    const newNode = pushed.nodes.find(n => n.id === 'brand-new');
-    expect(newNode).toBeDefined();
-    // Landing spot assigned (not undefined => no origin-spiral blink-in).
-    expect(typeof newNode!.x).toBe('number');
-    expect(typeof newNode!.y).toBe('number');
-    // Inside the visible graph-space rect for k=0.5, translate 0: |x|,|y| <=
-    // (container/k). Container is mocked at 640x360 in a sibling test but
-    // defaults to jsdom 0 — the guard falls back to no-assignment, so force
-    // the container size through a resize is overkill; just require finite.
-    expect(Number.isFinite(newNode!.x)).toBe(true);
-    expect(Number.isFinite(newNode!.y)).toBe(true);
-    // Inside the visible rect: k=0.5, translate 0, container 640x360 =>
-    // center cx=320/0.5=640, cy=360/2/0.5=360; halfW=640, halfH=360;
-    // central-60% jitter = +/-0.6*half (x: 256..1024, y: 144..576).
-    const x = newNode!.x as number;
-    const y = newNode!.y as number;
-    expect(x).toBeGreaterThanOrEqual(640 - 0.6 * 640);
-    expect(x).toBeLessThanOrEqual(640 + 0.6 * 640);
-    expect(y).toBeGreaterThanOrEqual(360 - 0.6 * 360);
-    expect(y).toBeLessThanOrEqual(360 + 0.6 * 360);
-    Element.prototype.getBoundingClientRect = originalRect;
+    try {
+      const graphProps = {
+        edges,
+        tagsVisible: true,
+        onNodeFocus: vi.fn(),
+        onClearFocus: vi.fn(),
+        forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+      };
+      const { rerender } = render(
+        <WikiGraphView nodes={nodes} {...graphProps} />
+      );
+      // Push again with one extra node: the diff must assign it a landing
+      // position inside the viewport rect (from the zoom transform).
+      const zoomCb = accessorFrom('onZoom') as (t: {
+        k: number;
+        x: number;
+        y: number;
+      }) => void;
+      zoomCb({ k: 0.5, x: 0, y: 0 });
+      const grown = [...nodes, pageNode({ id: 'brand-new', title: 'New' })];
+      rerender(
+        <WikiGraphView
+          nodes={grown}
+          edges={edges}
+          tagsVisible={true}
+          onNodeFocus={vi.fn()}
+          onClearFocus={vi.fn()}
+          forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+        />
+      );
+      vi.advanceTimersByTime(100);
+      const pushed = (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.at(
+        -1
+      )![0] as { nodes: Array<{ id: string; x?: number; y?: number }> };
+      const newNode = pushed.nodes.find(n => n.id === 'brand-new');
+      expect(newNode).toBeDefined();
+      // Landing spot assigned (not undefined => no origin-spiral blink-in).
+      expect(typeof newNode!.x).toBe('number');
+      expect(typeof newNode!.y).toBe('number');
+      expect(Number.isFinite(newNode!.x)).toBe(true);
+      expect(Number.isFinite(newNode!.y)).toBe(true);
+      const x = newNode!.x as number;
+      const y = newNode!.y as number;
+      expect(x).toBeGreaterThanOrEqual(640 - 0.6 * 640);
+      expect(x).toBeLessThanOrEqual(640 + 0.6 * 640);
+      expect(y).toBeGreaterThanOrEqual(360 - 0.6 * 360);
+      expect(y).toBeLessThanOrEqual(360 + 0.6 * 360);
+    } finally {
+      Element.prototype.getBoundingClientRect = originalRect;
+      vi.useRealTimers();
+    }
   });
 
   it('focused node label always draws, overriding showdown culling', () => {
@@ -1131,7 +1772,66 @@ describe('WikiGraphView', () => {
     // key assertion is Page2 overriding its earlier culling when focused.
   });
 
-  it('recomputes showdowns on engine ticks, throttled to 100ms', () => {
+  it('preserves label survivors while nodes are waiting for physics positions', () => {
+    const positioned = [
+      { ...pageNode({ id: 'page', title: 'Page' }), _val: 9, x: 0, y: 0 },
+      {
+        ...pageNode({ id: 'page2', title: 'Page2' }),
+        _val: 2,
+        x: 0,
+        y: 200,
+      },
+    ];
+    const graphProps = {
+      edges,
+      tagsVisible: true,
+      onNodeFocus: vi.fn(),
+      onClearFocus: vi.fn(),
+      forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+    };
+    const { rerender } = render(
+      <WikiGraphView {...graphProps} nodes={positioned} />
+    );
+    const frameFn = accessorFrom('onRenderFramePost') as (
+      ctx: CanvasRenderingContext2D,
+      globalScale: number
+    ) => void;
+    const stopCb = accessorFrom('onEngineStop') as () => void;
+    const mkCtx = () =>
+      ({
+        beginPath: vi.fn(),
+        arc: vi.fn(),
+        stroke: vi.fn(),
+        fillRect: vi.fn(),
+        fillText: vi.fn(),
+        measureText: vi.fn(() => ({ width: 10 })),
+        save: vi.fn(),
+        restore: vi.fn(),
+      }) as unknown as CanvasRenderingContext2D;
+
+    const preLayout: Array<
+      AugmentedGraphNode & { x?: number; y?: number }
+    > = [
+      { ...pageNode({ id: 'page', title: 'Page' }), _val: 9 },
+      { ...pageNode({ id: 'page2', title: 'Page2' }), _val: 2 },
+    ];
+    rerender(<WikiGraphView {...graphProps} nodes={preLayout} />);
+    stopCb();
+
+    preLayout[0].x = 0;
+    preLayout[0].y = 0;
+    preLayout[1].x = 0;
+    preLayout[1].y = 200;
+    const ctx = mkCtx();
+    frameFn(ctx, 1);
+    const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock
+      .calls as unknown as Array<[string]>;
+    expect(calls.some(c => c[0] === 'Page')).toBe(true);
+    expect(calls.some(c => c[0] === 'Page2')).toBe(true);
+  });
+
+  it('recomputes showdowns on engine ticks, throttled to 100ms', async () => {
+    vi.useFakeTimers();
     const nowSpy = vi.spyOn(performance, 'now');
     nowSpy.mockReturnValue(1000);
     try {
@@ -1188,18 +1888,22 @@ describe('WikiGraphView', () => {
       page2.x = 3;
       page2.y = 0;
       tickCb();
+      await vi.runOnlyPendingTimersAsync();
       expect(draws('Page2')).toBe(false);
       page2.x = 0;
       page2.y = 200;
       tickCb();
+      await vi.runOnlyPendingTimersAsync();
       expect(draws('Page2')).toBe(false);
 
       // After the throttle window, a tick recomputes with fresh positions.
       nowSpy.mockReturnValue(1000 + SHOWDOWN_RECOMPUTE_MS + 1);
       tickCb();
+      await vi.runOnlyPendingTimersAsync();
       expect(draws('Page2')).toBe(true);
     } finally {
       nowSpy.mockRestore();
+      vi.useRealTimers();
     }
   });
 });
