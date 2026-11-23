@@ -160,23 +160,6 @@ const EDGE_INSERTION_SLOTS = 100;
 const FOCUS_CENTER_MS = 350;
 const FOCUS_SETTLE_MS = 600;
 
-/**
- * Engine-mutation isolation: force-graph's link parsing replaces string
- * endpoints with node references ON THE OBJECTS PASSED TO graphData (and
- * d3-force mutates them further). Feeding it shallow clones keeps the
- * canonical edges passed as props string-based, which the page's tag-member
- * counting and focus logic rely on.
- *
- * Links are also stable-sorted tag edges first: the engine paints links in
- * array order, so this yields the draw order tag edges → tag nodes → page
- * link edges → … (nodes always paint after all links).
- */
-function toEngineLinks(edges: AugmentedGraphEdge[]): AugmentedGraphEdge[] {
-  return edges
-    .map(edge => ({ ...edge }))
-    .sort((a, b) => (a.kind === 'tag' ? 0 : 1) - (b.kind === 'tag' ? 0 : 1));
-}
-
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
@@ -380,7 +363,7 @@ export default function WikiGraphView({
    * Tag-node visibility: the global Tags toggle wins; otherwise focus mode
    * filtering is already applied by the safety-cull result.
    */
-  const isTagNodeVisible = (node: AugmentedGraphNode): boolean => {
+  const isTagNodeVisible = (_node: AugmentedGraphNode): boolean => {
     if (!tagsVisibleRef.current) return false;
     return true;
   };
