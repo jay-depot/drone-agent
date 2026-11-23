@@ -65,6 +65,7 @@ async function handleList(
         status: string;
         createdAt: number;
         updatedAt: number;
+        statusChangedAt: number | null;
       }>;
     };
     const sessions = data.sessions.filter(s => s.id !== currentSessionId);
@@ -75,7 +76,11 @@ async function handleList(
     const lines = sessions.map(s => {
       const created = new Date(s.createdAt).toISOString();
       const updated = new Date(s.updatedAt).toISOString();
-      return `${s.id.padEnd(24)} ${(s.personaId ?? 'none').padEnd(16)} ${s.status.padEnd(10)} ${created} ${updated}`;
+      const changed =
+        s.statusChangedAt === null
+          ? '-'
+          : new Date(s.statusChangedAt).toISOString();
+      return `${s.id.padEnd(24)} ${(s.personaId ?? 'none').padEnd(16)} ${s.status.padEnd(10)} ${created} ${updated} ${changed}`;
     });
     ctx.logger.info(`Sessions (excluding current):\n${lines.join('\n')}`);
   } catch (err) {

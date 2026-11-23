@@ -404,6 +404,7 @@ export default function swarmRoutes(app: FastifyInstance) {
           status: session.status,
           createdAt: session.createdAt,
           updatedAt: session.updatedAt,
+          statusChangedAt: session.statusChangedAt,
         },
         events: resolvedEvents,
       });
@@ -431,6 +432,7 @@ export default function swarmRoutes(app: FastifyInstance) {
           status: session.status,
           createdAt: session.createdAt,
           updatedAt: session.updatedAt,
+          statusChangedAt: session.statusChangedAt,
         },
         transcript,
       });

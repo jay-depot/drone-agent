@@ -108,6 +108,7 @@ describe('createSwarmSessionCommand', () => {
             status: 'ended',
             createdAt: 2,
             updatedAt: 3,
+            statusChangedAt: 1700000000000,
           },
         ],
       }),
@@ -127,6 +128,7 @@ describe('createSwarmSessionCommand', () => {
     expect(mockFetch).toHaveBeenCalledWith(`${BASE_URL}/sessions?limit=10`);
     expect(logs.join('\n')).toContain('ss1');
     expect(logs.join('\n')).not.toContain('current ');
+    expect(logs.join('\n')).toContain(new Date(1700000000000).toISOString());
   });
 
   it('warns on unknown subcommand', async () => {

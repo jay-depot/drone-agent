@@ -88,7 +88,7 @@ async function startFixture(port: number): Promise<Server> {
 
     if (url.startsWith('/api/sessions?') || url === '/api/sessions') {
       return sendJson(200, {
-        sessions: [{ id: 's-1', status: 'ended' }],
+        sessions: [{ id: 's-1', status: 'ended', statusChangedAt: 1700 }],
         count: 1,
         auth: req.headers.authorization ?? null,
       });
@@ -216,6 +216,7 @@ describe('drone-swarm CLI against a coordinator-dialect fixture', () => {
       const parsed = JSON.parse(out.join('\n'));
       expect(parsed.count).toBe(1);
       expect(parsed.sessions[0].id).toBe('s-1');
+      expect(parsed.sessions[0].statusChangedAt).toBe(1700);
     } finally {
       console.log = originalLog;
     }

@@ -278,26 +278,7 @@ export function initDatabase(dataPath: string): Database.Database {
 
   makeBeaconPortOptional(db);
 
-  // Idempotent migration: add interactive flag to swarm_sessions.
-  const swarmSessionCols = db
-    .prepare('PRAGMA table_info(swarm_sessions)')
-    .all() as Array<{ name: string }>;
-  if (!swarmSessionCols.some(c => c.name === 'interactive')) {
-    db.exec(
-      'ALTER TABLE swarm_sessions ADD COLUMN interactive INTEGER NOT NULL DEFAULT 0'
-    );
-  }
-
-  // Idempotent migration: add session_snapshot JSON to swarm_sessions.
-  if (!swarmSessionCols.some(c => c.name === 'session_snapshot')) {
-    db.exec('ALTER TABLE swarm_sessions ADD COLUMN session_snapshot TEXT');
-  }
-
-  // Idempotent migration: add ended_at to swarm_sessions. It records the real
-  // stop time. NULL means the session is live, or the row predates this column.
-  if (!swarmSessionCols.some(c => c.name === 'ended_at')) {
-    db.exec('ALTER TABLE swarm_sessions ADD COLUMN ended_at INTEGER');
-  }
+  migrateSwarmSessionColumns(db);
 
   // Extension capability cache + bundle registry.
   db.exec(`
@@ -401,6 +382,43 @@ export function makeBeaconPortOptional(db: Database.Database): void {
     }
   } finally {
     if (fkWasOn) db.pragma('foreign_keys = ON');
+  }
+}
+
+/**
+ * Add the `swarm_sessions` columns that earlier schemas lack. Backfill the
+ * status-change stamp for rows that predate the column. Idempotent: each
+ * column is probed before it is added, so the backfill runs one time only.
+ */
+export function migrateSwarmSessionColumns(db: Database.Database): void {
+  const cols = db.prepare('PRAGMA table_info(swarm_sessions)').all() as Array<{
+    name: string;
+  }>;
+
+  if (!cols.some(c => c.name === 'interactive')) {
+    db.exec(
+      'ALTER TABLE swarm_sessions ADD COLUMN interactive INTEGER NOT NULL DEFAULT 0'
+    );
+  }
+
+  if (!cols.some(c => c.name === 'session_snapshot')) {
+    db.exec('ALTER TABLE swarm_sessions ADD COLUMN session_snapshot TEXT');
+  }
+
+  // ended_at records the real stop time. NULL means the session is live, or
+  // the row predates this column.
+  if (!cols.some(c => c.name === 'ended_at')) {
+    db.exec('ALTER TABLE swarm_sessions ADD COLUMN ended_at INTEGER');
+  }
+
+  // status_changed_at records when the status last changed. The backfill uses
+  // updatedAt, which every status write also rewrites. It is the best proxy
+  // for a row that predates this column.
+  if (!cols.some(c => c.name === 'status_changed_at')) {
+    db.exec('ALTER TABLE swarm_sessions ADD COLUMN status_changed_at INTEGER');
+    db.exec(
+      'UPDATE swarm_sessions SET status_changed_at = updatedAt WHERE status_changed_at IS NULL'
+    );
   }
 }
 
