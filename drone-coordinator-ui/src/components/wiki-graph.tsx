@@ -194,8 +194,7 @@ export function createSelectiveHeatForce(): D3SelectiveHeatForce {
         0
       );
       const angle =
-        (hash % 360) * (Math.PI / 180) +
-        ((node.x ?? 0) % 6.283185307179586);
+        (hash % 360) * (Math.PI / 180) + ((node.x ?? 0) % 6.283185307179586);
       const strength = alpha * 1.8;
       node.vx = (node.vx ?? 0) + Math.cos(angle) * strength;
       node.vy = (node.vy ?? 0) + Math.sin(angle) * strength;
@@ -215,22 +214,17 @@ function isDarkMode(): boolean {
   return document.documentElement.classList.contains('dark');
 }
 
-const edgeLifecycleColor = (
-  color: string,
-  fraction: number
-): string => {
+const edgeLifecycleColor = (color: string, fraction: number): string => {
   const rgba = color.match(
     /^rgba?\((\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)(?:\s*,\s*(\d+(?:\.\d+)?))?\)$/
   );
   if (!rgba) return fraction <= 0 ? TRANSPARENT : color;
-  const alpha =
-    rgba[4] === undefined ? fraction : Number(rgba[4]) * fraction;
+  const alpha = rgba[4] === undefined ? fraction : Number(rgba[4]) * fraction;
   return `rgba(${rgba[1]}, ${rgba[2]}, ${rgba[3]}, ${alpha})`;
 };
 
 const isFiniteNumber = (value: number | undefined): value is number =>
   typeof value === 'number' && Number.isFinite(value);
-
 
 /** Fallback destination set for pages with no wiki links. */
 const NO_LINK_TARGETS: ReadonlySet<string> = new Set();
@@ -586,8 +580,7 @@ export default function WikiGraphView({
       const key = stableEdgeKey(link);
       const now = performance.now();
       const edgeLifecycleFraction =
-        edgeFadeOutFraction(key, now) *
-        edgeFadeInFraction(key, now);
+        edgeFadeOutFraction(key, now) * edgeFadeInFraction(key, now);
       if (link.kind === 'tag') {
         const tagNode = nodesByIdRef.current.get(edgeEndpointId(link.target));
         if (!tagNode || !isTagNodeVisible(tagNode)) return 0;
@@ -609,8 +602,7 @@ export default function WikiGraphView({
       const key = stableEdgeKey(link);
       const now = performance.now();
       const edgeLifecycleFraction =
-        edgeFadeOutFraction(key, now) *
-        edgeFadeInFraction(key, now);
+        edgeFadeOutFraction(key, now) * edgeFadeInFraction(key, now);
       if (link.kind === 'tag') {
         const tagNode = nodesByIdRef.current.get(edgeEndpointId(link.target));
         if (!tagNode || !isTagNodeVisible(tagNode)) return TRANSPARENT;
@@ -655,7 +647,9 @@ export default function WikiGraphView({
       if (node.kind === 'tag') {
         return isTagNodeVisible(node) ? `#${node.title}` : '';
       }
-      return node.exists ? truncateGraphPageTitle(node.title) : `Missing page: ${node.id}`;
+      return node.exists
+        ? truncateGraphPageTitle(node.title)
+        : `Missing page: ${node.id}`;
     };
 
     const nodeCanvasObjectAccessor = (
@@ -777,10 +771,7 @@ export default function WikiGraphView({
         ctx.save();
         ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
         ctx.shadowBlur = 2 / globalScale;
-        if (
-          focus !== null &&
-          focus.secondaryIds.has(node.id)
-        ) {
+        if (focus !== null && focus.secondaryIds.has(node.id)) {
           ctx.globalAlpha = 0.55;
         }
         ctx.fillStyle = isTag ? theme.tagLabel : 'rgba(255, 255, 255, 0.92)';
@@ -871,9 +862,10 @@ export default function WikiGraphView({
       const ghostNodes = [...fadingRef.current.keys()]
         .map(id => ghostNodesRef.current.get(id))
         .filter((node): node is PositionedNode => node !== undefined);
-      tagRepulsionForce.initialize(
-        [...activeNodes, ...ghostNodes] as SimNode[]
-      );
+      tagRepulsionForce.initialize([
+        ...activeNodes,
+        ...ghostNodes,
+      ] as SimNode[]);
     };
     syncGhostExclusionRef.current = syncGhostExclusion;
 
@@ -925,36 +917,39 @@ export default function WikiGraphView({
       const nodeSignature = [
         ...orderedNodes.map(node => node.id),
         ...ghostNodes.map(node => node.id),
-      ].sort().join('\u0000');
+      ]
+        .sort()
+        .join('\u0000');
       const edgeSignature = [...workingEdges.keys()].sort().join('\u0000');
       const signature = `${nodeSignature}\u0001${edgeSignature}`;
       if (signature === workingGraphSignatureRef.current) return;
 
       const links = [...workingEdges.entries()]
-        .sort(([, a], [, b]) => (a.kind === 'tag' ? 0 : 1) - (b.kind === 'tag' ? 0 : 1))
+        .sort(
+          ([, a], [, b]) =>
+            (a.kind === 'tag' ? 0 : 1) - (b.kind === 'tag' ? 0 : 1)
+        )
         .map(([key, edge]) => {
-        let clone = workingEdgeCacheRef.current.get(key);
-        if (!clone) {
-          clone = { ...edge };
-          workingEdgeCacheRef.current.set(key, clone);
-        }
-        return clone;
+          let clone = workingEdgeCacheRef.current.get(key);
+          if (!clone) {
+            clone = { ...edge };
+            workingEdgeCacheRef.current.set(key, clone);
+          }
+          return clone;
         });
       handle.pauseAnimation();
-        handle
-          .graphData({
-            nodes: [...orderedNodes, ...ghostNodes].sort(
-              (a, b) =>
-                (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
-            ),
-            links,
-          });
+      handle.graphData({
+        nodes: [...orderedNodes, ...ghostNodes].sort(
+          (a, b) => (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
+        ),
+        links,
+      });
       handle.resumeAnimation();
       workingGraphSignatureRef.current = signature;
-        if (!initialGraphWarmupRef.current) {
-          initialGraphWarmupRef.current = true;
-          handle.warmupTicks(0);
-        }
+      if (!initialGraphWarmupRef.current) {
+        initialGraphWarmupRef.current = true;
+        handle.warmupTicks(0);
+      }
     };
     syncGraphDataRef.current = syncGraphData;
     const applySize = () => {
@@ -1144,10 +1139,7 @@ export default function WikiGraphView({
     insertionTimersRef.current = [];
     const previousIds = new Set(nodesRef.current.map(n => n.id));
     const previousNodesById = new Map(
-      nodesRef.current.map(node => [
-        node.id,
-        node as PositionedNode,
-      ])
+      nodesRef.current.map(node => [node.id, node as PositionedNode])
     );
     const previousEdges = edgesRef.current;
     const nextEdgeKeys = new Set(edges.map(edge => edgeKey(edge)));
@@ -1257,18 +1249,13 @@ export default function WikiGraphView({
       const cy = (height / 2 - ty) / k;
       const halfW = width / 2 / k;
       const halfH = height / 2 / k;
-      const focusPoint =
-        focusedNodeId
-          ? (previousNodesById.get(focusedNodeId) as PositionedNode | undefined)
-          : undefined;
+      const focusPoint = focusedNodeId
+        ? (previousNodesById.get(focusedNodeId) as PositionedNode | undefined)
+        : undefined;
       const focusX =
-        focusPoint && isFiniteNumber(focusPoint.x)
-          ? focusPoint.x
-          : cx;
+        focusPoint && isFiniteNumber(focusPoint.x) ? focusPoint.x : cx;
       const focusY =
-        focusPoint && isFiniteNumber(focusPoint.y)
-          ? focusPoint.y
-          : cy;
+        focusPoint && isFiniteNumber(focusPoint.y) ? focusPoint.y : cy;
       for (const node of addedIds) {
         const positioned = node as PositionedNode;
         if (focusedNodeId) {
@@ -1295,8 +1282,7 @@ export default function WikiGraphView({
               (value, char) => (value * 31 + char.charCodeAt(0)) >>> 0,
               0
             );
-            const angle =
-              (hash % 360) * (Math.PI / 180);
+            const angle = (hash % 360) * (Math.PI / 180);
             const radius = 35 + (hash % 40);
             positioned.x = neighbor.x! + Math.cos(angle) * radius;
             positioned.y = neighbor.y! + Math.sin(angle) * radius;
@@ -1366,113 +1352,115 @@ export default function WikiGraphView({
     pendingInsertionDurationRef.current =
       cycleCount > 0 ? cycleCount * interval : 0;
     const newEdgeQueue = edges
-      .filter(edge => !previousEdges.some(previous => edgeKey(previous) === edgeKey(edge)))
+      .filter(
+        edge =>
+          !previousEdges.some(previous => edgeKey(previous) === edgeKey(edge))
+      )
       .map(edge => edgeKey(edge));
-    const edgeCycleCount = Math.ceil(newEdgeQueue.length / EDGE_INSERTION_SLOTS);
-    pendingInsertionDurationRef.current =
-      Math.max(pendingInsertionDurationRef.current, edgeCycleCount * interval);
+    const edgeCycleCount = Math.ceil(
+      newEdgeQueue.length / EDGE_INSERTION_SLOTS
+    );
+    pendingInsertionDurationRef.current = Math.max(
+      pendingInsertionDurationRef.current,
+      edgeCycleCount * interval
+    );
     const totalCycles = Math.max(cycleCount, edgeCycleCount);
     for (let cycle = 0; cycle < totalCycles; cycle++) {
       const batch = [
         pageQueue[cycle],
         ...tagQueue.slice(cycle * 3, cycle * 3 + 3),
-      ].filter(
-        (node): node is AugmentedGraphNode => node !== undefined
-      );
+      ].filter((node): node is AugmentedGraphNode => node !== undefined);
       const edgeBatch = newEdgeQueue.slice(
         cycle * EDGE_INSERTION_SLOTS,
         (cycle + 1) * EDGE_INSERTION_SLOTS
       );
-      const timer = window.setTimeout(() => {
-        if (graphRevisionRef.current !== revision) return;
-        let nodesChanged = false;
-        let edgesChanged = false;
-        for (const node of batch) {
-          const positioned = node as PositionedNode;
-          if (focusedNodeId) {
-            const liveFocusedNode = nodesRef.current.find(
-              candidate => candidate.id === focusedNodeId
-            ) as PositionedNode | undefined;
-            if (
-              liveFocusedNode &&
-              isFiniteNumber(liveFocusedNode.x) &&
-              isFiniteNumber(liveFocusedNode.y)
-            ) {
-              const hash = [...node.id].reduce(
-                (value, char) =>
-                  (value * 31 + char.charCodeAt(0)) >>> 0,
-                0
-              );
-              const angle = (hash % 360) * (Math.PI / 180);
-              const radius = 25 + (hash % 35);
-              positioned.x =
-                liveFocusedNode.x + Math.cos(angle) * radius;
-              positioned.y =
-                liveFocusedNode.y + Math.sin(angle) * radius;
-              positioned.vx = 0;
-              positioned.vy = 0;
-            }
-          } else {
-            const connectedIds = new Set<string>();
-            for (const edge of edges) {
-              if (edge.kind !== 'link' && edge.kind !== 'tag') continue;
-              if (edgeEndpointId(edge.source) === node.id) {
-                connectedIds.add(edgeEndpointId(edge.target));
-              }
-              if (edgeEndpointId(edge.target) === node.id) {
-                connectedIds.add(edgeEndpointId(edge.source));
-              }
-            }
-            const liveNeighbor = [...connectedIds]
-              .map(id =>
-                nodesRef.current.find(candidate => candidate.id === id)
-              )
-              .find(
-                candidate =>
-                  candidate &&
-                  isFiniteNumber((candidate as PositionedNode).x) &&
-                  isFiniteNumber((candidate as PositionedNode).y)
+      const timer = window.setTimeout(
+        () => {
+          if (graphRevisionRef.current !== revision) return;
+          let nodesChanged = false;
+          let edgesChanged = false;
+          for (const node of batch) {
+            const positioned = node as PositionedNode;
+            if (focusedNodeId) {
+              const liveFocusedNode = nodesRef.current.find(
+                candidate => candidate.id === focusedNodeId
               ) as PositionedNode | undefined;
-            if (liveNeighbor) {
-              const hash = [...node.id].reduce(
-                (value, char) =>
-                  (value * 31 + char.charCodeAt(0)) >>> 0,
-                0
-              );
-              const angle = (hash % 360) * (Math.PI / 180);
-              const radius = 35 + (hash % 40);
-              positioned.x =
-                liveNeighbor.x! + Math.cos(angle) * radius;
-              positioned.y =
-                liveNeighbor.y! + Math.sin(angle) * radius;
-              positioned.vx = 0;
-              positioned.vy = 0;
+              if (
+                liveFocusedNode &&
+                isFiniteNumber(liveFocusedNode.x) &&
+                isFiniteNumber(liveFocusedNode.y)
+              ) {
+                const hash = [...node.id].reduce(
+                  (value, char) => (value * 31 + char.charCodeAt(0)) >>> 0,
+                  0
+                );
+                const angle = (hash % 360) * (Math.PI / 180);
+                const radius = 25 + (hash % 35);
+                positioned.x = liveFocusedNode.x + Math.cos(angle) * radius;
+                positioned.y = liveFocusedNode.y + Math.sin(angle) * radius;
+                positioned.vx = 0;
+                positioned.vy = 0;
+              }
+            } else {
+              const connectedIds = new Set<string>();
+              for (const edge of edges) {
+                if (edge.kind !== 'link' && edge.kind !== 'tag') continue;
+                if (edgeEndpointId(edge.source) === node.id) {
+                  connectedIds.add(edgeEndpointId(edge.target));
+                }
+                if (edgeEndpointId(edge.target) === node.id) {
+                  connectedIds.add(edgeEndpointId(edge.source));
+                }
+              }
+              const liveNeighbor = [...connectedIds]
+                .map(id =>
+                  nodesRef.current.find(candidate => candidate.id === id)
+                )
+                .find(
+                  candidate =>
+                    candidate &&
+                    isFiniteNumber((candidate as PositionedNode).x) &&
+                    isFiniteNumber((candidate as PositionedNode).y)
+                ) as PositionedNode | undefined;
+              if (liveNeighbor) {
+                const hash = [...node.id].reduce(
+                  (value, char) => (value * 31 + char.charCodeAt(0)) >>> 0,
+                  0
+                );
+                const angle = (hash % 360) * (Math.PI / 180);
+                const radius = 35 + (hash % 40);
+                positioned.x = liveNeighbor.x! + Math.cos(angle) * radius;
+                positioned.y = liveNeighbor.y! + Math.sin(angle) * radius;
+                positioned.vx = 0;
+                positioned.vy = 0;
+              }
             }
+            insertionRevealRef.current.add(node.id);
+            nodesChanged = true;
           }
-          insertionRevealRef.current.add(node.id);
-          nodesChanged = true;
-        }
-        for (const key of edgeBatch) {
-          edgeRevealRef.current.add(key);
-          edgesChanged = true;
-        }
-        if (!nodesChanged && !edgesChanged) return;
-        if (focusedNodeId && nodesChanged) {
-          selectiveHeatRef.current?.setActive(
-            new Set(batch.map(node => node.id)),
-            performance.now()
-          );
-        }
-        syncGraphDataRef.current(fg);
-        repaintRef.current(fg);
-        if (nodesChanged) {
-          syncGhostExclusionRef.current();
-          computeShowdownsRef.current();
-        }
-        if (nodesChanged && cycle === cycleCount - 1) {
-          fg.d3ReheatSimulation();
-        }
-      }, interval * (cycle + 1));
+          for (const key of edgeBatch) {
+            edgeRevealRef.current.add(key);
+            edgesChanged = true;
+          }
+          if (!nodesChanged && !edgesChanged) return;
+          if (focusedNodeId && nodesChanged) {
+            selectiveHeatRef.current?.setActive(
+              new Set(batch.map(node => node.id)),
+              performance.now()
+            );
+          }
+          syncGraphDataRef.current(fg);
+          repaintRef.current(fg);
+          if (nodesChanged) {
+            syncGhostExclusionRef.current();
+            computeShowdownsRef.current();
+          }
+          if (nodesChanged && cycle === cycleCount - 1) {
+            fg.d3ReheatSimulation();
+          }
+        },
+        interval * (cycle + 1)
+      );
       timers.push(timer);
     }
     insertionTimersRef.current = timers;
@@ -1522,9 +1510,7 @@ export default function WikiGraphView({
 
       fg.d3ReheatSimulation();
       const transitionDuration =
-        pendingInsertionDurationRef.current +
-        FADE_MS +
-        FOCUS_SETTLE_MS;
+        pendingInsertionDurationRef.current + FADE_MS + FOCUS_SETTLE_MS;
       const runFitTick = () => {
         if (!zoomToFitOnRef.current) return;
         const positioned = nodesRef.current.some(

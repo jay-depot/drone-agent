@@ -182,10 +182,7 @@ export default function WikiPage() {
     if (focusedNodeId?.startsWith('tag:')) {
       retainedTagIds.add(focusedNodeId);
       for (const edge of sized.edges) {
-        if (
-          edge.kind === 'tag' &&
-          edge.target === focusedNodeId
-        ) {
+        if (edge.kind === 'tag' && edge.target === focusedNodeId) {
           retainedPageIds.add(edge.source);
         }
       }
@@ -194,8 +191,7 @@ export default function WikiPage() {
     const retainedEdges = sized.edges.filter(edge => {
       if (edge.kind === 'link') {
         return (
-          retainedPageIds.has(edge.source) &&
-          retainedPageIds.has(edge.target)
+          retainedPageIds.has(edge.source) && retainedPageIds.has(edge.target)
         );
       }
       if (!retainedPageIds.has(edge.source)) return false;
@@ -227,9 +223,7 @@ export default function WikiPage() {
       : null;
   const focusedTagMemberEdges =
     sized && focusedNode?.kind === 'tag'
-      ? sized.edges.filter(
-          e => e.kind === 'tag' && e.target === focusedNode.id
-        )
+      ? sized.edges.filter(e => e.kind === 'tag' && e.target === focusedNode.id)
       : [];
   const memberCount = focusedTagMemberEdges.length;
 

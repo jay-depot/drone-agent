@@ -153,8 +153,7 @@ describe('WikiGraphView', () => {
       }
     ).__chargeForce;
     const strengthAccessor = chargeForce.strength.mock.calls[0]?.[0] as
-      | ((node: AugmentedGraphNode) => number)
-      | undefined;
+      ((node: AugmentedGraphNode) => number) | undefined;
     expect(strengthAccessor).toBeTypeOf('function');
     if (!strengthAccessor) return;
 
@@ -217,16 +216,16 @@ describe('WikiGraphView', () => {
       );
 
       await vi.advanceTimersByTimeAsync(100);
-      const firstPush = (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.at(
-        -1
-      )![0] as { links: AugmentedGraphEdge[] };
+      const firstPush = (
+        handle.graphData as ReturnType<typeof vi.fn>
+      ).mock.calls.at(-1)![0] as { links: AugmentedGraphEdge[] };
       expect(firstPush.links.length).toBeGreaterThan(0);
       expect(firstPush.links.length).toBeLessThanOrEqual(10);
 
       await vi.advanceTimersByTimeAsync(100);
-      const secondPush = (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.at(
-        -1
-      )![0] as { links: AugmentedGraphEdge[] };
+      const secondPush = (
+        handle.graphData as ReturnType<typeof vi.fn>
+      ).mock.calls.at(-1)![0] as { links: AugmentedGraphEdge[] };
       expect(secondPush.links.length).toBeLessThanOrEqual(12);
     } finally {
       vi.useRealTimers();
@@ -236,9 +235,7 @@ describe('WikiGraphView', () => {
   it('lands inserted nodes near the focused node current position', async () => {
     vi.useFakeTimers();
     try {
-      const initial = [
-        pageNode({ id: 'focus', title: 'Focus', x: 10, y: 20 }),
-      ];
+      const initial = [pageNode({ id: 'focus', title: 'Focus', x: 10, y: 20 })];
       const grown = [
         initial[0],
         pageNode({ id: 'page-new', title: 'New page' }),
@@ -263,9 +260,11 @@ describe('WikiGraphView', () => {
         <WikiGraphView {...graphProps} nodes={grown} focusedNodeId="focus" />
       );
 
-      const pushed = (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.at(
-        -1
-      )![0] as { nodes: Array<AugmentedGraphNode & { x?: number; y?: number }> };
+      const pushed = (
+        handle.graphData as ReturnType<typeof vi.fn>
+      ).mock.calls.at(-1)![0] as {
+        nodes: Array<AugmentedGraphNode & { x?: number; y?: number }>;
+      };
       const liveFocus = pushed.nodes.find(node => node.id === 'focus');
       liveFocus!.x = 500;
       liveFocus!.y = -200;
@@ -290,9 +289,7 @@ describe('WikiGraphView', () => {
   it('trickles one page and up to three tags every 100ms and aborts on focus change', async () => {
     vi.useFakeTimers();
     try {
-      const initial = [
-        pageNode({ id: 'a', title: 'A', x: 0, y: 0 }),
-      ];
+      const initial = [pageNode({ id: 'a', title: 'A', x: 0, y: 0 })];
       const grown = [
         ...initial,
         pageNode({ id: 'b', title: 'B' }),
@@ -336,7 +333,9 @@ describe('WikiGraphView', () => {
       const pushedBeforeInsert = (
         handle.graphData as ReturnType<typeof vi.fn>
       ).mock.calls.at(-1)?.[0] as { nodes: AugmentedGraphNode[] };
-      expect(pushedBeforeInsert.nodes.map(node => node.id).sort()).toEqual(['a']);
+      expect(pushedBeforeInsert.nodes.map(node => node.id).sort()).toEqual([
+        'a',
+      ]);
 
       await vi.advanceTimersByTimeAsync(100);
       expect(colorAccessor(grown[1])).toBe('#2563eb');
@@ -358,14 +357,9 @@ describe('WikiGraphView', () => {
       const pushedAfterSecondInsert = (
         handle.graphData as ReturnType<typeof vi.fn>
       ).mock.calls.at(-1)?.[0] as { nodes: AugmentedGraphNode[] };
-      expect(pushedAfterSecondInsert.nodes.map(node => node.id).sort()).toEqual([
-        'a',
-        'b',
-        'c',
-        'tag:x',
-        'tag:y',
-        'tag:z',
-      ]);
+      expect(pushedAfterSecondInsert.nodes.map(node => node.id).sort()).toEqual(
+        ['a', 'b', 'c', 'tag:x', 'tag:y', 'tag:z']
+      );
 
       rerender(
         <WikiGraphView
@@ -374,8 +368,9 @@ describe('WikiGraphView', () => {
           focusedNodeId="focus"
         />
       );
-      const callsAfterFocusChange =
-        (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.length;
+      const callsAfterFocusChange = (
+        handle.graphData as ReturnType<typeof vi.fn>
+      ).mock.calls.length;
       await vi.runAllTimersAsync();
       expect(
         (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.length
@@ -399,7 +394,9 @@ describe('WikiGraphView', () => {
       onClearFocus: vi.fn(),
       forceGraphFactory: () => handle as unknown as ForceGraphHandle,
     };
-    const { rerender } = render(<WikiGraphView {...graphProps} nodes={initial} />);
+    const { rerender } = render(
+      <WikiGraphView {...graphProps} nodes={initial} />
+    );
 
     rerender(<WikiGraphView {...graphProps} nodes={grown} />);
 
@@ -436,9 +433,7 @@ describe('WikiGraphView', () => {
           nodes.some(node => node.id === edge.source) &&
           nodes.some(node => node.id === edge.target)
       )
-      .sort(
-      (a, b) => (a.kind === 'tag' ? 0 : 1) - (b.kind === 'tag' ? 0 : 1)
-      );
+      .sort((a, b) => (a.kind === 'tag' ? 0 : 1) - (b.kind === 'tag' ? 0 : 1));
     expect(pushed.links).toEqual(sortedCanonical);
     expect([...pushed.nodes].sort((a, b) => a.id.localeCompare(b.id))).toEqual(
       [...nodes].sort((a, b) => a.id.localeCompare(b.id))
@@ -1120,8 +1115,9 @@ describe('WikiGraphView', () => {
         forceGraphFactory={() => handle as unknown as ForceGraphHandle}
       />
     );
-    const reheatCallsBeforeClear =
-      (handle.d3ReheatSimulation as ReturnType<typeof vi.fn>).mock.calls.length;
+    const reheatCallsBeforeClear = (
+      handle.d3ReheatSimulation as ReturnType<typeof vi.fn>
+    ).mock.calls.length;
     expect(handle.centerAt).toHaveBeenCalledWith(10, 20, 350);
     expect(handle.zoomToFit).toHaveBeenCalledWith(600, 40);
 
@@ -1322,12 +1318,7 @@ describe('WikiGraphView', () => {
       target: 'c',
       kind: 'link',
     };
-    rerender(
-      <WikiGraphView
-        {...graphProps}
-        edges={[newEdge]}
-      />
-    );
+    rerender(<WikiGraphView {...graphProps} edges={[newEdge]} />);
     const widthAccessor = accessorFrom('linkWidth') as (
       link: AugmentedGraphEdge
     ) => number;
@@ -1565,7 +1556,12 @@ describe('WikiGraphView', () => {
   it('shows subdued labels for second-degree nodes in focus view', () => {
     const focusNodes = [
       ...nodes,
-      { ...pageNode({ id: 'd', title: 'Second Degree' }), _val: 8, x: 50, y: 50 },
+      {
+        ...pageNode({ id: 'd', title: 'Second Degree' }),
+        _val: 8,
+        x: 50,
+        y: 50,
+      },
     ];
     const focusEdges = [
       ...edges,
@@ -1607,8 +1603,9 @@ describe('WikiGraphView', () => {
 
     frameFn(ctx, 1);
 
-    const labels = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls
-      .map(call => call[0] as string);
+    const labels = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls.map(
+      call => call[0] as string
+    );
     expect(labels).toContain('Second Degree');
   });
 
@@ -1628,11 +1625,7 @@ describe('WikiGraphView', () => {
       <WikiGraphView {...graphProps} nodes={initial} />
     );
     rerender(
-      <WikiGraphView
-        {...graphProps}
-        nodes={[initial[1]]}
-        focusedNodeId="b"
-      />
+      <WikiGraphView {...graphProps} nodes={[initial[1]]} focusedNodeId="b" />
     );
     const pushed = (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.at(
       -1
@@ -1690,9 +1683,11 @@ describe('WikiGraphView', () => {
         />
       );
       vi.advanceTimersByTime(100);
-      const pushed = (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.at(
-        -1
-      )![0] as { nodes: Array<{ id: string; x?: number; y?: number }> };
+      const pushed = (
+        handle.graphData as ReturnType<typeof vi.fn>
+      ).mock.calls.at(-1)![0] as {
+        nodes: Array<{ id: string; x?: number; y?: number }>;
+      };
       const newNode = pushed.nodes.find(n => n.id === 'brand-new');
       expect(newNode).toBeDefined();
       // Landing spot assigned (not undefined => no origin-spiral blink-in).
@@ -1809,9 +1804,7 @@ describe('WikiGraphView', () => {
         restore: vi.fn(),
       }) as unknown as CanvasRenderingContext2D;
 
-    const preLayout: Array<
-      AugmentedGraphNode & { x?: number; y?: number }
-    > = [
+    const preLayout: Array<AugmentedGraphNode & { x?: number; y?: number }> = [
       { ...pageNode({ id: 'page', title: 'Page' }), _val: 9 },
       { ...pageNode({ id: 'page2', title: 'Page2' }), _val: 2 },
     ];

@@ -335,10 +335,16 @@ export const MAX_VISIBLE_TAG_NODES = 750;
 
 const safetyCullCache = new WeakMap<
   AugmentedGraphNode[],
-  WeakMap<AugmentedGraphEdge[], Map<string, {
-    nodes: AugmentedGraphNode[];
-    edges: AugmentedGraphEdge[];
-  }>>
+  WeakMap<
+    AugmentedGraphEdge[],
+    Map<
+      string,
+      {
+        nodes: AugmentedGraphNode[];
+        edges: AugmentedGraphEdge[];
+      }
+    >
+  >
 >();
 
 export function applySafetyCulledWikiGraph(
@@ -348,7 +354,8 @@ export function applySafetyCulledWikiGraph(
 ): { nodes: AugmentedGraphNode[]; edges: AugmentedGraphEdge[] } {
   if (
     !focusedId &&
-    nodes.filter(node => node.kind === 'page').length <= MAX_VISIBLE_PAGE_NODES &&
+    nodes.filter(node => node.kind === 'page').length <=
+      MAX_VISIBLE_PAGE_NODES &&
     nodes.filter(node => node.kind === 'tag').length <= MAX_VISIBLE_TAG_NODES
   ) {
     return { nodes, edges };
@@ -392,10 +399,7 @@ export function applySafetyCulledWikiGraph(
     candidatePageIds = secondaryPageIds;
     candidateTagIds = new Set();
     for (const edge of edges) {
-      if (
-        edge.kind === 'tag' &&
-        candidatePageIds.has(edge.source)
-      ) {
+      if (edge.kind === 'tag' && candidatePageIds.has(edge.source)) {
         candidateTagIds.add(edge.target);
       }
     }
@@ -408,25 +412,19 @@ export function applySafetyCulledWikiGraph(
       }
     }
     for (const edge of edges) {
-      if (
-        edge.kind === 'tag' &&
-        candidatePageIds.has(edge.source)
-      ) {
+      if (edge.kind === 'tag' && candidatePageIds.has(edge.source)) {
         candidateTagIds.add(edge.target);
       }
     }
   }
 
   const pageCandidates = nodes
-    .filter(node =>
-      node.kind === 'page' &&
-      (!candidatePageIds || candidatePageIds.has(node.id))
+    .filter(
+      node =>
+        node.kind === 'page' &&
+        (!candidatePageIds || candidatePageIds.has(node.id))
     )
-    .sort(
-      (a, b) =>
-        (b._val ?? 0) - (a._val ?? 0) ||
-        a.id.localeCompare(b.id)
-    );
+    .sort((a, b) => (b._val ?? 0) - (a._val ?? 0) || a.id.localeCompare(b.id));
 
   const retainedIds = new Set<string>();
   if (focusedId) {
@@ -451,11 +449,7 @@ export function applySafetyCulledWikiGraph(
         node.kind === 'tag' &&
         (!candidateTagIds || candidateTagIds.has(node.id))
     )
-    .sort(
-      (a, b) =>
-        (b._val ?? 0) - (a._val ?? 0) ||
-        a.id.localeCompare(b.id)
-    );
+    .sort((a, b) => (b._val ?? 0) - (a._val ?? 0) || a.id.localeCompare(b.id));
   const retainedTagIds = new Set<string>();
   if (focusedId) {
     const focusedTag = nodes.find(
@@ -477,13 +471,10 @@ export function applySafetyCulledWikiGraph(
     if (edge.kind === 'link') {
       return retainedIds.has(edge.source) && retainedIds.has(edge.target);
     }
-    return retainedIds.has(edge.source) &&
-      retainedTagIds.has(edge.target);
+    return retainedIds.has(edge.source) && retainedTagIds.has(edge.target);
   });
   const connectedTagIds = new Set(
-    retainedEdges
-      .filter(edge => edge.kind === 'tag')
-      .map(edge => edge.target)
+    retainedEdges.filter(edge => edge.kind === 'tag').map(edge => edge.target)
   );
   const result = {
     nodes: retainedNodes.filter(
@@ -542,10 +533,7 @@ export function buildFocusSets(
     }
   }
   for (const edge of edges) {
-    if (
-      neighborIds.has(edge.source) ||
-      neighborIds.has(edge.target)
-    ) {
+    if (neighborIds.has(edge.source) || neighborIds.has(edge.target)) {
       const otherSource = edge.source;
       const otherTarget = edge.target;
       if (!neighborIds.has(otherSource)) secondaryIds.add(otherSource);
