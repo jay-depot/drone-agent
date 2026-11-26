@@ -22,6 +22,7 @@ import {
   getAgent,
   listAgents,
   updateAgentActivity,
+  heartbeatAgent,
   unregisterAgent,
   createMemory,
   getMemory,
@@ -420,6 +421,31 @@ describe('Beacon Agent Session CRUD', () => {
     const updated = updateAgentActivity('agent-1');
     expect(updated).toBeDefined();
     expect(updated!.lastActivity).toBeGreaterThan(0);
+  });
+
+  it('updateAgentActivity sets the persona when one is given', () => {
+    registerAgent({ id: 'agent-1', personaId: null });
+    const updated = updateAgentActivity('agent-1', 'p-1');
+    expect(updated!.personaId).toBe('p-1');
+    expect(getAgent('agent-1')!.personaId).toBe('p-1');
+  });
+
+  it('updateAgentActivity with no persona keeps the stored one', () => {
+    registerAgent({ id: 'agent-1', personaId: 'p-0' });
+    const updated = updateAgentActivity('agent-1');
+    expect(updated!.personaId).toBe('p-0');
+    expect(getAgent('agent-1')!.personaId).toBe('p-0');
+  });
+
+  it('heartbeatAgent recreates a deleted row with the given persona', () => {
+    registerAgent({ id: 'agent-1', personaId: 'p-0' });
+    unregisterAgent('agent-1');
+    expect(getAgent('agent-1')).toBeUndefined();
+
+    const recreated = heartbeatAgent('agent-1', 'p-1');
+    expect(recreated.id).toBe('agent-1');
+    expect(recreated.personaId).toBe('p-1');
+    expect(getAgent('agent-1')!.personaId).toBe('p-1');
   });
 
   it('should unregister an agent', () => {

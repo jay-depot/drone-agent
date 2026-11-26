@@ -25,6 +25,7 @@ import {
   listAllAgentLocations,
   listSwarmSessions,
   markStaleSessions,
+  markStrandedProcessingSessions,
   getWebToken,
   generateWebToken,
   initWebToken,
@@ -655,6 +656,7 @@ export async function main() {
   const staleCheckInterval = setInterval(
     () => {
       markStaleSessions(24 * 60 * 60 * 1000);
+      markStrandedProcessingSessions(60 * 60 * 1000);
     },
     60 * 60 * 1000
   );

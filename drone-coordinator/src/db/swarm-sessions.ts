@@ -198,6 +198,41 @@ export function markStaleSessions(thresholdMs: number): SwarmSession[] {
   return updated;
 }
 
+/**
+ * Move sessions stranded in `processing` to `ended`.
+ *
+ * A processing row is stranded when the ingest hook dies before it marks the
+ * session. `ended` returns the session to the catch-up queue, so a failed
+ * ingest is retried. The threshold must be well above the hook timeout
+ * (300000 ms).
+ */
+export function markStrandedProcessingSessions(
+  thresholdMs: number
+): SwarmSession[] {
+  const cutoff = Date.now() - thresholdMs;
+  const rows = getDatabase()
+    .prepare(
+      `SELECT * FROM swarm_sessions
+       WHERE status = 'processing'
+         AND COALESCE(status_changed_at, updatedAt) < ?`
+    )
+    .all(cutoff) as SwarmSessionRow[];
+
+  const updated: SwarmSession[] = [];
+  for (const row of rows) {
+    const result = transitionSessionStatus(row.id, 'processing', 'ended');
+    if (!('error' in result)) {
+      updated.push(result);
+    }
+  }
+  if (updated.length > 0) {
+    logger.info(
+      `Cleared ${updated.length} stranded processing session(s) to 'ended'`
+    );
+  }
+  return updated;
+}
+
 export function countSwarmSessions(options?: {
   status?: string;
   exclude?: string;
