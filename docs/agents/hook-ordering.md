@@ -55,15 +55,21 @@ key (default 30000). OnShutdown is therefore bounded, never unbounded.
 
 ## SIGTERM / SIGINT in every run mode
 
-All run modes handle SIGTERM and SIGINT the same way `runSwarmListenMode`
-does:
+All four run modes handle SIGTERM and SIGINT through one shared helper,
+`installSignalHandlers(onSignal)` (in `drone-agent/src/interactive.ts`). It
+registers one-shot SIGTERM and SIGINT handlers and returns a function that
+removes them.
 
-- `runJsonListenMode` and `runInteractiveLoop` register once-handlers that call
-  the runtime capability's `cancelCurrentRequest()` and then close the readline,
-  so the loop returns normally and `onShutdown` runs. The handlers are removed
-  in the `finally` block.
-- `runJsonMode`'s error path sets `process.exitCode = 1` instead of calling
-  `process.exit(1)`, so `onShutdown` hooks run before the process exits.
+- `runJsonListenMode` and `runInteractiveLoop` supply a body that calls the
+  runtime capability's `cancelCurrentRequest()` and then closes the readline, so
+  the loop returns normally and `onShutdown` runs. The handlers are removed in
+  the `finally` block.
+- `runSwarmListenMode` supplies a body that settles its keep-alive promise, so
+  the mode returns and the caller runs `onShutdown`.
+- `runJsonMode` supplies a body that calls `runtime.cancelCurrentRequest?.()`,
+  so the in-flight turn settles as an error and control returns to `main()`. Its
+  error path sets `process.exitCode = 1` instead of calling `process.exit(1)`,
+  so `onShutdown` hooks run before the process exits.
 
 Shutdown is never triggered via `process.kill` or self-signaling: SIGTERM is
 uncatchable on Windows, so a self-signal would skip `onShutdown` entirely.

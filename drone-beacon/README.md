@@ -106,10 +106,19 @@ listing) when no page changed.
 ### Agent Sessions
 
 - `POST /agents` - Register agent session
-- `GET /agents` - List active agents
-- `GET /agents/:id` - Get agent info
-- `POST /agents/:id/heartbeat` - Agent heartbeat
+- `GET /agents` - List agents; `status` and `live` are derived from the live socket map
+- `GET /agents/:id` - Get agent info (same derived `status`/`live`)
+- `POST /agents/:id/heartbeat` - Agent heartbeat; upserts (recreates a reaped row)
 - `DELETE /agents/:id` - Unregister agent
+
+Agent liveness is derived at read time from the WebSocket socket map, so a dead
+socket reports `disconnected` before its row is deleted. The stored `status`
+column is written once at insert and left alone. A background reaper
+(`agent-reaper.ts`, `AGENT_REAP_INTERVAL_MS = 60_000`, unref'd) deletes every row
+that is neither socket-connected nor heartbeated within `HEARTBEAT_GRACE_MS`
+(45 s), reusing the boot spawn-reconcile reachability rule. The heartbeat is an
+upsert, so a live agent whose row was reaped reappears within one heartbeat
+interval.
 
 ### Memory
 
