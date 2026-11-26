@@ -1548,5 +1548,9 @@
   {
     "timestamp": "2026-11-20T01:11:43.481Z",
     "insight": "`drone-coordinator/test/wiki-routes.test.ts > GET /api/wiki/graph returns nodes and edges from the coordinator store` fails on a clean checkout of `feat/session-status-changed-at` (verified by reverting all working-tree changes and re-running: it still fails). The assertion expects node ids `['missing-page','orphan','page-a','page-b']` but receives `['no-pitch-page','pitch-page']`. This is a pre-existing, unrelated failure — the wiki graph/pitch-page feature, not swarm sessions. Do not treat a red coordinator suite as caused by unrelated work until this test is proven pre-existing (back up changed files to /tmp, `git checkout --` them, rerun, restore — never chain `git stash push && pop` per HOST.md)."
+  },
+  {
+    "timestamp": "2026-11-26T20:38:47.750Z",
+    "insight": "A doc claim that a capability exists is not evidence that it exists, and drone-agent has a live example. `docs/agents/hook-ordering.md` states \"All run modes handle SIGTERM and SIGINT the same way runSwarmListenMode does\", and a swarm wiki page (`drone-agent-universal-signal-handling-2026-10-26`) claims signal handling became \"universal\" at commit `ebc450a7`. Both are false as read at `0b77692e`: `runJsonMode` (`drone-agent/src/interactive.ts:100`) installs no signal handler — it got only the `process.exitCode = 1` change on its error path. The false claim is invisible to the type checker, the linter, and the tests. It cost real triage time because a reader would conclude the SIGTERM case was already covered. The rule: before depending on a documented behaviour, find the code that reads it; when a doc and the code disagree, recover the originating spec from git before deciding which side is wrong. Fix the doc in the same change that makes the claim true."
   }
 ]
