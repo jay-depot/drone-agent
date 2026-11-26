@@ -19,6 +19,9 @@ import {
   waitForService,
   shouldSkipIntegrationSuite,
   registerBeaconAgent,
+  openAgentSocket,
+  closeAgentSocket,
+  waitFor,
 } from './fixtures/index.js';
 
 const DEFAULT_BEACON_URL = 'http://localhost:3457';
@@ -57,22 +60,39 @@ describe.skipIf(
 
   describe('full-agent-lifecycle', () => {
     it('should complete full agent lifecycle', async () => {
-      // Register → connected → heartbeat → stale check for an agent this
-      // test owns. Other 'connected' rows may be stale leftovers from
-      // earlier suites, so the freshness assertion applies only to ours.
+      // Register → connect (real WebSocket) → heartbeat freshness check →
+      // disconnect, for an agent this test owns.
       const agent = await registerBeaconAgent(
         BEACON_URL,
         'e2e-lifecycle-agent'
       );
       expect(agent.status).toBe('connected');
 
-      const agents = await getBeaconAgents(BEACON_URL);
-      const ours = agents.find(a => a.id === 'e2e-lifecycle-agent');
-      expect(ours).toBeDefined();
-      expect(ours?.status).toBe('connected');
+      // The beacon derives `status` from its live socket map (ADR 282 D5), so
+      // a REST-only registration reads `disconnected`. Open the socket the
+      // real agent opens, then assert the derived liveness.
+      const socket = await openAgentSocket(BEACON_URL, 'e2e-lifecycle-agent');
+      try {
+        const agents = await getBeaconAgents(BEACON_URL);
+        const ours = agents.find(a => a.id === 'e2e-lifecycle-agent');
+        expect(ours).toBeDefined();
+        expect(ours?.status).toBe('connected');
+        expect(ours?.live).toBe(true);
 
-      const lastActivity = new Date(ours!.lastActivity).getTime();
-      expect(Date.now() - lastActivity).toBeLessThan(60000);
+        const lastActivity = new Date(ours!.lastActivity).getTime();
+        expect(Date.now() - lastActivity).toBeLessThan(60000);
+      } finally {
+        await closeAgentSocket(socket);
+      }
+
+      // After the socket closes the derived liveness is `disconnected`, even
+      // though the row survives until the reaper sweeps it.
+      const wentOffline = await waitFor(async () => {
+        const agents = await getBeaconAgents(BEACON_URL);
+        const ours = agents.find(a => a.id === 'e2e-lifecycle-agent');
+        return ours !== undefined && ours.live === false;
+      });
+      expect(wentOffline).toBe(true);
     });
   });
 

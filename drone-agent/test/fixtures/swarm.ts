@@ -167,6 +167,86 @@ export async function registerBeaconAgent(
 }
 
 /**
+ * Build the beacon WebSocket URL for an agent. Mirrors the agent-side builder
+ * in `plugins/swarm/websocket.ts` so a test can open the same socket the real
+ * agent opens.
+ */
+export function buildBeaconAgentWsUrl(
+  beaconUrl: string,
+  agentId: string
+): string {
+  const wsProtocol = beaconUrl.startsWith('https') ? 'wss' : 'ws';
+  return `${wsProtocol}://${beaconUrl.replace(/^https?:\/\//, '')}/ws?agentId=${encodeURIComponent(agentId)}`;
+}
+
+/**
+ * Open a real WebSocket to the beacon for a registered agent and resolve once
+ * the beacon has admitted it. The beacon stores the socket in its live map
+ * before it sends the `connected` welcome frame, so waiting for that frame
+ * guarantees the next `GET /agents` sees the agent as `connected` (ADR 282
+ * D5; a REST-only registration reads `disconnected`).
+ */
+export async function openAgentSocket(
+  beaconUrl: string,
+  agentId: string,
+  timeoutMs: number = 5000
+): Promise<WebSocket> {
+  const socket = new WebSocket(buildBeaconAgentWsUrl(beaconUrl, agentId));
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      socket.close();
+      reject(
+        new Error(
+          `Timed out after ${timeoutMs}ms connecting ${agentId} to ${beaconUrl}`
+        )
+      );
+    }, timeoutMs);
+    socket.addEventListener('message', event => {
+      try {
+        const msg = JSON.parse(String(event.data)) as { type?: string };
+        if (msg.type === 'connected') {
+          clearTimeout(timer);
+          resolve();
+        }
+      } catch {
+        // Ignore non-JSON frames until the welcome arrives.
+      }
+    });
+    socket.addEventListener(
+      'error',
+      () => {
+        clearTimeout(timer);
+        reject(new Error(`WebSocket error connecting ${agentId}`));
+      },
+      { once: true }
+    );
+  });
+  return socket;
+}
+
+/**
+ * Close an agent WebSocket and resolve once the socket is closed.
+ */
+export async function closeAgentSocket(
+  socket: WebSocket,
+  timeoutMs: number = 2000
+): Promise<void> {
+  if (socket.readyState === WebSocket.CLOSED) return;
+  await new Promise<void>(resolve => {
+    const timer = setTimeout(resolve, timeoutMs);
+    socket.addEventListener(
+      'close',
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true }
+    );
+    socket.close();
+  });
+}
+
+/**
  * Get all personas from beacon
  */
 export async function getBeaconPersonas(beaconUrl: string): Promise<Persona[]> {

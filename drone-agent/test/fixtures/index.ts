@@ -51,6 +51,7 @@ export interface Agent {
   persona?: string;
   lastActivity: string;
   capabilities?: string[];
+  live?: boolean;
 }
 
 export interface Message {
