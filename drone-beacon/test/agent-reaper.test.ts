@@ -18,11 +18,9 @@ vi.mock('../src/logger.js', () => ({
 }));
 
 const db = await import('../src/db/index.js');
-const wsServer = await import('../src/ws-server.js');
 const agentRemoval = await import('../src/agent-removal.js');
-const { reapStaleAgents, startAgentReaper, stopAgentReaper } = await import(
-  '../src/agent-reaper.js'
-);
+const { reapStaleAgents, startAgentReaper, stopAgentReaper } =
+  await import('../src/agent-reaper.js');
 
 function agent(overrides: Partial<AgentSession> = {}): AgentSession {
   return {
@@ -50,11 +48,7 @@ describe('reapStaleAgents', () => {
       agent({ id: 'agent-1', lastActivity: 0 }),
     ]);
 
-    const reaped = await reapStaleAgents(
-      Date.now(),
-      new Set<string>(),
-      45_000
-    );
+    const reaped = await reapStaleAgents(Date.now(), new Set<string>(), 45_000);
 
     expect(agentRemoval.removeAgent).toHaveBeenCalledWith('agent-1');
     expect(reaped).toEqual(['agent-1']);

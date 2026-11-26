@@ -5,10 +5,7 @@
 import type { SwarmContext } from './context.js';
 import { flushEventBuffer } from './hooks.js';
 import { BeaconConfigInjector } from './config.js';
-import type {
-  DroneConfigCapability,
-  DronePersonaCapability,
-} from 'drone-core';
+import type { DroneConfigCapability, DronePersonaCapability } from 'drone-core';
 
 /**
  * Send a heartbeat to the beacon.

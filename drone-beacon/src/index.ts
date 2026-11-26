@@ -561,6 +561,7 @@ async function main() {
   // Boot-only: after a grace window, downgrade spawn rows that neither
   // reconnected nor left a live process behind a restart.
   startSpawnReconcile();
+  startAgentReaper();
 
   // Start periodic TTL cleanup
   const cleanupInterval = setInterval(() => {
@@ -637,7 +638,6 @@ async function main() {
     clearInterval(cleanupInterval);
     searchIndexer.stopPeriodicSweep();
     wikiIndexer.stopPeriodicSweep();
-  startAgentReaper();
     stopFragmentTtlSweep();
     stopSpawnReconcile();
     stopAgentReaper();
