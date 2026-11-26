@@ -976,6 +976,7 @@ All of these must pass.
 **Status**: COMPLETE. All 16 steps executed. All validation criteria pass.
 
 ### Commits
+
 - `5bcdf729` — feat(swarm): steps 1-7 (agent signal helper, beacon removeAgent,
   heartbeat upsert, derived liveness + routes, agent-reaper, reaper wiring,
   heartbeat persona).
@@ -992,6 +993,7 @@ All of these must pass.
   spans).
 
 ### What was done
+
 Steps 1-11 implemented exactly as written. Step 12 wrote ADR 282, the index row,
 corrected the false `hook-ordering.md` SIGTERM claim, the beacon README, and the
 swarm-plugin heartbeat/shutdown note, plus the Obsidian vault (pointer stub,
@@ -1003,6 +1005,7 @@ Step 14 proved every new test bites (revert source → 8 beacon + 4 coordinator 
 Step 15 review passed every checklist item.
 
 ### Review finding (worth recording)
+
 The Step 6 edit placed `startAgentReaper()` INSIDE the `shutdown` function rather
 than after `startSpawnReconcile()`. The reaper would never have started. Caught
 only by reading the file during the Step 15 review — every test still passed,
@@ -1010,6 +1013,7 @@ because `startAgentReaper` is not imported by any test that exercises `index.ts`
 Fixed.
 
 ### Step 13 follow-on (worth recording)
+
 `docs/adr/index.md` was NOT prettier-stable after the repair: the old file was so
 mis-formatted that prettier bailed, hiding a latent defect — bare `|` characters
 inside inline code spans. Prettier's table writer splits on the first unescaped
@@ -1018,6 +1022,7 @@ file's existing convention) before running prettier, so the index is now both
 correct and formatter-stable.
 
 ### Validation (all green)
+
 - LSP: clean (no errors, no warnings on every changed file).
 - `pnpm -r run build`: exit 0.
 - `pnpm typecheck`: exit 0.
