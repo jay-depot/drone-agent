@@ -119,10 +119,10 @@ Read these facts before you start. They are the reason for each step.
 - **D9 — No config block.** Use module constants. Reuse `HEARTBEAT_GRACE_MS`
   (45 s) for the grace. Add `AGENT_REAP_INTERVAL_MS = 60_000` for the interval.
 - **D10 — Coordinator stranded-session reap.** Add
- `markStrandedProcessingSessions(thresholdMs)`. Transition `processing` to
- `ended`. Use a 1 hour threshold. Hardcode the threshold at the call site.
- Reuse `transitionSessionStatus`. Wire it into the existing hourly
- `staleCheckInterval`.
+  `markStrandedProcessingSessions(thresholdMs)`. Transition `processing` to
+  `ended`. Use a 1 hour threshold. Hardcode the threshold at the call site.
+  Reuse `transitionSessionStatus`. Wire it into the existing hourly
+  `staleCheckInterval`.
 - **D11 — Repair the ADR index.** Fold the `docs/adr/index.md` repair into this
   plan, as its own commit on the same branch. See Step 13.
 
@@ -191,7 +191,7 @@ try {
 }
 ```
 
-   Replace it with:
+Replace it with:
 
 ```ts
 const runtime = engine.getCapability<{
@@ -227,14 +227,14 @@ process.once('SIGTERM', onSignal);
 process.once('SIGINT', onSignal);
 ```
 
-   with
+with
 
 ```ts
 const removeSignalHandlers = installSignalHandlers(onSignal);
 ```
 
-   In the `finally` block, replace the guarded `process.removeListener` pair
-   with `removeSignalHandlers();`.
+In the `finally` block, replace the guarded `process.removeListener` pair
+with `removeSignalHandlers();`.
 
 4. In `runSwarmListenMode`, install the handler inside the promise and remove it
    in the `finally` block:
@@ -253,8 +253,8 @@ await new Promise<void>(resolve => {
 });
 ```
 
-   In the `finally` block, replace the `process.removeListener` pair with
-   `removeSignalHandlers?.();`.
+In the `finally` block, replace the `process.removeListener` pair with
+`removeSignalHandlers?.();`.
 
 5. In `runInteractiveLoop`, make the same change as Step 1.3.
 
@@ -424,22 +424,25 @@ app.post<{ Params: { id: string }; Body?: { personaId?: string | null } }>(
 );
 ```
 
-   Remove the old 404 branch. The route now always returns 200.
+Remove the old 404 branch. The route now always returns 200.
 
 6. Change the `DELETE /agents/:id` route to use the shared function:
 
 ```ts
-app.delete<{ Params: { id: string } }>('/agents/:id', async (request, reply) => {
-  const result = await removeAgent(request.params.id);
-  if (!result.removed) {
-    return reply.code(404).send({ error: 'Agent not found' });
+app.delete<{ Params: { id: string } }>(
+  '/agents/:id',
+  async (request, reply) => {
+    const result = await removeAgent(request.params.id);
+    if (!result.removed) {
+      return reply.code(404).send({ error: 'Agent not found' });
+    }
+    return { success: true };
   }
-  return { success: true };
-});
+);
 ```
 
-   Remove the now-unused `getCoordinatorClient` import if nothing else uses it in
-   this file.
+Remove the now-unused `getCoordinatorClient` import if nothing else uses it in
+this file.
 
 ---
 
@@ -615,10 +618,13 @@ export function markStrandedProcessingSessions(
 4. Change the hourly sweep:
 
 ```ts
-const staleCheckInterval = setInterval(() => {
-  markStaleSessions(24 * 60 * 60 * 1000);
-  markStrandedProcessingSessions(60 * 60 * 1000);
-}, 60 * 60 * 1000);
+const staleCheckInterval = setInterval(
+  () => {
+    markStaleSessions(24 * 60 * 60 * 1000);
+    markStrandedProcessingSessions(60 * 60 * 1000);
+  },
+  60 * 60 * 1000
+);
 ```
 
 ---
@@ -840,11 +846,11 @@ echo "files:" $(ls docs/adr | grep -cE '^[0-9]{3}-') " rows:" $(grep -cE '^\| \[
 sed -n '1,4p' docs/adr/index.md
 ```
 
-   - `files with no row` is empty.
-   - `rows with no file` is empty.
-   - The file count equals the row count.
-   - No number repeats.
-   - The frontmatter is at the top, then the one header.
+- `files with no row` is empty.
+- `rows with no file` is empty.
+- The file count equals the row count.
+- No number repeats.
+- The frontmatter is at the top, then the one header.
 
 5. Spot-check 5 rows against their files. The link target must be the real
    filename, and the description must not be truncated.
@@ -962,3 +968,59 @@ All of these must pass.
   same defect (Step 13 measures it first).
 - The coordinator UI "Terminate" button, which never kills the process. This is
   a separate path (ADR 231).
+
+---
+
+## 7. Execution summary (2026-11-26, branch `fix/stale-agent-sessions`)
+
+**Status**: COMPLETE. All 16 steps executed. All validation criteria pass.
+
+### Commits
+- `5bcdf729` — feat(swarm): steps 1-7 (agent signal helper, beacon removeAgent,
+  heartbeat upsert, derived liveness + routes, agent-reaper, reaper wiring,
+  heartbeat persona).
+- `b59618f8` — test(swarm): beacon agent-reaper.test.ts, routes/db test updates,
+  coordinator db.test.ts cases, agent json-mode-signal.test.ts.
+- `c23fe470` — docs(swarm): ADR 282 + index row + hook-ordering.md correction +
+  beacon README + swarm-plugin.md.
+- `317b664e` — docs(adr): repair the ADR index (dedupe 27 rows, add 5 missing,
+  one table) — Step 13, own commit.
+- `4d09e907` — chore(memory): mark the ADR index followup repaired.
+- final commit — Step 15 review fix (`startAgentReaper()` had landed inside the
+  shutdown block; moved to after `startSpawnReconcile()`) + lint fix (unused
+  `wsServer` import) + prettier-stable ADR index (escaped bare `|` inside code
+  spans).
+
+### What was done
+Steps 1-11 implemented exactly as written. Step 12 wrote ADR 282, the index row,
+corrected the false `hook-ordering.md` SIGTERM claim, the beacon README, and the
+swarm-plugin heartbeat/shutdown note, plus the Obsidian vault (pointer stub,
+decisions/index.md row, index.md count 281→282, log.md entry, meta.json).
+Step 13 repaired `docs/adr/index.md`: 282 files = 282 rows, no duplicate numbers,
+no missing rows, frontmatter at top, one header, rows newest-first.
+Step 14 proved every new test bites (revert source → 8 beacon + 4 coordinator +
+4 agent failures; restore → all pass).
+Step 15 review passed every checklist item.
+
+### Review finding (worth recording)
+The Step 6 edit placed `startAgentReaper()` INSIDE the `shutdown` function rather
+than after `startSpawnReconcile()`. The reaper would never have started. Caught
+only by reading the file during the Step 15 review — every test still passed,
+because `startAgentReaper` is not imported by any test that exercises `index.ts`.
+Fixed.
+
+### Step 13 follow-on (worth recording)
+`docs/adr/index.md` was NOT prettier-stable after the repair: the old file was so
+mis-formatted that prettier bailed, hiding a latent defect — bare `|` characters
+inside inline code spans. Prettier's table writer splits on the first unescaped
+`|`, so it mangled those rows. Fixed by escaping the in-cell pipes as `\|` (the
+file's existing convention) before running prettier, so the index is now both
+correct and formatter-stable.
+
+### Validation (all green)
+- LSP: clean (no errors, no warnings on every changed file).
+- `pnpm -r run build`: exit 0.
+- `pnpm typecheck`: exit 0.
+- `pnpm run lint`: exit 0.
+- `pnpm test`: 4765 passed, 19 skipped, 0 failed.
+- Regression proof: Step 14 complete (file backups in `/tmp`, no `git stash`).
