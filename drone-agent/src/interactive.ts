@@ -90,6 +90,19 @@ export async function readNdjsonInput(): Promise<unknown[]> {
 }
 
 /**
+ * Install one-shot SIGTERM and SIGINT handlers. Return a function that removes
+ * them. Each run mode supplies its own signal body.
+ */
+export function installSignalHandlers(onSignal: () => void): () => void {
+  process.once('SIGTERM', onSignal);
+  process.once('SIGINT', onSignal);
+  return () => {
+    process.removeListener('SIGTERM', onSignal);
+    process.removeListener('SIGINT', onSignal);
+  };
+}
+
+/**
  * Run in JSON mode (for subagent). Reads kickoff from stdin,
  * executes the task, and outputs NDJSON events.
  *
@@ -198,8 +211,17 @@ export async function runJsonMode(
   };
 
   // Resolve runtime info early so it's available in both success and error paths
-  const runtime = engine.getCapability<{ subagentId?: string }>('runtime');
+  const runtime = engine.getCapability<{
+    subagentId?: string;
+    cancelCurrentRequest?: () => void;
+  }>('runtime');
   const subagentId = runtime?.subagentId;
+
+  // A SIGTERM or SIGINT cancels the in-flight turn. The turn then settles as an
+  // error, so control returns to main(), which runs onShutdown one time.
+  const removeSignalHandlers = installSignalHandlers(() =>
+    runtime?.cancelCurrentRequest?.()
+  );
 
   let response: string;
   try {
@@ -210,6 +232,8 @@ export async function runJsonMode(
     ndjsonHandler({ kind: 'return', result: '', error: message, subagentId });
     process.exitCode = 1;
     return;
+  } finally {
+    removeSignalHandlers();
   }
 
   // Output the final assistant message
@@ -267,8 +291,7 @@ export async function runJsonListenMode(
     runtime?.cancelCurrentRequest?.();
     rl.close();
   };
-  process.once('SIGTERM', onSignal);
-  process.once('SIGINT', onSignal);
+  const removeSignalHandlers = installSignalHandlers(onSignal);
 
   try {
     for await (const line of rl) {
@@ -430,10 +453,7 @@ export async function runJsonListenMode(
       await engine.runHooks('onAfterToolCall');
     }
   } finally {
-    if (onSignal) {
-      process.removeListener('SIGTERM', onSignal);
-      process.removeListener('SIGINT', onSignal);
-    }
+    removeSignalHandlers();
     unregisterNotices?.();
     rl.close();
   }
@@ -527,7 +547,7 @@ export async function runSwarmListenMode(
     }) ?? null;
 
   // Hoisted above the try so the finally block can remove the listeners.
-  let onSignal: (() => void) | undefined;
+  let removeSignalHandlers: (() => void) | undefined;
   try {
     // Keep the process alive until the beacon asks us to exit. Two triggers
     // resolve the same deferred: an OS signal (SIGTERM/SIGINT from the
@@ -541,17 +561,12 @@ export async function runSwarmListenMode(
         settled = true;
         resolve();
       };
-      onSignal = settle;
-      process.once('SIGTERM', onSignal);
-      process.once('SIGINT', onSignal);
+      removeSignalHandlers = installSignalHandlers(settle);
       if (shutdownSignal) shutdownSignal.current = settle;
     });
   } finally {
     if (shutdownSignal) shutdownSignal.current = undefined;
-    if (onSignal) {
-      process.removeListener('SIGTERM', onSignal);
-      process.removeListener('SIGINT', onSignal);
-    }
+    removeSignalHandlers?.();
     unregister?.();
   }
 }
@@ -586,8 +601,7 @@ export async function runInteractiveLoop(
     runtime?.cancelCurrentRequest?.();
     rl.close();
   };
-  process.once('SIGTERM', onSignal);
-  process.once('SIGINT', onSignal);
+  const removeSignalHandlers = installSignalHandlers(onSignal);
 
   try {
     while (true) {
@@ -670,10 +684,7 @@ export async function runInteractiveLoop(
       await engine.runHooks('onAfterToolCall');
     }
   } finally {
-    if (onSignal) {
-      process.removeListener('SIGTERM', onSignal);
-      process.removeListener('SIGINT', onSignal);
-    }
+    removeSignalHandlers();
     unregisterConversationEvents?.();
     rl.close();
   }

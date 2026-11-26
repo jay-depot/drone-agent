@@ -76,6 +76,7 @@ import {
   stopFragmentTtlSweep,
 } from './fragments-sweep.js';
 import { startSpawnReconcile, stopSpawnReconcile } from './spawn-reconcile.js';
+import { startAgentReaper, stopAgentReaper } from './agent-reaper.js';
 import { logger } from './logger.js';
 import { configureSessionEndHook } from './session-end.js';
 import {
@@ -636,8 +637,10 @@ async function main() {
     clearInterval(cleanupInterval);
     searchIndexer.stopPeriodicSweep();
     wikiIndexer.stopPeriodicSweep();
+  startAgentReaper();
     stopFragmentTtlSweep();
     stopSpawnReconcile();
+    stopAgentReaper();
     if (syncInterval) {
       clearInterval(syncInterval);
     }
