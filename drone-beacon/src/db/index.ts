@@ -43,6 +43,7 @@ export {
   getAgent,
   listAgents,
   updateAgentActivity,
+  heartbeatAgent,
   unregisterAgent,
   updateAgentPersona,
 } from './agents.js';

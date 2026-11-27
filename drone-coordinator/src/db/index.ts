@@ -88,6 +88,7 @@ export {
   restoreSwarmSession,
   getStaleSessions,
   markStaleSessions,
+  markStrandedProcessingSessions,
   updateSwarmSessionPersona,
   createSwarmEvent,
   getSwarmEvents,

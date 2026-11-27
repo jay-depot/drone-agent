@@ -32,18 +32,37 @@ export function listAgents(): AgentSession[] {
   return stmt.all() as AgentSession[];
 }
 
-export function updateAgentActivity(id: string): AgentSession | undefined {
+export function updateAgentActivity(
+  id: string,
+  personaId?: string | null
+): AgentSession | undefined {
   const session = getAgent(id);
   if (!session) return undefined;
 
-  session.lastActivity = Date.now();
+  const now = Date.now();
+  const nextPersona = personaId === undefined ? session.personaId : personaId;
 
   const stmt = getDatabase().prepare(`
-    UPDATE agent_sessions SET lastActivity = @lastActivity WHERE id = @id
+    UPDATE agent_sessions
+    SET lastActivity = @lastActivity, personaId = @personaId
+    WHERE id = @id
   `);
+  stmt.run({ id, lastActivity: now, personaId: nextPersona });
 
-  stmt.run(session);
-  return session;
+  return { ...session, lastActivity: now, personaId: nextPersona };
+}
+
+/**
+ * Record a heartbeat. Recreate the row when the reaper deleted it. A live
+ * agent whose row was reaped reappears within one heartbeat interval.
+ */
+export function heartbeatAgent(
+  id: string,
+  personaId: string | null
+): AgentSession {
+  const updated = updateAgentActivity(id, personaId);
+  if (updated) return updated;
+  return registerAgent({ id, personaId });
 }
 
 export function unregisterAgent(id: string): boolean {

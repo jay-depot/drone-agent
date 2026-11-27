@@ -1,6 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import type { RegisterAgentRequest } from '../types.js';
 import { getCoordinatorClient } from './context.js';
+import { isAgentConnected } from '../ws-server.js';
+import { removeAgent } from '../agent-removal.js';
+import type { AgentSession } from '../types.js';
 import { BROADCAST_TARGET } from 'drone-core';
 import {
   getPendingCoordinatorFingerprint,
@@ -11,6 +14,15 @@ import {
 import * as db from '../db/index.js';
 
 import { logger } from '../logger.js';
+
+/**
+ * Derive liveness at read time. The socket map is the authority for "reachable
+ * now". The stored column is left alone; the reaper owns deletion.
+ */
+function withLiveness(agent: AgentSession): AgentSession & { live: boolean } {
+  const live = isAgentConnected(agent.id);
+  return { ...agent, status: live ? 'connected' : 'disconnected', live };
+}
 
 export default function agentRoutes(app: FastifyInstance) {
   // Register an agent session
@@ -66,7 +78,7 @@ export default function agentRoutes(app: FastifyInstance) {
 
   // List active agents
   app.get('/agents', async () => {
-    return db.listAgents();
+    return db.listAgents().map(withLiveness);
   });
 
   // Get agent info
@@ -75,18 +87,15 @@ export default function agentRoutes(app: FastifyInstance) {
     if (!agent) {
       return reply.code(404).send({ error: 'Agent not found' });
     }
-    return agent;
+    return withLiveness(agent);
   });
 
   // Agent heartbeat
-  app.post<{ Params: { id: string } }>(
+  app.post<{ Params: { id: string }; Body?: { personaId?: string | null } }>(
     '/agents/:id/heartbeat',
-    async (request, reply) => {
-      const agent = db.updateAgentActivity(request.params.id);
-      if (!agent) {
-        return reply.code(404).send({ error: 'Agent not found' });
-      }
-      return agent;
+    async request => {
+      const personaId = request.body?.personaId ?? null;
+      return db.heartbeatAgent(request.params.id, personaId);
     }
   );
 
@@ -94,29 +103,10 @@ export default function agentRoutes(app: FastifyInstance) {
   app.delete<{ Params: { id: string } }>(
     '/agents/:id',
     async (request, reply) => {
-      // Get agent info before unregistering (for session sync)
-      const agent = db.getAgent(request.params.id);
-      const connectedAt = agent?.connectedAt ?? Date.now();
-
-      const deleted = db.unregisterAgent(request.params.id);
-      if (!deleted) {
+      const result = await removeAgent(request.params.id);
+      if (!result.removed) {
         return reply.code(404).send({ error: 'Agent not found' });
       }
-
-      // Sync session end to coordinator
-      const client = getCoordinatorClient();
-      if (client) {
-        client.endSession(request.params.id, connectedAt).catch(err => {
-          logger.warn(`Failed to sync session end to coordinator: ${err}`);
-        });
-      }
-
-      // Log the event
-      db.createEventLog({
-        eventType: 'agent.disconnected',
-        agentId: request.params.id,
-        metadata: { connectedAt, durationMs: Date.now() - connectedAt },
-      });
       return { success: true };
     }
   );

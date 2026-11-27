@@ -395,14 +395,30 @@ describe('applySafetyCulledWikiGraph', () => {
         ...[
           pageNode({ id: 'focus', title: 'Focus', tags: ['focus-tag'] }),
           pageNode({ id: 'primary', title: 'Primary', tags: ['primary-tag'] }),
-          pageNode({ id: 'secondary', title: 'Secondary', tags: ['secondary-tag'] }),
+          pageNode({
+            id: 'secondary',
+            title: 'Secondary',
+            tags: ['secondary-tag'],
+          }),
           pageNode({ id: 'outside', title: 'Outside', tags: ['outside-tag'] }),
         ].map(node => ({ ...node, kind: 'page' as const, _val: 1 })),
         ...[
           pageNode({ id: 'tag:focus-tag', title: 'focus-tag', kind: 'tag' }),
-          pageNode({ id: 'tag:primary-tag', title: 'primary-tag', kind: 'tag' }),
-          pageNode({ id: 'tag:secondary-tag', title: 'secondary-tag', kind: 'tag' }),
-          pageNode({ id: 'tag:outside-tag', title: 'outside-tag', kind: 'tag' }),
+          pageNode({
+            id: 'tag:primary-tag',
+            title: 'primary-tag',
+            kind: 'tag',
+          }),
+          pageNode({
+            id: 'tag:secondary-tag',
+            title: 'secondary-tag',
+            kind: 'tag',
+          }),
+          pageNode({
+            id: 'tag:outside-tag',
+            title: 'outside-tag',
+            kind: 'tag',
+          }),
         ].map(node => ({ ...node, _val: 1 })),
       ],
       edges: [
@@ -411,7 +427,11 @@ describe('applySafetyCulledWikiGraph', () => {
         { source: 'outside', target: 'other', kind: 'link' as const },
         { source: 'focus', target: 'tag:focus-tag', kind: 'tag' as const },
         { source: 'primary', target: 'tag:primary-tag', kind: 'tag' as const },
-        { source: 'secondary', target: 'tag:secondary-tag', kind: 'tag' as const },
+        {
+          source: 'secondary',
+          target: 'tag:secondary-tag',
+          kind: 'tag' as const,
+        },
         { source: 'outside', target: 'tag:outside-tag', kind: 'tag' as const },
       ],
     };
@@ -457,11 +477,7 @@ describe('applySafetyCulledWikiGraph', () => {
       })),
       edges: [],
     };
-    const result = applySafetyCulledWikiGraph(
-      graph.nodes,
-      graph.edges,
-      null
-    );
+    const result = applySafetyCulledWikiGraph(graph.nodes, graph.edges, null);
     expect(result.nodes.filter(node => node.kind === 'page')).toHaveLength(250);
   });
 
@@ -485,11 +501,7 @@ describe('applySafetyCulledWikiGraph', () => {
         kind: 'tag' as const,
       })),
     };
-    const result = applySafetyCulledWikiGraph(
-      graph.nodes,
-      graph.edges,
-      null
-    );
+    const result = applySafetyCulledWikiGraph(graph.nodes, graph.edges, null);
     expect(result.nodes.filter(node => node.kind === 'tag')).toHaveLength(
       MAX_VISIBLE_TAG_NODES
     );
@@ -506,10 +518,7 @@ describe('applySafetyCulledWikiGraph', () => {
       _val: i,
     }));
     const graph = {
-      nodes: [
-        pageNode({ id: 'p0', title: 'Page 0' }),
-        ...tags,
-      ],
+      nodes: [pageNode({ id: 'p0', title: 'Page 0' }), ...tags],
       edges: tags.map(tag => ({
         source: 'p0',
         target: tag.id,

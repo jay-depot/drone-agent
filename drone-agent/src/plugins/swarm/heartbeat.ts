@@ -5,15 +5,21 @@
 import type { SwarmContext } from './context.js';
 import { flushEventBuffer } from './hooks.js';
 import { BeaconConfigInjector } from './config.js';
-import type { DroneConfigCapability } from 'drone-core';
+import type { DroneConfigCapability, DronePersonaCapability } from 'drone-core';
 
 /**
  * Send a heartbeat to the beacon.
  */
 async function heartbeat(ctx: SwarmContext): Promise<void> {
   try {
+    const personaId =
+      ctx.registration
+        .request<DronePersonaCapability>('persona')
+        ?.getActivePersona()?.id ?? null;
     await fetch(`${ctx.baseUrl}/agents/${ctx.sessionId}/heartbeat`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ personaId }),
     });
   } catch {
     // Silently ignore heartbeat failures

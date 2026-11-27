@@ -7,10 +7,29 @@ tags:
   - integrity
   - index
 created: 2026-11-09T22:44:12.845Z
-updated: 2026-11-09T22:44:12.845Z
+updated: 2026-11-26T20:52:49.265Z
 ---
 
-# Followup — `docs/adr/index.md` has duplicated rows, missing entries, and misplaced frontmatter
+# Followup — `docs/adr/index.md` duplicated rows + missing entries — REPAIRED
+
+**Status**: REPAIRED 2026-11-26 on branch `fix/stale-agent-sessions`, commit
+`317b664e` ("docs(adr): repair the ADR index - dedupe 27 rows, add 5 missing,
+one table"). Folded into `plan-reap-stale-agent-sessions` (Step 13) as its own
+commit. Kept here as a record.
+
+**Post-repair counts (2026-11-26)**: **282** numbered ADR files, **282** rows, no
+duplicate file or row numbers, no missing rows, no extra rows. Frontmatter block
+moved to the top, exactly one `| Page | Summary |` header + separator, rows
+sorted newest-number-first. Verified with the number-set comparison (not just a
+count) plus a 5-row spot check against the real filenames.
+
+**Method**: a one-off `/tmp` Node script — extract rows keyed by `^\| \[NNN-`,
+keep the longer copy per duplicated number (the short 1394-char copies were the
+stale ones; 190 and 187 needed a length comparison), build rows for the 5 files
+with none (title = file H1, description = the `**Summary**` line), emit
+frontmatter + one header + rows desc, tmp+rename write. No `git stash`.
+
+## Original report (superseded — do not re-repair)
 
 **Found**: 2026-11-09, during `plan-fix-extension-registry-navigation-teardown` (ADR 273).
 

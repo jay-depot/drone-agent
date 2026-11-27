@@ -76,6 +76,7 @@ import {
   stopFragmentTtlSweep,
 } from './fragments-sweep.js';
 import { startSpawnReconcile, stopSpawnReconcile } from './spawn-reconcile.js';
+import { startAgentReaper, stopAgentReaper } from './agent-reaper.js';
 import { logger } from './logger.js';
 import { configureSessionEndHook } from './session-end.js';
 import {
@@ -560,6 +561,7 @@ async function main() {
   // Boot-only: after a grace window, downgrade spawn rows that neither
   // reconnected nor left a live process behind a restart.
   startSpawnReconcile();
+  startAgentReaper();
 
   // Start periodic TTL cleanup
   const cleanupInterval = setInterval(() => {
@@ -638,6 +640,7 @@ async function main() {
     wikiIndexer.stopPeriodicSweep();
     stopFragmentTtlSweep();
     stopSpawnReconcile();
+    stopAgentReaper();
     if (syncInterval) {
       clearInterval(syncInterval);
     }

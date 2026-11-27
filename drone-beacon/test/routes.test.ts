@@ -25,10 +25,12 @@ import { replaceWikiFtsRows } from '../../drone-swarm-common/src/index.js';
 import { NOMIC_EMBED_TEXT_V1_5 } from 'drone-core';
 
 // Mock ws-server to avoid WebSocket dependency
+const connectedAgents = vi.hoisted(() => new Set<string>());
+
 vi.mock('../src/ws-server.js', () => ({
   isLocalConnection: vi.fn().mockReturnValue(true),
-  isAgentConnected: vi.fn().mockReturnValue(false),
-  getConnectedAgents: vi.fn().mockReturnValue([]),
+  isAgentConnected: vi.fn((id: string) => connectedAgents.has(id)),
+  getConnectedAgents: vi.fn(() => [...connectedAgents]),
   getConnection: vi.fn().mockReturnValue(undefined),
   sendToAgent: vi.fn(),
   sendToChannel: vi.fn(),
@@ -51,6 +53,7 @@ function makeFakeClient(
 }
 
 beforeEach(async () => {
+  connectedAgents.clear();
   await setupDb();
   app = await buildTestApp();
 });
@@ -290,7 +293,22 @@ describe('Agent Routes', () => {
     expect(res.statusCode).toBe(200);
     const agents = JSON.parse(res.body);
     expect(agents.length).toBe(1);
+    expect(agents[0].status).toBe('disconnected');
+    expect(agents[0].live).toBe(false);
+  });
+
+  it('GET /agents reports connected for a row with an open socket', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/agents',
+      payload: { id: 'agent-1', personaId: null },
+    });
+    connectedAgents.add('agent-1');
+    const res = await app.inject({ method: 'GET', url: '/agents' });
+    expect(res.statusCode).toBe(200);
+    const agents = JSON.parse(res.body);
     expect(agents[0].status).toBe('connected');
+    expect(agents[0].live).toBe(true);
   });
 
   it('GET /agents/:id gets an agent', async () => {
@@ -302,6 +320,21 @@ describe('Agent Routes', () => {
     const res = await app.inject({ method: 'GET', url: '/agents/agent-1' });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).id).toBe('agent-1');
+    expect(JSON.parse(res.body).status).toBe('disconnected');
+    expect(JSON.parse(res.body).live).toBe(false);
+  });
+
+  it('GET /agents/:id reports connected when the socket is open', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/agents',
+      payload: { id: 'agent-1', personaId: null },
+    });
+    connectedAgents.add('agent-1');
+    const res = await app.inject({ method: 'GET', url: '/agents/agent-1' });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).status).toBe('connected');
+    expect(JSON.parse(res.body).live).toBe(true);
   });
 
   it('GET /agents/:id returns 404 for missing', async () => {
@@ -323,12 +356,29 @@ describe('Agent Routes', () => {
     expect(JSON.parse(res.body).id).toBe('agent-1');
   });
 
-  it('POST /agents/:id/heartbeat returns 404 for missing', async () => {
+  it('POST /agents/:id/heartbeat recreates a missing row', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/agents/nonexistent/heartbeat',
     });
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(200);
+
+    const get = await app.inject({
+      method: 'GET',
+      url: '/agents/nonexistent',
+    });
+    expect(get.statusCode).toBe(200);
+    expect(JSON.parse(get.body).id).toBe('nonexistent');
+  });
+
+  it('POST /agents/:id/heartbeat stores the persona on a recreated row', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/agents/agent-x/heartbeat',
+      payload: { personaId: 'p-1' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).personaId).toBe('p-1');
   });
 
   it('DELETE /agents/:id unregisters an agent', async () => {

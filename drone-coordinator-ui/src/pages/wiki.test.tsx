@@ -291,7 +291,8 @@ describe('WikiPage graph view', () => {
             resolveGraph = resolve;
           });
         }
-        if (url === '/api/wiki') return Promise.resolve(ok([metaPage({ id: 'a' })]));
+        if (url === '/api/wiki')
+          return Promise.resolve(ok([metaPage({ id: 'a' })]));
         return Promise.resolve(notFound);
       })
     );
@@ -388,9 +389,7 @@ describe('WikiPage graph view', () => {
     expect(
       edges.some(
         edge =>
-          edge.kind === 'link' &&
-          edge.source === 'a' &&
-          edge.target === 'b'
+          edge.kind === 'link' && edge.source === 'a' && edge.target === 'b'
       )
     ).toBe(true);
   });

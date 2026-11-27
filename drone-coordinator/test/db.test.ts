@@ -43,6 +43,7 @@ import {
   restoreSwarmSession,
   transitionSessionStatus,
   markStaleSessions,
+  markStrandedProcessingSessions,
   createSwarmEvent,
   getSwarmEvents,
   getLatestSwarmEvents,
@@ -850,6 +851,61 @@ describe('Swarm Session & Events', () => {
     expect(getSwarmSession('ss1')!.statusChangedAt).toBe(
       stale[0].statusChangedAt
     );
+  });
+
+  describe('markStrandedProcessingSessions', () => {
+    it('moves a long-processing session to ended and returns it', () => {
+      createSwarmSession('ss1', null, 'b1');
+      updateSwarmSessionStatus('ss1', 'processing');
+      getDatabase()
+        .prepare('UPDATE swarm_sessions SET status_changed_at = ? WHERE id = ?')
+        .run(Date.now() - 7_200_000, 'ss1');
+
+      const cleared = markStrandedProcessingSessions(60 * 60 * 1000);
+
+      expect(cleared).toHaveLength(1);
+      expect(cleared[0].id).toBe('ss1');
+      expect(getSwarmSession('ss1')!.status).toBe('ended');
+    });
+
+    it('leaves a session that just entered processing alone', () => {
+      createSwarmSession('ss1', null, 'b1');
+      updateSwarmSessionStatus('ss1', 'processing');
+
+      const cleared = markStrandedProcessingSessions(60 * 60 * 1000);
+
+      expect(cleared).toHaveLength(0);
+      expect(getSwarmSession('ss1')!.status).toBe('processing');
+    });
+
+    it('leaves an active session alone even when old', () => {
+      createSwarmSession('ss1', null, 'b1');
+      getDatabase()
+        .prepare(
+          'UPDATE swarm_sessions SET status_changed_at = ?, updatedAt = ? WHERE id = ?'
+        )
+        .run(Date.now() - 10_000_000, Date.now() - 10_000_000, 'ss1');
+
+      const cleared = markStrandedProcessingSessions(60 * 60 * 1000);
+
+      expect(cleared).toHaveLength(0);
+      expect(getSwarmSession('ss1')!.status).toBe('active');
+    });
+
+    it('falls back to updatedAt when status_changed_at is null', () => {
+      createSwarmSession('ss1', null, 'b1');
+      updateSwarmSessionStatus('ss1', 'processing');
+      getDatabase()
+        .prepare(
+          'UPDATE swarm_sessions SET status_changed_at = NULL, updatedAt = ? WHERE id = ?'
+        )
+        .run(Date.now() - 7_200_000, 'ss1');
+
+      const cleared = markStrandedProcessingSessions(60 * 60 * 1000);
+
+      expect(cleared).toHaveLength(1);
+      expect(getSwarmSession('ss1')!.status).toBe('ended');
+    });
   });
 
   it('updateSwarmSessionPersona preserves statusChangedAt', () => {
